@@ -8,47 +8,243 @@ import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/com
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
 import { Loader2, Pill } from 'lucide-react';
 import { useToast } from '@/hooks/use-toast';
+import { supabase } from '@/integrations/supabase/client';
 
 // Forgot Password Component
 function ForgotPasswordForm() {
+  const [step, setStep] = useState<'email' | 'question' | 'reset'>('email');
   const [email, setEmail] = useState('');
+  const [securityQuestion, setSecurityQuestion] = useState('');
+  const [securityAnswer, setSecurityAnswer] = useState('');
+  const [newPassword, setNewPassword] = useState('');
+  const [confirmPassword, setConfirmPassword] = useState('');
+  const [userId, setUserId] = useState('');
   const [isSubmitting, setIsSubmitting] = useState(false);
   const { toast } = useToast();
 
-  const handleSubmit = async (e: React.FormEvent) => {
+  const handleEmailSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
     setIsSubmitting(true);
 
-    toast({
-      title: "Password Reset",
-      description: "Please contact your administrator to reset your password. Make sure you have set up your security question in your account settings.",
-      variant: "default"
-    });
+    try {
+      const { data, error } = await supabase.functions.invoke('password-reset', {
+        body: {
+          email,
+          step: 'verify_email'
+        }
+      });
 
-    setIsSubmitting(false);
+      if (error) throw error;
+
+      if (data.error) {
+        toast({
+          title: "Error",
+          description: data.error,
+          variant: "destructive"
+        });
+        return;
+      }
+
+      setSecurityQuestion(data.security_question);
+      setUserId(data.user_id);
+      setStep('question');
+    } catch (error: any) {
+      toast({
+        title: "Error",
+        description: "Failed to verify email address",
+        variant: "destructive"
+      });
+    } finally {
+      setIsSubmitting(false);
+    }
   };
 
+  const handleSecurityAnswer = async (e: React.FormEvent) => {
+    e.preventDefault();
+    setIsSubmitting(true);
+
+    try {
+      const { data, error } = await supabase.functions.invoke('password-reset', {
+        body: {
+          email,
+          securityAnswer,
+          step: 'verify_answer'
+        }
+      });
+
+      if (error) throw error;
+
+      if (data.error) {
+        toast({
+          title: "Error",
+          description: data.error,
+          variant: "destructive"
+        });
+        return;
+      }
+
+      setStep('reset');
+    } catch (error: any) {
+      toast({
+        title: "Error",
+        description: "Failed to verify security answer",
+        variant: "destructive"
+      });
+    } finally {
+      setIsSubmitting(false);
+    }
+  };
+
+  const handlePasswordReset = async (e: React.FormEvent) => {
+    e.preventDefault();
+    
+    if (newPassword !== confirmPassword) {
+      toast({
+        title: "Error",
+        description: "Passwords do not match",
+        variant: "destructive"
+      });
+      return;
+    }
+
+    if (newPassword.length < 6) {
+      toast({
+        title: "Error", 
+        description: "Password must be at least 6 characters long",
+        variant: "destructive"
+      });
+      return;
+    }
+
+    setIsSubmitting(true);
+
+    try {
+      const { data, error } = await supabase.functions.invoke('password-reset', {
+        body: {
+          email,
+          newPassword,
+          step: 'reset_password'
+        }
+      });
+
+      if (error) throw error;
+
+      if (data.error) {
+        toast({
+          title: "Error",
+          description: data.error,
+          variant: "destructive"
+        });
+        return;
+      }
+
+      toast({
+        title: "Success",
+        description: "Password reset successfully. You can now sign in."
+      });
+
+      // Reset form
+      setStep('email');
+      setEmail('');
+      setSecurityQuestion('');
+      setSecurityAnswer('');
+      setNewPassword('');
+      setConfirmPassword('');
+      setUserId('');
+    } catch (error: any) {
+      toast({
+        title: "Error",
+        description: "Failed to reset password",
+        variant: "destructive"
+      });
+    } finally {
+      setIsSubmitting(false);
+    }
+  };
+
+  if (step === 'email') {
+    return (
+      <form onSubmit={handleEmailSubmit} className="space-y-4">
+        <div className="space-y-2">
+          <Label htmlFor="forgot-email">Email Address</Label>
+          <Input
+            id="forgot-email"
+            type="email"
+            value={email}
+            onChange={(e) => setEmail(e.target.value)}
+            required
+            placeholder="Enter your email address"
+          />
+        </div>
+        <Button type="submit" className="w-full" disabled={isSubmitting}>
+          {isSubmitting && <Loader2 className="mr-2 h-4 w-4 animate-spin" />}
+          Continue
+        </Button>
+      </form>
+    );
+  }
+
+  if (step === 'question') {
+    return (
+      <form onSubmit={handleSecurityAnswer} className="space-y-4">
+        <div className="space-y-2">
+          <Label>Security Question</Label>
+          <p className="text-sm font-medium p-2 bg-muted rounded">{securityQuestion}</p>
+        </div>
+        <div className="space-y-2">
+          <Label htmlFor="security-answer">Your Answer</Label>
+          <Input
+            id="security-answer"
+            type="text"
+            value={securityAnswer}
+            onChange={(e) => setSecurityAnswer(e.target.value)}
+            required
+            placeholder="Enter your answer"
+          />
+        </div>
+        <Button type="submit" className="w-full" disabled={isSubmitting}>
+          {isSubmitting && <Loader2 className="mr-2 h-4 w-4 animate-spin" />}
+          Verify Answer
+        </Button>
+        <Button type="button" variant="outline" className="w-full" onClick={() => setStep('email')}>
+          Back
+        </Button>
+      </form>
+    );
+  }
+
   return (
-    <form onSubmit={handleSubmit} className="space-y-4">
+    <form onSubmit={handlePasswordReset} className="space-y-4">
       <div className="space-y-2">
-        <Label htmlFor="forgot-email">Email Address</Label>
+        <Label htmlFor="new-password">New Password</Label>
         <Input
-          id="forgot-email"
-          type="email"
-          value={email}
-          onChange={(e) => setEmail(e.target.value)}
+          id="new-password"
+          type="password"
+          value={newPassword}
+          onChange={(e) => setNewPassword(e.target.value)}
           required
-          placeholder="Enter your email address"
+          placeholder="Enter new password"
+          minLength={6}
         />
       </div>
-      <div className="p-4 bg-muted rounded-lg">
-        <p className="text-sm text-muted-foreground">
-          Password reset requires administrator assistance. Contact your pharmacy owner with your email address and security question answer to reset your password.
-        </p>
+      <div className="space-y-2">
+        <Label htmlFor="confirm-password">Confirm Password</Label>
+        <Input
+          id="confirm-password"
+          type="password"
+          value={confirmPassword}
+          onChange={(e) => setConfirmPassword(e.target.value)}
+          required
+          placeholder="Confirm new password"
+          minLength={6}
+        />
       </div>
       <Button type="submit" className="w-full" disabled={isSubmitting}>
         {isSubmitting && <Loader2 className="mr-2 h-4 w-4 animate-spin" />}
-        Request Password Reset
+        Reset Password
+      </Button>
+      <Button type="button" variant="outline" className="w-full" onClick={() => setStep('question')}>
+        Back
       </Button>
     </form>
   );
