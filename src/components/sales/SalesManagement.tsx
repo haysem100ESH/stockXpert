@@ -3,7 +3,10 @@ import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/com
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Badge } from '@/components/ui/badge';
-import { Search, Plus, Minus, ShoppingCart, Trash2 } from 'lucide-react';
+import { Label } from '@/components/ui/label';
+import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
+import { Separator } from '@/components/ui/separator';
+import { Search, Plus, Minus, ShoppingCart, Trash2, CreditCard } from 'lucide-react';
 import { supabase } from '@/integrations/supabase/client';
 import { useToast } from '@/hooks/use-toast';
 import { useAuth } from '@/hooks/useAuth';
@@ -14,6 +17,8 @@ interface Medicine {
   generic_name?: string;
   selling_price: number;
   stock_quantity: number;
+  category?: string;
+  expiry_date?: string;
 }
 
 interface CartItem extends Medicine {
@@ -28,6 +33,7 @@ export default function SalesManagement() {
   const [searchTerm, setSearchTerm] = useState('');
   const [loading, setLoading] = useState(true);
   const [processing, setProcessing] = useState(false);
+  const [paymentMethod, setPaymentMethod] = useState<string>('cash');
   const { profile } = useAuth();
   const { toast } = useToast();
 
@@ -47,7 +53,7 @@ export default function SalesManagement() {
     try {
       const { data, error } = await supabase
         .from('medicines')
-        .select('id, name, generic_name, selling_price, stock_quantity')
+        .select('id, name, generic_name, selling_price, stock_quantity, category, expiry_date')
         .gt('stock_quantity', 0)
         .order('name');
 
@@ -62,6 +68,25 @@ export default function SalesManagement() {
     } finally {
       setLoading(false);
     }
+  };
+
+  const isExpired = (expiryDate?: string) => {
+    if (!expiryDate) return false;
+    const expiry = new Date(expiryDate);
+    const today = new Date();
+    today.setHours(0, 0, 0, 0);
+    expiry.setHours(0, 0, 0, 0);
+    return expiry <= today;
+  };
+
+  const isExpiringSoon = (expiryDate?: string) => {
+    if (!expiryDate) return false;
+    if (isExpired(expiryDate)) return false;
+    const expiry = new Date(expiryDate);
+    const now = new Date();
+    const thirtyDaysFromNow = new Date();
+    thirtyDaysFromNow.setDate(now.getDate() + 30);
+    return expiry <= thirtyDaysFromNow;
   };
 
   const addToCart = (medicine: Medicine) => {
@@ -176,10 +201,11 @@ export default function SalesManagement() {
 
       toast({
         title: "Success",
-        description: `Sale completed successfully. Total: $${calculateTotal().toFixed(2)}`
+        description: `Sale completed successfully! Payment: ${paymentMethod}. Total: $${calculateTotal().toFixed(2)}`
       });
 
       setCart([]);
+      setPaymentMethod('cash');
       fetchMedicines(); // Refresh to get updated stock
     } catch (error) {
       toast({
@@ -216,10 +242,17 @@ export default function SalesManagement() {
           {filteredMedicines.map((medicine) => (
             <Card key={medicine.id} className="cursor-pointer hover:shadow-md transition-shadow">
               <CardHeader>
-                <CardTitle className="text-lg">{medicine.name}</CardTitle>
-                {medicine.generic_name && (
-                  <CardDescription>{medicine.generic_name}</CardDescription>
-                )}
+                <div className="flex items-start justify-between">
+                  <div>
+                    <CardTitle className="text-lg">{medicine.name}</CardTitle>
+                    {medicine.generic_name && (
+                      <CardDescription>{medicine.generic_name}</CardDescription>
+                    )}
+                  </div>
+                  {medicine.category && (
+                    <Badge variant="outline">{medicine.category}</Badge>
+                  )}
+                </div>
               </CardHeader>
               <CardContent>
                 <div className="space-y-2">
@@ -233,13 +266,39 @@ export default function SalesManagement() {
                       {medicine.stock_quantity}
                     </Badge>
                   </div>
+                  {medicine.expiry_date && (
+                    <div className="flex justify-between text-sm">
+                      <span>Expires:</span>
+                      <div className="flex items-center space-x-1">
+                        <span className={
+                          isExpired(medicine.expiry_date) 
+                            ? 'text-destructive font-medium' 
+                            : isExpiringSoon(medicine.expiry_date) 
+                              ? 'text-warning' 
+                              : ''
+                        }>
+                          {new Date(medicine.expiry_date).toLocaleDateString()}
+                        </span>
+                        {isExpired(medicine.expiry_date) && (
+                          <Badge variant="destructive" className="text-xs">
+                            Expired
+                          </Badge>
+                        )}
+                        {!isExpired(medicine.expiry_date) && isExpiringSoon(medicine.expiry_date) && (
+                          <Badge variant="destructive" className="text-xs">
+                            Soon
+                          </Badge>
+                        )}
+                      </div>
+                    </div>
+                  )}
                   <Button 
                     onClick={() => addToCart(medicine)}
                     className="w-full"
-                    disabled={medicine.stock_quantity === 0}
+                    disabled={medicine.stock_quantity === 0 || isExpired(medicine.expiry_date)}
                   >
                     <Plus className="h-4 w-4 mr-2" />
-                    Add to Cart
+                    {isExpired(medicine.expiry_date) ? 'Expired' : 'Add to Cart'}
                   </Button>
                 </div>
               </CardContent>
@@ -303,17 +362,37 @@ export default function SalesManagement() {
                   </div>
                 ))}
                 
-                <div className="border-t pt-4">
+                <div className="border-t pt-4 space-y-4">
+                  <div className="space-y-2">
+                    <Label htmlFor="payment-method">Payment Method</Label>
+                    <Select value={paymentMethod} onValueChange={setPaymentMethod}>
+                      <SelectTrigger>
+                        <SelectValue placeholder="Select payment method" />
+                      </SelectTrigger>
+                      <SelectContent>
+                        <SelectItem value="cash">Cash</SelectItem>
+                        <SelectItem value="card">Credit/Debit Card</SelectItem>
+                        <SelectItem value="mobile_money">Mobile Money</SelectItem>
+                        <SelectItem value="bank_transfer">Bank Transfer</SelectItem>
+                        <SelectItem value="insurance">Insurance</SelectItem>
+                      </SelectContent>
+                    </Select>
+                  </div>
+                  
+                  <Separator />
+                  
                   <div className="flex justify-between font-medium">
                     <span>Total:</span>
                     <span>${calculateTotal().toFixed(2)}</span>
                   </div>
+                  
                   <Button 
                     onClick={handleCheckout}
-                    className="w-full mt-4"
+                    className="w-full"
                     disabled={processing}
                   >
-                    {processing ? "Processing..." : "Checkout"}
+                    <CreditCard className="h-4 w-4 mr-2" />
+                    {processing ? "Processing..." : `Checkout (${paymentMethod})`}
                   </Button>
                 </div>
               </div>

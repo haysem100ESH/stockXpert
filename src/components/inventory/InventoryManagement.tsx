@@ -6,7 +6,9 @@ import { Badge } from '@/components/ui/badge';
 import { Plus, Search, Edit, Trash2 } from 'lucide-react';
 import { supabase } from '@/integrations/supabase/client';
 import { useToast } from '@/hooks/use-toast';
+import { useAuth } from '@/hooks/useAuth';
 import AddMedicineDialog from './AddMedicineDialog';
+import EditMedicineDialog from './EditMedicineDialog';
 
 interface Medicine {
   id: string;
@@ -14,10 +16,13 @@ interface Medicine {
   generic_name?: string;
   category: string;
   manufacturer?: string;
+  batch_number?: string;
+  purchase_price: number;
   selling_price: number;
   stock_quantity: number;
   minimum_stock_level: number;
   expiry_date?: string;
+  expiry_alert_enabled?: boolean;
 }
 
 export default function InventoryManagement() {
@@ -26,7 +31,10 @@ export default function InventoryManagement() {
   const [searchTerm, setSearchTerm] = useState('');
   const [loading, setLoading] = useState(true);
   const [showAddDialog, setShowAddDialog] = useState(false);
+  const [showEditDialog, setShowEditDialog] = useState(false);
+  const [selectedMedicine, setSelectedMedicine] = useState<Medicine | null>(null);
   const { toast } = useToast();
+  const { profile } = useAuth();
 
   useEffect(() => {
     fetchMedicines();
@@ -69,13 +77,65 @@ export default function InventoryManagement() {
     return medicine.stock_quantity <= medicine.minimum_stock_level;
   };
 
+  const isExpired = (expiryDate?: string) => {
+    if (!expiryDate) return false;
+    const expiry = new Date(expiryDate);
+    const today = new Date();
+    today.setHours(0, 0, 0, 0);
+    expiry.setHours(0, 0, 0, 0);
+    return expiry <= today;
+  };
+
   const isExpiringSoon = (expiryDate?: string) => {
     if (!expiryDate) return false;
+    if (isExpired(expiryDate)) return false; // Don't mark as expiring soon if already expired
     const expiry = new Date(expiryDate);
     const now = new Date();
     const thirtyDaysFromNow = new Date();
     thirtyDaysFromNow.setDate(now.getDate() + 30);
     return expiry <= thirtyDaysFromNow;
+  };
+
+  const handleEditMedicine = (medicine: Medicine) => {
+    setSelectedMedicine(medicine);
+    setShowEditDialog(true);
+  };
+
+  const handleDeleteMedicine = async (medicineId: string) => {
+    if (!profile || profile.role !== 'owner') {
+      toast({
+        title: "Error",
+        description: "Only owners can delete medicines",
+        variant: "destructive"
+      });
+      return;
+    }
+
+    if (!confirm("Are you sure you want to delete this medicine? This action cannot be undone.")) {
+      return;
+    }
+
+    try {
+      const { error } = await supabase
+        .from('medicines')
+        .delete()
+        .eq('id', medicineId);
+
+      if (error) throw error;
+
+      toast({
+        title: "Success",
+        description: "Medicine deleted successfully"
+      });
+
+      fetchMedicines();
+    } catch (error) {
+      toast({
+        title: "Error",
+        description: "Failed to delete medicine",
+        variant: "destructive"
+      });
+    }
   };
 
   if (loading) {
@@ -116,12 +176,22 @@ export default function InventoryManagement() {
                   )}
                 </div>
                 <div className="flex space-x-1">
-                  <Button variant="ghost" size="sm">
+                  <Button 
+                    variant="ghost" 
+                    size="sm"
+                    onClick={() => handleEditMedicine(medicine)}
+                  >
                     <Edit className="h-4 w-4" />
                   </Button>
-                  <Button variant="ghost" size="sm">
-                    <Trash2 className="h-4 w-4" />
-                  </Button>
+                  {profile?.role === 'owner' && (
+                    <Button 
+                      variant="ghost" 
+                      size="sm"
+                      onClick={() => handleDeleteMedicine(medicine.id)}
+                    >
+                      <Trash2 className="h-4 w-4" />
+                    </Button>
+                  )}
                 </div>
               </div>
             </CardHeader>
@@ -158,10 +228,21 @@ export default function InventoryManagement() {
                   <div className="flex justify-between text-sm">
                     <span>Expires:</span>
                     <div className="flex items-center space-x-2">
-                      <span className={isExpiringSoon(medicine.expiry_date) ? 'text-warning' : ''}>
+                      <span className={
+                        isExpired(medicine.expiry_date) 
+                          ? 'text-destructive font-medium' 
+                          : isExpiringSoon(medicine.expiry_date) 
+                            ? 'text-warning' 
+                            : ''
+                      }>
                         {new Date(medicine.expiry_date).toLocaleDateString()}
                       </span>
-                      {isExpiringSoon(medicine.expiry_date) && (
+                      {isExpired(medicine.expiry_date) && (
+                        <Badge variant="destructive" className="text-xs">
+                          Expired
+                        </Badge>
+                      )}
+                      {!isExpired(medicine.expiry_date) && isExpiringSoon(medicine.expiry_date) && (
                         <Badge variant="destructive" className="text-xs">
                           Expiring Soon
                         </Badge>
@@ -185,6 +266,13 @@ export default function InventoryManagement() {
         open={showAddDialog}
         onOpenChange={setShowAddDialog}
         onMedicineAdded={handleMedicineAdded}
+      />
+
+      <EditMedicineDialog
+        open={showEditDialog}
+        onOpenChange={setShowEditDialog}
+        medicine={selectedMedicine}
+        onMedicineUpdated={handleMedicineAdded}
       />
     </div>
   );
