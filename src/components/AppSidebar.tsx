@@ -7,7 +7,8 @@ import {
   DollarSign, 
   Truck, 
   Users,
-  Pill
+  Pill,
+  Settings
 } from "lucide-react";
 import {
   Sidebar,
@@ -31,12 +32,14 @@ const ownerNavItems = [
   { title: "Finance", url: "/finance", icon: DollarSign },
   { title: "Suppliers", url: "/suppliers", icon: Truck },
   { title: "Staff", url: "/staff", icon: Users },
+  { title: "Account", url: "/account", icon: Settings },
 ];
 
 const staffNavItems = [
   { title: "Overview", url: "/", icon: LayoutDashboard },
   { title: "Sales", url: "/sales", icon: ShoppingCart },
   { title: "Inventory", url: "/inventory", icon: Package },
+  { title: "Account", url: "/account", icon: Settings },
 ];
 
 export function AppSidebar() {

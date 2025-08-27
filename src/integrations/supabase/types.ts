@@ -253,6 +253,19 @@ export type Database = {
       [_ in never]: never
     }
     Functions: {
+      get_profile_by_email: {
+        Args: { user_email: string }
+        Returns: {
+          created_at: string
+          full_name: string
+          id: string
+          phone: string
+          role: Database["public"]["Enums"]["user_role"]
+          security_answer_hash: string
+          security_question: string
+          updated_at: string
+        }[]
+      }
       is_owner: {
         Args: Record<PropertyKey, never>
         Returns: boolean
