@@ -10,8 +10,6 @@ import { ChartContainer, ChartTooltip, ChartTooltipContent } from '@/components/
 import { DollarSign, Package, ShoppingCart, AlertTriangle, TrendingUp, Download, CalendarIcon } from 'lucide-react';
 import { BarChart, Bar, XAxis, YAxis, CartesianGrid, ResponsiveContainer, PieChart, Pie, Cell, LineChart, Line } from 'recharts';
 import { format, subDays, subWeeks, subMonths, subYears } from 'date-fns';
-import jsPDF from 'jspdf';
-import 'jspdf-autotable';
 import { supabase } from '@/integrations/supabase/client';
 
 interface DashboardStats {
@@ -229,66 +227,6 @@ export default function Dashboard() {
     }
   };
 
-  const exportToPDF = () => {
-    const doc = new jsPDF();
-    
-    doc.setFontSize(20);
-    doc.text('Pharmacy Dashboard Report', 20, 20);
-    
-    doc.setFontSize(12);
-    const periodText = customDate 
-      ? `Custom Date: ${format(customDate, 'PPP')}`
-      : `Period: ${reportPeriod.charAt(0).toUpperCase() + reportPeriod.slice(1)}`;
-    doc.text(periodText, 20, 35);
-    doc.text(`Generated: ${format(new Date(), 'PPP')}`, 20, 45);
-    
-    // Stats table
-    const statsData = [
-      ['Total Revenue', `$${stats.totalRevenue.toFixed(2)}`],
-      ['Total Products', stats.totalProducts.toString()],
-      [customDate ? 'Selected Date Sales' : 'Period Sales', stats.todaySales.toString()],
-      ['Low Stock Items', stats.lowStockItems.toString()],
-      ['Out of Stock Items', stats.outOfStockItems.toString()]
-    ];
-    
-    // Add chart data to PDF
-    const categoryData = categorySales.map(cat => [cat.category, cat.sales.toString(), `$${cat.revenue.toFixed(2)}`]);
-    const productData = productPerformance.slice(0, 5).map(prod => [prod.name, prod.sales.toString(), `$${prod.revenue.toFixed(2)}`]);
-    
-    (doc as any).autoTable({
-      head: [['Metric', 'Value']],
-      body: statsData,
-      startY: 60,
-      theme: 'grid'
-    });
-    
-    // Add category sales table
-    if (categoryData.length > 0) {
-      (doc as any).autoTable({
-        head: [['Category', 'Items Sold', 'Revenue']],
-        body: categoryData,
-        startY: (doc as any).lastAutoTable.finalY + 20,
-        theme: 'grid'
-      });
-    }
-    
-    // Add top products table
-    if (productData.length > 0) {
-      (doc as any).autoTable({
-        head: [['Product', 'Items Sold', 'Revenue']],
-        body: productData,
-        startY: (doc as any).lastAutoTable.finalY + 20,
-        theme: 'grid'
-      });
-    }
-    
-    const filename = customDate 
-      ? `pharmacy-dashboard-${format(customDate, 'yyyy-MM-dd')}.pdf`
-      : `pharmacy-dashboard-${reportPeriod}-${format(new Date(), 'yyyy-MM-dd')}.pdf`;
-    
-    doc.save(filename);
-  };
-
   const exportToCSV = () => {
     const csvContent = [
       ['Metric', 'Value'],
@@ -362,11 +300,6 @@ export default function Dashboard() {
               />
             </PopoverContent>
           </Popover>
-          
-          <Button onClick={exportToPDF} variant="outline">
-            <Download className="h-4 w-4 mr-2" />
-            PDF
-          </Button>
           
           <Button onClick={exportToCSV} variant="outline">
             <Download className="h-4 w-4 mr-2" />
