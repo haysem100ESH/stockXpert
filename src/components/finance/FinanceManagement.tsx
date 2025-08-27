@@ -8,6 +8,7 @@ import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@
 import { Dialog, DialogContent, DialogDescription, DialogHeader, DialogTitle, DialogTrigger } from '@/components/ui/dialog';
 import { Calendar } from '@/components/ui/calendar';
 import { Popover, PopoverContent, PopoverTrigger } from '@/components/ui/popover';
+import { Pagination, PaginationContent, PaginationItem, PaginationLink, PaginationNext, PaginationPrevious } from '@/components/ui/pagination';
 import { DollarSign, TrendingUp, TrendingDown, BarChart3, Plus, CalendarIcon } from 'lucide-react';
 import { format } from 'date-fns';
 import { supabase } from '@/integrations/supabase/client';
@@ -50,6 +51,10 @@ export default function FinanceManagement() {
   });
   const [expenses, setExpenses] = useState<Expense[]>([]);
   const [sales, setSales] = useState<Sale[]>([]);
+  const [paginatedSales, setPaginatedSales] = useState<Sale[]>([]);
+  const [paginatedExpenses, setPaginatedExpenses] = useState<Expense[]>([]);
+  const [salesPage, setSalesPage] = useState(1);
+  const [expensesPage, setExpensesPage] = useState(1);
   const [loading, setLoading] = useState(true);
   const [showAddExpense, setShowAddExpense] = useState(false);
   const [period, setPeriod] = useState('monthly');
@@ -57,6 +62,8 @@ export default function FinanceManagement() {
   const [endDate, setEndDate] = useState<Date>();
   const { profile } = useAuth();
   const { toast } = useToast();
+  
+  const itemsPerPage = 15;
 
   useEffect(() => {
     fetchFinanceData();
@@ -128,6 +135,10 @@ export default function FinanceManagement() {
         netProfit,
         profitMargin
       });
+      
+      // Reset pagination when data changes
+      setSalesPage(1);
+      setExpensesPage(1);
     } catch (error) {
       toast({
         title: "Error",
@@ -138,6 +149,18 @@ export default function FinanceManagement() {
       setLoading(false);
     }
   };
+
+  useEffect(() => {
+    const startIndex = (salesPage - 1) * itemsPerPage;
+    const endIndex = startIndex + itemsPerPage;
+    setPaginatedSales(sales.slice(startIndex, endIndex));
+  }, [sales, salesPage]);
+
+  useEffect(() => {
+    const startIndex = (expensesPage - 1) * itemsPerPage;
+    const endIndex = startIndex + itemsPerPage;
+    setPaginatedExpenses(expenses.slice(startIndex, endIndex));
+  }, [expenses, expensesPage]);
 
   const handleAddExpense = async (e: React.FormEvent<HTMLFormElement>) => {
     e.preventDefault();
@@ -375,7 +398,7 @@ export default function FinanceManagement() {
             </CardHeader>
             <CardContent>
               <div className="space-y-4">
-                {sales.map((sale) => (
+                {paginatedSales.map((sale) => (
                   <div key={sale.id} className="flex justify-between items-start p-2 border rounded">
                     <div>
                       <div className="font-medium">
@@ -399,6 +422,56 @@ export default function FinanceManagement() {
                 {sales.length === 0 && (
                   <p className="text-muted-foreground text-center py-4">No sales in selected period</p>
                 )}
+                
+                {/* Pagination for Sales */}
+                {Math.ceil(sales.length / itemsPerPage) > 1 && (
+                  <div className="flex justify-center pt-4">
+                    <Pagination>
+                      <PaginationContent>
+                        <PaginationItem>
+                          <PaginationPrevious 
+                            href="#"
+                            onClick={(e) => {
+                              e.preventDefault();
+                              if (salesPage > 1) setSalesPage(salesPage - 1);
+                            }}
+                            className={salesPage === 1 ? "pointer-events-none opacity-50" : ""}
+                          />
+                        </PaginationItem>
+                        
+                        {Array.from({ length: Math.ceil(sales.length / itemsPerPage) }, (_, i) => i + 1).map((page) => (
+                          <PaginationItem key={page}>
+                            <PaginationLink
+                              href="#"
+                              onClick={(e) => {
+                                e.preventDefault();
+                                setSalesPage(page);
+                              }}
+                              isActive={salesPage === page}
+                            >
+                              {page}
+                            </PaginationLink>
+                          </PaginationItem>
+                        ))}
+                        
+                        <PaginationItem>
+                          <PaginationNext 
+                            href="#"
+                            onClick={(e) => {
+                              e.preventDefault();
+                              if (salesPage < Math.ceil(sales.length / itemsPerPage)) setSalesPage(salesPage + 1);
+                            }}
+                            className={salesPage === Math.ceil(sales.length / itemsPerPage) ? "pointer-events-none opacity-50" : ""}
+                          />
+                        </PaginationItem>
+                      </PaginationContent>
+                    </Pagination>
+                  </div>
+                )}
+                
+                <div className="text-center text-sm text-muted-foreground">
+                  Showing {paginatedSales.length} of {sales.length} sales records
+                </div>
               </div>
             </CardContent>
           </Card>
@@ -412,7 +485,7 @@ export default function FinanceManagement() {
             </CardHeader>
             <CardContent>
               <div className="space-y-4">
-                {expenses.map((expense) => (
+                {paginatedExpenses.map((expense) => (
                   <div key={expense.id} className="flex justify-between items-center p-2 border rounded">
                     <div>
                       <div className="font-medium">{expense.description}</div>
@@ -429,6 +502,56 @@ export default function FinanceManagement() {
                 {expenses.length === 0 && (
                   <p className="text-muted-foreground text-center py-4">No expenses in selected period</p>
                 )}
+                
+                {/* Pagination for Expenses */}
+                {Math.ceil(expenses.length / itemsPerPage) > 1 && (
+                  <div className="flex justify-center pt-4">
+                    <Pagination>
+                      <PaginationContent>
+                        <PaginationItem>
+                          <PaginationPrevious 
+                            href="#"
+                            onClick={(e) => {
+                              e.preventDefault();
+                              if (expensesPage > 1) setExpensesPage(expensesPage - 1);
+                            }}
+                            className={expensesPage === 1 ? "pointer-events-none opacity-50" : ""}
+                          />
+                        </PaginationItem>
+                        
+                        {Array.from({ length: Math.ceil(expenses.length / itemsPerPage) }, (_, i) => i + 1).map((page) => (
+                          <PaginationItem key={page}>
+                            <PaginationLink
+                              href="#"
+                              onClick={(e) => {
+                                e.preventDefault();
+                                setExpensesPage(page);
+                              }}
+                              isActive={expensesPage === page}
+                            >
+                              {page}
+                            </PaginationLink>
+                          </PaginationItem>
+                        ))}
+                        
+                        <PaginationItem>
+                          <PaginationNext 
+                            href="#"
+                            onClick={(e) => {
+                              e.preventDefault();
+                              if (expensesPage < Math.ceil(expenses.length / itemsPerPage)) setExpensesPage(expensesPage + 1);
+                            }}
+                            className={expensesPage === Math.ceil(expenses.length / itemsPerPage) ? "pointer-events-none opacity-50" : ""}
+                          />
+                        </PaginationItem>
+                      </PaginationContent>
+                    </Pagination>
+                  </div>
+                )}
+                
+                <div className="text-center text-sm text-muted-foreground">
+                  Showing {paginatedExpenses.length} of {expenses.length} expense records
+                </div>
               </div>
             </CardContent>
           </Card>

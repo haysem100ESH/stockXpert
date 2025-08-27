@@ -3,6 +3,7 @@ import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/com
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Badge } from '@/components/ui/badge';
+import { Pagination, PaginationContent, PaginationItem, PaginationLink, PaginationNext, PaginationPrevious } from '@/components/ui/pagination';
 import { Plus, Search, Edit, Trash2, Truck, Phone, Mail, MapPin, User } from 'lucide-react';
 import { supabase } from '@/integrations/supabase/client';
 import { useToast } from '@/hooks/use-toast';
@@ -23,13 +24,17 @@ interface Supplier {
 export default function SupplierManagement() {
   const [suppliers, setSuppliers] = useState<Supplier[]>([]);
   const [filteredSuppliers, setFilteredSuppliers] = useState<Supplier[]>([]);
+  const [paginatedSuppliers, setPaginatedSuppliers] = useState<Supplier[]>([]);
   const [searchTerm, setSearchTerm] = useState('');
+  const [currentPage, setCurrentPage] = useState(1);
   const [loading, setLoading] = useState(true);
   const [showAddDialog, setShowAddDialog] = useState(false);
   const [showEditDialog, setShowEditDialog] = useState(false);
   const [selectedSupplier, setSelectedSupplier] = useState<Supplier | null>(null);
   const { toast } = useToast();
   const { profile } = useAuth();
+  
+  const itemsPerPage = 15;
 
   useEffect(() => {
     fetchSuppliers();
@@ -42,7 +47,14 @@ export default function SupplierManagement() {
       supplier.email?.toLowerCase().includes(searchTerm.toLowerCase())
     );
     setFilteredSuppliers(filtered);
+    setCurrentPage(1); // Reset to first page when search changes
   }, [suppliers, searchTerm]);
+
+  useEffect(() => {
+    const startIndex = (currentPage - 1) * itemsPerPage;
+    const endIndex = startIndex + itemsPerPage;
+    setPaginatedSuppliers(filteredSuppliers.slice(startIndex, endIndex));
+  }, [filteredSuppliers, currentPage]);
 
   const fetchSuppliers = async () => {
     try {
@@ -146,7 +158,7 @@ export default function SupplierManagement() {
       </div>
 
       <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
-        {filteredSuppliers.map((supplier) => (
+        {paginatedSuppliers.map((supplier) => (
           <Card key={supplier.id}>
             <CardHeader>
               <div className="flex items-start justify-between">
@@ -218,6 +230,56 @@ export default function SupplierManagement() {
           <p className="text-muted-foreground">No suppliers found.</p>
         </div>
       )}
+
+      {/* Pagination */}
+      {Math.ceil(filteredSuppliers.length / itemsPerPage) > 1 && (
+        <div className="flex justify-center">
+          <Pagination>
+            <PaginationContent>
+              <PaginationItem>
+                <PaginationPrevious 
+                  href="#"
+                  onClick={(e) => {
+                    e.preventDefault();
+                    if (currentPage > 1) setCurrentPage(currentPage - 1);
+                  }}
+                  className={currentPage === 1 ? "pointer-events-none opacity-50" : ""}
+                />
+              </PaginationItem>
+              
+              {Array.from({ length: Math.ceil(filteredSuppliers.length / itemsPerPage) }, (_, i) => i + 1).map((page) => (
+                <PaginationItem key={page}>
+                  <PaginationLink
+                    href="#"
+                    onClick={(e) => {
+                      e.preventDefault();
+                      setCurrentPage(page);
+                    }}
+                    isActive={currentPage === page}
+                  >
+                    {page}
+                  </PaginationLink>
+                </PaginationItem>
+              ))}
+              
+              <PaginationItem>
+                <PaginationNext 
+                  href="#"
+                  onClick={(e) => {
+                    e.preventDefault();
+                    if (currentPage < Math.ceil(filteredSuppliers.length / itemsPerPage)) setCurrentPage(currentPage + 1);
+                  }}
+                  className={currentPage === Math.ceil(filteredSuppliers.length / itemsPerPage) ? "pointer-events-none opacity-50" : ""}
+                />
+              </PaginationItem>
+            </PaginationContent>
+          </Pagination>
+        </div>
+      )}
+
+      <div className="text-center text-sm text-muted-foreground">
+        Showing {paginatedSuppliers.length} of {filteredSuppliers.length} suppliers
+      </div>
 
       <AddSupplierDialog
         open={showAddDialog}

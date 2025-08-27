@@ -6,6 +6,7 @@ import { Badge } from '@/components/ui/badge';
 import { Label } from '@/components/ui/label';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
 import { Separator } from '@/components/ui/separator';
+import { Pagination, PaginationContent, PaginationItem, PaginationLink, PaginationNext, PaginationPrevious } from '@/components/ui/pagination';
 import { Search, Plus, Minus, ShoppingCart, Trash2, CreditCard } from 'lucide-react';
 import { supabase } from '@/integrations/supabase/client';
 import { useToast } from '@/hooks/use-toast';
@@ -29,13 +30,17 @@ interface CartItem extends Medicine {
 export default function SalesManagement() {
   const [medicines, setMedicines] = useState<Medicine[]>([]);
   const [filteredMedicines, setFilteredMedicines] = useState<Medicine[]>([]);
+  const [paginatedMedicines, setPaginatedMedicines] = useState<Medicine[]>([]);
   const [cart, setCart] = useState<CartItem[]>([]);
   const [searchTerm, setSearchTerm] = useState('');
+  const [currentPage, setCurrentPage] = useState(1);
   const [loading, setLoading] = useState(true);
   const [processing, setProcessing] = useState(false);
   const [paymentMethod, setPaymentMethod] = useState<string>('cash');
   const { profile } = useAuth();
   const { toast } = useToast();
+  
+  const itemsPerPage = 16;
 
   useEffect(() => {
     fetchMedicines();
@@ -47,7 +52,14 @@ export default function SalesManagement() {
       medicine.generic_name?.toLowerCase().includes(searchTerm.toLowerCase())
     );
     setFilteredMedicines(filtered);
+    setCurrentPage(1); // Reset to first page when search changes
   }, [medicines, searchTerm]);
+
+  useEffect(() => {
+    const startIndex = (currentPage - 1) * itemsPerPage;
+    const endIndex = startIndex + itemsPerPage;
+    setPaginatedMedicines(filteredMedicines.slice(startIndex, endIndex));
+  }, [filteredMedicines, currentPage]);
 
   const fetchMedicines = async () => {
     try {
@@ -239,7 +251,7 @@ export default function SalesManagement() {
         </div>
 
         <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-          {filteredMedicines.map((medicine) => (
+          {paginatedMedicines.map((medicine) => (
             <Card key={medicine.id} className="cursor-pointer hover:shadow-md transition-shadow">
               <CardHeader>
                 <div className="flex items-start justify-between">
@@ -311,6 +323,56 @@ export default function SalesManagement() {
             <p className="text-muted-foreground">No medicines found.</p>
           </div>
         )}
+
+        {/* Pagination for medicines */}
+        {Math.ceil(filteredMedicines.length / itemsPerPage) > 1 && (
+          <div className="flex justify-center col-span-full">
+            <Pagination>
+              <PaginationContent>
+                <PaginationItem>
+                  <PaginationPrevious 
+                    href="#"
+                    onClick={(e) => {
+                      e.preventDefault();
+                      if (currentPage > 1) setCurrentPage(currentPage - 1);
+                    }}
+                    className={currentPage === 1 ? "pointer-events-none opacity-50" : ""}
+                  />
+                </PaginationItem>
+                
+                {Array.from({ length: Math.ceil(filteredMedicines.length / itemsPerPage) }, (_, i) => i + 1).map((page) => (
+                  <PaginationItem key={page}>
+                    <PaginationLink
+                      href="#"
+                      onClick={(e) => {
+                        e.preventDefault();
+                        setCurrentPage(page);
+                      }}
+                      isActive={currentPage === page}
+                    >
+                      {page}
+                    </PaginationLink>
+                  </PaginationItem>
+                ))}
+                
+                <PaginationItem>
+                  <PaginationNext 
+                    href="#"
+                    onClick={(e) => {
+                      e.preventDefault();
+                      if (currentPage < Math.ceil(filteredMedicines.length / itemsPerPage)) setCurrentPage(currentPage + 1);
+                    }}
+                    className={currentPage === Math.ceil(filteredMedicines.length / itemsPerPage) ? "pointer-events-none opacity-50" : ""}
+                  />
+                </PaginationItem>
+              </PaginationContent>
+            </Pagination>
+          </div>
+        )}
+
+        <div className="text-center text-sm text-muted-foreground col-span-full">
+          Showing {paginatedMedicines.length} of {filteredMedicines.length} medicines
+        </div>
       </div>
 
       {/* Cart */}

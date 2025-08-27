@@ -3,7 +3,12 @@ import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/com
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Badge } from '@/components/ui/badge';
-import { Plus, Search, Edit, Trash2 } from 'lucide-react';
+import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
+import { Calendar } from '@/components/ui/calendar';
+import { Popover, PopoverContent, PopoverTrigger } from '@/components/ui/popover';
+import { Pagination, PaginationContent, PaginationItem, PaginationLink, PaginationNext, PaginationPrevious } from '@/components/ui/pagination';
+import { Plus, Search, Edit, Trash2, CalendarIcon, Filter } from 'lucide-react';
+import { format } from 'date-fns';
 import { supabase } from '@/integrations/supabase/client';
 import { useToast } from '@/hooks/use-toast';
 import { useAuth } from '@/hooks/useAuth';
@@ -23,36 +28,74 @@ interface Medicine {
   minimum_stock_level: number;
   expiry_date?: string;
   expiry_alert_enabled?: boolean;
+  created_at?: string;
 }
 
 export default function InventoryManagement() {
   const [medicines, setMedicines] = useState<Medicine[]>([]);
   const [filteredMedicines, setFilteredMedicines] = useState<Medicine[]>([]);
+  const [paginatedMedicines, setPaginatedMedicines] = useState<Medicine[]>([]);
   const [searchTerm, setSearchTerm] = useState('');
+  const [categoryFilter, setCategoryFilter] = useState('all');
+  const [dateFilter, setDateFilter] = useState<Date | undefined>();
+  const [currentPage, setCurrentPage] = useState(1);
+  const [categoryCounts, setCategoryCounts] = useState<Record<string, number>>({});
   const [loading, setLoading] = useState(true);
   const [showAddDialog, setShowAddDialog] = useState(false);
   const [showEditDialog, setShowEditDialog] = useState(false);
   const [selectedMedicine, setSelectedMedicine] = useState<Medicine | null>(null);
   const { toast } = useToast();
   const { profile } = useAuth();
+  
+  const itemsPerPage = 15;
 
   useEffect(() => {
     fetchMedicines();
   }, []);
 
   useEffect(() => {
-    const filtered = medicines.filter(medicine =>
-      medicine.name.toLowerCase().includes(searchTerm.toLowerCase()) ||
-      medicine.generic_name?.toLowerCase().includes(searchTerm.toLowerCase())
-    );
+    let filtered = medicines.filter(medicine => {
+      const matchesSearch = medicine.name.toLowerCase().includes(searchTerm.toLowerCase()) ||
+        medicine.generic_name?.toLowerCase().includes(searchTerm.toLowerCase());
+      
+      const matchesCategory = categoryFilter === 'all' || medicine.category === categoryFilter;
+      
+      let matchesDate = true;
+      if (dateFilter) {
+        const medicineDate = new Date(medicine.created_at || '');
+        const filterDate = new Date(dateFilter);
+        medicineDate.setHours(0, 0, 0, 0);
+        filterDate.setHours(0, 0, 0, 0);
+        matchesDate = medicineDate.getTime() === filterDate.getTime();
+      }
+      
+      return matchesSearch && matchesCategory && matchesDate;
+    });
+    
     setFilteredMedicines(filtered);
-  }, [medicines, searchTerm]);
+    setCurrentPage(1); // Reset to first page when filters change
+  }, [medicines, searchTerm, categoryFilter, dateFilter]);
+
+  useEffect(() => {
+    const startIndex = (currentPage - 1) * itemsPerPage;
+    const endIndex = startIndex + itemsPerPage;
+    setPaginatedMedicines(filteredMedicines.slice(startIndex, endIndex));
+  }, [filteredMedicines, currentPage]);
+
+  useEffect(() => {
+    // Calculate category counts
+    const counts: Record<string, number> = {};
+    medicines.forEach(medicine => {
+      counts[medicine.category] = (counts[medicine.category] || 0) + 1;
+    });
+    setCategoryCounts(counts);
+  }, [medicines]);
 
   const fetchMedicines = async () => {
     try {
       const { data, error } = await supabase
         .from('medicines')
-        .select('*')
+        .select('*, created_at')
         .order('name');
 
       if (error) throw error;
@@ -71,6 +114,13 @@ export default function InventoryManagement() {
   const handleMedicineAdded = () => {
     fetchMedicines();
     setShowAddDialog(false);
+  };
+
+  const totalPages = Math.ceil(filteredMedicines.length / itemsPerPage);
+  
+  const getUniqueCategories = () => {
+    const categories = [...new Set(medicines.map(m => m.category))];
+    return categories.sort();
   };
 
   const isLowStock = (medicine: Medicine) => {
@@ -152,7 +202,7 @@ export default function InventoryManagement() {
         </Button>
       </div>
 
-      <div className="flex items-center space-x-4">
+      <div className="flex flex-col md:flex-row items-center space-y-4 md:space-y-0 md:space-x-4">
         <div className="relative flex-1">
           <Search className="absolute left-2 top-2.5 h-4 w-4 text-muted-foreground" />
           <Input
@@ -162,10 +212,54 @@ export default function InventoryManagement() {
             className="pl-8"
           />
         </div>
+        
+        <div className="flex items-center space-x-2">
+          <Filter className="h-4 w-4 text-muted-foreground" />
+          <Select value={categoryFilter} onValueChange={setCategoryFilter}>
+            <SelectTrigger className="w-48">
+              <SelectValue placeholder="Filter by category" />
+            </SelectTrigger>
+            <SelectContent>
+              <SelectItem value="all">All Categories</SelectItem>
+              {getUniqueCategories().map((category) => (
+                <SelectItem key={category} value={category}>
+                  {category} ({categoryCounts[category] || 0})
+                </SelectItem>
+              ))}
+            </SelectContent>
+          </Select>
+        </div>
+
+        <Popover>
+          <PopoverTrigger asChild>
+            <Button variant="outline" className="w-48 justify-start text-left font-normal">
+              <CalendarIcon className="mr-2 h-4 w-4" />
+              {dateFilter ? format(dateFilter, "PPP") : <span>Filter by date</span>}
+            </Button>
+          </PopoverTrigger>
+          <PopoverContent className="w-auto p-0">
+            <Calendar
+              mode="single"
+              selected={dateFilter}
+              onSelect={setDateFilter}
+              initialFocus
+              className="p-3 pointer-events-auto"
+            />
+            <div className="p-3 border-t">
+              <Button 
+                variant="ghost" 
+                className="w-full text-sm"
+                onClick={() => setDateFilter(undefined)}
+              >
+                Clear filter
+              </Button>
+            </div>
+          </PopoverContent>
+        </Popover>
       </div>
 
       <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
-        {filteredMedicines.map((medicine) => (
+        {paginatedMedicines.map((medicine) => (
           <Card key={medicine.id} className="relative">
             <CardHeader>
               <div className="flex items-start justify-between">
@@ -261,6 +355,56 @@ export default function InventoryManagement() {
           <p className="text-muted-foreground">No medicines found.</p>
         </div>
       )}
+
+      {/* Pagination */}
+      {totalPages > 1 && (
+        <div className="flex justify-center">
+          <Pagination>
+            <PaginationContent>
+              <PaginationItem>
+                <PaginationPrevious 
+                  href="#"
+                  onClick={(e) => {
+                    e.preventDefault();
+                    if (currentPage > 1) setCurrentPage(currentPage - 1);
+                  }}
+                  className={currentPage === 1 ? "pointer-events-none opacity-50" : ""}
+                />
+              </PaginationItem>
+              
+              {Array.from({ length: totalPages }, (_, i) => i + 1).map((page) => (
+                <PaginationItem key={page}>
+                  <PaginationLink
+                    href="#"
+                    onClick={(e) => {
+                      e.preventDefault();
+                      setCurrentPage(page);
+                    }}
+                    isActive={currentPage === page}
+                  >
+                    {page}
+                  </PaginationLink>
+                </PaginationItem>
+              ))}
+              
+              <PaginationItem>
+                <PaginationNext 
+                  href="#"
+                  onClick={(e) => {
+                    e.preventDefault();
+                    if (currentPage < totalPages) setCurrentPage(currentPage + 1);
+                  }}
+                  className={currentPage === totalPages ? "pointer-events-none opacity-50" : ""}
+                />
+              </PaginationItem>
+            </PaginationContent>
+          </Pagination>
+        </div>
+      )}
+
+      <div className="text-center text-sm text-muted-foreground">
+        Showing {paginatedMedicines.length} of {filteredMedicines.length} medicines
+      </div>
 
       <AddMedicineDialog
         open={showAddDialog}
