@@ -70,7 +70,13 @@ export default function Dashboard() {
 
   const getDateRange = () => {
     const now = new Date();
-    if (customDate) return { start: customDate, end: now };
+    if (customDate) {
+      const start = new Date(customDate);
+      start.setHours(0, 0, 0, 0);
+      const end = new Date(customDate);
+      end.setHours(23, 59, 59, 999);
+      return { start, end };
+    }
     
     switch (reportPeriod) {
       case 'daily': return { start: subDays(now, 1), end: now };
@@ -85,10 +91,12 @@ export default function Dashboard() {
     try {
       const { start, end } = getDateRange();
       
-      // Fetch total revenue
+      // Fetch revenue for the selected period
       const { data: salesData } = await supabase
         .from('sales')
-        .select('total_amount');
+        .select('total_amount, created_at')
+        .gte('created_at', start.toISOString())
+        .lte('created_at', end.toISOString());
       
       const totalRevenue = salesData?.reduce((sum, sale) => sum + Number(sale.total_amount), 0) || 0;
 
@@ -103,15 +111,14 @@ export default function Dashboard() {
       ).length || 0;
       const outOfStockItems = medicinesData?.filter(med => med.stock_quantity === 0).length || 0;
 
-      // Fetch today's sales
-      const today = new Date().toISOString().split('T')[0];
-      const { data: todaySalesData } = await supabase
+      // Fetch sales for the selected period
+      const { data: periodSalesData } = await supabase
         .from('sales')
         .select('id')
-        .gte('created_at', today)
-        .lt('created_at', today + 'T23:59:59');
+        .gte('created_at', start.toISOString())
+        .lte('created_at', end.toISOString());
 
-      const todaySales = todaySalesData?.length || 0;
+      const todaySales = periodSalesData?.length || 0;
 
       // Fetch out of stock items details
       const { data: outOfStockDetails } = await supabase
@@ -229,17 +236,24 @@ export default function Dashboard() {
     doc.text('Pharmacy Dashboard Report', 20, 20);
     
     doc.setFontSize(12);
-    doc.text(`Period: ${reportPeriod.charAt(0).toUpperCase() + reportPeriod.slice(1)}`, 20, 35);
+    const periodText = customDate 
+      ? `Custom Date: ${format(customDate, 'PPP')}`
+      : `Period: ${reportPeriod.charAt(0).toUpperCase() + reportPeriod.slice(1)}`;
+    doc.text(periodText, 20, 35);
     doc.text(`Generated: ${format(new Date(), 'PPP')}`, 20, 45);
     
     // Stats table
     const statsData = [
       ['Total Revenue', `$${stats.totalRevenue.toFixed(2)}`],
       ['Total Products', stats.totalProducts.toString()],
-      ['Today\'s Sales', stats.todaySales.toString()],
+      [customDate ? 'Selected Date Sales' : 'Period Sales', stats.todaySales.toString()],
       ['Low Stock Items', stats.lowStockItems.toString()],
       ['Out of Stock Items', stats.outOfStockItems.toString()]
     ];
+    
+    // Add chart data to PDF
+    const categoryData = categorySales.map(cat => [cat.category, cat.sales.toString(), `$${cat.revenue.toFixed(2)}`]);
+    const productData = productPerformance.slice(0, 5).map(prod => [prod.name, prod.sales.toString(), `$${prod.revenue.toFixed(2)}`]);
     
     (doc as any).autoTable({
       head: [['Metric', 'Value']],
@@ -248,7 +262,31 @@ export default function Dashboard() {
       theme: 'grid'
     });
     
-    doc.save(`pharmacy-dashboard-${format(new Date(), 'yyyy-MM-dd')}.pdf`);
+    // Add category sales table
+    if (categoryData.length > 0) {
+      (doc as any).autoTable({
+        head: [['Category', 'Items Sold', 'Revenue']],
+        body: categoryData,
+        startY: (doc as any).lastAutoTable.finalY + 20,
+        theme: 'grid'
+      });
+    }
+    
+    // Add top products table
+    if (productData.length > 0) {
+      (doc as any).autoTable({
+        head: [['Product', 'Items Sold', 'Revenue']],
+        body: productData,
+        startY: (doc as any).lastAutoTable.finalY + 20,
+        theme: 'grid'
+      });
+    }
+    
+    const filename = customDate 
+      ? `pharmacy-dashboard-${format(customDate, 'yyyy-MM-dd')}.pdf`
+      : `pharmacy-dashboard-${reportPeriod}-${format(new Date(), 'yyyy-MM-dd')}.pdf`;
+    
+    doc.save(filename);
   };
 
   const exportToCSV = () => {

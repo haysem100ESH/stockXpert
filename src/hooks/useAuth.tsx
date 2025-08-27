@@ -8,6 +8,8 @@ interface Profile {
   full_name: string;
   role: 'owner' | 'staff';
   phone?: string;
+  security_question?: string;
+  security_answer_hash?: string;
 }
 
 interface AuthContextType {

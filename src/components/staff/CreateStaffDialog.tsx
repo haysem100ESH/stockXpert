@@ -1,0 +1,254 @@
+import { useState } from 'react';
+import { Dialog, DialogContent, DialogDescription, DialogHeader, DialogTitle } from '@/components/ui/dialog';
+import { Button } from '@/components/ui/button';
+import { Input } from '@/components/ui/input';
+import { Label } from '@/components/ui/label';
+import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
+import { Loader2 } from 'lucide-react';
+import { supabase } from '@/integrations/supabase/client';
+import { useToast } from '@/hooks/use-toast';
+
+interface CreateStaffDialogProps {
+  open: boolean;
+  onOpenChange: (open: boolean) => void;
+  onStaffCreated: () => void;
+}
+
+// Security questions list
+const SECURITY_QUESTIONS = [
+  "What was the name of your first pet?",
+  "What is your mother's maiden name?",
+  "What was the name of your first school?",
+  "What city were you born in?",
+  "What is your favorite book?",
+  "What was your childhood nickname?"
+];
+
+// Simple hash function for security answers
+const hashAnswer = (answer: string) => {
+  let hash = 0;
+  for (let i = 0; i < answer.length; i++) {
+    const char = answer.charCodeAt(i);
+    hash = ((hash << 5) - hash) + char;
+    hash = hash & hash; // Convert to 32-bit integer
+  }
+  return Math.abs(hash).toString();
+};
+
+export default function CreateStaffDialog({ open, onOpenChange, onStaffCreated }: CreateStaffDialogProps) {
+  const [formData, setFormData] = useState({
+    email: '',
+    password: '',
+    fullName: '',
+    phone: '',
+    role: 'staff' as 'owner' | 'staff',
+    securityQuestion: '',
+    securityAnswer: ''
+  });
+  const [isSubmitting, setIsSubmitting] = useState(false);
+  const { toast } = useToast();
+
+  const handleSubmit = async (e: React.FormEvent) => {
+    e.preventDefault();
+    
+    if (!formData.email || !formData.password || !formData.fullName) {
+      toast({
+        title: "Error",
+        description: "Please fill in all required fields",
+        variant: "destructive"
+      });
+      return;
+    }
+
+    if (formData.password.length < 6) {
+      toast({
+        title: "Error",
+        description: "Password must be at least 6 characters long",
+        variant: "destructive"
+      });
+      return;
+    }
+
+    if (!formData.securityQuestion || !formData.securityAnswer) {
+      toast({
+        title: "Error",
+        description: "Please set up a security question and answer",
+        variant: "destructive"
+      });
+      return;
+    }
+
+    setIsSubmitting(true);
+
+    try {
+      // Create the user account
+      const { data: authData, error: authError } = await supabase.auth.admin.createUser({
+        email: formData.email,
+        password: formData.password,
+        user_metadata: {
+          full_name: formData.fullName,
+          role: formData.role
+        },
+        email_confirm: true // Auto-confirm email for admin-created accounts
+      });
+
+      if (authError) throw authError;
+
+      // Hash the security answer
+      const hashedAnswer = hashAnswer(formData.securityAnswer.toLowerCase().trim());
+
+      // Update the profile with additional information
+      const { error: profileError } = await supabase
+        .from('profiles')
+        .update({
+          phone: formData.phone || null,
+          security_question: formData.securityQuestion,
+          security_answer_hash: hashedAnswer
+        })
+        .eq('id', authData.user.id);
+
+      if (profileError) throw profileError;
+
+      toast({
+        title: "Success",
+        description: `${formData.role === 'owner' ? 'Owner' : 'Staff member'} account created successfully`
+      });
+
+      onStaffCreated();
+      onOpenChange(false);
+      
+      // Reset form
+      setFormData({
+        email: '',
+        password: '',
+        fullName: '',
+        phone: '',
+        role: 'staff',
+        securityQuestion: '',
+        securityAnswer: ''
+      });
+    } catch (error: any) {
+      toast({
+        title: "Error",
+        description: error.message || "Failed to create staff account",
+        variant: "destructive"
+      });
+    } finally {
+      setIsSubmitting(false);
+    }
+  };
+
+  return (
+    <Dialog open={open} onOpenChange={onOpenChange}>
+      <DialogContent className="sm:max-w-[500px]">
+        <DialogHeader>
+          <DialogTitle>Create Staff Account</DialogTitle>
+          <DialogDescription>
+            Create a new staff member account with login credentials
+          </DialogDescription>
+        </DialogHeader>
+
+        <form onSubmit={handleSubmit} className="space-y-4">
+          <div className="space-y-2">
+            <Label htmlFor="email">Email *</Label>
+            <Input
+              id="email"
+              type="email"
+              value={formData.email}
+              onChange={(e) => setFormData({ ...formData, email: e.target.value })}
+              required
+              placeholder="Enter email address"
+            />
+          </div>
+
+          <div className="space-y-2">
+            <Label htmlFor="password">Password *</Label>
+            <Input
+              id="password"
+              type="password"
+              value={formData.password}
+              onChange={(e) => setFormData({ ...formData, password: e.target.value })}
+              required
+              minLength={6}
+              placeholder="Enter password (min 6 characters)"
+            />
+          </div>
+
+          <div className="space-y-2">
+            <Label htmlFor="fullName">Full Name *</Label>
+            <Input
+              id="fullName"
+              type="text"
+              value={formData.fullName}
+              onChange={(e) => setFormData({ ...formData, fullName: e.target.value })}
+              required
+              placeholder="Enter full name"
+            />
+          </div>
+
+          <div className="space-y-2">
+            <Label htmlFor="phone">Phone (Optional)</Label>
+            <Input
+              id="phone"
+              type="tel"
+              value={formData.phone}
+              onChange={(e) => setFormData({ ...formData, phone: e.target.value })}
+              placeholder="Enter phone number"
+            />
+          </div>
+
+          <div className="space-y-2">
+            <Label htmlFor="role">Role *</Label>
+            <Select value={formData.role} onValueChange={(value: 'owner' | 'staff') => setFormData({ ...formData, role: value })}>
+              <SelectTrigger>
+                <SelectValue />
+              </SelectTrigger>
+              <SelectContent>
+                <SelectItem value="staff">Staff Member</SelectItem>
+                <SelectItem value="owner">Owner</SelectItem>
+              </SelectContent>
+            </Select>
+          </div>
+
+          <div className="space-y-2">
+            <Label htmlFor="securityQuestion">Security Question *</Label>
+            <Select value={formData.securityQuestion} onValueChange={(value) => setFormData({ ...formData, securityQuestion: value })}>
+              <SelectTrigger>
+                <SelectValue placeholder="Select a security question" />
+              </SelectTrigger>
+              <SelectContent>
+                {SECURITY_QUESTIONS.map((question) => (
+                  <SelectItem key={question} value={question}>
+                    {question}
+                  </SelectItem>
+                ))}
+              </SelectContent>
+            </Select>
+          </div>
+
+          <div className="space-y-2">
+            <Label htmlFor="securityAnswer">Security Answer *</Label>
+            <Input
+              id="securityAnswer"
+              type="text"
+              value={formData.securityAnswer}
+              onChange={(e) => setFormData({ ...formData, securityAnswer: e.target.value })}
+              required
+              placeholder="Enter security answer"
+            />
+          </div>
+
+          <div className="flex space-x-2 pt-4">
+            <Button type="submit" disabled={isSubmitting} className="flex-1">
+              {isSubmitting && <Loader2 className="mr-2 h-4 w-4 animate-spin" />}
+              Create Account
+            </Button>
+            <Button type="button" variant="outline" onClick={() => onOpenChange(false)} className="flex-1">
+              Cancel
+            </Button>
+          </div>
+        </form>
+      </DialogContent>
+    </Dialog>
+  );
+}

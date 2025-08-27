@@ -11,6 +11,7 @@ import { supabase } from '@/integrations/supabase/client';
 import { useToast } from '@/hooks/use-toast';
 import { useAuth } from '@/hooks/useAuth';
 import EditStaffDialog from './EditStaffDialog';
+import CreateStaffDialog from './CreateStaffDialog';
 
 interface StaffMember {
   id: string;
@@ -25,7 +26,7 @@ export default function StaffManagement() {
   const [filteredStaff, setFilteredStaff] = useState<StaffMember[]>([]);
   const [searchTerm, setSearchTerm] = useState('');
   const [loading, setLoading] = useState(true);
-  const [showInviteDialog, setShowInviteDialog] = useState(false);
+  const [showCreateDialog, setShowCreateDialog] = useState(false);
   const [showEditDialog, setShowEditDialog] = useState(false);
   const [selectedStaff, setSelectedStaff] = useState<StaffMember | null>(null);
   const { toast } = useToast();
@@ -122,37 +123,10 @@ export default function StaffManagement() {
         <h2 className="text-2xl font-bold">Staff Management</h2>
         
         {profile?.role === 'owner' && (
-          <Dialog open={showInviteDialog} onOpenChange={setShowInviteDialog}>
-            <DialogTrigger asChild>
-              <Button>
-                <Plus className="h-4 w-4 mr-2" />
-                Invite Staff
-              </Button>
-            </DialogTrigger>
-            <DialogContent>
-              <DialogHeader>
-                <DialogTitle>Invite Staff Member</DialogTitle>
-                <DialogDescription>
-                  To add a new staff member, they need to sign up on the registration page with their own credentials.
-                  Share the registration link with them and ensure they select "Staff Member" as their role.
-                </DialogDescription>
-              </DialogHeader>
-              <div className="space-y-4">
-                <div className="p-4 bg-muted rounded-lg">
-                  <p className="text-sm font-medium mb-2">Registration URL:</p>
-                  <code className="text-xs bg-background p-2 rounded block">
-                    {window.location.origin}/auth
-                  </code>
-                </div>
-                <p className="text-sm text-muted-foreground">
-                  New staff members will appear in this list once they register with a staff role.
-                </p>
-                <Button onClick={() => setShowInviteDialog(false)} className="w-full">
-                  Got it
-                </Button>
-              </div>
-            </DialogContent>
-          </Dialog>
+          <Button onClick={() => setShowCreateDialog(true)}>
+            <Plus className="h-4 w-4 mr-2" />
+            Create Staff Account
+          </Button>
         )}
       </div>
 
@@ -260,6 +234,12 @@ export default function StaffManagement() {
         onOpenChange={setShowEditDialog}
         staff={selectedStaff}
         onStaffUpdated={handleStaffUpdated}
+      />
+
+      <CreateStaffDialog
+        open={showCreateDialog}
+        onOpenChange={setShowCreateDialog}
+        onStaffCreated={fetchStaff}
       />
     </div>
   );
