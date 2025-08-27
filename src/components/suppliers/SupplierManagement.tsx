@@ -2,11 +2,13 @@ import { useState, useEffect } from 'react';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
-import { Label } from '@/components/ui/label';
-import { Dialog, DialogContent, DialogDescription, DialogHeader, DialogTitle, DialogTrigger } from '@/components/ui/dialog';
-import { Plus, Edit, Trash2, Building2, Phone, Mail } from 'lucide-react';
+import { Badge } from '@/components/ui/badge';
+import { Plus, Search, Edit, Trash2, Truck, Phone, Mail, MapPin, User } from 'lucide-react';
 import { supabase } from '@/integrations/supabase/client';
 import { useToast } from '@/hooks/use-toast';
+import { useAuth } from '@/hooks/useAuth';
+import AddSupplierDialog from './AddSupplierDialog';
+import EditSupplierDialog from './EditSupplierDialog';
 
 interface Supplier {
   id: string;
@@ -20,13 +22,27 @@ interface Supplier {
 
 export default function SupplierManagement() {
   const [suppliers, setSuppliers] = useState<Supplier[]>([]);
+  const [filteredSuppliers, setFilteredSuppliers] = useState<Supplier[]>([]);
+  const [searchTerm, setSearchTerm] = useState('');
   const [loading, setLoading] = useState(true);
   const [showAddDialog, setShowAddDialog] = useState(false);
+  const [showEditDialog, setShowEditDialog] = useState(false);
+  const [selectedSupplier, setSelectedSupplier] = useState<Supplier | null>(null);
   const { toast } = useToast();
+  const { profile } = useAuth();
 
   useEffect(() => {
     fetchSuppliers();
   }, []);
+
+  useEffect(() => {
+    const filtered = suppliers.filter(supplier =>
+      supplier.name.toLowerCase().includes(searchTerm.toLowerCase()) ||
+      supplier.contact_person?.toLowerCase().includes(searchTerm.toLowerCase()) ||
+      supplier.email?.toLowerCase().includes(searchTerm.toLowerCase())
+    );
+    setFilteredSuppliers(filtered);
+  }, [suppliers, searchTerm]);
 
   const fetchSuppliers = async () => {
     try {
@@ -48,43 +64,33 @@ export default function SupplierManagement() {
     }
   };
 
-  const handleAddSupplier = async (e: React.FormEvent<HTMLFormElement>) => {
-    e.preventDefault();
-    
-    const formData = new FormData(e.currentTarget);
-    const supplierData = {
-      name: formData.get('name') as string,
-      contact_person: formData.get('contact_person') as string || null,
-      phone: formData.get('phone') as string || null,
-      email: formData.get('email') as string || null,
-      address: formData.get('address') as string || null
-    };
-
-    try {
-      const { error } = await supabase
-        .from('suppliers')
-        .insert([supplierData]);
-
-      if (error) throw error;
-
-      toast({
-        title: "Success",
-        description: "Supplier added successfully"
-      });
-
-      setShowAddDialog(false);
-      fetchSuppliers();
-    } catch (error) {
-      toast({
-        title: "Error",
-        description: "Failed to add supplier",
-        variant: "destructive"
-      });
-    }
+  const handleSupplierAdded = () => {
+    fetchSuppliers();
+    setShowAddDialog(false);
   };
 
-  const handleDeleteSupplier = async (id: string) => {
-    if (!confirm("Are you sure you want to delete this supplier?")) {
+  const handleSupplierUpdated = () => {
+    fetchSuppliers();
+    setShowEditDialog(false);
+    setSelectedSupplier(null);
+  };
+
+  const handleEditSupplier = (supplier: Supplier) => {
+    setSelectedSupplier(supplier);
+    setShowEditDialog(true);
+  };
+
+  const handleDeleteSupplier = async (supplierId: string) => {
+    if (!profile || profile.role !== 'owner') {
+      toast({
+        title: "Error",
+        description: "Only owners can delete suppliers",
+        variant: "destructive"
+      });
+      return;
+    }
+
+    if (!confirm("Are you sure you want to delete this supplier? This action cannot be undone.")) {
       return;
     }
 
@@ -92,7 +98,7 @@ export default function SupplierManagement() {
       const { error } = await supabase
         .from('suppliers')
         .delete()
-        .eq('id', id);
+        .eq('id', supplierId);
 
       if (error) throw error;
 
@@ -119,78 +125,60 @@ export default function SupplierManagement() {
     <div className="space-y-6">
       <div className="flex items-center justify-between">
         <h2 className="text-2xl font-bold">Supplier Management</h2>
-        
-        <Dialog open={showAddDialog} onOpenChange={setShowAddDialog}>
-          <DialogTrigger asChild>
-            <Button>
-              <Plus className="h-4 w-4 mr-2" />
-              Add Supplier
-            </Button>
-          </DialogTrigger>
-          <DialogContent>
-            <DialogHeader>
-              <DialogTitle>Add New Supplier</DialogTitle>
-              <DialogDescription>
-                Enter the supplier details
-              </DialogDescription>
-            </DialogHeader>
-            <form onSubmit={handleAddSupplier} className="space-y-4">
-              <div className="space-y-2">
-                <Label htmlFor="name">Supplier Name *</Label>
-                <Input id="name" name="name" required />
-              </div>
-              <div className="space-y-2">
-                <Label htmlFor="contact_person">Contact Person</Label>
-                <Input id="contact_person" name="contact_person" />
-              </div>
-              <div className="space-y-2">
-                <Label htmlFor="phone">Phone</Label>
-                <Input id="phone" name="phone" type="tel" />
-              </div>
-              <div className="space-y-2">
-                <Label htmlFor="email">Email</Label>
-                <Input id="email" name="email" type="email" />
-              </div>
-              <div className="space-y-2">
-                <Label htmlFor="address">Address</Label>
-                <Input id="address" name="address" />
-              </div>
-              <div className="flex justify-end space-x-2">
-                <Button type="button" variant="outline" onClick={() => setShowAddDialog(false)}>
-                  Cancel
-                </Button>
-                <Button type="submit">Add Supplier</Button>
-              </div>
-            </form>
-          </DialogContent>
-        </Dialog>
+        {profile?.role === 'owner' && (
+          <Button onClick={() => setShowAddDialog(true)}>
+            <Plus className="h-4 w-4 mr-2" />
+            Add Supplier
+          </Button>
+        )}
+      </div>
+
+      <div className="flex items-center space-x-4">
+        <div className="relative flex-1">
+          <Search className="absolute left-2 top-2.5 h-4 w-4 text-muted-foreground" />
+          <Input
+            placeholder="Search suppliers by name, contact person, or email..."
+            value={searchTerm}
+            onChange={(e) => setSearchTerm(e.target.value)}
+            className="pl-8"
+          />
+        </div>
       </div>
 
       <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
-        {suppliers.map((supplier) => (
+        {filteredSuppliers.map((supplier) => (
           <Card key={supplier.id}>
             <CardHeader>
               <div className="flex items-start justify-between">
-                <div>
-                  <CardTitle className="flex items-center space-x-2">
-                    <Building2 className="h-5 w-5" />
-                    <span>{supplier.name}</span>
-                  </CardTitle>
-                  {supplier.contact_person && (
-                    <CardDescription>{supplier.contact_person}</CardDescription>
-                  )}
+                <div className="flex items-center space-x-2">
+                  <Truck className="h-5 w-5 text-primary" />
+                  <div>
+                    <CardTitle className="text-lg">{supplier.name}</CardTitle>
+                    {supplier.contact_person && (
+                      <CardDescription className="flex items-center space-x-1 mt-1">
+                        <User className="h-3 w-3" />
+                        <span>{supplier.contact_person}</span>
+                      </CardDescription>
+                    )}
+                  </div>
                 </div>
                 <div className="flex space-x-1">
-                  <Button variant="ghost" size="sm">
-                    <Edit className="h-4 w-4" />
-                  </Button>
                   <Button 
                     variant="ghost" 
                     size="sm"
-                    onClick={() => handleDeleteSupplier(supplier.id)}
+                    onClick={() => handleEditSupplier(supplier)}
                   >
-                    <Trash2 className="h-4 w-4" />
+                    <Edit className="h-4 w-4" />
                   </Button>
+                  {profile?.role === 'owner' && (
+                    <Button 
+                      variant="ghost" 
+                      size="sm"
+                      onClick={() => handleDeleteSupplier(supplier.id)}
+                    >
+                      <Trash2 className="h-4 w-4" />
+                    </Button>
+                  )}
                 </div>
               </div>
             </CardHeader>
@@ -209,11 +197,12 @@ export default function SupplierManagement() {
                   </div>
                 )}
                 {supplier.address && (
-                  <div className="text-sm">
-                    <span className="text-muted-foreground">Address: </span>
-                    <span>{supplier.address}</span>
+                  <div className="flex items-start space-x-2 text-sm">
+                    <MapPin className="h-4 w-4 text-muted-foreground mt-0.5" />
+                    <span className="text-wrap">{supplier.address}</span>
                   </div>
                 )}
+                
                 <div className="text-xs text-muted-foreground">
                   Added: {new Date(supplier.created_at).toLocaleDateString()}
                 </div>
@@ -223,12 +212,25 @@ export default function SupplierManagement() {
         ))}
       </div>
 
-      {suppliers.length === 0 && (
+      {filteredSuppliers.length === 0 && (
         <div className="text-center py-8">
-          <Building2 className="h-12 w-12 text-muted-foreground mx-auto mb-4" />
-          <p className="text-muted-foreground">No suppliers found. Add your first supplier to get started.</p>
+          <Truck className="h-12 w-12 text-muted-foreground mx-auto mb-4" />
+          <p className="text-muted-foreground">No suppliers found.</p>
         </div>
       )}
+
+      <AddSupplierDialog
+        open={showAddDialog}
+        onOpenChange={setShowAddDialog}
+        onSupplierAdded={handleSupplierAdded}
+      />
+
+      <EditSupplierDialog
+        open={showEditDialog}
+        onOpenChange={setShowEditDialog}
+        supplier={selectedSupplier}
+        onSupplierUpdated={handleSupplierUpdated}
+      />
     </div>
   );
 }
