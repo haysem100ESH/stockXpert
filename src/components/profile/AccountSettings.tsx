@@ -6,7 +6,7 @@ import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
-import { Loader2, User, Lock, Shield } from 'lucide-react';
+import { Loader2, User, Lock, Shield, Mail } from 'lucide-react';
 import { supabase } from '@/integrations/supabase/client';
 import { useToast } from '@/hooks/use-toast';
 
@@ -49,6 +49,12 @@ export default function AccountSettings() {
     confirmPassword: ''
   });
 
+  // Email update form state
+  const [emailData, setEmailData] = useState({
+    newEmail: '',
+    confirmEmail: ''
+  });
+
   // Security question form state
   const [securityData, setSecurityData] = useState({
     question: '',
@@ -73,7 +79,8 @@ export default function AccountSettings() {
     setLoading(true);
 
     try {
-      const { error } = await supabase
+      // Update profile information
+      const { error: profileError } = await supabase
         .from('profiles')
         .update({
           full_name: profileData.full_name,
@@ -81,7 +88,7 @@ export default function AccountSettings() {
         })
         .eq('id', user?.id);
 
-      if (error) throw error;
+      if (profileError) throw profileError;
 
       toast({
         title: "Success",
@@ -91,6 +98,47 @@ export default function AccountSettings() {
       toast({
         title: "Error",
         description: "Failed to update profile",
+        variant: "destructive"
+      });
+    } finally {
+      setLoading(false);
+    }
+  };
+
+  const handleEmailUpdate = async (e: React.FormEvent) => {
+    e.preventDefault();
+    
+    if (emailData.newEmail !== emailData.confirmEmail) {
+      toast({
+        title: "Error",
+        description: "Email addresses do not match",
+        variant: "destructive"
+      });
+      return;
+    }
+
+    setLoading(true);
+
+    try {
+      const { error } = await supabase.auth.updateUser({
+        email: emailData.newEmail
+      });
+
+      if (error) throw error;
+
+      toast({
+        title: "Success",
+        description: "Email update initiated. Please check your new email for confirmation."
+      });
+
+      setEmailData({
+        newEmail: '',
+        confirmEmail: ''
+      });
+    } catch (error: any) {
+      toast({
+        title: "Error",
+        description: error.message || "Failed to update email",
         variant: "destructive"
       });
     } finally {
@@ -208,8 +256,9 @@ export default function AccountSettings() {
       </div>
 
       <Tabs defaultValue="profile" className="w-full">
-        <TabsList className="grid w-full grid-cols-3">
+        <TabsList className="grid w-full grid-cols-4">
           <TabsTrigger value="profile">Profile</TabsTrigger>
+          <TabsTrigger value="email">Email</TabsTrigger>
           <TabsTrigger value="password">Password</TabsTrigger>
           <TabsTrigger value="security">Security</TabsTrigger>
         </TabsList>
@@ -245,7 +294,7 @@ export default function AccountSettings() {
                     className="bg-muted"
                   />
                   <p className="text-xs text-muted-foreground">
-                    Email cannot be changed from this interface
+                    Use the Email tab to change your email address
                   </p>
                 </div>
                 <div className="space-y-2">
@@ -268,6 +317,64 @@ export default function AccountSettings() {
                 <Button type="submit" disabled={loading}>
                   {loading && <Loader2 className="mr-2 h-4 w-4 animate-spin" />}
                   Update Profile
+                </Button>
+              </form>
+            </CardContent>
+          </Card>
+        </TabsContent>
+
+        <TabsContent value="email">
+          <Card>
+            <CardHeader>
+              <CardTitle className="flex items-center space-x-2">
+                <Mail className="h-5 w-5" />
+                <span>Change Email</span>
+              </CardTitle>
+              <CardDescription>
+                Update your email address
+              </CardDescription>
+            </CardHeader>
+            <CardContent>
+              <form onSubmit={handleEmailUpdate} className="space-y-4">
+                <div className="space-y-2">
+                  <Label htmlFor="current_email">Current Email</Label>
+                  <Input
+                    id="current_email"
+                    value={user.email || ''}
+                    disabled
+                    className="bg-muted"
+                  />
+                </div>
+                <div className="space-y-2">
+                  <Label htmlFor="new_email">New Email</Label>
+                  <Input
+                    id="new_email"
+                    type="email"
+                    value={emailData.newEmail}
+                    onChange={(e) => setEmailData({...emailData, newEmail: e.target.value})}
+                    required
+                    placeholder="Enter new email address"
+                  />
+                </div>
+                <div className="space-y-2">
+                  <Label htmlFor="confirm_email">Confirm New Email</Label>
+                  <Input
+                    id="confirm_email"
+                    type="email"
+                    value={emailData.confirmEmail}
+                    onChange={(e) => setEmailData({...emailData, confirmEmail: e.target.value})}
+                    required
+                    placeholder="Confirm new email address"
+                  />
+                </div>
+                <div className="p-4 bg-muted rounded-lg">
+                  <p className="text-sm text-muted-foreground">
+                    You will receive a confirmation email at your new address. Click the link to complete the email change.
+                  </p>
+                </div>
+                <Button type="submit" disabled={loading}>
+                  {loading && <Loader2 className="mr-2 h-4 w-4 animate-spin" />}
+                  Update Email
                 </Button>
               </form>
             </CardContent>

@@ -81,37 +81,27 @@ export default function CreateStaffDialog({ open, onOpenChange, onStaffCreated }
     setIsSubmitting(true);
 
     try {
-      // Create the user account
-      const { data: authData, error: authError } = await supabase.auth.admin.createUser({
-        email: formData.email,
-        password: formData.password,
-        user_metadata: {
-          full_name: formData.fullName,
-          role: formData.role
-        },
-        email_confirm: true // Auto-confirm email for admin-created accounts
+      const { data, error } = await supabase.functions.invoke('create-staff-account', {
+        body: {
+          email: formData.email,
+          password: formData.password,
+          fullName: formData.fullName,
+          phone: formData.phone,
+          role: formData.role,
+          securityQuestion: formData.securityQuestion,
+          securityAnswer: formData.securityAnswer
+        }
       });
 
-      if (authError) throw authError;
+      if (error) throw error;
 
-      // Hash the security answer
-      const hashedAnswer = hashAnswer(formData.securityAnswer.toLowerCase().trim());
-
-      // Update the profile with additional information
-      const { error: profileError } = await supabase
-        .from('profiles')
-        .update({
-          phone: formData.phone || null,
-          security_question: formData.securityQuestion,
-          security_answer_hash: hashedAnswer
-        })
-        .eq('id', authData.user.id);
-
-      if (profileError) throw profileError;
+      if (data.error) {
+        throw new Error(data.error);
+      }
 
       toast({
         title: "Success",
-        description: `${formData.role === 'owner' ? 'Owner' : 'Staff member'} account created successfully`
+        description: data.message || "Staff account created successfully"
       });
 
       onStaffCreated();
@@ -128,6 +118,7 @@ export default function CreateStaffDialog({ open, onOpenChange, onStaffCreated }
         securityAnswer: ''
       });
     } catch (error: any) {
+      console.error('Error creating staff account:', error);
       toast({
         title: "Error",
         description: error.message || "Failed to create staff account",

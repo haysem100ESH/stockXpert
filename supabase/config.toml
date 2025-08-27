@@ -58,3 +58,6 @@ inspector_port = 54331
 
 [functions.password-reset]
 verify_jwt = false
+
+[functions.create-staff-account]
+verify_jwt = true
