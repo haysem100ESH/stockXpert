@@ -6,7 +6,10 @@ import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
 import { Dialog, DialogContent, DialogDescription, DialogHeader, DialogTitle, DialogTrigger } from '@/components/ui/dialog';
-import { DollarSign, TrendingUp, TrendingDown, BarChart3, Plus } from 'lucide-react';
+import { Calendar } from '@/components/ui/calendar';
+import { Popover, PopoverContent, PopoverTrigger } from '@/components/ui/popover';
+import { DollarSign, TrendingUp, TrendingDown, BarChart3, Plus, CalendarIcon } from 'lucide-react';
+import { format } from 'date-fns';
 import { supabase } from '@/integrations/supabase/client';
 import { useToast } from '@/hooks/use-toast';
 import { useAuth } from '@/hooks/useAuth';
@@ -30,6 +33,12 @@ interface Sale {
   id: string;
   total_amount: number;
   created_at: string;
+  sale_items?: {
+    medicines: {
+      name: string;
+    };
+    quantity: number;
+  }[];
 }
 
 export default function FinanceManagement() {
@@ -44,38 +53,52 @@ export default function FinanceManagement() {
   const [loading, setLoading] = useState(true);
   const [showAddExpense, setShowAddExpense] = useState(false);
   const [period, setPeriod] = useState('monthly');
+  const [startDate, setStartDate] = useState<Date>();
+  const [endDate, setEndDate] = useState<Date>();
   const { profile } = useAuth();
   const { toast } = useToast();
 
   useEffect(() => {
     fetchFinanceData();
-  }, [period]);
+  }, [period, startDate, endDate]);
 
   const fetchFinanceData = async () => {
     try {
       const now = new Date();
-      let startDate = new Date();
+      let queryStartDate = startDate || new Date();
+      let queryEndDate = endDate || now;
 
-      switch (period) {
-        case 'daily':
-          startDate.setDate(now.getDate() - 1);
-          break;
-        case 'weekly':
-          startDate.setDate(now.getDate() - 7);
-          break;
-        case 'monthly':
-          startDate.setMonth(now.getMonth() - 1);
-          break;
-        case 'yearly':
-          startDate.setFullYear(now.getFullYear() - 1);
-          break;
+      if (!startDate && !endDate) {
+        switch (period) {
+          case 'daily':
+            queryStartDate.setDate(now.getDate() - 1);
+            break;
+          case 'weekly':
+            queryStartDate.setDate(now.getDate() - 7);
+            break;
+          case 'monthly':
+            queryStartDate.setMonth(now.getMonth() - 1);
+            break;
+          case 'yearly':
+            queryStartDate.setFullYear(now.getFullYear() - 1);
+            break;
+        }
       }
 
-      // Fetch sales
+      // Fetch sales with medicine details
       const { data: salesData, error: salesError } = await supabase
         .from('sales')
-        .select('*')
-        .gte('created_at', startDate.toISOString())
+        .select(`
+          *,
+          sale_items (
+            quantity,
+            medicines (
+              name
+            )
+          )
+        `)
+        .gte('created_at', queryStartDate.toISOString())
+        .lte('created_at', queryEndDate.toISOString())
         .order('created_at', { ascending: false });
 
       if (salesError) throw salesError;
@@ -84,7 +107,8 @@ export default function FinanceManagement() {
       const { data: expensesData, error: expensesError } = await supabase
         .from('expenses')
         .select('*')
-        .gte('created_at', startDate.toISOString())
+        .gte('created_at', queryStartDate.toISOString())
+        .lte('created_at', queryEndDate.toISOString())
         .order('created_at', { ascending: false });
 
       if (expensesError) throw expensesError;
@@ -169,6 +193,42 @@ export default function FinanceManagement() {
               <SelectItem value="yearly">Yearly</SelectItem>
             </SelectContent>
           </Select>
+          
+          <Popover>
+            <PopoverTrigger asChild>
+              <Button variant="outline" className="w-48 justify-start text-left font-normal">
+                <CalendarIcon className="mr-2 h-4 w-4" />
+                {startDate ? format(startDate, "PPP") : <span>Start date</span>}
+              </Button>
+            </PopoverTrigger>
+            <PopoverContent className="w-auto p-0">
+              <Calendar
+                mode="single"
+                selected={startDate}
+                onSelect={setStartDate}
+                initialFocus
+                className="p-3 pointer-events-auto"
+              />
+            </PopoverContent>
+          </Popover>
+          
+          <Popover>
+            <PopoverTrigger asChild>
+              <Button variant="outline" className="w-48 justify-start text-left font-normal">
+                <CalendarIcon className="mr-2 h-4 w-4" />
+                {endDate ? format(endDate, "PPP") : <span>End date</span>}
+              </Button>
+            </PopoverTrigger>
+            <PopoverContent className="w-auto p-0">
+              <Calendar
+                mode="single"
+                selected={endDate}
+                onSelect={setEndDate}
+                initialFocus
+                className="p-3 pointer-events-auto"
+              />
+            </PopoverContent>
+          </Popover>
           
           <Dialog open={showAddExpense} onOpenChange={setShowAddExpense}>
             <DialogTrigger asChild>
@@ -316,14 +376,24 @@ export default function FinanceManagement() {
             <CardContent>
               <div className="space-y-4">
                 {sales.map((sale) => (
-                  <div key={sale.id} className="flex justify-between items-center p-2 border rounded">
-                    <span>Sale #{sale.id.slice(-8)}</span>
-                    <div className="text-right">
-                      <div className="text-success font-medium">${sale.total_amount}</div>
+                  <div key={sale.id} className="flex justify-between items-start p-2 border rounded">
+                    <div>
+                      <div className="font-medium">
+                        {sale.sale_items && sale.sale_items.length > 0
+                          ? sale.sale_items.map((item, index) => (
+                              <span key={index}>
+                                {item.medicines?.name} (x{item.quantity})
+                                {index < sale.sale_items!.length - 1 ? ', ' : ''}
+                              </span>
+                            ))
+                          : `Sale #${sale.id.slice(-8)}`
+                        }
+                      </div>
                       <div className="text-xs text-muted-foreground">
                         {new Date(sale.created_at).toLocaleDateString()}
                       </div>
                     </div>
+                    <div className="text-success font-medium">${Number(sale.total_amount).toFixed(2)}</div>
                   </div>
                 ))}
                 {sales.length === 0 && (
