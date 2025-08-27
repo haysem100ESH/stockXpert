@@ -14,16 +14,256 @@ export type Database = {
   }
   public: {
     Tables: {
-      [_ in never]: never
+      expenses: {
+        Row: {
+          amount: number
+          category: string | null
+          created_at: string | null
+          created_by: string | null
+          description: string
+          id: string
+        }
+        Insert: {
+          amount: number
+          category?: string | null
+          created_at?: string | null
+          created_by?: string | null
+          description: string
+          id?: string
+        }
+        Update: {
+          amount?: number
+          category?: string | null
+          created_at?: string | null
+          created_by?: string | null
+          description?: string
+          id?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "expenses_created_by_fkey"
+            columns: ["created_by"]
+            isOneToOne: false
+            referencedRelation: "profiles"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      medicines: {
+        Row: {
+          batch_number: string | null
+          category: Database["public"]["Enums"]["medicine_category"]
+          created_at: string | null
+          expiry_alert_enabled: boolean | null
+          expiry_date: string | null
+          generic_name: string | null
+          id: string
+          manufacturer: string | null
+          minimum_stock_level: number
+          name: string
+          purchase_price: number
+          selling_price: number
+          stock_quantity: number
+          supplier_id: string | null
+          updated_at: string | null
+        }
+        Insert: {
+          batch_number?: string | null
+          category: Database["public"]["Enums"]["medicine_category"]
+          created_at?: string | null
+          expiry_alert_enabled?: boolean | null
+          expiry_date?: string | null
+          generic_name?: string | null
+          id?: string
+          manufacturer?: string | null
+          minimum_stock_level?: number
+          name: string
+          purchase_price: number
+          selling_price: number
+          stock_quantity?: number
+          supplier_id?: string | null
+          updated_at?: string | null
+        }
+        Update: {
+          batch_number?: string | null
+          category?: Database["public"]["Enums"]["medicine_category"]
+          created_at?: string | null
+          expiry_alert_enabled?: boolean | null
+          expiry_date?: string | null
+          generic_name?: string | null
+          id?: string
+          manufacturer?: string | null
+          minimum_stock_level?: number
+          name?: string
+          purchase_price?: number
+          selling_price?: number
+          stock_quantity?: number
+          supplier_id?: string | null
+          updated_at?: string | null
+        }
+        Relationships: [
+          {
+            foreignKeyName: "medicines_supplier_id_fkey"
+            columns: ["supplier_id"]
+            isOneToOne: false
+            referencedRelation: "suppliers"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      profiles: {
+        Row: {
+          created_at: string | null
+          full_name: string
+          id: string
+          phone: string | null
+          role: Database["public"]["Enums"]["user_role"]
+          updated_at: string | null
+        }
+        Insert: {
+          created_at?: string | null
+          full_name: string
+          id: string
+          phone?: string | null
+          role?: Database["public"]["Enums"]["user_role"]
+          updated_at?: string | null
+        }
+        Update: {
+          created_at?: string | null
+          full_name?: string
+          id?: string
+          phone?: string | null
+          role?: Database["public"]["Enums"]["user_role"]
+          updated_at?: string | null
+        }
+        Relationships: []
+      }
+      sale_items: {
+        Row: {
+          id: string
+          medicine_id: string | null
+          quantity: number
+          sale_id: string | null
+          total_price: number
+          unit_price: number
+        }
+        Insert: {
+          id?: string
+          medicine_id?: string | null
+          quantity: number
+          sale_id?: string | null
+          total_price: number
+          unit_price: number
+        }
+        Update: {
+          id?: string
+          medicine_id?: string | null
+          quantity?: number
+          sale_id?: string | null
+          total_price?: number
+          unit_price?: number
+        }
+        Relationships: [
+          {
+            foreignKeyName: "sale_items_medicine_id_fkey"
+            columns: ["medicine_id"]
+            isOneToOne: false
+            referencedRelation: "medicines"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "sale_items_sale_id_fkey"
+            columns: ["sale_id"]
+            isOneToOne: false
+            referencedRelation: "sales"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      sales: {
+        Row: {
+          created_at: string | null
+          id: string
+          sold_by: string | null
+          total_amount: number
+        }
+        Insert: {
+          created_at?: string | null
+          id?: string
+          sold_by?: string | null
+          total_amount: number
+        }
+        Update: {
+          created_at?: string | null
+          id?: string
+          sold_by?: string | null
+          total_amount?: number
+        }
+        Relationships: [
+          {
+            foreignKeyName: "sales_sold_by_fkey"
+            columns: ["sold_by"]
+            isOneToOne: false
+            referencedRelation: "profiles"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      suppliers: {
+        Row: {
+          address: string | null
+          contact_person: string | null
+          created_at: string | null
+          email: string | null
+          id: string
+          name: string
+          phone: string | null
+          updated_at: string | null
+        }
+        Insert: {
+          address?: string | null
+          contact_person?: string | null
+          created_at?: string | null
+          email?: string | null
+          id?: string
+          name: string
+          phone?: string | null
+          updated_at?: string | null
+        }
+        Update: {
+          address?: string | null
+          contact_person?: string | null
+          created_at?: string | null
+          email?: string | null
+          id?: string
+          name?: string
+          phone?: string | null
+          updated_at?: string | null
+        }
+        Relationships: []
+      }
     }
     Views: {
       [_ in never]: never
     }
     Functions: {
-      [_ in never]: never
+      is_owner: {
+        Args: Record<PropertyKey, never>
+        Returns: boolean
+      }
     }
     Enums: {
-      [_ in never]: never
+      medicine_category:
+        | "tablet"
+        | "capsule"
+        | "syrup"
+        | "injection"
+        | "cream"
+        | "ointment"
+        | "drops"
+        | "inhaler"
+        | "other"
+      user_role: "owner" | "staff"
     }
     CompositeTypes: {
       [_ in never]: never
@@ -150,6 +390,19 @@ export type CompositeTypes<
 
 export const Constants = {
   public: {
-    Enums: {},
+    Enums: {
+      medicine_category: [
+        "tablet",
+        "capsule",
+        "syrup",
+        "injection",
+        "cream",
+        "ointment",
+        "drops",
+        "inhaler",
+        "other",
+      ],
+      user_role: ["owner", "staff"],
+    },
   },
 } as const
