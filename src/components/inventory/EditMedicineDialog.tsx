@@ -242,15 +242,25 @@ export default function EditMedicineDialog({
             />
           </div>
 
-          <div className="flex items-center space-x-2">
-            <Checkbox
-              id="expiry_alert_enabled"
-              checked={medicineData.expiry_alert_enabled}
-              onCheckedChange={(checked) => 
-                setMedicineData({ ...medicineData, expiry_alert_enabled: !!checked })
-              }
-            />
-            <Label htmlFor="expiry_alert_enabled">Enable expiry alerts</Label>
+          <div className="space-y-2">
+            <Label htmlFor="expiry_alert_enabled">Alert me before expiry</Label>
+            <Select 
+              value={medicineData.expiry_alert_enabled ? "1" : "0"} 
+              onValueChange={(value) => setMedicineData({ ...medicineData, expiry_alert_enabled: value !== "0" })}
+            >
+              <SelectTrigger>
+                <SelectValue placeholder="Select alert period" />
+              </SelectTrigger>
+              <SelectContent>
+                <SelectItem value="0">No Alert</SelectItem>
+                <SelectItem value="1">1 Month</SelectItem>
+                <SelectItem value="2">2 Months</SelectItem>
+                <SelectItem value="3">3 Months</SelectItem>
+                <SelectItem value="4">4 Months</SelectItem>
+                <SelectItem value="5">5 Months</SelectItem>
+                <SelectItem value="6">6 Months</SelectItem>
+              </SelectContent>
+            </Select>
           </div>
 
           <div className="flex gap-2 pt-4">
