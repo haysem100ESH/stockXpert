@@ -189,19 +189,25 @@ export type Database = {
       sales: {
         Row: {
           created_at: string | null
+          discount_amount: number | null
           id: string
+          payment_method: string | null
           sold_by: string | null
           total_amount: number
         }
         Insert: {
           created_at?: string | null
+          discount_amount?: number | null
           id?: string
+          payment_method?: string | null
           sold_by?: string | null
           total_amount: number
         }
         Update: {
           created_at?: string | null
+          discount_amount?: number | null
           id?: string
+          payment_method?: string | null
           sold_by?: string | null
           total_amount?: number
         }

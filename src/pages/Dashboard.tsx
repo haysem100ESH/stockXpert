@@ -7,9 +7,9 @@ import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@
 import { Calendar } from '@/components/ui/calendar';
 import { Popover, PopoverContent, PopoverTrigger } from '@/components/ui/popover';
 import { ChartContainer, ChartTooltip, ChartTooltipContent } from '@/components/ui/chart';
-import { DollarSign, Package, ShoppingCart, AlertTriangle, TrendingUp, Download, CalendarIcon } from 'lucide-react';
+import { DollarSign, Package, ShoppingCart, AlertTriangle, Download, CalendarIcon, Calendar as CalendarDaysIcon } from 'lucide-react';
 import { BarChart, Bar, XAxis, YAxis, CartesianGrid, ResponsiveContainer, PieChart, Pie, Cell, LineChart, Line } from 'recharts';
-import { format, subDays, subWeeks, subMonths, subYears } from 'date-fns';
+import { format, subDays, subWeeks, subMonths, subYears, startOfDay, endOfDay } from 'date-fns';
 import { supabase } from '@/integrations/supabase/client';
 
 interface DashboardStats {
@@ -25,6 +25,26 @@ interface OutOfStockItem {
   name: string;
   category: string;
   stock_quantity: number;
+}
+
+interface LowStockItem {
+  id: string;
+  name: string;
+  category: string;
+  stock_quantity: number;
+  minimum_stock_level: number;
+}
+
+interface ExpiringItem {
+  id: string;
+  name: string;
+  category: string;
+  expiry_date: string;
+}
+
+interface PaymentMethodData {
+  method: string;
+  amount: number;
 }
 
 interface CategorySalesData {
@@ -55,9 +75,12 @@ export default function Dashboard() {
     outOfStockItems: 0
   });
   const [outOfStockItems, setOutOfStockItems] = useState<OutOfStockItem[]>([]);
+  const [lowStockItems, setLowStockItems] = useState<LowStockItem[]>([]);
+  const [expiringItems, setExpiringItems] = useState<ExpiringItem[]>([]);
   const [categorySales, setCategorySales] = useState<CategorySalesData[]>([]);
   const [productPerformance, setProductPerformance] = useState<ProductPerformanceData[]>([]);
   const [incomeExpenseData, setIncomeExpenseData] = useState<IncomeExpenseData[]>([]);
+  const [paymentMethodData, setPaymentMethodData] = useState<PaymentMethodData[]>([]);
   const [loading, setLoading] = useState(true);
   const [reportPeriod, setReportPeriod] = useState('monthly');
   const [customDate, setCustomDate] = useState<Date>();
@@ -69,15 +92,14 @@ export default function Dashboard() {
   const getDateRange = () => {
     const now = new Date();
     if (customDate) {
-      const start = new Date(customDate);
-      start.setHours(0, 0, 0, 0);
-      const end = new Date(customDate);
-      end.setHours(23, 59, 59, 999);
-      return { start, end };
+      return { 
+        start: startOfDay(customDate), 
+        end: endOfDay(customDate) 
+      };
     }
     
     switch (reportPeriod) {
-      case 'daily': return { start: subDays(now, 1), end: now };
+      case 'daily': return { start: startOfDay(now), end: endOfDay(now) };
       case 'weekly': return { start: subWeeks(now, 1), end: now };
       case 'monthly': return { start: subMonths(now, 1), end: now };
       case 'yearly': return { start: subYears(now, 1), end: now };
@@ -92,7 +114,7 @@ export default function Dashboard() {
       // Fetch revenue for the selected period
       const { data: salesData } = await supabase
         .from('sales')
-        .select('total_amount, created_at')
+        .select('total_amount, created_at, payment_method, discount_amount')
         .gte('created_at', start.toISOString())
         .lte('created_at', end.toISOString());
       
@@ -123,6 +145,23 @@ export default function Dashboard() {
         .from('medicines')
         .select('id, name, category, stock_quantity')
         .eq('stock_quantity', 0);
+
+      // Fetch low stock items details
+      const { data: lowStockDetails } = await supabase
+        .from('medicines')
+        .select('id, name, category, stock_quantity, minimum_stock_level')
+        .filter('stock_quantity', 'lte', 'minimum_stock_level')
+        .gt('stock_quantity', 0);
+
+      // Fetch expiring items (within 30 days)
+      const thirtyDaysFromNow = new Date();
+      thirtyDaysFromNow.setDate(thirtyDaysFromNow.getDate() + 30);
+      const { data: expiringDetails } = await supabase
+        .from('medicines')
+        .select('id, name, category, expiry_date')
+        .not('expiry_date', 'is', null)
+        .lte('expiry_date', thirtyDaysFromNow.toISOString().split('T')[0])
+        .gte('expiry_date', new Date().toISOString().split('T')[0]);
 
       // Fetch sales data with medicine details for charts
       const { data: salesWithItems } = await supabase
@@ -209,6 +248,19 @@ export default function Dashboard() {
         .map(([date, data]) => ({ date, ...data }))
         .sort((a, b) => a.date.localeCompare(b.date));
 
+      // Process payment method data
+      const paymentMap = new Map<string, number>();
+      salesData?.forEach(sale => {
+        const method = sale.payment_method || 'Cash';
+        const amount = Number(sale.total_amount) - (Number(sale.discount_amount) || 0);
+        paymentMap.set(method, (paymentMap.get(method) || 0) + amount);
+      });
+
+      const paymentMethodArray = Array.from(paymentMap.entries()).map(([method, amount]) => ({
+        method: method,
+        amount: amount
+      }));
+
       setStats({
         totalRevenue,
         totalProducts,
@@ -217,9 +269,12 @@ export default function Dashboard() {
         outOfStockItems
       });
       setOutOfStockItems(outOfStockDetails || []);
+      setLowStockItems(lowStockDetails || []);
+      setExpiringItems(expiringDetails || []);
       setCategorySales(categorySalesArray);
       setProductPerformance(productPerformanceArray);
       setIncomeExpenseData(incomeExpenseArray);
+      setPaymentMethodData(paymentMethodArray);
     } catch (error) {
       console.error('Error fetching dashboard data:', error);
     } finally {
@@ -308,17 +363,19 @@ export default function Dashboard() {
         </div>
       </div>
 
-      <div className="grid gap-4 md:grid-cols-2 lg:grid-cols-4">
-        <Card>
-          <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
-            <CardTitle className="text-sm font-medium">Total Revenue</CardTitle>
-            <DollarSign className="h-4 w-4 text-muted-foreground" />
-          </CardHeader>
-          <CardContent>
-            <div className="text-2xl font-bold">${stats.totalRevenue.toFixed(2)}</div>
-            <p className="text-xs text-muted-foreground">All time revenue</p>
-          </CardContent>
-        </Card>
+      <div className="grid gap-4 md:grid-cols-2 lg:grid-cols-5">
+        {profile?.role === 'owner' && (
+          <Card>
+            <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
+              <CardTitle className="text-sm font-medium">Total Revenue</CardTitle>
+              <DollarSign className="h-4 w-4 text-muted-foreground" />
+            </CardHeader>
+            <CardContent>
+              <div className="text-2xl font-bold">${stats.totalRevenue.toFixed(2)}</div>
+              <p className="text-xs text-muted-foreground">All time revenue</p>
+            </CardContent>
+          </Card>
+        )}
         
         <Card>
           <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
@@ -333,12 +390,12 @@ export default function Dashboard() {
         
         <Card>
           <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
-            <CardTitle className="text-sm font-medium">Today's Sales</CardTitle>
+            <CardTitle className="text-sm font-medium">Period Sales</CardTitle>
             <ShoppingCart className="h-4 w-4 text-muted-foreground" />
           </CardHeader>
           <CardContent>
             <div className="text-2xl font-bold">{stats.todaySales}</div>
-            <p className="text-xs text-muted-foreground">Sales transactions today</p>
+            <p className="text-xs text-muted-foreground">Sales transactions this period</p>
           </CardContent>
         </Card>
         
@@ -352,7 +409,89 @@ export default function Dashboard() {
             <p className="text-xs text-muted-foreground">Low stock items</p>
           </CardContent>
         </Card>
+        
+        <Card>
+          <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
+            <CardTitle className="text-sm font-medium">Expiring Soon</CardTitle>
+            <CalendarDaysIcon className="h-4 w-4 text-muted-foreground" />
+          </CardHeader>
+          <CardContent>
+            <div className="text-2xl font-bold text-warning">{expiringItems.length}</div>
+            <p className="text-xs text-muted-foreground">Items expiring in 30 days</p>
+          </CardContent>
+        </Card>
       </div>
+
+      {/* Low Stock Items */}
+      {lowStockItems.length > 0 && (
+        <Card>
+          <CardHeader>
+            <CardTitle className="flex items-center space-x-2">
+              <Package className="h-5 w-5 text-warning" />
+              <span>Low Stock Items</span>
+            </CardTitle>
+            <CardDescription>
+              {lowStockItems.length} items are running low on stock
+            </CardDescription>
+          </CardHeader>
+          <CardContent>
+            <div className="grid gap-2">
+              {lowStockItems.slice(0, 5).map((item) => (
+                <div key={item.id} className="flex items-center justify-between p-2 border rounded-lg">
+                  <div>
+                    <p className="font-medium">{item.name}</p>
+                    <p className="text-sm text-muted-foreground">{item.category}</p>
+                  </div>
+                  <div className="text-right">
+                    <Badge variant="secondary">{item.stock_quantity} left</Badge>
+                    <p className="text-xs text-muted-foreground">Min: {item.minimum_stock_level}</p>
+                  </div>
+                </div>
+              ))}
+              {lowStockItems.length > 5 && (
+                <p className="text-sm text-muted-foreground text-center">
+                  And {lowStockItems.length - 5} more items...
+                </p>
+              )}
+            </div>
+          </CardContent>
+        </Card>
+      )}
+
+      {/* Expiring Items */}
+      {expiringItems.length > 0 && (
+        <Card>
+          <CardHeader>
+            <CardTitle className="flex items-center space-x-2">
+              <CalendarDaysIcon className="h-5 w-5 text-warning" />
+              <span>Items Expiring Soon</span>
+            </CardTitle>
+            <CardDescription>
+              {expiringItems.length} items will expire within 30 days
+            </CardDescription>
+          </CardHeader>
+          <CardContent>
+            <div className="grid gap-2">
+              {expiringItems.slice(0, 5).map((item) => (
+                <div key={item.id} className="flex items-center justify-between p-2 border rounded-lg">
+                  <div>
+                    <p className="font-medium">{item.name}</p>
+                    <p className="text-sm text-muted-foreground">{item.category}</p>
+                  </div>
+                  <div className="text-right">
+                    <Badge variant="outline">{new Date(item.expiry_date).toLocaleDateString()}</Badge>
+                  </div>
+                </div>
+              ))}
+              {expiringItems.length > 5 && (
+                <p className="text-sm text-muted-foreground text-center">
+                  And {expiringItems.length - 5} more items...
+                </p>
+              )}
+            </div>
+          </CardContent>
+        </Card>
+      )}
 
       {stats.outOfStockItems > 0 && (
         <Card>
@@ -387,7 +526,7 @@ export default function Dashboard() {
       )}
 
       {/* Charts Section */}
-      <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
+      <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
         {/* Items Sold by Category */}
         <Card>
           <CardHeader>
@@ -450,43 +589,80 @@ export default function Dashboard() {
         </Card>
       </div>
 
-      {/* Income vs Expenses Chart */}
-      <Card>
-        <CardHeader>
-          <CardTitle>Income vs Expenses</CardTitle>
-          <CardDescription>Daily comparison of income and expenses</CardDescription>
-        </CardHeader>
-        <CardContent>
-          <ChartContainer
-            config={{
-              income: { label: "Income", color: "hsl(var(--success))" },
-              expenses: { label: "Expenses", color: "hsl(var(--destructive))" }
-            }}
-            className="h-[400px]"
-          >
-            <ResponsiveContainer width="100%" height="100%">
-              <LineChart data={incomeExpenseData}>
-                <CartesianGrid strokeDasharray="3 3" />
-                <XAxis dataKey="date" />
-                <YAxis />
-                <ChartTooltip content={<ChartTooltipContent />} />
-                <Line 
-                  type="monotone" 
-                  dataKey="income" 
-                  stroke="hsl(var(--success))" 
-                  strokeWidth={2}
-                />
-                <Line 
-                  type="monotone" 
-                  dataKey="expenses" 
-                  stroke="hsl(var(--destructive))" 
-                  strokeWidth={2}
-                />
-              </LineChart>
-            </ResponsiveContainer>
-          </ChartContainer>
-        </CardContent>
-      </Card>
-    </div>
+      {/* Income vs Expenses Chart - Only show for owners */}
+      {profile?.role === 'owner' && (
+        <Card>
+          <CardHeader>
+            <CardTitle>Income vs Expenses</CardTitle>
+            <CardDescription>Daily comparison of income and expenses</CardDescription>
+          </CardHeader>
+          <CardContent>
+            <ChartContainer
+              config={{
+                income: { label: "Income", color: "hsl(var(--success))" },
+                expenses: { label: "Expenses", color: "hsl(var(--destructive))" }
+              }}
+              className="h-[400px]"
+            >
+              <ResponsiveContainer width="100%" height="100%">
+                <LineChart data={incomeExpenseData}>
+                  <CartesianGrid strokeDasharray="3 3" />
+                  <XAxis dataKey="date" />
+                  <YAxis />
+                  <ChartTooltip content={<ChartTooltipContent />} />
+                  <Line 
+                    type="monotone" 
+                    dataKey="income" 
+                    stroke="hsl(var(--success))" 
+                    strokeWidth={2}
+                  />
+                  <Line 
+                    type="monotone" 
+                    dataKey="expenses" 
+                    stroke="hsl(var(--destructive))" 
+                    strokeWidth={2}
+                  />
+                </LineChart>
+                </ResponsiveContainer>
+            </ChartContainer>
+          </CardContent>
+        </Card>
+      )}
+
+        {/* Payment Methods Pie Chart */}
+        <Card>
+          <CardHeader>
+            <CardTitle>Payment Methods</CardTitle>
+            <CardDescription>Revenue breakdown by payment method</CardDescription>
+          </CardHeader>
+          <CardContent>
+            <ChartContainer
+              config={{
+                amount: { label: "Amount", color: "hsl(var(--primary))" }
+              }}
+              className="h-[300px]"
+            >
+              <ResponsiveContainer width="100%" height="100%">
+                <PieChart>
+                  <Pie
+                    data={paymentMethodData}
+                    cx="50%"
+                    cy="50%"
+                    outerRadius={80}
+                    fill="hsl(var(--primary))"
+                    dataKey="amount"
+                    label={(entry) => `${entry.method}: $${entry.amount.toFixed(2)}`}
+                  >
+                    {paymentMethodData.map((entry, index) => (
+                      <Cell key={`cell-${index}`} fill={COLORS[index % COLORS.length]} />
+                    ))}
+                  </Pie>
+                  <ChartTooltip content={<ChartTooltipContent />} />
+                </PieChart>
+              </ResponsiveContainer>
+            </ChartContainer>
+          </CardContent>
+        </Card>
+      </div>
   );
 }

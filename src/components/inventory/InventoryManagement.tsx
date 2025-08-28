@@ -14,6 +14,7 @@ import { useToast } from '@/hooks/use-toast';
 import { useAuth } from '@/hooks/useAuth';
 import AddMedicineDialog from './AddMedicineDialog';
 import EditMedicineDialog from './EditMedicineDialog';
+import { ConfirmationDialog } from '@/components/ui/confirmation-dialog';
 
 interface Medicine {
   id: string;
@@ -43,7 +44,9 @@ export default function InventoryManagement() {
   const [loading, setLoading] = useState(true);
   const [showAddDialog, setShowAddDialog] = useState(false);
   const [showEditDialog, setShowEditDialog] = useState(false);
+  const [showDeleteConfirm, setShowDeleteConfirm] = useState(false);
   const [selectedMedicine, setSelectedMedicine] = useState<Medicine | null>(null);
+  const [medicineToDelete, setMedicineToDelete] = useState<string | null>(null);
   const { toast } = useToast();
   const { profile } = useAuth();
   
@@ -151,7 +154,7 @@ export default function InventoryManagement() {
     setShowEditDialog(true);
   };
 
-  const handleDeleteMedicine = async (medicineId: string) => {
+  const handleDeleteMedicine = (medicineId: string) => {
     if (!profile || profile.role !== 'owner') {
       toast({
         title: "Error",
@@ -161,15 +164,20 @@ export default function InventoryManagement() {
       return;
     }
 
-    if (!confirm("Are you sure you want to delete this medicine? This action cannot be undone.")) {
-      return;
-    }
+    setMedicineToDelete(medicineId);
+    setShowDeleteConfirm(true);
+  };
+
+  const confirmDeleteMedicine = async () => {
+    if (!medicineToDelete) return;
+
+    setShowDeleteConfirm(false);
 
     try {
       const { error } = await supabase
         .from('medicines')
         .delete()
-        .eq('id', medicineId);
+        .eq('id', medicineToDelete);
 
       if (error) throw error;
 
@@ -185,6 +193,8 @@ export default function InventoryManagement() {
         description: "Failed to delete medicine",
         variant: "destructive"
       });
+    } finally {
+      setMedicineToDelete(null);
     }
   };
 
@@ -417,6 +427,15 @@ export default function InventoryManagement() {
         onOpenChange={setShowEditDialog}
         medicine={selectedMedicine}
         onMedicineUpdated={handleMedicineAdded}
+      />
+
+      <ConfirmationDialog
+        open={showDeleteConfirm}
+        onOpenChange={setShowDeleteConfirm}
+        title="Delete Medicine"
+        description="Are you sure you want to delete this medicine? This action cannot be undone."
+        onConfirm={confirmDeleteMedicine}
+        confirmText="Delete"
       />
     </div>
   );

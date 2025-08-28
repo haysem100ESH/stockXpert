@@ -7,10 +7,11 @@ import { Label } from '@/components/ui/label';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
 import { Separator } from '@/components/ui/separator';
 import { Pagination, PaginationContent, PaginationItem, PaginationLink, PaginationNext, PaginationPrevious } from '@/components/ui/pagination';
-import { Search, Plus, Minus, ShoppingCart, Trash2, CreditCard } from 'lucide-react';
+import { Search, Plus, Minus, ShoppingCart, Trash2, CreditCard, Percent } from 'lucide-react';
 import { supabase } from '@/integrations/supabase/client';
 import { useToast } from '@/hooks/use-toast';
 import { useAuth } from '@/hooks/useAuth';
+import { ConfirmationDialog } from '@/components/ui/confirmation-dialog';
 
 interface Medicine {
   id: string;
@@ -36,7 +37,9 @@ export default function SalesManagement() {
   const [currentPage, setCurrentPage] = useState(1);
   const [loading, setLoading] = useState(true);
   const [processing, setProcessing] = useState(false);
-  const [paymentMethod, setPaymentMethod] = useState<string>('cash');
+  const [paymentMethod, setPaymentMethod] = useState<string>('Cash');
+  const [discountPercent, setDiscountPercent] = useState<number>(0);
+  const [showCheckoutConfirm, setShowCheckoutConfirm] = useState(false);
   const { profile } = useAuth();
   const { toast } = useToast();
   
@@ -155,8 +158,16 @@ export default function SalesManagement() {
     setCart(cart.filter(item => item.id !== id));
   };
 
-  const calculateTotal = () => {
+  const calculateSubtotal = () => {
     return cart.reduce((sum, item) => sum + item.total, 0);
+  };
+
+  const calculateDiscount = () => {
+    return (calculateSubtotal() * discountPercent) / 100;
+  };
+
+  const calculateTotal = () => {
+    return calculateSubtotal() - calculateDiscount();
   };
 
   const handleCheckout = async () => {
@@ -169,6 +180,11 @@ export default function SalesManagement() {
       return;
     }
 
+    setShowCheckoutConfirm(true);
+  };
+
+  const confirmCheckout = async () => {
+    setShowCheckoutConfirm(false);
     setProcessing(true);
 
     try {
@@ -177,6 +193,8 @@ export default function SalesManagement() {
         .from('sales')
         .insert([{
           total_amount: calculateTotal(),
+          payment_method: paymentMethod,
+          discount_amount: calculateDiscount(),
           sold_by: profile?.id
         }])
         .select()
@@ -217,7 +235,8 @@ export default function SalesManagement() {
       });
 
       setCart([]);
-      setPaymentMethod('cash');
+      setPaymentMethod('Cash');
+      setDiscountPercent(0);
       fetchMedicines(); // Refresh to get updated stock
     } catch (error) {
       toast({
@@ -432,13 +451,49 @@ export default function SalesManagement() {
                         <SelectValue placeholder="Select payment method" />
                       </SelectTrigger>
                       <SelectContent>
-                        <SelectItem value="cash">Cash</SelectItem>
-                        <SelectItem value="card">Credit/Debit Card</SelectItem>
-                        <SelectItem value="mobile_money">Mobile Money</SelectItem>
-                        <SelectItem value="bank_transfer">Bank Transfer</SelectItem>
-                        <SelectItem value="insurance">Insurance</SelectItem>
+                        <SelectItem value="Cash">Cash</SelectItem>
+                        <SelectItem value="Commercial Bank of Ethiopia">Commercial Bank of Ethiopia</SelectItem>
+                        <SelectItem value="Awash International Bank">Awash International Bank</SelectItem>
+                        <SelectItem value="Bank of Abyssinia">Bank of Abyssinia</SelectItem>
+                        <SelectItem value="Dashen Bank">Dashen Bank</SelectItem>
+                        <SelectItem value="Telebirr">Telebirr</SelectItem>
+                        <SelectItem value="M-PESA | Safaricom">M-PESA | Safaricom</SelectItem>
                       </SelectContent>
                     </Select>
+                  </div>
+
+                  {/* Discount Section */}
+                  <div className="space-y-2">
+                    <Label htmlFor="discount">Discount (%)</Label>
+                    <div className="flex items-center space-x-2">
+                      <Percent className="h-4 w-4 text-muted-foreground" />
+                      <Input
+                        id="discount"
+                        type="number"
+                        min="0"
+                        max="100"
+                        value={discountPercent}
+                        onChange={(e) => setDiscountPercent(Math.max(0, Math.min(100, Number(e.target.value))))}
+                        placeholder="0"
+                        className="flex-1"
+                      />
+                    </div>
+                  </div>
+                  
+                  <Separator />
+
+                  {/* Pricing Summary */}
+                  <div className="space-y-2">
+                    <div className="flex justify-between text-sm">
+                      <span>Subtotal:</span>
+                      <span>${calculateSubtotal().toFixed(2)}</span>
+                    </div>
+                    {discountPercent > 0 && (
+                      <div className="flex justify-between text-sm text-success">
+                        <span>Discount ({discountPercent}%):</span>
+                        <span>-${calculateDiscount().toFixed(2)}</span>
+                      </div>
+                    )}
                   </div>
                   
                   <Separator />
@@ -461,6 +516,15 @@ export default function SalesManagement() {
             )}
           </CardContent>
         </Card>
+        
+        <ConfirmationDialog
+          open={showCheckoutConfirm}
+          onOpenChange={setShowCheckoutConfirm}
+          title="Confirm Checkout"
+          description={`Are you sure you want to complete this sale? Total: $${calculateTotal().toFixed(2)} via ${paymentMethod}`}
+          onConfirm={confirmCheckout}
+          confirmText="Complete Sale"
+        />
       </div>
     </div>
   );

@@ -1,4 +1,4 @@
-import { ReactNode } from 'react';
+import { ReactNode, useState } from 'react';
 import { Navigate } from 'react-router-dom';
 import { useAuth } from '@/hooks/useAuth';
 import { Button } from '@/components/ui/button';
@@ -7,6 +7,7 @@ import { SidebarProvider, SidebarTrigger } from '@/components/ui/sidebar';
 import { AppSidebar } from '@/components/AppSidebar';
 import { LogOut } from 'lucide-react';
 import { Loader2 } from 'lucide-react';
+import { ConfirmationDialog } from '@/components/ui/confirmation-dialog';
 
 interface LayoutProps {
   children: ReactNode;
@@ -14,6 +15,7 @@ interface LayoutProps {
 
 export default function Layout({ children }: LayoutProps) {
   const { user, profile, signOut, loading } = useAuth();
+  const [showSignOutConfirm, setShowSignOutConfirm] = useState(false);
 
   if (loading) {
     return (
@@ -26,6 +28,15 @@ export default function Layout({ children }: LayoutProps) {
   if (!user) {
     return <Navigate to="/auth" replace />;
   }
+
+  const handleSignOut = () => {
+    setShowSignOutConfirm(true);
+  };
+
+  const confirmSignOut = async () => {
+    setShowSignOutConfirm(false);
+    await signOut();
+  };
 
   return (
     <SidebarProvider>
@@ -47,7 +58,7 @@ export default function Layout({ children }: LayoutProps) {
                   {profile?.full_name || user.email}
                 </span>
               </div>
-              <Button variant="outline" size="sm" onClick={signOut}>
+              <Button variant="outline" size="sm" onClick={handleSignOut}>
                 <LogOut className="h-4 w-4 mr-2" />
                 <span className="hidden sm:inline">Sign Out</span>
               </Button>
@@ -59,6 +70,15 @@ export default function Layout({ children }: LayoutProps) {
           </main>
         </div>
       </div>
+      
+      <ConfirmationDialog
+        open={showSignOutConfirm}
+        onOpenChange={setShowSignOutConfirm}
+        title="Sign Out"
+        description="Are you sure you want to sign out?"
+        onConfirm={confirmSignOut}
+        confirmText="Sign Out"
+      />
     </SidebarProvider>
   );
 }
