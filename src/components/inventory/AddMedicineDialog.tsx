@@ -168,14 +168,19 @@ export default function AddMedicineDialog({ open, onOpenChange, onMedicineAdded 
           </div>
 
           <div className="space-y-2">
-            <Label htmlFor="expiry_alert_enabled">Expiry Alert</Label>
-            <Select name="expiry_alert_enabled" defaultValue="true">
+            <Label htmlFor="expiry_alert_enabled">Alert me before expiry</Label>
+            <Select name="expiry_alert_enabled" defaultValue="1">
               <SelectTrigger>
-                <SelectValue placeholder="Select alert preference" />
+                <SelectValue placeholder="Select alert period" />
               </SelectTrigger>
               <SelectContent>
-                <SelectItem value="false">No Alert</SelectItem>
-                <SelectItem value="true">Alert me before expiry (30 days)</SelectItem>
+                <SelectItem value="0">No Alert</SelectItem>
+                <SelectItem value="1">1 Month</SelectItem>
+                <SelectItem value="2">2 Months</SelectItem>
+                <SelectItem value="3">3 Months</SelectItem>
+                <SelectItem value="4">4 Months</SelectItem>
+                <SelectItem value="5">5 Months</SelectItem>
+                <SelectItem value="6">6 Months</SelectItem>
               </SelectContent>
             </Select>
           </div>

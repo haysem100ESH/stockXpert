@@ -313,7 +313,16 @@ export default function Dashboard() {
     return <div>Loading dashboard...</div>;
   }
 
-  const COLORS = ['hsl(var(--primary))', 'hsl(var(--secondary))', 'hsl(var(--accent))', 'hsl(var(--success))', 'hsl(var(--warning))'];
+  const COLORS = [
+    'hsl(217 91% 60%)',     // Blue
+    'hsl(142 76% 36%)',     // Green  
+    'hsl(38 92% 50%)',      // Orange
+    'hsl(0 84% 60%)',       // Red
+    'hsl(271 81% 56%)',     // Purple
+    'hsl(191 95% 45%)',     // Cyan
+    'hsl(49 96% 53%)',      // Yellow
+    'hsl(340 82% 52%)',     // Pink
+  ];
 
   return (
     <div className="space-y-6">
@@ -422,6 +431,41 @@ export default function Dashboard() {
         </Card>
       </div>
 
+      {/* Expiring Items */}
+      {expiringItems.length > 0 && (
+        <Card>
+          <CardHeader>
+            <CardTitle className="flex items-center space-x-2">
+              <CalendarDaysIcon className="h-5 w-5 text-warning" />
+              <span>Items Expiring Soon</span>
+            </CardTitle>
+            <CardDescription>
+              {expiringItems.length} items will expire within 30 days
+            </CardDescription>
+          </CardHeader>
+          <CardContent>
+            <div className="grid gap-2">
+              {expiringItems.slice(0, 5).map((item) => (
+                <div key={item.id} className="flex items-center justify-between p-2 border rounded-lg">
+                  <div>
+                    <p className="font-medium">{item.name}</p>
+                    <p className="text-sm text-muted-foreground">{item.category}</p>
+                  </div>
+                  <div className="text-right">
+                    <Badge variant="outline">{new Date(item.expiry_date).toLocaleDateString()}</Badge>
+                  </div>
+                </div>
+              ))}
+              {expiringItems.length > 5 && (
+                <p className="text-sm text-muted-foreground text-center">
+                  And {expiringItems.length - 5} more items...
+                </p>
+              )}
+            </div>
+          </CardContent>
+        </Card>
+      )}
+
       {/* Low Stock Items */}
       {lowStockItems.length > 0 && (
         <Card>
@@ -451,41 +495,6 @@ export default function Dashboard() {
               {lowStockItems.length > 5 && (
                 <p className="text-sm text-muted-foreground text-center">
                   And {lowStockItems.length - 5} more items...
-                </p>
-              )}
-            </div>
-          </CardContent>
-        </Card>
-      )}
-
-      {/* Expiring Items */}
-      {expiringItems.length > 0 && (
-        <Card>
-          <CardHeader>
-            <CardTitle className="flex items-center space-x-2">
-              <CalendarDaysIcon className="h-5 w-5 text-warning" />
-              <span>Items Expiring Soon</span>
-            </CardTitle>
-            <CardDescription>
-              {expiringItems.length} items will expire within 30 days
-            </CardDescription>
-          </CardHeader>
-          <CardContent>
-            <div className="grid gap-2">
-              {expiringItems.slice(0, 5).map((item) => (
-                <div key={item.id} className="flex items-center justify-between p-2 border rounded-lg">
-                  <div>
-                    <p className="font-medium">{item.name}</p>
-                    <p className="text-sm text-muted-foreground">{item.category}</p>
-                  </div>
-                  <div className="text-right">
-                    <Badge variant="outline">{new Date(item.expiry_date).toLocaleDateString()}</Badge>
-                  </div>
-                </div>
-              ))}
-              {expiringItems.length > 5 && (
-                <p className="text-sm text-muted-foreground text-center">
-                  And {expiringItems.length - 5} more items...
                 </p>
               )}
             </div>
@@ -526,7 +535,7 @@ export default function Dashboard() {
       )}
 
       {/* Charts Section */}
-      <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
+      <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
         {/* Items Sold by Category */}
         <Card>
           <CardHeader>
@@ -536,7 +545,7 @@ export default function Dashboard() {
           <CardContent>
             <ChartContainer
               config={{
-                sales: { label: "Sales", color: "hsl(var(--primary))" }
+                sales: { label: "Sales", color: "hsl(217 91% 60%)" }
               }}
               className="h-[300px]"
             >
@@ -546,38 +555,42 @@ export default function Dashboard() {
                   <XAxis dataKey="category" />
                   <YAxis />
                   <ChartTooltip content={<ChartTooltipContent />} />
-                  <Bar dataKey="sales" fill="hsl(var(--primary))" />
+                  <Bar dataKey="sales">
+                    {categorySales.map((entry, index) => (
+                      <Cell key={`cell-${index}`} fill={COLORS[index % COLORS.length]} />
+                    ))}
+                  </Bar>
                 </BarChart>
               </ResponsiveContainer>
             </ChartContainer>
           </CardContent>
         </Card>
 
-        {/* Product Performance */}
+        {/* Payment Methods Pie Chart */}
         <Card>
           <CardHeader>
-            <CardTitle>Top Selling Products</CardTitle>
-            <CardDescription>Most frequently sold products</CardDescription>
+            <CardTitle>Payment Methods</CardTitle>
+            <CardDescription>Revenue breakdown by payment method</CardDescription>
           </CardHeader>
           <CardContent>
             <ChartContainer
               config={{
-                sales: { label: "Sales", color: "hsl(var(--secondary))" }
+                amount: { label: "Amount", color: "hsl(142 76% 36%)" }
               }}
               className="h-[300px]"
             >
               <ResponsiveContainer width="100%" height="100%">
                 <PieChart>
                   <Pie
-                    data={productPerformance.slice(0, 5)}
+                    data={paymentMethodData}
                     cx="50%"
                     cy="50%"
                     outerRadius={80}
-                    fill="hsl(var(--secondary))"
-                    dataKey="sales"
-                    label={(entry) => entry.name}
+                    fill="hsl(142 76% 36%)"
+                    dataKey="amount"
+                    label={(entry) => `${entry.method}: $${entry.amount.toFixed(2)}`}
                   >
-                    {productPerformance.slice(0, 5).map((entry, index) => (
+                    {paymentMethodData.map((entry, index) => (
                       <Cell key={`cell-${index}`} fill={COLORS[index % COLORS.length]} />
                     ))}
                   </Pie>
@@ -588,6 +601,41 @@ export default function Dashboard() {
           </CardContent>
         </Card>
       </div>
+
+      {/* Top Selling Products Chart - Moved Below */}
+      <Card>
+        <CardHeader>
+          <CardTitle>Top Selling Products</CardTitle>
+          <CardDescription>Most frequently sold products</CardDescription>
+        </CardHeader>
+        <CardContent>
+          <ChartContainer
+            config={{
+              sales: { label: "Sales", color: "hsl(38 92% 50%)" }
+            }}
+            className="h-[300px]"
+          >
+            <ResponsiveContainer width="100%" height="100%">
+              <PieChart>
+                <Pie
+                  data={productPerformance.slice(0, 5)}
+                  cx="50%"
+                  cy="50%"
+                  outerRadius={80}
+                  fill="hsl(38 92% 50%)"
+                  dataKey="sales"
+                  label={(entry) => entry.name}
+                >
+                  {productPerformance.slice(0, 5).map((entry, index) => (
+                    <Cell key={`cell-${index}`} fill={COLORS[index % COLORS.length]} />
+                  ))}
+                </Pie>
+                <ChartTooltip content={<ChartTooltipContent />} />
+              </PieChart>
+            </ResponsiveContainer>
+          </ChartContainer>
+        </CardContent>
+      </Card>
 
       {/* Income vs Expenses Chart - Only show for owners */}
       {profile?.role === 'owner' && (
@@ -628,41 +676,6 @@ export default function Dashboard() {
           </CardContent>
         </Card>
       )}
-
-        {/* Payment Methods Pie Chart */}
-        <Card>
-          <CardHeader>
-            <CardTitle>Payment Methods</CardTitle>
-            <CardDescription>Revenue breakdown by payment method</CardDescription>
-          </CardHeader>
-          <CardContent>
-            <ChartContainer
-              config={{
-                amount: { label: "Amount", color: "hsl(var(--primary))" }
-              }}
-              className="h-[300px]"
-            >
-              <ResponsiveContainer width="100%" height="100%">
-                <PieChart>
-                  <Pie
-                    data={paymentMethodData}
-                    cx="50%"
-                    cy="50%"
-                    outerRadius={80}
-                    fill="hsl(var(--primary))"
-                    dataKey="amount"
-                    label={(entry) => `${entry.method}: $${entry.amount.toFixed(2)}`}
-                  >
-                    {paymentMethodData.map((entry, index) => (
-                      <Cell key={`cell-${index}`} fill={COLORS[index % COLORS.length]} />
-                    ))}
-                  </Pie>
-                  <ChartTooltip content={<ChartTooltipContent />} />
-                </PieChart>
-              </ResponsiveContainer>
-            </ChartContainer>
-          </CardContent>
-        </Card>
-      </div>
+    </div>
   );
 }
