@@ -59,6 +59,30 @@ export default function InventoryDashboard() {
     fetchInventoryData();
   }, []);
 
+  // Set up real-time subscription for medicines table changes
+  useEffect(() => {
+    const channel = supabase
+      .channel('inventory-changes')
+      .on(
+        'postgres_changes',
+        {
+          event: 'UPDATE',
+          schema: 'public',
+          table: 'medicines'
+        },
+        (payload) => {
+          console.log('Medicine updated:', payload);
+          // Refresh inventory data when medicines are updated
+          fetchInventoryData();
+        }
+      )
+      .subscribe();
+
+    return () => {
+      supabase.removeChannel(channel);
+    };
+  }, []);
+
   const fetchInventoryData = async () => {
     try {
       // Fetch out of stock items
@@ -117,23 +141,23 @@ export default function InventoryDashboard() {
 
   const confirmRemoveExpiredItem = async () => {
     try {
-      // Set stock to 0 for expired medicines
+      // Set stock to 0 and clear expiry date for expired medicines
       const { error } = await supabase
         .from('medicines')
-        .update({ stock_quantity: 0 })
+        .update({ 
+          stock_quantity: 0,
+          expiry_date: null
+        })
         .eq('id', deleteConfirm.medicineId);
 
       if (error) throw error;
 
-      // Remove from local state
+      // Remove from local state immediately for better UX
       setExpiredItems(expiredItems.filter(item => item.id !== deleteConfirm.medicineId));
-      
-      // Refresh inventory data
-      fetchInventoryData();
       
       toast({
         title: "Success",
-        description: "Expired medicine stock set to 0",
+        description: "Expired medicine stock set to 0 and expiry date cleared",
       });
 
       setDeleteConfirm({ open: false, medicineId: '', medicineName: '' });
