@@ -91,8 +91,12 @@ export default function StaffInventoryView() {
     }
   };
 
+  const isOutOfStock = (medicine: Medicine) => {
+    return medicine.stock_quantity === 0;
+  };
+
   const isLowStock = (medicine: Medicine) => {
-    return medicine.stock_quantity <= medicine.minimum_stock_level;
+    return medicine.stock_quantity > 0 && medicine.stock_quantity <= medicine.minimum_stock_level;
   };
 
   if (loading) {
@@ -161,7 +165,7 @@ export default function StaffInventoryView() {
                       </div>
                     ) : (
                       <div className="flex items-center space-x-2">
-                        <span className={isLowStock(medicine) ? 'text-warning font-medium' : ''}>
+                        <span className={(isLowStock(medicine) || isOutOfStock(medicine)) ? 'text-warning font-medium' : ''}>
                           {medicine.stock_quantity}
                         </span>
                         <Button
@@ -172,6 +176,11 @@ export default function StaffInventoryView() {
                         >
                           <Edit2 className="h-3 w-3" />
                         </Button>
+                        {isOutOfStock(medicine) && (
+                          <Badge variant="destructive" className="text-xs">
+                            Out of Stock
+                          </Badge>
+                        )}
                         {isLowStock(medicine) && (
                           <Badge variant="destructive" className="text-xs">
                             Low Stock

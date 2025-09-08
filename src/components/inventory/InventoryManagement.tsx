@@ -126,8 +126,12 @@ export default function InventoryManagement() {
     return categories.sort();
   };
 
+  const isOutOfStock = (medicine: Medicine) => {
+    return medicine.stock_quantity === 0;
+  };
+
   const isLowStock = (medicine: Medicine) => {
-    return medicine.stock_quantity <= medicine.minimum_stock_level;
+    return medicine.stock_quantity > 0 && medicine.stock_quantity <= medicine.minimum_stock_level;
   };
 
   const isExpired = (expiryDate?: string) => {
@@ -315,19 +319,24 @@ export default function InventoryManagement() {
                   <span>Price:</span>
                   <span className="font-medium">ETB {medicine.selling_price}</span>
                 </div>
-                <div className="flex justify-between text-sm">
-                  <span>Stock:</span>
-                  <div className="flex items-center space-x-2">
-                    <span className={isLowStock(medicine) ? 'text-warning font-medium' : ''}>
-                      {medicine.stock_quantity}
-                    </span>
-                    {isLowStock(medicine) && (
-                      <Badge variant="destructive" className="text-xs">
-                        Low Stock
-                      </Badge>
-                    )}
-                  </div>
-                </div>
+                  <div className="flex justify-between text-sm">
+                   <span>Stock:</span>
+                   <div className="flex items-center space-x-2">
+                     <span className={(isLowStock(medicine) || isOutOfStock(medicine)) ? 'text-warning font-medium' : ''}>
+                       {medicine.stock_quantity}
+                     </span>
+                     {isOutOfStock(medicine) && (
+                       <Badge variant="destructive" className="text-xs">
+                         Out of Stock
+                       </Badge>
+                     )}
+                     {isLowStock(medicine) && (
+                       <Badge variant="destructive" className="text-xs">
+                         Low Stock
+                       </Badge>
+                     )}
+                   </div>
+                 </div>
                 {medicine.expiry_date && (
                   <div className="flex justify-between text-sm">
                     <span>Expires:</span>
