@@ -149,40 +149,6 @@ export default function InventoryManagement() {
     return expiry <= thirtyDaysFromNow;
   };
 
-  const handleDeleteMedicine = (medicineId: string, medicineName: string) => {
-    setDeleteConfirmation({
-      open: true,
-      medicineId,
-      medicineName
-    });
-  };
-
-  const confirmDeleteMedicine = async () => {
-    try {
-      const { error } = await supabase
-        .from('medicines')
-        .delete()
-        .eq('id', deleteConfirmation.medicineId);
-
-      if (error) throw error;
-
-      fetchMedicines();
-      
-      toast({
-        title: "Success",
-        description: "Medicine deleted successfully"
-      });
-
-      setDeleteConfirmation({ open: false, medicineId: '', medicineName: '' });
-    } catch (error) {
-      toast({
-        title: "Error",
-        description: "Failed to delete medicine",
-        variant: "destructive"
-      });
-    }
-  };
-
   const handleEditMedicine = (medicine: Medicine) => {
     setSelectedMedicine(medicine);
     setShowEditDialog(true);
@@ -347,7 +313,7 @@ export default function InventoryManagement() {
                 )}
                 <div className="flex justify-between text-sm">
                   <span>Price:</span>
-                  <span className="font-medium">${medicine.selling_price}</span>
+                  <span className="font-medium">ETB {medicine.selling_price}</span>
                 </div>
                 <div className="flex justify-between text-sm">
                   <span>Stock:</span>
