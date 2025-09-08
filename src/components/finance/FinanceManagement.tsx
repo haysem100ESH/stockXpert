@@ -589,7 +589,7 @@ export default function FinanceManagement() {
                         <span>{sales.length}</span>
                       </div>
                       <div className="flex justify-between">
-                       <span>ETB {sales.length > 0 ? (stats.totalIncome / sales.length).toFixed(2) : '0.00'}</span>
+                       <span>Average Income:</span>
                         <span>ETB {sales.length > 0 ? (stats.totalIncome / sales.length).toFixed(2) : '0.00'}</span>
                       </div>
                       <div className="flex justify-between">
