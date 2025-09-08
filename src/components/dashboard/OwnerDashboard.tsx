@@ -28,6 +28,7 @@ interface DashboardStats {
   totalProducts: number;
   totalSoldItems: number;
   lowStockItems: number;
+  outOfStockItems: number;
   expiredItems: number;
 }
 
@@ -37,6 +38,7 @@ export default function OwnerDashboard() {
     totalProducts: 0,
     totalSoldItems: 0,
     lowStockItems: 0,
+    outOfStockItems: 0,
     expiredItems: 0
   });
   const [loading, setLoading] = useState(true);
@@ -62,8 +64,9 @@ export default function OwnerDashboard() {
       
       const totalProducts = medicinesData?.length || 0;
       const lowStockItems = medicinesData?.filter(
-        medicine => medicine.stock_quantity <= medicine.minimum_stock_level
+        medicine => medicine.stock_quantity <= medicine.minimum_stock_level && medicine.stock_quantity > 0
       ).length || 0;
+      const outOfStockItems = medicinesData?.filter(medicine => medicine.stock_quantity === 0).length || 0;
 
       // Fetch total sold items
       const { data: saleItemsData } = await supabase
@@ -86,6 +89,7 @@ export default function OwnerDashboard() {
         totalProducts,
         totalSoldItems,
         lowStockItems,
+        outOfStockItems,
         expiredItems
       });
     } catch (error) {
@@ -106,7 +110,7 @@ export default function OwnerDashboard() {
       </div>
 
       {/* Stats Cards */}
-      <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-5 gap-6">
+      <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-6 gap-6">
         <Card>
           <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
             <CardTitle className="text-sm font-medium">Total Revenue</CardTitle>
@@ -161,6 +165,19 @@ export default function OwnerDashboard() {
 
         <Card>
           <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
+            <CardTitle className="text-sm font-medium">Out of Stock</CardTitle>
+            <Package className="h-4 w-4 text-destructive" />
+          </CardHeader>
+          <CardContent>
+            <div className="text-2xl font-bold text-destructive">{stats.outOfStockItems || 0}</div>
+            <p className="text-xs text-muted-foreground">
+              Items out of stock
+            </p>
+          </CardContent>
+        </Card>
+
+        <Card>
+          <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
             <CardTitle className="text-sm font-medium">Expired Medicines</CardTitle>
             <AlertTriangle className="h-4 w-4 text-destructive" />
           </CardHeader>
@@ -184,13 +201,7 @@ export default function OwnerDashboard() {
           <TabsTrigger value="staff">Staff</TabsTrigger>
         </TabsList>
 
-        <TabsContent value="overview" className="space-y-4">
-          {/* Expired Medicines Table */}
-          <ExpiredMedicinesTable />
-          
-          {/* Low Stock Items Table */}
-          <LowStockItemsTable />
-          
+        <TabsContent value="overview" className="space-y-4">          
           <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
             <Card>
               <CardHeader>

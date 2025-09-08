@@ -261,9 +261,10 @@ export default function StaffDashboard() {
 
   const handleRemoveExpiredItem = async (itemId: string) => {
     try {
+      // Set stock to 0 instead of deleting to preserve sales history
       const { error } = await supabase
         .from('medicines')
-        .delete()
+        .update({ stock_quantity: 0 })
         .eq('id', itemId);
 
       if (error) throw error;
@@ -274,7 +275,7 @@ export default function StaffDashboard() {
       // Refresh dashboard data to update counts
       fetchDashboardData();
     } catch (error) {
-      console.error('Error removing expired item:', error);
+      console.error('Error updating expired item:', error);
     }
   };
 
@@ -358,7 +359,7 @@ export default function StaffDashboard() {
         </div>
       </div>
 
-      <div className="grid gap-4 md:grid-cols-2 lg:grid-cols-5">
+      <div className="grid gap-4 md:grid-cols-2 lg:grid-cols-6">
         <Card>
           <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
             <CardTitle className="text-sm font-medium">Total Products</CardTitle>
@@ -389,6 +390,17 @@ export default function StaffDashboard() {
           <CardContent>
             <div className="text-2xl font-bold text-warning">{stats.lowStockItems}</div>
             <p className="text-xs text-muted-foreground">Low stock items</p>
+          </CardContent>
+        </Card>
+
+        <Card>
+          <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
+            <CardTitle className="text-sm font-medium">Out of Stock</CardTitle>
+            <Package className="h-4 w-4 text-destructive" />
+          </CardHeader>
+          <CardContent>
+            <div className="text-2xl font-bold text-destructive">{stats.outOfStockItems}</div>
+            <p className="text-xs text-muted-foreground">Items out of stock</p>
           </CardContent>
         </Card>
         

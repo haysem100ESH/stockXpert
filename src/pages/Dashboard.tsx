@@ -465,6 +465,17 @@ export default function Dashboard() {
             <p className="text-xs text-muted-foreground">Low stock items</p>
           </CardContent>
         </Card>
+
+        <Card>
+          <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
+            <CardTitle className="text-sm font-medium">Out of Stock</CardTitle>
+            <Package className="h-4 w-4 text-destructive" />
+          </CardHeader>
+          <CardContent>
+            <div className="text-2xl font-bold text-destructive">{stats.outOfStockItems}</div>
+            <p className="text-xs text-muted-foreground">Items out of stock</p>
+          </CardContent>
+        </Card>
         
         <Card>
           <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
@@ -488,155 +499,6 @@ export default function Dashboard() {
           </CardContent>
         </Card>
       </div>
-
-      {/* Expired Items */}
-      <Card>
-        <CardHeader>
-          <CardTitle className="flex items-center space-x-2">
-            <AlertTriangle className="h-5 w-5 text-destructive" />
-            <span>Expired Medicines</span>
-          </CardTitle>
-          <CardDescription>
-            {expiredItems.length > 0 
-              ? `${expiredItems.length} medicines have already expired`
-              : 'No medicines have expired'
-            }
-          </CardDescription>
-        </CardHeader>
-        {expiredItems.length > 0 && (
-          <CardContent>
-            <div className="grid gap-2">
-              {expiredItems.slice(0, 5).map((item) => (
-                <div key={item.id} className="flex items-center justify-between p-2 bg-red-50 border rounded-lg">
-                  <div>
-                    <p className="font-medium">{item.name}</p>
-                    <p className="text-sm text-muted-foreground">{item.category}</p>
-                  </div>
-                  <div className="flex items-center space-x-2">
-                    <Badge variant="destructive">{new Date(item.expiry_date).toLocaleDateString()}</Badge>
-                    <Button
-                      size="sm"
-                      variant="outline"
-                      onClick={() => handleRemoveExpiredItem(item.id)}
-                      className="text-destructive hover:text-destructive"
-                    >
-                      Set Stock to 0
-                    </Button>
-                  </div>
-                </div>
-              ))}
-              {expiredItems.length > 5 && (
-                <p className="text-sm text-muted-foreground text-center">
-                  And {expiredItems.length - 5} more expired items...
-                </p>
-              )}
-            </div>
-          </CardContent>
-        )}
-      </Card>
-
-      {/* Expiring Items */}
-      {expiringItems.length > 0 && (
-        <Card>
-          <CardHeader>
-            <CardTitle className="flex items-center space-x-2">
-              <CalendarDaysIcon className="h-5 w-5 text-warning" />
-              <span>Items Expiring Soon</span>
-            </CardTitle>
-            <CardDescription>
-              {expiringItems.length} items will expire within 30 days
-            </CardDescription>
-          </CardHeader>
-          <CardContent>
-            <div className="grid gap-2">
-              {expiringItems.slice(0, 5).map((item) => (
-                <div key={item.id} className="flex items-center justify-between p-2 border rounded-lg">
-                  <div>
-                    <p className="font-medium">{item.name}</p>
-                    <p className="text-sm text-muted-foreground">{item.category}</p>
-                  </div>
-                  <div className="text-right">
-                    <Badge variant="outline">{new Date(item.expiry_date).toLocaleDateString()}</Badge>
-                  </div>
-                </div>
-              ))}
-              {expiringItems.length > 5 && (
-                <p className="text-sm text-muted-foreground text-center">
-                  And {expiringItems.length - 5} more items...
-                </p>
-              )}
-            </div>
-          </CardContent>
-        </Card>
-      )}
-
-      {/* Low Stock Items */}
-      {lowStockItems.length > 0 && (
-        <Card>
-          <CardHeader>
-            <CardTitle className="flex items-center space-x-2">
-              <Package className="h-5 w-5 text-warning" />
-              <span>Low Stock Items</span>
-            </CardTitle>
-            <CardDescription>
-              {lowStockItems.length} items are running low on stock
-            </CardDescription>
-          </CardHeader>
-          <CardContent>
-            <div className="grid gap-2">
-              {lowStockItems.slice(0, 5).map((item) => (
-                <div key={item.id} className="flex items-center justify-between p-2 border rounded-lg">
-                  <div>
-                    <p className="font-medium">{item.name}</p>
-                    <p className="text-sm text-muted-foreground">{item.category}</p>
-                  </div>
-                  <div className="text-right">
-                    <Badge variant="secondary">{item.stock_quantity} left</Badge>
-                    <p className="text-xs text-muted-foreground">Min: {item.minimum_stock_level}</p>
-                  </div>
-                </div>
-              ))}
-              {lowStockItems.length > 5 && (
-                <p className="text-sm text-muted-foreground text-center">
-                  And {lowStockItems.length - 5} more items...
-                </p>
-              )}
-            </div>
-          </CardContent>
-        </Card>
-      )}
-
-      {stats.outOfStockItems > 0 && (
-        <Card>
-          <CardHeader>
-            <CardTitle className="flex items-center space-x-2">
-              <AlertTriangle className="h-5 w-5 text-destructive" />
-              <span>Out of Stock Products</span>
-            </CardTitle>
-            <CardDescription>
-              {stats.outOfStockItems} products are currently out of stock
-            </CardDescription>
-          </CardHeader>
-          <CardContent>
-            <div className="grid gap-2">
-              {outOfStockItems.slice(0, 5).map((item) => (
-                <div key={item.id} className="flex items-center justify-between p-2 border rounded-lg">
-                  <div>
-                    <p className="font-medium">{item.name}</p>
-                    <p className="text-sm text-muted-foreground">{item.category}</p>
-                  </div>
-                  <Badge variant="destructive">Out of Stock</Badge>
-                </div>
-              ))}
-              {outOfStockItems.length > 5 && (
-                <p className="text-sm text-muted-foreground text-center">
-                  And {outOfStockItems.length - 5} more items...
-                </p>
-              )}
-            </div>
-          </CardContent>
-        </Card>
-      )}
 
       {/* Charts Section */}
       <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
