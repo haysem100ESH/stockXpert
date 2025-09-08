@@ -307,9 +307,11 @@ export default function Dashboard() {
 
   const handleRemoveExpiredItem = async (itemId: string) => {
     try {
+      // Instead of deleting, set stock to 0 for expired medicines
+      // This preserves sales history while removing from active inventory
       const { error } = await supabase
         .from('medicines')
-        .delete()
+        .update({ stock_quantity: 0 })
         .eq('id', itemId);
 
       if (error) throw error;
@@ -319,8 +321,11 @@ export default function Dashboard() {
       
       // Refresh dashboard data to update counts
       fetchDashboardData();
+      
+      // Show success message
+      console.log('Expired medicine stock set to 0 successfully');
     } catch (error) {
-      console.error('Error removing expired item:', error);
+      console.error('Error updating expired item:', error);
     }
   };
 
@@ -515,7 +520,7 @@ export default function Dashboard() {
                       onClick={() => handleRemoveExpiredItem(item.id)}
                       className="text-destructive hover:text-destructive"
                     >
-                      Remove
+                      Set Stock to 0
                     </Button>
                   </div>
                 </div>
