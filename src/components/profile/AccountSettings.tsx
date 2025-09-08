@@ -255,13 +255,15 @@ export default function AccountSettings() {
         <p className="text-muted-foreground">Manage your account information and security</p>
       </div>
 
-      <Tabs defaultValue="password" className="w-full">
-        <TabsList className="grid w-full grid-cols-2">
+      <Tabs defaultValue="profile" className="w-full">
+        <TabsList className="grid w-full grid-cols-4">
+          <TabsTrigger value="profile">Profile</TabsTrigger>
           <TabsTrigger value="password">Password</TabsTrigger>
+          <TabsTrigger value="email">Email</TabsTrigger>
           <TabsTrigger value="security">Security</TabsTrigger>
         </TabsList>
 
-        <TabsContent value="password">
+        <TabsContent value="profile">
           <Card>
             <CardHeader>
               <CardTitle className="flex items-center space-x-2">
@@ -315,6 +317,113 @@ export default function AccountSettings() {
                 <Button type="submit" disabled={loading}>
                   {loading && <Loader2 className="mr-2 h-4 w-4 animate-spin" />}
                   Update Profile
+                </Button>
+              </form>
+            </CardContent>
+          </Card>
+        </TabsContent>
+
+        <TabsContent value="password">
+          <Card>
+            <CardHeader>
+              <CardTitle className="flex items-center space-x-2">
+                <Lock className="h-5 w-5" />
+                <span>Change Password</span>
+              </CardTitle>
+              <CardDescription>
+                Update your account password
+              </CardDescription>
+            </CardHeader>
+            <CardContent>
+              <form onSubmit={handlePasswordUpdate} className="space-y-4">
+                <div className="space-y-2">
+                  <Label htmlFor="current_password">Current Password</Label>
+                  <Input
+                    id="current_password"
+                    type="password"
+                    value={passwordData.currentPassword}
+                    onChange={(e) => setPasswordData({...passwordData, currentPassword: e.target.value})}
+                    placeholder="Enter current password"
+                  />
+                </div>
+                <div className="space-y-2">
+                  <Label htmlFor="new_password">New Password</Label>
+                  <Input
+                    id="new_password"
+                    type="password"
+                    value={passwordData.newPassword}
+                    onChange={(e) => setPasswordData({...passwordData, newPassword: e.target.value})}
+                    required
+                    placeholder="Enter new password"
+                  />
+                </div>
+                <div className="space-y-2">
+                  <Label htmlFor="confirm_password">Confirm New Password</Label>
+                  <Input
+                    id="confirm_password"
+                    type="password"
+                    value={passwordData.confirmPassword}
+                    onChange={(e) => setPasswordData({...passwordData, confirmPassword: e.target.value})}
+                    required
+                    placeholder="Confirm new password"
+                  />
+                </div>
+                <Button type="submit" disabled={loading}>
+                  {loading && <Loader2 className="mr-2 h-4 w-4 animate-spin" />}
+                  Change Password
+                </Button>
+              </form>
+            </CardContent>
+          </Card>
+        </TabsContent>
+
+        <TabsContent value="email">
+          <Card>
+            <CardHeader>
+              <CardTitle className="flex items-center space-x-2">
+                <Mail className="h-5 w-5" />
+                <span>Change Email</span>
+              </CardTitle>
+              <CardDescription>
+                Update your email address
+              </CardDescription>
+            </CardHeader>
+            <CardContent>
+              <form onSubmit={handleEmailUpdate} className="space-y-4">
+                <div className="space-y-2">
+                  <Label htmlFor="current_email">Current Email</Label>
+                  <Input
+                    id="current_email"
+                    value={user.email || ''}
+                    disabled
+                    className="bg-muted"
+                  />
+                </div>
+                <div className="space-y-2">
+                  <Label htmlFor="new_email">New Email</Label>
+                  <Input
+                    id="new_email"
+                    type="email"
+                    value={emailData.newEmail}
+                    onChange={(e) => setEmailData({...emailData, newEmail: e.target.value})}
+                    required
+                    placeholder="Enter new email address"
+                  />
+                </div>
+                <div className="space-y-2">
+                  <Label htmlFor="confirm_email">Confirm New Email</Label>
+                  <Input
+                    id="confirm_email"
+                    type="email"
+                    value={emailData.confirmEmail}
+                    onChange={(e) => setEmailData({...emailData, confirmEmail: e.target.value})}
+                    required
+                    placeholder="Confirm new email address"
+                  />
+                </div>
+                <Button type="submit" disabled={loading}>
+                  {loading && <Loader2 className="mr-2 h-4 w-4 animate-spin" />}
+                  Update Email
                 </Button>
               </form>
             </CardContent>
