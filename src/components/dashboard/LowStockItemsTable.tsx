@@ -23,10 +23,8 @@ export default function LowStockItemsTable() {
   const fetchLowStockItems = async () => {
     try {
       const { data, error } = await supabase
-        .from('medicines')
+        .from('low_stock_medicines')
         .select('id, name, stock_quantity, minimum_stock_level')
-        .filter('stock_quantity', 'lte', 'minimum_stock_level')
-        .gt('stock_quantity', 0)
         .order('stock_quantity', { ascending: true });
 
       if (error) throw error;

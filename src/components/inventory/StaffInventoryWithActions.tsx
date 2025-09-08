@@ -3,7 +3,8 @@ import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/com
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Badge } from '@/components/ui/badge';
-import { Search, Edit2, Plus, Trash2 } from 'lucide-react';
+import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
+import { Search, Edit2, Plus, Trash2, Filter } from 'lucide-react';
 import { supabase } from '@/integrations/supabase/client';
 import { useToast } from '@/hooks/use-toast';
 import AddMedicineDialog from './AddMedicineDialog';
@@ -28,6 +29,7 @@ export default function StaffInventoryWithActions() {
   const [medicines, setMedicines] = useState<Medicine[]>([]);
   const [filteredMedicines, setFilteredMedicines] = useState<Medicine[]>([]);
   const [searchTerm, setSearchTerm] = useState('');
+  const [categoryFilter, setCategoryFilter] = useState('all');
   const [editingStock, setEditingStock] = useState<string | null>(null);
   const [tempStock, setTempStock] = useState<number>(0);
   const [loading, setLoading] = useState(true);
@@ -49,12 +51,14 @@ export default function StaffInventoryWithActions() {
   }, []);
 
   useEffect(() => {
-    const filtered = medicines.filter(medicine =>
-      medicine.name.toLowerCase().includes(searchTerm.toLowerCase()) ||
-      medicine.generic_name?.toLowerCase().includes(searchTerm.toLowerCase())
-    );
+    const filtered = medicines.filter(medicine => {
+      const matchesSearch = medicine.name.toLowerCase().includes(searchTerm.toLowerCase()) ||
+        medicine.generic_name?.toLowerCase().includes(searchTerm.toLowerCase());
+      const matchesCategory = categoryFilter === 'all' || medicine.category === categoryFilter;
+      return matchesSearch && matchesCategory;
+    });
     setFilteredMedicines(filtered);
-  }, [medicines, searchTerm]);
+  }, [medicines, searchTerm, categoryFilter]);
 
   const fetchMedicines = async () => {
     try {
@@ -161,6 +165,11 @@ export default function StaffInventoryWithActions() {
     return medicine.stock_quantity <= medicine.minimum_stock_level;
   };
 
+  const getUniqueCategories = () => {
+    const categories = [...new Set(medicines.map(m => m.category))];
+    return categories.sort();
+  };
+
   const isExpired = (medicine: Medicine) => {
     if (!medicine.expiry_date) return false;
     return new Date(medicine.expiry_date) < new Date();
@@ -191,11 +200,28 @@ export default function StaffInventoryWithActions() {
         <div className="relative flex-1">
           <Search className="absolute left-2 top-2.5 h-4 w-4 text-muted-foreground" />
           <Input
-            placeholder="Search medicines by name..."
+            placeholder="Search medicines by name or generic name..."
             value={searchTerm}
             onChange={(e) => setSearchTerm(e.target.value)}
             className="pl-8"
           />
+        </div>
+
+        <div className="flex items-center space-x-2">
+          <Filter className="h-4 w-4 text-muted-foreground" />
+          <Select value={categoryFilter} onValueChange={setCategoryFilter}>
+            <SelectTrigger className="w-48">
+              <SelectValue placeholder="Filter by category" />
+            </SelectTrigger>
+            <SelectContent>
+              <SelectItem value="all">All Categories</SelectItem>
+              {getUniqueCategories().map((category) => (
+                <SelectItem key={category} value={category}>
+                  {category}
+                </SelectItem>
+              ))}
+            </SelectContent>
+          </Select>
         </div>
       </div>
 
