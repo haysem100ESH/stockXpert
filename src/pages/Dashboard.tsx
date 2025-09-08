@@ -42,6 +42,13 @@ interface ExpiringItem {
   expiry_date: string;
 }
 
+interface ExpiredItem {
+  id: string;
+  name: string;
+  category: string;
+  expiry_date: string;
+}
+
 interface PaymentMethodData {
   method: string;
   amount: number;
@@ -77,6 +84,7 @@ export default function Dashboard() {
   const [outOfStockItems, setOutOfStockItems] = useState<OutOfStockItem[]>([]);
   const [lowStockItems, setLowStockItems] = useState<LowStockItem[]>([]);
   const [expiringItems, setExpiringItems] = useState<ExpiringItem[]>([]);
+  const [expiredItems, setExpiredItems] = useState<ExpiredItem[]>([]);
   const [categorySales, setCategorySales] = useState<CategorySalesData[]>([]);
   const [productPerformance, setProductPerformance] = useState<ProductPerformanceData[]>([]);
   const [incomeExpenseData, setIncomeExpenseData] = useState<IncomeExpenseData[]>([]);
@@ -162,6 +170,13 @@ export default function Dashboard() {
         .not('expiry_date', 'is', null)
         .lte('expiry_date', thirtyDaysFromNow.toISOString().split('T')[0])
         .gte('expiry_date', new Date().toISOString().split('T')[0]);
+
+      // Fetch expired items
+      const { data: expiredDetails } = await supabase
+        .from('medicines')
+        .select('id, name, category, expiry_date')
+        .not('expiry_date', 'is', null)
+        .lt('expiry_date', new Date().toISOString().split('T')[0]);
 
       // Fetch sales data with medicine details for charts
       const { data: salesWithItems } = await supabase
@@ -271,6 +286,7 @@ export default function Dashboard() {
       setOutOfStockItems(outOfStockDetails || []);
       setLowStockItems(lowStockDetails || []);
       setExpiringItems(expiringDetails || []);
+      setExpiredItems(expiredDetails || []);
       setCategorySales(categorySalesArray);
       setProductPerformance(productPerformanceArray);
       setIncomeExpenseData(incomeExpenseArray);
@@ -282,10 +298,29 @@ export default function Dashboard() {
     }
   };
 
+  const handleRemoveExpiredItem = async (itemId: string) => {
+    try {
+      const { error } = await supabase
+        .from('medicines')
+        .delete()
+        .eq('id', itemId);
+
+      if (error) throw error;
+
+      // Remove from local state
+      setExpiredItems(expiredItems.filter(item => item.id !== itemId));
+      
+      // Refresh dashboard data to update counts
+      fetchDashboardData();
+    } catch (error) {
+      console.error('Error removing expired item:', error);
+    }
+  };
+
   const exportToCSV = () => {
     const csvContent = [
       ['Metric', 'Value'],
-      ['Total Revenue', `$${stats.totalRevenue.toFixed(2)}`],
+      ['Total Revenue', `ETB ${stats.totalRevenue.toFixed(2)}`],
       ['Total Products', stats.totalProducts.toString()],
       ['Today\'s Sales', stats.todaySales.toString()],
       ['Low Stock Items', stats.lowStockItems.toString()],
@@ -293,7 +328,7 @@ export default function Dashboard() {
       [],
       ['Top Products'],
       ['Product Name', 'Sales Count', 'Revenue'],
-      ...productPerformance.map(p => [p.name, p.sales.toString(), `$${p.revenue.toFixed(2)}`])
+      ...productPerformance.map(p => [p.name, p.sales.toString(), `ETB ${p.revenue.toFixed(2)}`])
     ].map(row => row.join(',')).join('\n');
     
     const blob = new Blob([csvContent], { type: 'text/csv' });
@@ -380,7 +415,7 @@ export default function Dashboard() {
               <DollarSign className="h-4 w-4 text-muted-foreground" />
             </CardHeader>
             <CardContent>
-              <div className="text-2xl font-bold">${stats.totalRevenue.toFixed(2)}</div>
+              <div className="text-2xl font-bold">ETB {stats.totalRevenue.toFixed(2)}</div>
               <p className="text-xs text-muted-foreground">All time revenue</p>
             </CardContent>
           </Card>
@@ -459,6 +494,48 @@ export default function Dashboard() {
               {expiringItems.length > 5 && (
                 <p className="text-sm text-muted-foreground text-center">
                   And {expiringItems.length - 5} more items...
+                </p>
+              )}
+            </div>
+          </CardContent>
+        </Card>
+      )}
+
+      {/* Expired Items */}
+      {expiredItems.length > 0 && (
+        <Card>
+          <CardHeader>
+            <CardTitle className="flex items-center space-x-2">
+              <CalendarDaysIcon className="h-5 w-5 text-destructive" />
+              <span>Expired Items</span>
+            </CardTitle>
+            <CardDescription>
+              {expiredItems.length} items have already expired
+            </CardDescription>
+          </CardHeader>
+          <CardContent>
+            <div className="grid gap-2">
+              {expiredItems.slice(0, 5).map((item) => (
+                <div key={item.id} className="flex items-center justify-between p-2 bg-red-50 border rounded-lg">
+                  <div>
+                    <p className="font-medium">{item.name}</p>
+                    <p className="text-sm text-muted-foreground">{item.category}</p>
+                  </div>
+                  <div className="flex items-center space-x-2">
+                    <Badge variant="destructive">{new Date(item.expiry_date).toLocaleDateString()}</Badge>
+                    <Button
+                      size="sm"
+                      variant="destructive"
+                      onClick={() => handleRemoveExpiredItem(item.id)}
+                    >
+                      Remove
+                    </Button>
+                  </div>
+                </div>
+              ))}
+              {expiredItems.length > 5 && (
+                <p className="text-sm text-muted-foreground text-center">
+                  And {expiredItems.length - 5} more items...
                 </p>
               )}
             </div>
@@ -588,7 +665,7 @@ export default function Dashboard() {
                     outerRadius={80}
                     fill="hsl(142 76% 36%)"
                     dataKey="amount"
-                    label={(entry) => `${entry.method}: $${entry.amount.toFixed(2)}`}
+                    label={(entry) => `${entry.method}: ETB ${entry.amount.toFixed(2)}`}
                   >
                     {paymentMethodData.map((entry, index) => (
                       <Cell key={`cell-${index}`} fill={COLORS[index % COLORS.length]} />

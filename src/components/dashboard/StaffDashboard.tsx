@@ -17,6 +17,7 @@ interface DashboardStats {
   todaySales: number;
   lowStockItems: number;
   outOfStockItems: number;
+  periodSalesRevenue: number;
 }
 
 interface OutOfStockItem {
@@ -35,6 +36,13 @@ interface LowStockItem {
 }
 
 interface ExpiringItem {
+  id: string;
+  name: string;
+  category: string;
+  expiry_date: string;
+}
+
+interface ExpiredItem {
   id: string;
   name: string;
   category: string;
@@ -64,11 +72,13 @@ export default function StaffDashboard() {
     totalProducts: 0,
     todaySales: 0,
     lowStockItems: 0,
-    outOfStockItems: 0
+    outOfStockItems: 0,
+    periodSalesRevenue: 0
   });
   const [outOfStockItems, setOutOfStockItems] = useState<OutOfStockItem[]>([]);
   const [lowStockItems, setLowStockItems] = useState<LowStockItem[]>([]);
   const [expiringItems, setExpiringItems] = useState<ExpiringItem[]>([]);
+  const [expiredItems, setExpiredItems] = useState<ExpiredItem[]>([]);
   const [categorySales, setCategorySales] = useState<CategorySalesData[]>([]);
   const [productPerformance, setProductPerformance] = useState<ProductPerformanceData[]>([]);
   const [paymentMethodData, setPaymentMethodData] = useState<PaymentMethodData[]>([]);
@@ -122,6 +132,9 @@ export default function StaffDashboard() {
 
       const todaySales = periodSalesData?.length || 0;
 
+      // Calculate period sales revenue 
+      const periodSalesRevenue = periodSalesData?.reduce((sum, sale) => sum + Number(sale.total_amount), 0) || 0;
+
       // Fetch out of stock items details
       const { data: outOfStockDetails } = await supabase
         .from('medicines')
@@ -144,6 +157,13 @@ export default function StaffDashboard() {
         .not('expiry_date', 'is', null)
         .lte('expiry_date', thirtyDaysFromNow.toISOString().split('T')[0])
         .gte('expiry_date', new Date().toISOString().split('T')[0]);
+
+      // Fetch expired items
+      const { data: expiredDetails } = await supabase
+        .from('medicines')
+        .select('id, name, category, expiry_date')
+        .not('expiry_date', 'is', null)
+        .lt('expiry_date', new Date().toISOString().split('T')[0]);
 
       // Fetch sales data with medicine details for charts
       const { data: salesWithItems } = await supabase
@@ -216,18 +236,42 @@ export default function StaffDashboard() {
         totalProducts,
         todaySales,
         lowStockItems,
-        outOfStockItems
+        outOfStockItems,
+        periodSalesRevenue
       });
       setOutOfStockItems(outOfStockDetails || []);
       setLowStockItems(lowStockDetails || []);
       setExpiringItems(expiringDetails || []);
+      setExpiredItems(expiredDetails || []);
       setCategorySales(categorySalesArray);
       setProductPerformance(productPerformanceArray);
       setPaymentMethodData(paymentMethodArray);
+      
+      // Store period sales revenue for the card display
+      (window as any).periodSalesRevenue = periodSalesRevenue;
     } catch (error) {
       console.error('Error fetching dashboard data:', error);
     } finally {
       setLoading(false);
+    }
+  };
+
+  const handleRemoveExpiredItem = async (itemId: string) => {
+    try {
+      const { error } = await supabase
+        .from('medicines')
+        .delete()
+        .eq('id', itemId);
+
+      if (error) throw error;
+
+      // Remove from local state
+      setExpiredItems(expiredItems.filter(item => item.id !== itemId));
+      
+      // Refresh dashboard data to update counts
+      fetchDashboardData();
+    } catch (error) {
+      console.error('Error removing expired item:', error);
     }
   };
 
@@ -329,8 +373,8 @@ export default function StaffDashboard() {
             <ShoppingCart className="h-4 w-4 text-muted-foreground" />
           </CardHeader>
           <CardContent>
-            <div className="text-2xl font-bold">{stats.todaySales}</div>
-            <p className="text-xs text-muted-foreground">Sales transactions this period</p>
+            <div className="text-2xl font-bold">ETB {stats.periodSalesRevenue.toFixed(2)}</div>
+            <p className="text-xs text-muted-foreground">Sales revenue this period</p>
           </CardContent>
         </Card>
         
@@ -453,6 +497,48 @@ export default function StaffDashboard() {
               {expiringItems.length > 5 && (
                 <p className="text-sm text-muted-foreground text-center">
                   And {expiringItems.length - 5} more items...
+                </p>
+              )}
+            </div>
+          </CardContent>
+        </Card>
+      )}
+
+      {/* Expired Items */}
+      {expiredItems.length > 0 && (
+        <Card>
+          <CardHeader>
+            <CardTitle className="flex items-center space-x-2">
+              <CalendarDaysIcon className="h-5 w-5 text-destructive" />
+              <span>Expired Items</span>
+            </CardTitle>
+            <CardDescription>
+              {expiredItems.length} items have already expired
+            </CardDescription>
+          </CardHeader>
+          <CardContent>
+            <div className="grid gap-2">
+              {expiredItems.slice(0, 5).map((item) => (
+                <div key={item.id} className="flex items-center justify-between p-2 bg-red-50 border rounded-lg">
+                  <div>
+                    <p className="font-medium">{item.name}</p>
+                    <p className="text-sm text-muted-foreground">{item.category}</p>
+                  </div>
+                  <div className="flex items-center space-x-2">
+                    <Badge variant="destructive">{new Date(item.expiry_date).toLocaleDateString()}</Badge>
+                    <Button
+                      size="sm"
+                      variant="destructive"
+                      onClick={() => handleRemoveExpiredItem(item.id)}
+                    >
+                      Remove
+                    </Button>
+                  </div>
+                </div>
+              ))}
+              {expiredItems.length > 5 && (
+                <p className="text-sm text-muted-foreground text-center">
+                  And {expiredItems.length - 5} more items...
                 </p>
               )}
             </div>

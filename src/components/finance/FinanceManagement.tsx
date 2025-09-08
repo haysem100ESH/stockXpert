@@ -67,6 +67,21 @@ export default function FinanceManagement() {
 
   useEffect(() => {
     fetchFinanceData();
+
+    // Set up real-time subscription for expenses
+    const expenseSubscription = supabase
+      .channel('expense-changes')
+      .on('postgres_changes', 
+        { event: '*', schema: 'public', table: 'expenses' },
+        () => {
+          fetchFinanceData();
+        }
+      )
+      .subscribe();
+
+    return () => {
+      supabase.removeChannel(expenseSubscription);
+    };
   }, [period, startDate, endDate]);
 
   const fetchFinanceData = async () => {
@@ -312,7 +327,7 @@ export default function FinanceManagement() {
             <DollarSign className="h-4 w-4 text-success" />
           </CardHeader>
           <CardContent>
-            <div className="text-2xl font-bold text-success">${stats.totalIncome.toFixed(2)}</div>
+            <div className="text-2xl font-bold text-success">ETB {stats.totalIncome.toFixed(2)}</div>
           </CardContent>
         </Card>
 
@@ -322,7 +337,7 @@ export default function FinanceManagement() {
             <TrendingDown className="h-4 w-4 text-destructive" />
           </CardHeader>
           <CardContent>
-            <div className="text-2xl font-bold text-destructive">${stats.totalExpenses.toFixed(2)}</div>
+            <div className="text-2xl font-bold text-destructive">ETB {stats.totalExpenses.toFixed(2)}</div>
           </CardContent>
         </Card>
 
@@ -333,7 +348,7 @@ export default function FinanceManagement() {
           </CardHeader>
           <CardContent>
             <div className={`text-2xl font-bold ${stats.netProfit >= 0 ? 'text-success' : 'text-destructive'}`}>
-              ${stats.netProfit.toFixed(2)}
+              ETB {stats.netProfit.toFixed(2)}
             </div>
           </CardContent>
         </Card>
@@ -492,7 +507,7 @@ export default function FinanceManagement() {
                       <div className="text-xs text-muted-foreground">{expense.category}</div>
                     </div>
                     <div className="text-right">
-                      <div className="text-destructive font-medium">-${expense.amount}</div>
+                      <div className="text-destructive font-medium">-ETB {expense.amount}</div>
                       <div className="text-xs text-muted-foreground">
                         {new Date(expense.created_at).toLocaleDateString()}
                       </div>
@@ -574,8 +589,12 @@ export default function FinanceManagement() {
                         <span>{sales.length}</span>
                       </div>
                       <div className="flex justify-between">
-                        <span>Average Sale:</span>
-                        <span>${sales.length > 0 ? (stats.totalIncome / sales.length).toFixed(2) : '0.00'}</span>
+                       <span>ETB {sales.length > 0 ? (stats.totalIncome / sales.length).toFixed(2) : '0.00'}</span>
+                        <span>ETB {sales.length > 0 ? (stats.totalIncome / sales.length).toFixed(2) : '0.00'}</span>
+                      </div>
+                      <div className="flex justify-between">
+                        <span>Average Expense:</span>
+                        <span>ETB {expenses.length > 0 ? (stats.totalExpenses / expenses.length).toFixed(2) : '0.00'}</span>
                       </div>
                       <div className="flex justify-between">
                         <span>Total Expenses:</span>

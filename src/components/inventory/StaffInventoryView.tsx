@@ -130,7 +130,7 @@ export default function StaffInventoryView() {
                 </div>
                 <div className="flex justify-between text-sm">
                   <span>Price:</span>
-                  <span className="font-medium">${medicine.selling_price}</span>
+                  <span className="font-medium">ETB {medicine.selling_price}</span>
                 </div>
                 <div className="flex justify-between text-sm items-center">
                   <span>Stock:</span>
