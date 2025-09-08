@@ -18,6 +18,7 @@ interface DashboardStats {
   todaySales: number;
   lowStockItems: number;
   outOfStockItems: number;
+  expiredItems: number;
 }
 
 interface OutOfStockItem {
@@ -79,7 +80,8 @@ export default function Dashboard() {
     totalProducts: 0,
     todaySales: 0,
     lowStockItems: 0,
-    outOfStockItems: 0
+    outOfStockItems: 0,
+    expiredItems: 0
   });
   const [outOfStockItems, setOutOfStockItems] = useState<OutOfStockItem[]>([]);
   const [lowStockItems, setLowStockItems] = useState<LowStockItem[]>([]);
@@ -279,7 +281,8 @@ export default function Dashboard() {
         totalProducts,
         todaySales,
         lowStockItems,
-        outOfStockItems
+        outOfStockItems,
+        expiredItems: expiredDetails?.length || 0
       });
       setOutOfStockItems(outOfStockDetails || []);
       setLowStockItems(lowStockDetails || []);
@@ -405,7 +408,7 @@ export default function Dashboard() {
         </div>
       </div>
 
-      <div className="grid gap-4 md:grid-cols-2 lg:grid-cols-5">
+      <div className="grid gap-4 md:grid-cols-2 lg:grid-cols-6">
         {profile?.role === 'owner' && (
           <Card>
             <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
@@ -462,7 +465,61 @@ export default function Dashboard() {
             <p className="text-xs text-muted-foreground">Items expiring in 30 days</p>
           </CardContent>
         </Card>
+
+        <Card>
+          <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
+            <CardTitle className="text-sm font-medium">Expired Medicines</CardTitle>
+            <AlertTriangle className="h-4 w-4 text-destructive" />
+          </CardHeader>
+          <CardContent>
+            <div className="text-2xl font-bold text-destructive">{stats.expiredItems}</div>
+            <p className="text-xs text-muted-foreground">Medicines expired</p>
+          </CardContent>
+        </Card>
       </div>
+
+      {/* Expired Items */}
+      {expiredItems.length > 0 && (
+        <Card>
+          <CardHeader>
+            <CardTitle className="flex items-center space-x-2">
+              <AlertTriangle className="h-5 w-5 text-destructive" />
+              <span>Expired Medicines</span>
+            </CardTitle>
+            <CardDescription>
+              {expiredItems.length} medicines have already expired
+            </CardDescription>
+          </CardHeader>
+          <CardContent>
+            <div className="grid gap-2">
+              {expiredItems.slice(0, 5).map((item) => (
+                <div key={item.id} className="flex items-center justify-between p-2 bg-red-50 border rounded-lg">
+                  <div>
+                    <p className="font-medium">{item.name}</p>
+                    <p className="text-sm text-muted-foreground">{item.category}</p>
+                  </div>
+                  <div className="flex items-center space-x-2">
+                    <Badge variant="destructive">{new Date(item.expiry_date).toLocaleDateString()}</Badge>
+                    <Button
+                      size="sm"
+                      variant="outline"
+                      onClick={() => handleRemoveExpiredItem(item.id)}
+                      className="text-destructive hover:text-destructive"
+                    >
+                      Remove
+                    </Button>
+                  </div>
+                </div>
+              ))}
+              {expiredItems.length > 5 && (
+                <p className="text-sm text-muted-foreground text-center">
+                  And {expiredItems.length - 5} more expired items...
+                </p>
+              )}
+            </div>
+          </CardContent>
+        </Card>
+      )}
 
       {/* Expiring Items */}
       {expiringItems.length > 0 && (
@@ -492,48 +549,6 @@ export default function Dashboard() {
               {expiringItems.length > 5 && (
                 <p className="text-sm text-muted-foreground text-center">
                   And {expiringItems.length - 5} more items...
-                </p>
-              )}
-            </div>
-          </CardContent>
-        </Card>
-      )}
-
-      {/* Expired Items */}
-      {expiredItems.length > 0 && (
-        <Card>
-          <CardHeader>
-            <CardTitle className="flex items-center space-x-2">
-              <CalendarDaysIcon className="h-5 w-5 text-destructive" />
-              <span>Expired Items</span>
-            </CardTitle>
-            <CardDescription>
-              {expiredItems.length} items have already expired
-            </CardDescription>
-          </CardHeader>
-          <CardContent>
-            <div className="grid gap-2">
-              {expiredItems.slice(0, 5).map((item) => (
-                <div key={item.id} className="flex items-center justify-between p-2 bg-red-50 border rounded-lg">
-                  <div>
-                    <p className="font-medium">{item.name}</p>
-                    <p className="text-sm text-muted-foreground">{item.category}</p>
-                  </div>
-                  <div className="flex items-center space-x-2">
-                    <Badge variant="destructive">{new Date(item.expiry_date).toLocaleDateString()}</Badge>
-                    <Button
-                      size="sm"
-                      variant="destructive"
-                      onClick={() => handleRemoveExpiredItem(item.id)}
-                    >
-                      Remove
-                    </Button>
-                  </div>
-                </div>
-              ))}
-              {expiredItems.length > 5 && (
-                <p className="text-sm text-muted-foreground text-center">
-                  And {expiredItems.length - 5} more items...
                 </p>
               )}
             </div>
