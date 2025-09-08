@@ -156,10 +156,8 @@ export default function Dashboard() {
 
       // Fetch low stock items details
       const { data: lowStockDetails } = await supabase
-        .from('medicines')
-        .select('id, name, category, stock_quantity, minimum_stock_level')
-        .filter('stock_quantity', 'lte', 'minimum_stock_level')
-        .gt('stock_quantity', 0);
+        .from('low_stock_medicines')
+        .select('id, name, category, stock_quantity, minimum_stock_level');
 
       // Fetch expiring items (within 30 days)
       const thirtyDaysFromNow = new Date();
