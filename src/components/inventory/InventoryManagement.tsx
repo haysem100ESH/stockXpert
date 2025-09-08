@@ -212,61 +212,61 @@ export default function InventoryManagement() {
         </Button>
       </div>
 
-      <div className="flex flex-col md:flex-row items-center space-y-4 md:space-y-0 md:space-x-4">
-        <div className="relative flex-1">
-          <Search className="absolute left-2 top-2.5 h-4 w-4 text-muted-foreground" />
-          <Input
-            placeholder="Search medicines by name or generic name..."
-            value={searchTerm}
-            onChange={(e) => setSearchTerm(e.target.value)}
-            className="pl-8"
-          />
-        </div>
-        
-        <div className="flex items-center space-x-2">
-          <Filter className="h-4 w-4 text-muted-foreground" />
-          <Select value={categoryFilter} onValueChange={setCategoryFilter}>
-            <SelectTrigger className="w-48">
-              <SelectValue placeholder="Filter by category" />
-            </SelectTrigger>
-            <SelectContent>
-              <SelectItem value="all">All Categories</SelectItem>
-              {getUniqueCategories().map((category) => (
-                <SelectItem key={category} value={category}>
-                  {category} ({categoryCounts[category] || 0})
-                </SelectItem>
-              ))}
-            </SelectContent>
-          </Select>
-        </div>
-
-        <Popover>
-          <PopoverTrigger asChild>
-            <Button variant="outline" className="w-48 justify-start text-left font-normal">
-              <CalendarIcon className="mr-2 h-4 w-4" />
-              {dateFilter ? format(dateFilter, "PPP") : <span>Filter by date</span>}
-            </Button>
-          </PopoverTrigger>
-          <PopoverContent className="w-auto p-0">
-            <Calendar
-              mode="single"
-              selected={dateFilter}
-              onSelect={setDateFilter}
-              initialFocus
-              className="p-3 pointer-events-auto"
+        <div className="flex items-center space-x-4">
+          <div className="relative flex-1">
+            <Search className="absolute left-2 top-2.5 h-4 w-4 text-muted-foreground" />
+            <Input
+              placeholder="Search medicines by name or generic name..."
+              value={searchTerm}
+              onChange={(e) => setSearchTerm(e.target.value)}
+              className="pl-8"
             />
-            <div className="p-3 border-t">
-              <Button 
-                variant="ghost" 
-                className="w-full text-sm"
-                onClick={() => setDateFilter(undefined)}
-              >
-                Clear filter
+          </div>
+          
+          <div className="flex items-center space-x-2">
+            <Filter className="h-4 w-4 text-muted-foreground" />
+            <Select value={categoryFilter} onValueChange={setCategoryFilter}>
+              <SelectTrigger className="w-48">
+                <SelectValue placeholder="Filter by category" />
+              </SelectTrigger>
+              <SelectContent>
+                <SelectItem value="all">All Categories</SelectItem>
+                {getUniqueCategories().map((category) => (
+                  <SelectItem key={category} value={category}>
+                    {category} ({categoryCounts[category] || 0})
+                  </SelectItem>
+                ))}
+              </SelectContent>
+            </Select>
+          </div>
+
+          <Popover>
+            <PopoverTrigger asChild>
+              <Button variant="outline" className="w-48 justify-start text-left font-normal">
+                <CalendarIcon className="mr-2 h-4 w-4" />
+                {dateFilter ? format(dateFilter, "PPP") : <span>Filter by date</span>}
               </Button>
-            </div>
-          </PopoverContent>
-        </Popover>
-      </div>
+            </PopoverTrigger>
+            <PopoverContent className="w-auto p-0">
+              <Calendar
+                mode="single"
+                selected={dateFilter}
+                onSelect={setDateFilter}
+                initialFocus
+                className="p-3 pointer-events-auto"
+              />
+              <div className="p-3 border-t">
+                <Button 
+                  variant="ghost" 
+                  className="w-full text-sm"
+                  onClick={() => setDateFilter(undefined)}
+                >
+                  Clear filter
+                </Button>
+              </div>
+            </PopoverContent>
+          </Popover>
+        </div>
 
       <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
         {paginatedMedicines.map((medicine) => (

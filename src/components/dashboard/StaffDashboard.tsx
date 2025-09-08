@@ -11,6 +11,8 @@ import { Package, ShoppingCart, AlertTriangle, Download, CalendarIcon, Calendar 
 import { BarChart, Bar, XAxis, YAxis, CartesianGrid, ResponsiveContainer, PieChart, Pie, Cell } from 'recharts';
 import { format, startOfDay, endOfDay, subDays, subWeeks, subMonths, subYears } from 'date-fns';
 import { supabase } from '@/integrations/supabase/client';
+import ExpiredMedicinesTable from './ExpiredMedicinesTable';
+import LowStockItemsTable from './LowStockItemsTable';
 
 interface DashboardStats {
   totalProducts: number;
@@ -635,15 +637,21 @@ export default function StaffDashboard() {
                   >
                     {paymentMethodData.map((entry, index) => (
                       <Cell key={`cell-${index}`} fill={COLORS[index % COLORS.length]} />
-                    ))}
-                  </Pie>
-                  <ChartTooltip content={<ChartTooltipContent />} />
-                </PieChart>
-              </ResponsiveContainer>
-            </ChartContainer>
-          </CardContent>
-        </Card>
-      </div>
-    </div>
+                     ))}
+                   </Pie>
+                   <ChartTooltip content={<ChartTooltipContent />} />
+                 </PieChart>
+               </ResponsiveContainer>
+             </ChartContainer>
+           </CardContent>
+         </Card>
+       </div>
+       
+       {/* Expired Medicines Table */}
+       <ExpiredMedicinesTable />
+       
+       {/* Low Stock Items Table */}
+       <LowStockItemsTable />
+     </div>
   );
 }

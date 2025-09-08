@@ -7,7 +7,7 @@ import { Label } from '@/components/ui/label';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
 import { Separator } from '@/components/ui/separator';
 import { Pagination, PaginationContent, PaginationItem, PaginationLink, PaginationNext, PaginationPrevious } from '@/components/ui/pagination';
-import { Search, Plus, Minus, ShoppingCart, Trash2, CreditCard, Percent } from 'lucide-react';
+import { Search, Plus, Minus, ShoppingCart, Trash2, CreditCard, Percent, Filter } from 'lucide-react';
 import { supabase } from '@/integrations/supabase/client';
 import { useToast } from '@/hooks/use-toast';
 import { useAuth } from '@/hooks/useAuth';
@@ -34,6 +34,7 @@ export default function SalesManagement() {
   const [paginatedMedicines, setPaginatedMedicines] = useState<Medicine[]>([]);
   const [cart, setCart] = useState<CartItem[]>([]);
   const [searchTerm, setSearchTerm] = useState('');
+  const [categoryFilter, setCategoryFilter] = useState<string>('all');
   const [currentPage, setCurrentPage] = useState(1);
   const [loading, setLoading] = useState(true);
   const [processing, setProcessing] = useState(false);
@@ -50,13 +51,17 @@ export default function SalesManagement() {
   }, []);
 
   useEffect(() => {
-    const filtered = medicines.filter(medicine =>
-      medicine.name.toLowerCase().includes(searchTerm.toLowerCase()) ||
-      medicine.generic_name?.toLowerCase().includes(searchTerm.toLowerCase())
-    );
+    const filtered = medicines.filter(medicine => {
+      const matchesSearch = medicine.name.toLowerCase().includes(searchTerm.toLowerCase()) ||
+        medicine.generic_name?.toLowerCase().includes(searchTerm.toLowerCase());
+      
+      const matchesCategory = categoryFilter === 'all' || medicine.category === categoryFilter;
+      
+      return matchesSearch && matchesCategory;
+    });
     setFilteredMedicines(filtered);
-    setCurrentPage(1); // Reset to first page when search changes
-  }, [medicines, searchTerm]);
+    setCurrentPage(1); // Reset to first page when filters change
+  }, [medicines, searchTerm, categoryFilter]);
 
   useEffect(() => {
     const startIndex = (currentPage - 1) * itemsPerPage;
@@ -231,7 +236,7 @@ export default function SalesManagement() {
 
       toast({
         title: "Success",
-        description: `Sale completed successfully! Payment: ${paymentMethod}. Total: $${calculateTotal().toFixed(2)}`
+        description: `Sale completed successfully! Payment: ${paymentMethod}. Total: ETB ${calculateTotal().toFixed(2)}`
       });
 
       setCart([]);
@@ -247,6 +252,11 @@ export default function SalesManagement() {
     } finally {
       setProcessing(false);
     }
+  };
+
+  const getUniqueCategories = () => {
+    const categories = [...new Set(medicines.map(m => m.category).filter(Boolean))];
+    return categories.sort();
   };
 
   if (loading) {
@@ -266,6 +276,23 @@ export default function SalesManagement() {
               onChange={(e) => setSearchTerm(e.target.value)}
               className="pl-8"
             />
+          </div>
+          
+          <div className="flex items-center space-x-2">
+            <Filter className="h-4 w-4 text-muted-foreground" />
+            <Select value={categoryFilter} onValueChange={setCategoryFilter}>
+              <SelectTrigger className="w-48">
+                <SelectValue placeholder="Filter by category" />
+              </SelectTrigger>
+              <SelectContent>
+                <SelectItem value="all">All Categories</SelectItem>
+                {getUniqueCategories().map((category) => (
+                  <SelectItem key={category} value={category}>
+                    {category}
+                  </SelectItem>
+                ))}
+              </SelectContent>
+            </Select>
           </div>
         </div>
 
@@ -289,7 +316,7 @@ export default function SalesManagement() {
                 <div className="space-y-2">
                   <div className="flex justify-between text-sm">
                     <span>Price:</span>
-                    <span className="font-medium">${medicine.selling_price}</span>
+                    <span className="font-medium">ETB {medicine.selling_price}</span>
                   </div>
                   <div className="flex justify-between text-sm">
                     <span>Stock:</span>
@@ -411,10 +438,10 @@ export default function SalesManagement() {
                 {cart.map((item) => (
                   <div key={item.id} className="flex items-center justify-between p-2 border rounded">
                     <div className="flex-1">
-                      <h4 className="font-medium text-sm">{item.name}</h4>
-                      <p className="text-xs text-muted-foreground">
-                        ${item.selling_price} each
-                      </p>
+                       <h4 className="font-medium text-sm">{item.name}</h4>
+                       <p className="text-xs text-muted-foreground">
+                         ETB {item.selling_price} each
+                       </p>
                     </div>
                     <div className="flex items-center space-x-2">
                       <Button
@@ -484,24 +511,24 @@ export default function SalesManagement() {
 
                   {/* Pricing Summary */}
                   <div className="space-y-2">
-                    <div className="flex justify-between text-sm">
-                      <span>Subtotal:</span>
-                      <span>${calculateSubtotal().toFixed(2)}</span>
-                    </div>
-                    {discountPercent > 0 && (
-                      <div className="flex justify-between text-sm text-success">
-                        <span>Discount ({discountPercent}%):</span>
-                        <span>-${calculateDiscount().toFixed(2)}</span>
-                      </div>
-                    )}
-                  </div>
-                  
-                  <Separator />
-                  
-                  <div className="flex justify-between font-medium">
-                    <span>Total:</span>
-                    <span>${calculateTotal().toFixed(2)}</span>
-                  </div>
+                     <div className="flex justify-between text-sm">
+                       <span>Subtotal:</span>
+                       <span>ETB {calculateSubtotal().toFixed(2)}</span>
+                     </div>
+                     {discountPercent > 0 && (
+                       <div className="flex justify-between text-sm text-success">
+                         <span>Discount ({discountPercent}%):</span>
+                         <span>-ETB {calculateDiscount().toFixed(2)}</span>
+                       </div>
+                     )}
+                   </div>
+                   
+                   <Separator />
+                   
+                   <div className="flex justify-between font-medium">
+                     <span>Total:</span>
+                     <span>ETB {calculateTotal().toFixed(2)}</span>
+                   </div>
                   
                   <Button 
                     onClick={handleCheckout}
@@ -521,7 +548,7 @@ export default function SalesManagement() {
           open={showCheckoutConfirm}
           onOpenChange={setShowCheckoutConfirm}
           title="Confirm Checkout"
-          description={`Are you sure you want to complete this sale? Total: $${calculateTotal().toFixed(2)} via ${paymentMethod}`}
+          description={`Are you sure you want to complete this sale? Total: ETB ${calculateTotal().toFixed(2)} via ${paymentMethod}`}
           onConfirm={confirmCheckout}
           confirmText="Complete Sale"
         />

@@ -20,6 +20,8 @@ import SalesManagement from '@/components/sales/SalesManagement';
 import FinanceManagement from '@/components/finance/FinanceManagement';
 import SupplierManagement from '@/components/suppliers/SupplierManagement';
 import StaffManagement from '@/components/staff/StaffManagement';
+import ExpiredMedicinesTable from './ExpiredMedicinesTable';
+import LowStockItemsTable from './LowStockItemsTable';
 
 interface DashboardStats {
   totalRevenue: number;
@@ -168,7 +170,7 @@ export default function OwnerDashboard() {
                 <div className="space-y-3">
                   <div className="flex items-center space-x-2">
                     <Badge variant="secondary">Sale</Badge>
-                    <span className="text-sm">Medicine sold - $25.50</span>
+                    <span className="text-sm">Medicine sold - ETB 25.50</span>
                   </div>
                   <div className="flex items-center space-x-2">
                     <Badge variant="outline">Stock</Badge>
@@ -176,7 +178,7 @@ export default function OwnerDashboard() {
                   </div>
                   <div className="flex items-center space-x-2">
                     <Badge variant="secondary">Expense</Badge>
-                    <span className="text-sm">Utility bill - $150.00</span>
+                    <span className="text-sm">Utility bill - ETB 150.00</span>
                   </div>
                 </div>
               </CardContent>
@@ -209,6 +211,12 @@ export default function OwnerDashboard() {
               </CardContent>
             </Card>
           </div>
+          
+          {/* Expired Medicines Table */}
+          <ExpiredMedicinesTable />
+          
+          {/* Low Stock Items Table */}
+          <LowStockItemsTable />
         </TabsContent>
 
         <TabsContent value="inventory">
