@@ -75,7 +75,7 @@ export function AppSidebar() {
           </div>
           {!isCollapsed && (
             <div>
-              <h1 className="text-lg font-bold">PharmaCare</h1>
+              <h1 className="text-lg font-bold">PharmaXpert</h1>
               {profile && (
                 <Badge 
                   variant={profile.role === 'owner' ? 'default' : 'secondary'}
