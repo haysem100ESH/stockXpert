@@ -176,7 +176,7 @@ export default function Dashboard() {
         .from('medicines')
         .select('id, name, category, expiry_date')
         .not('expiry_date', 'is', null)
-        .lt('expiry_date', new Date().toISOString().split('T')[0]);
+        .lte('expiry_date', new Date().toISOString().split('T')[0]);
 
       if (expiredError) {
         console.error('Error fetching expired medicines:', expiredError);
