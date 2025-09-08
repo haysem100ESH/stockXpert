@@ -160,6 +160,12 @@ export default function OwnerDashboard() {
         </TabsList>
 
         <TabsContent value="overview" className="space-y-4">
+          {/* Expired Medicines Table */}
+          <ExpiredMedicinesTable />
+          
+          {/* Low Stock Items Table */}
+          <LowStockItemsTable />
+          
           <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
             <Card>
               <CardHeader>
@@ -211,12 +217,6 @@ export default function OwnerDashboard() {
               </CardContent>
             </Card>
           </div>
-          
-          {/* Expired Medicines Table */}
-          <ExpiredMedicinesTable />
-          
-          {/* Low Stock Items Table */}
-          <LowStockItemsTable />
         </TabsContent>
 
         <TabsContent value="inventory">

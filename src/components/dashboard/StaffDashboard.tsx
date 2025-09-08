@@ -548,6 +548,12 @@ export default function StaffDashboard() {
         </Card>
       )}
 
+      {/* Expired Medicines Table */}
+      <ExpiredMedicinesTable />
+      
+      {/* Low Stock Items Table */}  
+      <LowStockItemsTable />
+
       {/* Charts Section */}
       <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
         {/* Items Sold by Category */}
@@ -633,7 +639,7 @@ export default function StaffDashboard() {
                     outerRadius={80}
                     fill="hsl(var(--primary))"
                     dataKey="amount"
-                    label={(entry) => `${entry.method}: $${entry.amount.toFixed(2)}`}
+                    label={(entry) => `${entry.method}: ETB ${entry.amount.toFixed(2)}`}
                   >
                     {paymentMethodData.map((entry, index) => (
                       <Cell key={`cell-${index}`} fill={COLORS[index % COLORS.length]} />
@@ -646,12 +652,6 @@ export default function StaffDashboard() {
            </CardContent>
          </Card>
        </div>
-       
-       {/* Expired Medicines Table */}
-       <ExpiredMedicinesTable />
-       
-       {/* Low Stock Items Table */}
-       <LowStockItemsTable />
      </div>
   );
 }
