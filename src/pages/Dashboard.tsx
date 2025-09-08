@@ -172,11 +172,17 @@ export default function Dashboard() {
         .gte('expiry_date', new Date().toISOString().split('T')[0]);
 
       // Fetch expired items
-      const { data: expiredDetails } = await supabase
+      const { data: expiredDetails, error: expiredError } = await supabase
         .from('medicines')
         .select('id, name, category, expiry_date')
         .not('expiry_date', 'is', null)
         .lt('expiry_date', new Date().toISOString().split('T')[0]);
+
+      if (expiredError) {
+        console.error('Error fetching expired medicines:', expiredError);
+      } else {
+        console.log('Expired medicines found:', expiredDetails?.length || 0);
+      }
 
       // Fetch sales data with medicine details for charts
       const { data: salesWithItems } = await supabase
@@ -479,17 +485,20 @@ export default function Dashboard() {
       </div>
 
       {/* Expired Items */}
-      {expiredItems.length > 0 && (
-        <Card>
-          <CardHeader>
-            <CardTitle className="flex items-center space-x-2">
-              <AlertTriangle className="h-5 w-5 text-destructive" />
-              <span>Expired Medicines</span>
-            </CardTitle>
-            <CardDescription>
-              {expiredItems.length} medicines have already expired
-            </CardDescription>
-          </CardHeader>
+      <Card>
+        <CardHeader>
+          <CardTitle className="flex items-center space-x-2">
+            <AlertTriangle className="h-5 w-5 text-destructive" />
+            <span>Expired Medicines</span>
+          </CardTitle>
+          <CardDescription>
+            {expiredItems.length > 0 
+              ? `${expiredItems.length} medicines have already expired`
+              : 'No medicines have expired'
+            }
+          </CardDescription>
+        </CardHeader>
+        {expiredItems.length > 0 && (
           <CardContent>
             <div className="grid gap-2">
               {expiredItems.slice(0, 5).map((item) => (
@@ -518,8 +527,8 @@ export default function Dashboard() {
               )}
             </div>
           </CardContent>
-        </Card>
-      )}
+        )}
+      </Card>
 
       {/* Expiring Items */}
       {expiringItems.length > 0 && (
