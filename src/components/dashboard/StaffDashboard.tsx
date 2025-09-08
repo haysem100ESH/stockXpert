@@ -150,22 +150,24 @@ export default function StaffDashboard() {
         .from('low_stock_medicines')
         .select('id, name, category, stock_quantity, minimum_stock_level');
 
-      // Fetch expiring items (within 30 days)
+      // Fetch expiring items (within 30 days, excluding today)
       const thirtyDaysFromNow = new Date();
       thirtyDaysFromNow.setDate(thirtyDaysFromNow.getDate() + 30);
+      const tomorrow = new Date();
+      tomorrow.setDate(tomorrow.getDate() + 1);
       const { data: expiringDetails } = await supabase
         .from('medicines')
         .select('id, name, category, expiry_date')
         .not('expiry_date', 'is', null)
         .lte('expiry_date', thirtyDaysFromNow.toISOString().split('T')[0])
-        .gte('expiry_date', new Date().toISOString().split('T')[0]);
+        .gte('expiry_date', tomorrow.toISOString().split('T')[0]);
 
       // Fetch expired items
       const { data: expiredDetails } = await supabase
         .from('medicines')
         .select('id, name, category, expiry_date')
         .not('expiry_date', 'is', null)
-        .lt('expiry_date', new Date().toISOString().split('T')[0]);
+        .lte('expiry_date', new Date().toISOString().split('T')[0]);
 
       // Fetch sales data with medicine details for charts
       const { data: salesWithItems } = await supabase

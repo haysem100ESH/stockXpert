@@ -178,7 +178,11 @@ export default function StaffInventoryWithActions() {
 
   const isExpired = (medicine: Medicine) => {
     if (!medicine.expiry_date) return false;
-    return new Date(medicine.expiry_date) < new Date();
+    const expiry = new Date(medicine.expiry_date);
+    const today = new Date();
+    today.setHours(0, 0, 0, 0);
+    expiry.setHours(0, 0, 0, 0);
+    return expiry <= today;
   };
 
   const isExpiringSoon = (medicine: Medicine) => {

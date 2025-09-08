@@ -80,7 +80,7 @@ export default function OwnerDashboard() {
         .from('medicines')
         .select('id')
         .not('expiry_date', 'is', null)
-        .lt('expiry_date', new Date().toISOString().split('T')[0]);
+        .lte('expiry_date', new Date().toISOString().split('T')[0]);
       
       const expiredItems = expiredMedicinesData?.length || 0;
 
