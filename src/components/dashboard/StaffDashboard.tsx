@@ -20,6 +20,7 @@ interface DashboardStats {
   lowStockItems: number;
   outOfStockItems: number;
   periodSalesRevenue: number;
+  expiredItems: number;
 }
 
 interface OutOfStockItem {
@@ -75,7 +76,8 @@ export default function StaffDashboard() {
     todaySales: 0,
     lowStockItems: 0,
     outOfStockItems: 0,
-    periodSalesRevenue: 0
+    periodSalesRevenue: 0,
+    expiredItems: 0
   });
   const [outOfStockItems, setOutOfStockItems] = useState<OutOfStockItem[]>([]);
   const [lowStockItems, setLowStockItems] = useState<LowStockItem[]>([]);
@@ -237,7 +239,8 @@ export default function StaffDashboard() {
         todaySales,
         lowStockItems,
         outOfStockItems,
-        periodSalesRevenue
+        periodSalesRevenue,
+        expiredItems: expiredDetails?.length || 0
       });
       setOutOfStockItems(outOfStockDetails || []);
       setLowStockItems(lowStockDetails || []);
@@ -355,7 +358,7 @@ export default function StaffDashboard() {
         </div>
       </div>
 
-      <div className="grid gap-4 md:grid-cols-2 lg:grid-cols-4">
+      <div className="grid gap-4 md:grid-cols-2 lg:grid-cols-5">
         <Card>
           <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
             <CardTitle className="text-sm font-medium">Total Products</CardTitle>
@@ -397,6 +400,17 @@ export default function StaffDashboard() {
           <CardContent>
             <div className="text-2xl font-bold text-warning">{expiringItems.length}</div>
             <p className="text-xs text-muted-foreground">Items expiring in 30 days</p>
+          </CardContent>
+        </Card>
+        
+        <Card>
+          <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
+            <CardTitle className="text-sm font-medium">Expired Medicines</CardTitle>
+            <AlertTriangle className="h-4 w-4 text-destructive" />
+          </CardHeader>
+          <CardContent>
+            <div className="text-2xl font-bold text-destructive">{stats.expiredItems}</div>
+            <p className="text-xs text-muted-foreground">Medicines expired</p>
           </CardContent>
         </Card>
       </div>

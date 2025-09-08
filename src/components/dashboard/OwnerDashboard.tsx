@@ -28,6 +28,7 @@ interface DashboardStats {
   totalProducts: number;
   totalSoldItems: number;
   lowStockItems: number;
+  expiredItems: number;
 }
 
 export default function OwnerDashboard() {
@@ -35,7 +36,8 @@ export default function OwnerDashboard() {
     totalRevenue: 0,
     totalProducts: 0,
     totalSoldItems: 0,
-    lowStockItems: 0
+    lowStockItems: 0,
+    expiredItems: 0
   });
   const [loading, setLoading] = useState(true);
   const { toast } = useToast();
@@ -70,11 +72,21 @@ export default function OwnerDashboard() {
       
       const totalSoldItems = saleItemsData?.reduce((sum, item) => sum + item.quantity, 0) || 0;
 
+      // Fetch expired items count
+      const { data: expiredMedicinesData } = await supabase
+        .from('medicines')
+        .select('id')
+        .not('expiry_date', 'is', null)
+        .lt('expiry_date', new Date().toISOString().split('T')[0]);
+      
+      const expiredItems = expiredMedicinesData?.length || 0;
+
       setStats({
         totalRevenue,
         totalProducts,
         totalSoldItems,
-        lowStockItems
+        lowStockItems,
+        expiredItems
       });
     } catch (error) {
       toast({
@@ -94,7 +106,7 @@ export default function OwnerDashboard() {
       </div>
 
       {/* Stats Cards */}
-      <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-6">
+      <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-5 gap-6">
         <Card>
           <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
             <CardTitle className="text-sm font-medium">Total Revenue</CardTitle>
@@ -143,6 +155,19 @@ export default function OwnerDashboard() {
             <div className="text-2xl font-bold text-warning">{stats.lowStockItems}</div>
             <p className="text-xs text-muted-foreground">
               Items need restock
+            </p>
+          </CardContent>
+        </Card>
+
+        <Card>
+          <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
+            <CardTitle className="text-sm font-medium">Expired Medicines</CardTitle>
+            <AlertTriangle className="h-4 w-4 text-destructive" />
+          </CardHeader>
+          <CardContent>
+            <div className="text-2xl font-bold text-destructive">{stats.expiredItems}</div>
+            <p className="text-xs text-muted-foreground">
+              Medicines expired
             </p>
           </CardContent>
         </Card>
