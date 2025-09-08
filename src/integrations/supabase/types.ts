@@ -174,6 +174,13 @@ export type Database = {
             foreignKeyName: "sale_items_medicine_id_fkey"
             columns: ["medicine_id"]
             isOneToOne: false
+            referencedRelation: "low_stock_medicines"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "sale_items_medicine_id_fkey"
+            columns: ["medicine_id"]
+            isOneToOne: false
             referencedRelation: "medicines"
             referencedColumns: ["id"]
           },
@@ -256,7 +263,68 @@ export type Database = {
       }
     }
     Views: {
-      [_ in never]: never
+      low_stock_medicines: {
+        Row: {
+          batch_number: string | null
+          category: Database["public"]["Enums"]["medicine_category"] | null
+          created_at: string | null
+          expiry_alert_enabled: boolean | null
+          expiry_date: string | null
+          generic_name: string | null
+          id: string | null
+          manufacturer: string | null
+          minimum_stock_level: number | null
+          name: string | null
+          purchase_price: number | null
+          selling_price: number | null
+          stock_quantity: number | null
+          supplier_id: string | null
+          updated_at: string | null
+        }
+        Insert: {
+          batch_number?: string | null
+          category?: Database["public"]["Enums"]["medicine_category"] | null
+          created_at?: string | null
+          expiry_alert_enabled?: boolean | null
+          expiry_date?: string | null
+          generic_name?: string | null
+          id?: string | null
+          manufacturer?: string | null
+          minimum_stock_level?: number | null
+          name?: string | null
+          purchase_price?: number | null
+          selling_price?: number | null
+          stock_quantity?: number | null
+          supplier_id?: string | null
+          updated_at?: string | null
+        }
+        Update: {
+          batch_number?: string | null
+          category?: Database["public"]["Enums"]["medicine_category"] | null
+          created_at?: string | null
+          expiry_alert_enabled?: boolean | null
+          expiry_date?: string | null
+          generic_name?: string | null
+          id?: string | null
+          manufacturer?: string | null
+          minimum_stock_level?: number | null
+          name?: string | null
+          purchase_price?: number | null
+          selling_price?: number | null
+          stock_quantity?: number | null
+          supplier_id?: string | null
+          updated_at?: string | null
+        }
+        Relationships: [
+          {
+            foreignKeyName: "medicines_supplier_id_fkey"
+            columns: ["supplier_id"]
+            isOneToOne: false
+            referencedRelation: "suppliers"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
     }
     Functions: {
       get_profile_by_email: {
@@ -273,6 +341,10 @@ export type Database = {
         }[]
       }
       is_owner: {
+        Args: Record<PropertyKey, never>
+        Returns: boolean
+      }
+      is_staff: {
         Args: Record<PropertyKey, never>
         Returns: boolean
       }
