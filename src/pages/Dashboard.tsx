@@ -624,19 +624,17 @@ export default function Dashboard() {
               }}
               className="h-[300px]"
             >
-              <ResponsiveContainer width="100%" height="100%">
-                <BarChart data={categorySales}>
-                  <CartesianGrid strokeDasharray="3 3" />
-                  <XAxis dataKey="category" />
-                  <YAxis />
-                  <ChartTooltip content={<ChartTooltipContent />} />
-                  <Bar dataKey="sales">
-                    {categorySales.map((entry, index) => (
-                      <Cell key={`cell-${index}`} fill={COLORS[index % COLORS.length]} />
-                    ))}
-                  </Bar>
-                </BarChart>
-              </ResponsiveContainer>
+              <BarChart data={categorySales} width={533} height={300}>
+                <CartesianGrid strokeDasharray="3 3" />
+                <XAxis dataKey="category" />
+                <YAxis />
+                <ChartTooltip content={<ChartTooltipContent />} />
+                <Bar dataKey="sales">
+                  {categorySales.map((entry, index) => (
+                    <Cell key={`cell-${index}`} fill={COLORS[index % COLORS.length]} />
+                  ))}
+                </Bar>
+              </BarChart>
             </ChartContainer>
           </CardContent>
         </Card>
@@ -654,24 +652,22 @@ export default function Dashboard() {
               }}
               className="h-[300px]"
             >
-              <ResponsiveContainer width="100%" height="100%">
-                <PieChart>
-                  <Pie
-                    data={paymentMethodData}
-                    cx="50%"
-                    cy="50%"
-                    outerRadius={80}
-                    fill="hsl(142 76% 36%)"
-                    dataKey="amount"
-                    label={(entry) => `${entry.method}: ETB ${entry.amount.toFixed(2)}`}
-                  >
-                    {paymentMethodData.map((entry, index) => (
-                      <Cell key={`cell-${index}`} fill={COLORS[index % COLORS.length]} />
-                    ))}
-                  </Pie>
-                  <ChartTooltip content={<ChartTooltipContent />} />
-                </PieChart>
-              </ResponsiveContainer>
+              <PieChart width={533} height={300}>
+                <Pie
+                  data={paymentMethodData}
+                  cx="50%"
+                  cy="50%"
+                  outerRadius={80}
+                  fill="hsl(142 76% 36%)"
+                  dataKey="amount"
+                  label={(entry) => `${entry.method}: ETB ${entry.amount.toFixed(2)}`}
+                >
+                  {paymentMethodData.map((entry, index) => (
+                    <Cell key={`cell-${index}`} fill={COLORS[index % COLORS.length]} />
+                  ))}
+                </Pie>
+                <ChartTooltip content={<ChartTooltipContent />} />
+              </PieChart>
             </ChartContainer>
           </CardContent>
         </Card>
@@ -690,24 +686,22 @@ export default function Dashboard() {
             }}
             className="h-[300px]"
           >
-            <ResponsiveContainer width="100%" height="100%">
-              <PieChart>
-                <Pie
-                  data={productPerformance.slice(0, 5)}
-                  cx="50%"
-                  cy="50%"
-                  outerRadius={80}
-                  fill="hsl(38 92% 50%)"
-                  dataKey="sales"
-                  label={(entry) => entry.name}
-                >
-                  {productPerformance.slice(0, 5).map((entry, index) => (
-                    <Cell key={`cell-${index}`} fill={COLORS[index % COLORS.length]} />
-                  ))}
-                </Pie>
-                <ChartTooltip content={<ChartTooltipContent />} />
-              </PieChart>
-            </ResponsiveContainer>
+            <PieChart width={533} height={300}>
+              <Pie
+                data={productPerformance.slice(0, 5)}
+                cx="50%"
+                cy="50%"
+                outerRadius={80}
+                fill="hsl(38 92% 50%)"
+                dataKey="sales"
+                label={(entry) => entry.name}
+              >
+                {productPerformance.slice(0, 5).map((entry, index) => (
+                  <Cell key={`cell-${index}`} fill={COLORS[index % COLORS.length]} />
+                ))}
+              </Pie>
+              <ChartTooltip content={<ChartTooltipContent />} />
+            </PieChart>
           </ChartContainer>
         </CardContent>
       </Card>
@@ -727,26 +721,24 @@ export default function Dashboard() {
               }}
               className="h-[400px]"
             >
-              <ResponsiveContainer width="100%" height="100%">
-                <LineChart data={incomeExpenseData}>
-                  <CartesianGrid strokeDasharray="3 3" />
-                  <XAxis dataKey="date" />
-                  <YAxis />
-                  <ChartTooltip content={<ChartTooltipContent />} />
-                  <Line 
-                    type="monotone" 
-                    dataKey="income" 
-                    stroke="hsl(var(--success))" 
-                    strokeWidth={2}
-                  />
-                  <Line 
-                    type="monotone" 
-                    dataKey="expenses" 
-                    stroke="hsl(var(--destructive))" 
-                    strokeWidth={2}
-                  />
-                </LineChart>
-                </ResponsiveContainer>
+              <LineChart data={incomeExpenseData} width={533} height={400}>
+                <CartesianGrid strokeDasharray="3 3" />
+                <XAxis dataKey="date" />
+                <YAxis />
+                <ChartTooltip content={<ChartTooltipContent />} />
+                <Line 
+                  type="monotone" 
+                  dataKey="income" 
+                  stroke="hsl(var(--success))" 
+                  strokeWidth={2}
+                />
+                <Line 
+                  type="monotone" 
+                  dataKey="expenses" 
+                  stroke="hsl(var(--destructive))" 
+                  strokeWidth={2}
+                />
+              </LineChart>
             </ChartContainer>
           </CardContent>
         </Card>

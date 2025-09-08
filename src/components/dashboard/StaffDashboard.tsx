@@ -581,15 +581,13 @@ export default function StaffDashboard() {
               }}
               className="h-[300px]"
             >
-              <ResponsiveContainer width="100%" height="100%">
-                <BarChart data={categorySales}>
-                  <CartesianGrid strokeDasharray="3 3" />
-                  <XAxis dataKey="category" />
-                  <YAxis />
-                  <ChartTooltip content={<ChartTooltipContent />} />
-                  <Bar dataKey="sales" fill="hsl(var(--primary))" />
-                </BarChart>
-              </ResponsiveContainer>
+              <BarChart data={categorySales} width={533} height={300}>
+                <CartesianGrid strokeDasharray="3 3" />
+                <XAxis dataKey="category" />
+                <YAxis />
+                <ChartTooltip content={<ChartTooltipContent />} />
+                <Bar dataKey="sales" fill="hsl(var(--primary))" />
+              </BarChart>
             </ChartContainer>
           </CardContent>
         </Card>
@@ -607,24 +605,22 @@ export default function StaffDashboard() {
               }}
               className="h-[300px]"
             >
-              <ResponsiveContainer width="100%" height="100%">
-                <PieChart>
-                  <Pie
-                    data={productPerformance.slice(0, 5)}
-                    cx="50%"
-                    cy="50%"
-                    outerRadius={80}
-                    fill="hsl(var(--secondary))"
-                    dataKey="sales"
-                    label={(entry) => entry.name}
-                  >
-                    {productPerformance.slice(0, 5).map((entry, index) => (
-                      <Cell key={`cell-${index}`} fill={COLORS[index % COLORS.length]} />
-                    ))}
-                  </Pie>
-                  <ChartTooltip content={<ChartTooltipContent />} />
-                </PieChart>
-              </ResponsiveContainer>
+              <PieChart width={533} height={300}>
+                <Pie
+                  data={productPerformance.slice(0, 5)}
+                  cx="50%"
+                  cy="50%"
+                  outerRadius={80}
+                  fill="hsl(var(--secondary))"
+                  dataKey="sales"
+                  label={(entry) => entry.name}
+                >
+                  {productPerformance.slice(0, 5).map((entry, index) => (
+                    <Cell key={`cell-${index}`} fill={COLORS[index % COLORS.length]} />
+                  ))}
+                </Pie>
+                <ChartTooltip content={<ChartTooltipContent />} />
+              </PieChart>
             </ChartContainer>
           </CardContent>
         </Card>
@@ -642,24 +638,22 @@ export default function StaffDashboard() {
               }}
               className="h-[300px]"
             >
-              <ResponsiveContainer width="100%" height="100%">
-                <PieChart>
-                  <Pie
-                    data={paymentMethodData}
-                    cx="50%"
-                    cy="50%"
-                    outerRadius={80}
-                    fill="hsl(var(--primary))"
-                    dataKey="amount"
-                    label={(entry) => `${entry.method}: ETB ${entry.amount.toFixed(2)}`}
-                  >
-                    {paymentMethodData.map((entry, index) => (
-                      <Cell key={`cell-${index}`} fill={COLORS[index % COLORS.length]} />
-                     ))}
-                   </Pie>
-                   <ChartTooltip content={<ChartTooltipContent />} />
-                 </PieChart>
-               </ResponsiveContainer>
+              <PieChart width={533} height={300}>
+                <Pie
+                  data={paymentMethodData}
+                  cx="50%"
+                  cy="50%"
+                  outerRadius={80}
+                  fill="hsl(var(--primary))"
+                  dataKey="amount"
+                  label={(entry) => `${entry.method}: ETB ${entry.amount.toFixed(2)}`}
+                >
+                  {paymentMethodData.map((entry, index) => (
+                    <Cell key={`cell-${index}`} fill={COLORS[index % COLORS.length]} />
+                   ))}
+                 </Pie>
+                 <ChartTooltip content={<ChartTooltipContent />} />
+               </PieChart>
              </ChartContainer>
            </CardContent>
          </Card>
