@@ -68,7 +68,7 @@ export function AppSidebar() {
       className={isCollapsed ? "w-14" : "w-64"}
       collapsible="icon"
     >
-      <SidebarHeader className="border-b p-4 bg-black">
+      <SidebarHeader className="border-b p-4 bg-[#4b9eab]">
         <div className="flex items-center space-x-2">
           <div className="flex items-center justify-center w-15 h-15 rounded-md overflow-hidden">
             <img src="/lovable-uploads/2f79a84c-a540-4f7f-bbe7-0bb88136976a.png" alt="PharmaXpert Logo" className="w-15 h-15 object-cover" />
