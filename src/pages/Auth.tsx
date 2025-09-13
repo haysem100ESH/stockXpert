@@ -286,7 +286,7 @@ export default function Auth() {
             <img
               src="/lovable-uploads/2f79a84c-a540-4f7f-bbe7-0bb88136976a.png"
               alt="PharmaXpert Logo"
-              className="w-22 h-22 object-cover rounded-full shadow-md mb-3 transition-transform duration-300 hover:scale-105"
+              className="w-21 h-21 object-cover rounded-full shadow-md mb-3 transition-transform duration-300 hover:scale-105"
             />
             <CardTitle className="text-3xl font-extrabold text-gray-800">PharmaXpert</CardTitle>
             <CardDescription className="text-gray-500">
