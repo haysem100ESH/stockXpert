@@ -334,17 +334,20 @@ export default function Auth() {
                 <div className="space-y-2 relative">
                   <Label htmlFor="signin-password">Password</Label>
                   <Input
-                    id="signin-password"
-                    name="password"
-                    type="password"
-                    required
-                    placeholder="Enter your password"
-                    className="rounded-xl pr-10"
-                  />
-                  {/* Eye icon toggle (optional) */}
-                  <span className="absolute right-3 top-9 text-gray-400 cursor-pointer hover:text-gray-600">
-                    👁
-                  </span>
+                        id="signin-password"
+                         name="password"
+                          type={showPassword ? "text" : "password"} // 👈 toggle type
+                          required
+                          placeholder="Enter your password"
+                            className="rounded-xl pr-10"
+                              />
+                          <span
+                          className="absolute right-3 top-9 text-gray-400 cursor-pointer hover:text-gray-600"
+                          onClick={() => setShowPassword((prev) => !prev)} // 👈 toggle
+                              >
+                          {showPassword ? <EyeOff size={18} /> : <Eye size={18} />}
+                          </span>
+
                 </div>
 
                 <Button
