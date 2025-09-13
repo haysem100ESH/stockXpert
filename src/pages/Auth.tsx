@@ -6,373 +6,365 @@ import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
-import { Loader2, Eye, EyeOff } from 'lucide-react'; // Import Eye and EyeOff icons
+import { Loader2, Pill } from 'lucide-react';
 import { useToast } from '@/hooks/use-toast';
 import { supabase } from '@/integrations/supabase/client';
 
 // Forgot Password Component
 function ForgotPasswordForm() {
-  const [step, setStep] = useState<'email' | 'question' | 'reset'>('email');
-  const [email, setEmail] = useState('');
-  const [securityQuestion, setSecurityQuestion] = useState('');
-  const [securityAnswer, setSecurityAnswer] = useState('');
-  const [newPassword, setNewPassword] = useState('');
-  const [confirmPassword, setConfirmPassword] = useState('');
-  const [userId, setUserId] = useState('');
-  const [isSubmitting, setIsSubmitting] = useState(false);
-  const { toast } = useToast();
+  const [step, setStep] = useState<'email' | 'question' | 'reset'>('email');
+  const [email, setEmail] = useState('');
+  const [securityQuestion, setSecurityQuestion] = useState('');
+  const [securityAnswer, setSecurityAnswer] = useState('');
+  const [newPassword, setNewPassword] = useState('');
+  const [confirmPassword, setConfirmPassword] = useState('');
+  const [userId, setUserId] = useState('');
+  const [isSubmitting, setIsSubmitting] = useState(false);
+  const { toast } = useToast();
 
-  const handleEmailSubmit = async (e: React.FormEvent) => {
-    e.preventDefault();
-    setIsSubmitting(true);
+  const handleEmailSubmit = async (e: React.FormEvent) => {
+    e.preventDefault();
+    setIsSubmitting(true);
 
-    try {
-      const { data, error } = await supabase.functions.invoke('password-reset', {
-        body: {
-          email,
-          step: 'verify_email'
-        }
-      });
+    try {
+      const { data, error } = await supabase.functions.invoke('password-reset', {
+        body: {
+          email,
+          step: 'verify_email'
+        }
+      });
 
-      if (error) throw error;
+      if (error) throw error;
 
-      if (data.error) {
-        toast({
-          title: "Error",
-          description: data.error,
-          variant: "destructive"
-        });
-        return;
-      }
+      if (data.error) {
+        toast({
+          title: "Error",
+          description: data.error,
+          variant: "destructive"
+        });
+        return;
+      }
 
-      setSecurityQuestion(data.security_question);
-      setUserId(data.user_id);
-      setStep('question');
-    } catch (error: any) {
-      toast({
-        title: "Error",
-        description: "Failed to verify email address",
-        variant: "destructive"
-      });
-    } finally {
-      setIsSubmitting(false);
-    }
-  };
+      setSecurityQuestion(data.security_question);
+      setUserId(data.user_id);
+      setStep('question');
+    } catch (error: any) {
+      toast({
+        title: "Error",
+        description: "Failed to verify email address",
+        variant: "destructive"
+      });
+    } finally {
+      setIsSubmitting(false);
+    }
+  };
 
-  const handleSecurityAnswer = async (e: React.FormEvent) => {
-    e.preventDefault();
-    setIsSubmitting(true);
+  const handleSecurityAnswer = async (e: React.FormEvent) => {
+    e.preventDefault();
+    setIsSubmitting(true);
 
-    try {
-      const { data, error } = await supabase.functions.invoke('password-reset', {
-        body: {
-          email,
-          securityAnswer,
-          step: 'verify_answer'
-        }
-      });
+    try {
+      const { data, error } = await supabase.functions.invoke('password-reset', {
+        body: {
+          email,
+          securityAnswer,
+          step: 'verify_answer'
+        }
+      });
 
-      if (error) throw error;
+      if (error) throw error;
 
-      if (data.error) {
-        toast({
-          title: "Error",
-          description: data.error,
-          variant: "destructive"
-        });
-        return;
-      }
+      if (data.error) {
+        toast({
+          title: "Error",
+          description: data.error,
+          variant: "destructive"
+        });
+        return;
+      }
 
-      setStep('reset');
-    } catch (error: any) {
-      toast({
-        title: "Error",
-        description: "Failed to verify security answer",
-        variant: "destructive"
-      });
-    } finally {
-      setIsSubmitting(false);
-    }
-  };
+      setStep('reset');
+    } catch (error: any) {
+      toast({
+        title: "Error",
+        description: "Failed to verify security answer",
+        variant: "destructive"
+      });
+    } finally {
+      setIsSubmitting(false);
+    }
+  };
 
-  const handlePasswordReset = async (e: React.FormEvent) => {
-    e.preventDefault();
-    
-    if (newPassword !== confirmPassword) {
-      toast({
-        title: "Error",
-        description: "Passwords do not match",
-        variant: "destructive"
-      });
-      return;
-    }
+  const handlePasswordReset = async (e: React.FormEvent) => {
+    e.preventDefault();
+    
+    if (newPassword !== confirmPassword) {
+      toast({
+        title: "Error",
+        description: "Passwords do not match",
+        variant: "destructive"
+      });
+      return;
+    }
 
-    if (newPassword.length < 6) {
-      toast({
-        title: "Error", 
-        description: "Password must be at least 6 characters long",
-        variant: "destructive"
-      });
-      return;
-    }
+    if (newPassword.length < 6) {
+      toast({
+        title: "Error", 
+        description: "Password must be at least 6 characters long",
+        variant: "destructive"
+      });
+      return;
+    }
 
-    setIsSubmitting(true);
+    setIsSubmitting(true);
 
-    try {
-      const { data, error } = await supabase.functions.invoke('password-reset', {
-        body: {
-          email,
-          newPassword,
-          step: 'reset_password'
-        }
-      });
+    try {
+      const { data, error } = await supabase.functions.invoke('password-reset', {
+        body: {
+          email,
+          newPassword,
+          step: 'reset_password'
+        }
+      });
 
-      if (error) throw error;
+      if (error) throw error;
 
-      if (data.error) {
-        toast({
-          title: "Error",
-          description: data.error,
-          variant: "destructive"
-        });
-        return;
-      }
+      if (data.error) {
+        toast({
+          title: "Error",
+          description: data.error,
+          variant: "destructive"
+        });
+        return;
+      }
 
-      toast({
-        title: "Success",
-        description: "Password reset successfully. You can now sign in."
-      });
+      toast({
+        title: "Success",
+        description: "Password reset successfully. You can now sign in."
+      });
 
-      // Reset form
-      setStep('email');
-      setEmail('');
-      setSecurityQuestion('');
-      setSecurityAnswer('');
-      setNewPassword('');
-      setConfirmPassword('');
-      setUserId('');
-    } catch (error: any) {
-      toast({
-        title: "Error",
-        description: "Failed to reset password",
-        variant: "destructive"
-      });
-    } finally {
-      setIsSubmitting(false);
-    }
-  };
+      // Reset form
+      setStep('email');
+      setEmail('');
+      setSecurityQuestion('');
+      setSecurityAnswer('');
+      setNewPassword('');
+      setConfirmPassword('');
+      setUserId('');
+    } catch (error: any) {
+      toast({
+        title: "Error",
+        description: "Failed to reset password",
+        variant: "destructive"
+      });
+    } finally {
+      setIsSubmitting(false);
+    }
+  };
 
-  if (step === 'email') {
-    return (
-      <form onSubmit={handleEmailSubmit} className="space-y-4">
-        <div className="space-y-2">
-          <Label htmlFor="forgot-email">Email Address</Label>
-          <Input
-            id="forgot-email"
-            type="email"
-            value={email}
-            onChange={(e) => setEmail(e.target.value)}
-            required
-            placeholder="Enter your email address"
-          />
-        </div>
-        <Button type="submit" className="w-full" disabled={isSubmitting}>
-          {isSubmitting && <Loader2 className="mr-2 h-4 w-4 animate-spin" />}
-          Continue
-        </Button>
-      </form>
-    );
-  }
+  if (step === 'email') {
+    return (
+      <form onSubmit={handleEmailSubmit} className="space-y-4">
+        <div className="space-y-2">
+          <Label htmlFor="forgot-email">Email Address</Label>
+          <Input
+            id="forgot-email"
+            type="email"
+            value={email}
+            onChange={(e) => setEmail(e.target.value)}
+            required
+            placeholder="Enter your email address"
+          />
+        </div>
+        <Button type="submit" className="w-full" disabled={isSubmitting}>
+          {isSubmitting && <Loader2 className="mr-2 h-4 w-4 animate-spin" />}
+          Continue
+        </Button>
+      </form>
+    );
+  }
 
-  if (step === 'question') {
-    return (
-      <form onSubmit={handleSecurityAnswer} className="space-y-4">
-        <div className="space-y-2">
-          <Label>Security Question</Label>
-          <p className="text-sm font-medium p-2 bg-muted rounded">{securityQuestion}</p>
-        </div>
-        <div className="space-y-2">
-          <Label htmlFor="security-answer">Your Answer</Label>
-          <Input
-            id="security-answer"
-            type="text"
-            value={securityAnswer}
-            onChange={(e) => setSecurityAnswer(e.target.value)}
-            required
-            placeholder="Enter your answer"
-          />
-        </div>
-        <Button type="submit" className="w-full" disabled={isSubmitting}>
-          {isSubmitting && <Loader2 className="mr-2 h-4 w-4 animate-spin" />}
-          Verify Answer
-        </Button>
-        <Button type="button" variant="outline" className="w-full" onClick={() => setStep('email')}>
-          Back
-        </Button>
-      </form>
-    );
-  }
+  if (step === 'question') {
+    return (
+      <form onSubmit={handleSecurityAnswer} className="space-y-4">
+        <div className="space-y-2">
+          <Label>Security Question</Label>
+          <p className="text-sm font-medium p-2 bg-muted rounded">{securityQuestion}</p>
+        </div>
+        <div className="space-y-2">
+          <Label htmlFor="security-answer">Your Answer</Label>
+          <Input
+            id="security-answer"
+            type="text"
+            value={securityAnswer}
+            onChange={(e) => setSecurityAnswer(e.target.value)}
+            required
+            placeholder="Enter your answer"
+          />
+        </div>
+        <Button type="submit" className="w-full" disabled={isSubmitting}>
+          {isSubmitting && <Loader2 className="mr-2 h-4 w-4 animate-spin" />}
+          Verify Answer
+        </Button>
+        <Button type="button" variant="outline" className="w-full" onClick={() => setStep('email')}>
+          Back
+        </Button>
+      </form>
+    );
+  }
 
-  return (
-    <form onSubmit={handlePasswordReset} className="space-y-4">
-      <div className="space-y-2">
-        <Label htmlFor="new-password">New Password</Label>
-        <Input
-          id="new-password"
-          type="password"
-          value={newPassword}
-          onChange={(e) => setNewPassword(e.target.value)}
-          required
-          placeholder="Enter new password"
-          minLength={6}
-        />
-      </div>
-      <div className="space-y-2">
-        <Label htmlFor="confirm-password">Confirm Password</Label>
-        <Input
-          id="confirm-password"
-          type="password"
-          value={confirmPassword}
-          onChange={(e) => setConfirmPassword(e.target.value)}
-          required
-          placeholder="Confirm new password"
-          minLength={6}
-        />
-      </div>
-      <Button type="submit" className="w-full" disabled={isSubmitting}>
-        {isSubmitting && <Loader2 className="mr-2 h-4 w-4 animate-spin" />}
-        Reset Password
-      </Button>
-      <Button type="button" variant="outline" className="w-full" onClick={() => setStep('question')}>
-        Back
-      </Button>
-    </form>
-  );
+  return (
+    <form onSubmit={handlePasswordReset} className="space-y-4">
+      <div className="space-y-2">
+        <Label htmlFor="new-password">New Password</Label>
+        <Input
+          id="new-password"
+          type="password"
+          value={newPassword}
+          onChange={(e) => setNewPassword(e.target.value)}
+          required
+          placeholder="Enter new password"
+          minLength={6}
+        />
+      </div>
+      <div className="space-y-2">
+        <Label htmlFor="confirm-password">Confirm Password</Label>
+        <Input
+          id="confirm-password"
+          type="password"
+          value={confirmPassword}
+          onChange={(e) => setConfirmPassword(e.target.value)}
+          required
+          placeholder="Confirm new password"
+          minLength={6}
+        />
+      </div>
+      <Button type="submit" className="w-full" disabled={isSubmitting}>
+        {isSubmitting && <Loader2 className="mr-2 h-4 w-4 animate-spin" />}
+        Reset Password
+      </Button>
+      <Button type="button" variant="outline" className="w-full" onClick={() => setStep('question')}>
+        Back
+      </Button>
+    </form>
+  );
 }
 
 export default function Auth() {
-  const { user, signIn, loading } = useAuth();
-  const [isSubmitting, setIsSubmitting] = useState(false);
-  const [showPassword, setShowPassword] = useState(false); // New state for password visibility
+  const { user, signIn, loading } = useAuth();
+  const [isSubmitting, setIsSubmitting] = useState(false);
 
-  // Function to toggle password visibility
-  const togglePasswordVisibility = () => {
-    setShowPassword(!showPassword);
-  };
+  if (loading) {
+    return (
+      <div className="min-h-screen flex items-center justify-center bg-gradient-to-br from-blue-50 to-indigo-100">
+        <Loader2 className="h-10 w-10 animate-spin text-primary" />
+      </div>
+    );
+  }
 
-  if (loading) {
-    return (
-      <div className="min-h-screen flex items-center justify-center bg-gradient-to-br from-blue-50 to-indigo-100">
-        <Loader2 className="h-10 w-10 animate-spin text-primary" />
-      </div>
-    );
-  }
+  if (user) {
+    return <Navigate to="/" replace />;
+  }
 
-  if (user) {
-    return <Navigate to="/" replace />;
-  }
+  const handleSignIn = async (e: React.FormEvent<HTMLFormElement>) => {
+    e.preventDefault();
+    setIsSubmitting(true);
 
-  const handleSignIn = async (e: React.FormEvent<HTMLFormElement>) => {
-    e.preventDefault();
-    setIsSubmitting(true);
+    const formData = new FormData(e.currentTarget);
+    const email = formData.get('email') as string;
+    const password = formData.get('password') as string;
 
-    const formData = new FormData(e.currentTarget);
-    const email = formData.get('email') as string;
-    const password = formData.get('password') as string;
+    await signIn(email, password);
+    setIsSubmitting(false);
+  };
 
-    await signIn(email, password);
-    setIsSubmitting(false);
-  };
+  return (
+    <div className="min-h-screen flex items-center justify-center bg-gradient-to-br from-blue-50 to-indigo-100 p-6">
+      <Card className="w-full max-w-md shadow-xl rounded-2xl border border-gray-200">
+        {/* Header */}
+        <CardHeader className="text-center space-y-2 pb-6">
+          <div className="flex flex-col items-center">
+            <img
+              src="/lovable-uploads/2f79a84c-a540-4f7f-bbe7-0bb88136976a.png"
+              alt="PharmaXpert Logo"
+              className="w-16 h-16 object-cover rounded-full shadow-md mb-3 transition-transform duration-300 hover:scale-105"
+            />
+            <CardTitle className="text-3xl font-extrabold text-gray-800">
+              PharmaXpert
+            </CardTitle>
+            <CardDescription className="text-gray-500">
+              Sign in to your pharmacy management account
+            </CardDescription>
+          </div>
+        </CardHeader>
 
-  return (
-    <div className="min-h-screen flex items-center justify-center bg-gradient-to-br from-blue-50 to-indigo-100 p-6">
-      <Card className="w-full max-w-md shadow-xl rounded-2xl border border-gray-200">
-        {/* Header */}
-        <CardHeader className="text-center space-y-2 pb-6">
-          <div className="flex flex-col items-center">
-            <img
-              src="/lovable-uploads/2f79a84c-a540-4f7f-bbe7-0bb88136976a.png"
-              alt="PharmaXpert Logo"
-              className="w-16 h-16 object-cover rounded-full shadow-md mb-3 transition-transform duration-300 hover:scale-105"
-            />
-            <CardTitle className="text-3xl font-extrabold text-gray-800">
-              PharmaXpert
-            </CardTitle>
-            <CardDescription className="text-gray-500">
-              Sign in to your pharmacy management account
-            </CardDescription>
-          </div>
-        </CardHeader>
+        {/* Tabs & Forms */}
+        <CardContent className="px-6 pb-6">
+          <Tabs defaultValue="signin" className="w-full">
+            <TabsList className="grid w-full grid-cols-2 mb-6 rounded-xl bg-gray-100 p-1">
+              <TabsTrigger
+                value="signin"
+                className="data-[state=active]:bg-white data-[state=active]:shadow-md data-[state=active]:font-semibold rounded-lg transition"
+              >
+                Sign In
+              </TabsTrigger>
+              <TabsTrigger
+                value="forgot"
+                className="data-[state=active]:bg-white data-[state=active]:shadow-md data-[state=active]:font-semibold rounded-lg transition"
+              >
+                Forgot Password
+              </TabsTrigger>
+            </TabsList>
 
-        {/* Tabs & Forms */}
-        <CardContent className="px-6 pb-6">
-          <Tabs defaultValue="signin" className="w-full">
-            <TabsList className="grid w-full grid-cols-2 mb-6 rounded-xl bg-gray-100 p-1">
-              <TabsTrigger
-                value="signin"
-                className="data-[state=active]:bg-white data-[state=active]:shadow-md data-[state=active]:font-semibold rounded-lg transition"
-              >
-                Sign In
-              </TabsTrigger>
-              <TabsTrigger
-                value="forgot"
-                className="data-[state=active]:bg-white data-[state=active]:shadow-md data-[state=active]:font-semibold rounded-lg transition"
-              >
-                Forgot Password
-              </TabsTrigger>
-            </TabsList>
+            {/* Sign In Form */}
+            <TabsContent value="signin">
+              <form onSubmit={handleSignIn} className="space-y-5">
+                <div className="space-y-2">
+                  <Label htmlFor="signin-email">Email</Label>
+                  <Input
+                    id="signin-email"
+                    name="email"
+                    type="email"
+                    required
+                    placeholder="Enter your email"
+                    className="rounded-xl"
+                  />
+                </div>
 
-            {/* Sign In Form */}
-            <TabsContent value="signin">
-              <form onSubmit={handleSignIn} className="space-y-5">
-                <div className="space-y-2">
-                  <Label htmlFor="signin-email">Email</Label>
-                  <Input
-                    id="signin-email"
-                    name="email"
-                    type="email"
-                    required
-                    placeholder="Enter your email"
-                    className="rounded-xl"
-                  />
-                </div>
+                <div className="space-y-2 relative">
+                  <Label htmlFor="signin-password">Password</Label>
+                 <Input
+                     id="signin-password"
+                      name="password"
+                      type={showPassword ? 'text' : 'password'}
+                      required
+                        placeholder="Enter your password"
+                        className="rounded-xl pr-10"
+                          />
+                  {/* Eye icon toggle (optional) */}
+                  <span className="absolute right-3 top-9 text-gray-400 cursor-pointer hover:text-gray-600">
+                    👁
+                  </span>
+                </div>
 
-                <div className="space-y-2 relative">
-                  <Label htmlFor="signin-password">Password</Label>
-                  <Input
-                    id="signin-password"
-                    name="password"
-                    **type={showPassword ? 'text' : 'password'}**
-                    required
-                    placeholder="Enter your password"
-                    className="rounded-xl pr-10"
-                  />
-                  {/* Eye icon toggle */}
-                  <div
-                    className="absolute right-3 top-9 text-gray-400 cursor-pointer hover:text-gray-600"
-                    **onClick={togglePasswordVisibility}**
-                  >
-                    **{showPassword ? <EyeOff className="h-5 w-5" /> : <Eye className="h-5 w-5" />}**
-                  </div>
-                </div>
+                <Button
+                  type="submit"
+                  className="w-full rounded-xl font-medium"
+                  disabled={isSubmitting}
+                >
+                  {isSubmitting && <Loader2 className="mr-2 h-4 w-4 animate-spin" />}
+                  Sign In
+                </Button>
+              </form>
+            </TabsContent>
 
-                <Button
-                  type="submit"
-                  className="w-full rounded-xl font-medium"
-                  disabled={isSubmitting}
-                >
-                  {isSubmitting && <Loader2 className="mr-2 h-4 w-4 animate-spin" />}
-                  Sign In
-                </Button>
-            </TabsContent>
-
-            {/* Forgot Password */}
-            <TabsContent value="forgot">
-              <ForgotPasswordForm />
-            </TabsContent>
-          </Tabs>
-        </CardContent>
-      </Card>
-    </div>
-  );
+            {/* Forgot Password */}
+            <TabsContent value="forgot">
+              <ForgotPasswordForm />
+            </TabsContent>
+          </Tabs>
+        </CardContent>
+      </Card>
+    </div>
+  );
 }
