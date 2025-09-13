@@ -253,7 +253,6 @@ function ForgotPasswordForm() {
 export default function Auth() {
   const { user, signIn, loading } = useAuth();
   const [isSubmitting, setIsSubmitting] = useState(false);
-  const [showPassword, setShowPassword] = useState(false); // 👈 toggle state
 
   if (loading) {
     return (
@@ -272,8 +271,8 @@ export default function Auth() {
     setIsSubmitting(true);
 
     const formData = new FormData(e.currentTarget);
-    const email = formData.get("email") as string;
-    const password = formData.get("password") as string;
+    const email = formData.get('email') as string;
+    const password = formData.get('password') as string;
 
     await signIn(email, password);
     setIsSubmitting(false);
@@ -288,7 +287,7 @@ export default function Auth() {
             <img
               src="/lovable-uploads/2f79a84c-a540-4f7f-bbe7-0bb88136976a.png"
               alt="PharmaXpert Logo"
-              className="w-20 h-20 object-cover rounded-full shadow-md mb-3 transition-transform duration-300 hover:scale-105"
+              className="w-16 h-16 object-cover rounded-full shadow-md mb-3 transition-transform duration-300 hover:scale-105"
             />
             <CardTitle className="text-3xl font-extrabold text-gray-800">
               PharmaXpert
@@ -337,22 +336,15 @@ export default function Auth() {
                   <Input
                     id="signin-password"
                     name="password"
-                    type={showPassword ? "text" : "password"} // 👈 dynamic type
+                    type="password"
                     required
                     placeholder="Enter your password"
                     className="rounded-xl pr-10"
                   />
-                  <button
-                    type="button"
-                    onClick={() => setShowPassword(!showPassword)}
-                    className="absolute right-3 top-9 text-gray-400 hover:text-gray-600"
-                  >
-                    {showPassword ? (
-                      <EyeOff className="h-5 w-5" />
-                    ) : (
-                      <Eye className="h-5 w-5" />
-                    )}
-                  </button>
+                  {/* Eye icon toggle (optional) */}
+                  <span className="absolute right-3 top-9 text-gray-400 cursor-pointer hover:text-gray-600">
+                    👁
+                  </span>
                 </div>
 
                 <Button
@@ -360,9 +352,7 @@ export default function Auth() {
                   className="w-full rounded-xl font-medium"
                   disabled={isSubmitting}
                 >
-                  {isSubmitting && (
-                    <Loader2 className="mr-2 h-4 w-4 animate-spin" />
-                  )}
+                  {isSubmitting && <Loader2 className="mr-2 h-4 w-4 animate-spin" />}
                   Sign In
                 </Button>
               </form>
