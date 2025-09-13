@@ -256,8 +256,8 @@ export default function Auth() {
 
   if (loading) {
     return (
-      <div className="min-h-screen flex items-center justify-center">
-        <Loader2 className="h-8 w-8 animate-spin" />
+      <div className="min-h-screen flex items-center justify-center bg-background">
+        <Loader2 className="h-10 w-10 animate-spin text-primary" />
       </div>
     );
   }
@@ -269,37 +269,54 @@ export default function Auth() {
   const handleSignIn = async (e: React.FormEvent<HTMLFormElement>) => {
     e.preventDefault();
     setIsSubmitting(true);
-    
+
     const formData = new FormData(e.currentTarget);
     const email = formData.get('email') as string;
     const password = formData.get('password') as string;
-    
+
     await signIn(email, password);
     setIsSubmitting(false);
   };
 
   return (
-    <div className="min-h-screen flex items-center justify-center bg-background p-4">
-      <Card className="w-full max-w-md">
-        <CardHeader className="text-center">
-          <div className="flex items-center justify-center mb-4">
-            {/* <Pill className="h-8 w-8 text-primary mr-2" /> */}
-             <img src="/lovable-uploads/2f79a84c-a540-4f7f-bbe7-0bb88136976a.png" alt="PharmaXpert Logo" className="w-11 h-11 object-cover mr-2" />
-            <CardTitle className="text-2xl font-bold">PharmaXpert</CardTitle>
+    <div className="min-h-screen flex items-center justify-center bg-gradient-to-br from-blue-50 to-indigo-100 p-4">
+      <Card className="w-full max-w-md shadow-xl rounded-2xl border border-gray-200">
+        <CardHeader className="text-center space-y-2">
+          <div className="flex items-center justify-center mb-3">
+            <img
+              src="/lovable-uploads/2f79a84c-a540-4f7f-bbe7-0bb88136976a.png"
+              alt="PharmaXpert Logo"
+              className="w-14 h-14 object-cover rounded-full shadow-md transition-transform duration-300 hover:scale-105"
+            />
           </div>
-          <CardDescription>
+          <CardTitle className="text-3xl font-extrabold text-gray-800">
+            PharmaXpert
+          </CardTitle>
+          <CardDescription className="text-gray-500">
             Sign in to your pharmacy management account
           </CardDescription>
         </CardHeader>
-        <CardContent>
+
+        <CardContent className="px-6 pb-6">
           <Tabs defaultValue="signin" className="w-full">
-            <TabsList className="grid w-full grid-cols-2">
-              <TabsTrigger value="signin">Sign In</TabsTrigger>
-              <TabsTrigger value="forgot">Forgot Password</TabsTrigger>
+            <TabsList className="grid w-full grid-cols-2 mb-4 rounded-xl bg-gray-100 p-1">
+              <TabsTrigger
+                value="signin"
+                className="data-[state=active]:bg-white data-[state=active]:shadow-md data-[state=active]:font-semibold rounded-lg transition"
+              >
+                Sign In
+              </TabsTrigger>
+              <TabsTrigger
+                value="forgot"
+                className="data-[state=active]:bg-white data-[state=active]:shadow-md data-[state=active]:font-semibold rounded-lg transition"
+              >
+                Forgot Password
+              </TabsTrigger>
             </TabsList>
-            
+
+            {/* Sign In Form */}
             <TabsContent value="signin">
-              <form onSubmit={handleSignIn} className="space-y-4">
+              <form onSubmit={handleSignIn} className="space-y-5">
                 <div className="space-y-2">
                   <Label htmlFor="signin-email">Email</Label>
                   <Input
@@ -308,6 +325,7 @@ export default function Auth() {
                     type="email"
                     required
                     placeholder="Enter your email"
+                    className="rounded-xl"
                   />
                 </div>
                 <div className="space-y-2">
@@ -318,15 +336,21 @@ export default function Auth() {
                     type="password"
                     required
                     placeholder="Enter your password"
+                    className="rounded-xl"
                   />
                 </div>
-                <Button type="submit" className="w-full" disabled={isSubmitting}>
+                <Button
+                  type="submit"
+                  className="w-full rounded-xl font-medium"
+                  disabled={isSubmitting}
+                >
                   {isSubmitting && <Loader2 className="mr-2 h-4 w-4 animate-spin" />}
                   Sign In
                 </Button>
               </form>
             </TabsContent>
-            
+
+            {/* Forgot Password Form */}
             <TabsContent value="forgot">
               <ForgotPasswordForm />
             </TabsContent>
