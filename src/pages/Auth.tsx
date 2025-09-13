@@ -253,7 +253,7 @@ function ForgotPasswordForm() {
 export default function Auth() {
   const { user, signIn, loading } = useAuth();
   const [isSubmitting, setIsSubmitting] = useState(false);
-  const [showPassword, setShowPassword] = useState(false); // 👈 state for visibility toggle
+  const [showPassword, setShowPassword] = useState(false); // 👈 toggle state
 
   if (loading) {
     return (
@@ -337,7 +337,7 @@ export default function Auth() {
                   <Input
                     id="signin-password"
                     name="password"
-                    type={showPassword ? "text" : "password"} // 👈 toggle type
+                    type={showPassword ? "text" : "password"} // 👈 dynamic type
                     required
                     placeholder="Enter your password"
                     className="rounded-xl pr-10"
