@@ -269,85 +269,77 @@ export default function Auth() {
   const handleSignIn = async (e: React.FormEvent<HTMLFormElement>) => {
     e.preventDefault();
     setIsSubmitting(true);
-
+    
     const formData = new FormData(e.currentTarget);
-    const email = formData.get("email") as string;
-    const password = formData.get("password") as string;
-
+    const email = formData.get('email') as string;
+    const password = formData.get('password') as string;
+    
     await signIn(email, password);
     setIsSubmitting(false);
   };
 
   return (
     <div className="min-h-screen flex items-center justify-center bg-background p-4">
-      <Card
-        className="w-full max-w-md shadow-xl rounded-2xl bg-cover bg-center"
-        style={{
-          backgroundImage:
-            "url('/lovable-uploads/2f79a84c-a540-4f7f-bbe7-0bb88136976a.png')",
-        }}
-      >
-        {/* Overlay to make text/forms readable */}
-        <div className="rounded-2xl bg-white/85 backdrop-blur-sm">
-          <CardHeader className="text-center">
-            <div className="flex items-center justify-center mb-4">
-              <CardTitle className="text-2xl font-bold text-gray-800">
-                PharmaXpert
-              </CardTitle>
-            </div>
-            <CardDescription>
-              Sign in to your pharmacy management account
-            </CardDescription>
-          </CardHeader>
-          <CardContent>
-            <Tabs defaultValue="signin" className="w-full">
-              <TabsList className="grid w-full grid-cols-2 rounded-xl bg-gray-100 p-1 mb-4">
-                <TabsTrigger value="signin">Sign In</TabsTrigger>
-                <TabsTrigger value="forgot">Forgot Password</TabsTrigger>
-              </TabsList>
+     <Card
+  className="w-full max-w-md shadow-xl rounded-2xl bg-cover bg-center"
+  style={{
+    backgroundImage:
+      "url('/lovable-uploads/2f79a84c-a540-4f7f-bbe7-0bb88136976a.png')",
+  }}
+>
+  <CardHeader className="text-center">
+    <div className="flex items-center justify-center mb-4">
+      <CardTitle className="text-2xl font-bold text-white drop-shadow-md">
+        PharmaXpert
+      </CardTitle>
+    </div>
+    <CardDescription className="text-white/90 drop-shadow-md">
+      Sign in to your pharmacy management account
+    </CardDescription>
+  </CardHeader>
+  <CardContent className="bg-white/95 rounded-xl p-4">
+    <Tabs defaultValue="signin" className="w-full">
+      <TabsList className="grid w-full grid-cols-2 mb-4">
+        <TabsTrigger value="signin">Sign In</TabsTrigger>
+        <TabsTrigger value="forgot">Forgot Password</TabsTrigger>
+      </TabsList>
 
-              <TabsContent value="signin">
-                <form onSubmit={handleSignIn} className="space-y-4">
-                  <div className="space-y-2">
-                    <Label htmlFor="signin-email">Email</Label>
-                    <Input
-                      id="signin-email"
-                      name="email"
-                      type="email"
-                      required
-                      placeholder="Enter your email"
-                    />
-                  </div>
-                  <div className="space-y-2">
-                    <Label htmlFor="signin-password">Password</Label>
-                    <Input
-                      id="signin-password"
-                      name="password"
-                      type="password"
-                      required
-                      placeholder="Enter your password"
-                    />
-                  </div>
-                  <Button
-                    type="submit"
-                    className="w-full"
-                    disabled={isSubmitting}
-                  >
-                    {isSubmitting && (
-                      <Loader2 className="mr-2 h-4 w-4 animate-spin" />
-                    )}
-                    Sign In
-                  </Button>
-                </form>
-              </TabsContent>
+      <TabsContent value="signin">
+        <form onSubmit={handleSignIn} className="space-y-4">
+          <div className="space-y-2">
+            <Label htmlFor="signin-email">Email</Label>
+            <Input
+              id="signin-email"
+              name="email"
+              type="email"
+              required
+              placeholder="Enter your email"
+            />
+          </div>
+          <div className="space-y-2">
+            <Label htmlFor="signin-password">Password</Label>
+            <Input
+              id="signin-password"
+              name="password"
+              type="password"
+              required
+              placeholder="Enter your password"
+            />
+          </div>
+          <Button type="submit" className="w-full" disabled={isSubmitting}>
+            {isSubmitting && <Loader2 className="mr-2 h-4 w-4 animate-spin" />}
+            Sign In
+          </Button>
+        </form>
+      </TabsContent>
 
-              <TabsContent value="forgot">
-                <ForgotPasswordForm />
-              </TabsContent>
-            </Tabs>
-          </CardContent>
-        </div>
-      </Card>
+      <TabsContent value="forgot">
+        <ForgotPasswordForm />
+      </TabsContent>
+    </Tabs>
+  </CardContent>
+</Card>
+
     </div>
   );
 }
