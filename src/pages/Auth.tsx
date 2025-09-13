@@ -284,7 +284,7 @@ export default function Auth() {
         <CardHeader className="text-center">
           <div className="flex items-center justify-center mb-4">
             {/* <Pill className="h-8 w-8 text-primary mr-2" /> */}
-             <img src="/lovable-uploads/2f79a84c-a540-4f7f-bbe7-0bb88136976a.png" alt="PharmaXpert Logo" className="w-10 h-10 object-cover" />
+             <img src="/lovable-uploads/2f79a84c-a540-4f7f-bbe7-0bb88136976a.png" alt="PharmaXpert Logo" className="w-13 h-13 object-cover" />
             <CardTitle className="text-2xl font-bold">PharmaXpert</CardTitle>
           </div>
           <CardDescription>
