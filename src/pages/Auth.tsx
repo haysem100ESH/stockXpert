@@ -31,6 +31,8 @@ function ForgotPasswordForm() {
   const [confirmPassword, setConfirmPassword] = useState("");
   const [userId, setUserId] = useState("");
   const [isSubmitting, setIsSubmitting] = useState(false);
+  const [showNewPassword, setShowNewPassword] = useState(false);
+  const [showConfirmPassword, setShowConfirmPassword] = useState(false);
   const { toast } = useToast();
 
   const handleEmailSubmit = async (e: React.FormEvent) => {
@@ -196,29 +198,45 @@ function ForgotPasswordForm() {
 
   return (
     <form onSubmit={handlePasswordReset} className="space-y-4">
-      <div className="space-y-2">
+      <div className="space-y-2 relative">
         <Label htmlFor="new-password">New Password</Label>
         <Input
           id="new-password"
-          type="password"
+          type={showNewPassword ? "text" : "password"}
           value={newPassword}
           onChange={(e) => setNewPassword(e.target.value)}
           required
           placeholder="Enter new password"
           minLength={6}
+          className="pr-10"
         />
+        <button
+          type="button"
+          onClick={() => setShowNewPassword(!showNewPassword)}
+          className="absolute right-3 top-9 text-gray-400 hover:text-gray-600"
+        >
+          {showNewPassword ? <EyeOff className="h-5 w-5" /> : <Eye className="h-5 w-5" />}
+        </button>
       </div>
-      <div className="space-y-2">
+      <div className="space-y-2 relative">
         <Label htmlFor="confirm-password">Confirm Password</Label>
         <Input
           id="confirm-password"
-          type="password"
+          type={showConfirmPassword ? "text" : "password"}
           value={confirmPassword}
           onChange={(e) => setConfirmPassword(e.target.value)}
           required
           placeholder="Confirm new password"
           minLength={6}
+          className="pr-10"
         />
+        <button
+          type="button"
+          onClick={() => setShowConfirmPassword(!showConfirmPassword)}
+          className="absolute right-3 top-9 text-gray-400 hover:text-gray-600"
+        >
+          {showConfirmPassword ? <EyeOff className="h-5 w-5" /> : <Eye className="h-5 w-5" />}
+        </button>
       </div>
       <Button type="submit" className="w-full" disabled={isSubmitting}>
         {isSubmitting && <Loader2 className="mr-2 h-4 w-4 animate-spin" />}
