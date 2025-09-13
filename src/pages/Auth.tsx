@@ -1,24 +1,35 @@
-import { useState } from 'react';
-import { Navigate } from 'react-router-dom';
-import { useAuth } from '@/hooks/useAuth';
-import { Button } from '@/components/ui/button';
-import { Input } from '@/components/ui/input';
-import { Label } from '@/components/ui/label';
-import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
-import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
-import { Loader2, Pill, Eye, EyeOff } from 'lucide-react';
-import { useToast } from '@/hooks/use-toast';
-import { supabase } from '@/integrations/supabase/client';
+import { useState } from "react";
+import { Navigate } from "react-router-dom";
+import { useAuth } from "@/hooks/useAuth";
+import { Button } from "@/components/ui/button";
+import { Input } from "@/components/ui/input";
+import { Label } from "@/components/ui/label";
+import {
+  Card,
+  CardContent,
+  CardDescription,
+  CardHeader,
+  CardTitle,
+} from "@/components/ui/card";
+import {
+  Tabs,
+  TabsContent,
+  TabsList,
+  TabsTrigger,
+} from "@/components/ui/tabs";
+import { Loader2, Eye, EyeOff } from "lucide-react";
+import { useToast } from "@/hooks/use-toast";
+import { supabase } from "@/integrations/supabase/client";
 
 // Forgot Password Component
 function ForgotPasswordForm() {
-  const [step, setStep] = useState<'email' | 'question' | 'reset'>('email');
-  const [email, setEmail] = useState('');
-  const [securityQuestion, setSecurityQuestion] = useState('');
-  const [securityAnswer, setSecurityAnswer] = useState('');
-  const [newPassword, setNewPassword] = useState('');
-  const [confirmPassword, setConfirmPassword] = useState('');
-  const [userId, setUserId] = useState('');
+  const [step, setStep] = useState<"email" | "question" | "reset">("email");
+  const [email, setEmail] = useState("");
+  const [securityQuestion, setSecurityQuestion] = useState("");
+  const [securityAnswer, setSecurityAnswer] = useState("");
+  const [newPassword, setNewPassword] = useState("");
+  const [confirmPassword, setConfirmPassword] = useState("");
+  const [userId, setUserId] = useState("");
   const [isSubmitting, setIsSubmitting] = useState(false);
   const { toast } = useToast();
 
@@ -27,32 +38,25 @@ function ForgotPasswordForm() {
     setIsSubmitting(true);
 
     try {
-      const { data, error } = await supabase.functions.invoke('password-reset', {
-        body: {
-          email,
-          step: 'verify_email'
-        }
+      const { data, error } = await supabase.functions.invoke("password-reset", {
+        body: { email, step: "verify_email" },
       });
 
       if (error) throw error;
 
       if (data.error) {
-        toast({
-          title: "Error",
-          description: data.error,
-          variant: "destructive"
-        });
+        toast({ title: "Error", description: data.error, variant: "destructive" });
         return;
       }
 
       setSecurityQuestion(data.security_question);
       setUserId(data.user_id);
-      setStep('question');
-    } catch (error: any) {
+      setStep("question");
+    } catch {
       toast({
         title: "Error",
         description: "Failed to verify email address",
-        variant: "destructive"
+        variant: "destructive",
       });
     } finally {
       setIsSubmitting(false);
@@ -64,31 +68,23 @@ function ForgotPasswordForm() {
     setIsSubmitting(true);
 
     try {
-      const { data, error } = await supabase.functions.invoke('password-reset', {
-        body: {
-          email,
-          securityAnswer,
-          step: 'verify_answer'
-        }
+      const { data, error } = await supabase.functions.invoke("password-reset", {
+        body: { email, securityAnswer, step: "verify_answer" },
       });
 
       if (error) throw error;
 
       if (data.error) {
-        toast({
-          title: "Error",
-          description: data.error,
-          variant: "destructive"
-        });
+        toast({ title: "Error", description: data.error, variant: "destructive" });
         return;
       }
 
-      setStep('reset');
-    } catch (error: any) {
+      setStep("reset");
+    } catch {
       toast({
         title: "Error",
         description: "Failed to verify security answer",
-        variant: "destructive"
+        variant: "destructive",
       });
     } finally {
       setIsSubmitting(false);
@@ -97,21 +93,17 @@ function ForgotPasswordForm() {
 
   const handlePasswordReset = async (e: React.FormEvent) => {
     e.preventDefault();
-    
+
     if (newPassword !== confirmPassword) {
-      toast({
-        title: "Error",
-        description: "Passwords do not match",
-        variant: "destructive"
-      });
+      toast({ title: "Error", description: "Passwords do not match", variant: "destructive" });
       return;
     }
 
     if (newPassword.length < 6) {
       toast({
-        title: "Error", 
+        title: "Error",
         description: "Password must be at least 6 characters long",
-        variant: "destructive"
+        variant: "destructive",
       });
       return;
     }
@@ -119,50 +111,39 @@ function ForgotPasswordForm() {
     setIsSubmitting(true);
 
     try {
-      const { data, error } = await supabase.functions.invoke('password-reset', {
-        body: {
-          email,
-          newPassword,
-          step: 'reset_password'
-        }
+      const { data, error } = await supabase.functions.invoke("password-reset", {
+        body: { email, newPassword, step: "reset_password" },
       });
 
       if (error) throw error;
 
       if (data.error) {
-        toast({
-          title: "Error",
-          description: data.error,
-          variant: "destructive"
-        });
+        toast({ title: "Error", description: data.error, variant: "destructive" });
         return;
       }
 
-      toast({
-        title: "Success",
-        description: "Password reset successfully. You can now sign in."
-      });
+      toast({ title: "Success", description: "Password reset successfully." });
 
       // Reset form
-      setStep('email');
-      setEmail('');
-      setSecurityQuestion('');
-      setSecurityAnswer('');
-      setNewPassword('');
-      setConfirmPassword('');
-      setUserId('');
-    } catch (error: any) {
+      setStep("email");
+      setEmail("");
+      setSecurityQuestion("");
+      setSecurityAnswer("");
+      setNewPassword("");
+      setConfirmPassword("");
+      setUserId("");
+    } catch {
       toast({
         title: "Error",
         description: "Failed to reset password",
-        variant: "destructive"
+        variant: "destructive",
       });
     } finally {
       setIsSubmitting(false);
     }
   };
 
-  if (step === 'email') {
+  if (step === "email") {
     return (
       <form onSubmit={handleEmailSubmit} className="space-y-4">
         <div className="space-y-2">
@@ -184,7 +165,7 @@ function ForgotPasswordForm() {
     );
   }
 
-  if (step === 'question') {
+  if (step === "question") {
     return (
       <form onSubmit={handleSecurityAnswer} className="space-y-4">
         <div className="space-y-2">
@@ -206,7 +187,7 @@ function ForgotPasswordForm() {
           {isSubmitting && <Loader2 className="mr-2 h-4 w-4 animate-spin" />}
           Verify Answer
         </Button>
-        <Button type="button" variant="outline" className="w-full" onClick={() => setStep('email')}>
+        <Button type="button" variant="outline" className="w-full" onClick={() => setStep("email")}>
           Back
         </Button>
       </form>
@@ -243,16 +224,18 @@ function ForgotPasswordForm() {
         {isSubmitting && <Loader2 className="mr-2 h-4 w-4 animate-spin" />}
         Reset Password
       </Button>
-      <Button type="button" variant="outline" className="w-full" onClick={() => setStep('question')}>
+      <Button type="button" variant="outline" className="w-full" onClick={() => setStep("question")}>
         Back
       </Button>
     </form>
   );
 }
 
+// Main Auth Component
 export default function Auth() {
   const { user, signIn, loading } = useAuth();
   const [isSubmitting, setIsSubmitting] = useState(false);
+  const [showPassword, setShowPassword] = useState(false);
 
   if (loading) {
     return (
@@ -262,17 +245,15 @@ export default function Auth() {
     );
   }
 
-  if (user) {
-    return <Navigate to="/" replace />;
-  }
+  if (user) return <Navigate to="/" replace />;
 
   const handleSignIn = async (e: React.FormEvent<HTMLFormElement>) => {
     e.preventDefault();
     setIsSubmitting(true);
 
     const formData = new FormData(e.currentTarget);
-    const email = formData.get('email') as string;
-    const password = formData.get('password') as string;
+    const email = formData.get("email") as string;
+    const password = formData.get("password") as string;
 
     await signIn(email, password);
     setIsSubmitting(false);
@@ -287,11 +268,9 @@ export default function Auth() {
             <img
               src="/lovable-uploads/2f79a84c-a540-4f7f-bbe7-0bb88136976a.png"
               alt="PharmaXpert Logo"
-              className="w-16 h-16 object-cover rounded-full shadow-md mb-3 transition-transform duration-300 hover:scale-105"
+              className="w-20 h-20 object-cover rounded-full shadow-md mb-3 transition-transform duration-300 hover:scale-105"
             />
-            <CardTitle className="text-3xl font-extrabold text-gray-800">
-              PharmaXpert
-            </CardTitle>
+            <CardTitle className="text-3xl font-extrabold text-gray-800">PharmaXpert</CardTitle>
             <CardDescription className="text-gray-500">
               Sign in to your pharmacy management account
             </CardDescription>
@@ -334,34 +313,30 @@ export default function Auth() {
                 <div className="space-y-2 relative">
                   <Label htmlFor="signin-password">Password</Label>
                   <Input
-                        id="signin-password"
-                         name="password"
-                          type={showPassword ? "text" : "password"} // 👈 toggle type
-                          required
-                          placeholder="Enter your password"
-                            className="rounded-xl pr-10"
-                              />
-                          <span
-                          className="absolute right-3 top-9 text-gray-400 cursor-pointer hover:text-gray-600"
-                          onClick={() => setShowPassword((prev) => !prev)} // 👈 toggle
-                              >
-                          {showPassword ? <EyeOff size={18} /> : <Eye size={18} />}
-                          </span>
-
+                    id="signin-password"
+                    name="password"
+                    type={showPassword ? "text" : "password"}
+                    required
+                    placeholder="Enter your password"
+                    className="rounded-xl pr-10"
+                  />
+                  <button
+                    type="button"
+                    onClick={() => setShowPassword(!showPassword)}
+                    className="absolute right-3 top-9 text-gray-400 hover:text-gray-600"
+                  >
+                    {showPassword ? <EyeOff className="h-5 w-5" /> : <Eye className="h-5 w-5" />}
+                  </button>
                 </div>
 
-                <Button
-                  type="submit"
-                  className="w-full rounded-xl font-medium"
-                  disabled={isSubmitting}
-                >
+                <Button type="submit" className="w-full rounded-xl font-medium" disabled={isSubmitting}>
                   {isSubmitting && <Loader2 className="mr-2 h-4 w-4 animate-spin" />}
                   Sign In
                 </Button>
               </form>
             </TabsContent>
 
-            {/* Forgot Password */}
+            {/* Forgot Password Form */}
             <TabsContent value="forgot">
               <ForgotPasswordForm />
             </TabsContent>
