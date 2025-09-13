@@ -6,7 +6,7 @@ import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
-import { Loader2, Pill } from 'lucide-react';
+import { Loader2, Pill, Eye, EyeOff } from 'lucide-react';
 import { useToast } from '@/hooks/use-toast';
 import { supabase } from '@/integrations/supabase/client';
 
@@ -333,14 +333,14 @@ export default function Auth() {
 
                 <div className="space-y-2 relative">
                   <Label htmlFor="signin-password">Password</Label>
-                 <Input
-                     id="signin-password"
-                      name="password"
-                      type={showPassword ? 'text' : 'password'}
-                      required
-                        placeholder="Enter your password"
-                        className="rounded-xl pr-10"
-                          />
+                  <Input
+                    id="signin-password"
+                    name="password"
+                    type="password"
+                    required
+                    placeholder="Enter your password"
+                    className="rounded-xl pr-10"
+                  />
                   {/* Eye icon toggle (optional) */}
                   <span className="absolute right-3 top-9 text-gray-400 cursor-pointer hover:text-gray-600">
                     👁
