@@ -143,9 +143,12 @@ export default function OwnerDashboard() {
           if (item.medicines) {
             const category = item.medicines.category;
             const existing = categoryMap.get(category) || { sales: 0, revenue: 0 };
+            // Calculate item-specific revenue (assuming equal distribution for simplicity)
+            const itemRevenue = (Number(sale.total_amount) * item.quantity) / 
+              (sale.sale_items?.reduce((sum: number, si: any) => sum + si.quantity, 0) || 1);
             categoryMap.set(category, {
               sales: existing.sales + item.quantity,
-              revenue: existing.revenue + (item.quantity * Number(sale.total_amount) / sale.sale_items.length)
+              revenue: existing.revenue + itemRevenue
             });
           }
         });
@@ -163,9 +166,12 @@ export default function OwnerDashboard() {
           if (item.medicines) {
             const name = item.medicines.name;
             const existing = productMap.get(name) || { sales: 0, revenue: 0 };
+            // Calculate item-specific revenue (assuming equal distribution for simplicity)
+            const itemRevenue = (Number(sale.total_amount) * item.quantity) / 
+              (sale.sale_items?.reduce((sum: number, si: any) => sum + si.quantity, 0) || 1);
             productMap.set(name, {
               sales: existing.sales + item.quantity,
-              revenue: existing.revenue + (item.quantity * Number(sale.total_amount) / sale.sale_items.length)
+              revenue: existing.revenue + itemRevenue
             });
           }
         });

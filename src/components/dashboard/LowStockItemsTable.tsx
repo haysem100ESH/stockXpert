@@ -4,6 +4,7 @@ import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@
 import { Badge } from '@/components/ui/badge';
 import { Package } from 'lucide-react';
 import { supabase } from '@/integrations/supabase/client';
+import { useBranchContext } from '@/hooks/useBranchContext';
 
 interface LowStockItem {
   id: string;
@@ -15,20 +16,34 @@ interface LowStockItem {
 export default function LowStockItemsTable() {
   const [lowStockItems, setLowStockItems] = useState<LowStockItem[]>([]);
   const [loading, setLoading] = useState(true);
+  const { selectedBranch } = useBranchContext();
 
   useEffect(() => {
     fetchLowStockItems();
-  }, []);
+  }, [selectedBranch]);
 
   const fetchLowStockItems = async () => {
     try {
-      const { data, error } = await supabase
-        .from('low_stock_medicines')
+      let query = supabase
+        .from('medicines')
         .select('id, name, stock_quantity, minimum_stock_level')
-        .order('stock_quantity', { ascending: true });
+        .gt('stock_quantity', 0);
+
+      // Filter by selected branch if one is selected
+      if (selectedBranch) {
+        query = query.eq('branch_id', selectedBranch);
+      }
+
+      const { data, error } = await query.order('stock_quantity', { ascending: true });
 
       if (error) throw error;
-      setLowStockItems(data || []);
+
+      // Filter for low stock items (stock <= minimum level)
+      const lowStock = (data || []).filter(item => 
+        item.stock_quantity <= item.minimum_stock_level
+      );
+
+      setLowStockItems(lowStock);
     } catch (error) {
       console.error('Error fetching low stock items:', error);
     } finally {

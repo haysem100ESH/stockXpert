@@ -6,6 +6,7 @@ import { AlertTriangle, Trash2 } from 'lucide-react';
 import { supabase } from '@/integrations/supabase/client';
 import { useToast } from '@/hooks/use-toast';
 import { ConfirmationDialog } from '@/components/ui/confirmation-dialog';
+import { useBranchContext } from '@/hooks/useBranchContext';
 
 interface ExpiredMedicine {
   id: string;
@@ -21,19 +22,26 @@ export default function ExpiredMedicinesTable() {
   const [deleteConfirm, setDeleteConfirm] = useState(false);
   const [medicineToDelete, setMedicineToDelete] = useState<string | null>(null);
   const { toast } = useToast();
+  const { selectedBranch } = useBranchContext();
 
   useEffect(() => {
     fetchExpiredMedicines();
-  }, []);
+  }, [selectedBranch]);
 
   const fetchExpiredMedicines = async () => {
     try {
-      const { data, error } = await supabase
+      let query = supabase
         .from('medicines')
         .select('id, name, batch_number, expiry_date, stock_quantity')
         .not('expiry_date', 'is', null)
-        .lt('expiry_date', new Date().toISOString().split('T')[0])
-        .order('expiry_date', { ascending: true });
+        .lt('expiry_date', new Date().toISOString().split('T')[0]);
+
+      // Filter by selected branch if one is selected
+      if (selectedBranch) {
+        query = query.eq('branch_id', selectedBranch);
+      }
+
+      const { data, error } = await query.order('expiry_date', { ascending: true });
 
       if (error) throw error;
       setExpiredMedicines(data || []);
