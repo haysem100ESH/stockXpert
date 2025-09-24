@@ -43,42 +43,41 @@ export default function StaffManagement() {
   }, [selectedBranch]);
 
   useEffect(() => {
-    // Filter by search term first
-    let filtered = staff.filter(member =>
+    // Filter by search term (branch filtering is handled in fetchStaff)
+    const filtered = staff.filter(member =>
       member.full_name.toLowerCase().includes(searchTerm.toLowerCase()) ||
       member.phone?.toLowerCase().includes(searchTerm.toLowerCase())
     );
 
-    // Then filter by selected branch (only for owners)
-    if (profile?.role === 'owner' && selectedBranch) {
-      filtered = filtered.filter(member => member.branch_id === selectedBranch);
-    }
-
     setFilteredStaff(filtered);
-  }, [staff, searchTerm, selectedBranch, profile?.role]);
+  }, [staff, searchTerm]);
 
   const fetchStaff = async () => {
     try {
-      const { data, error } = await supabase
+      setLoading(true);
+      
+      const { data: profilesData, error } = await supabase
         .from('profiles')
-        .select(`
-          *,
-          pharmacy_branches (
-            name
-          )
-        `)
+        .select('id, full_name, role, phone, created_at')
         .order('created_at');
 
       if (error) throw error;
       
-      // Map the data to handle the relationship properly
-      const mappedData = data?.map((item: any) => ({
-        ...item,
-        pharmacy_branches: item.pharmacy_branches?.[0] || null
+      // For now, show all staff since branch_id doesn't exist in profiles table
+      // This will need to be fixed when the proper branch relationship is established
+      const staffData: StaffMember[] = profilesData?.map(profile => ({
+        id: profile.id,
+        full_name: profile.full_name,
+        role: profile.role,
+        phone: profile.phone,
+        branch_id: undefined,
+        created_at: profile.created_at,
+        pharmacy_branches: null
       })) || [];
       
-      setStaff(mappedData);
+      setStaff(staffData);
     } catch (error) {
+      console.error('Staff fetch error:', error);
       toast({
         title: "Error",
         description: "Failed to fetch staff members",

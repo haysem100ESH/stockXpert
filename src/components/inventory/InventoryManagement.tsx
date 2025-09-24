@@ -12,6 +12,7 @@ import { format } from 'date-fns';
 import { supabase } from '@/integrations/supabase/client';
 import { useToast } from '@/hooks/use-toast';
 import { useAuth } from '@/hooks/useAuth';
+import { useBranchContext } from '@/hooks/useBranchContext';
 import AddMedicineDialog from './AddMedicineDialog';
 import EditMedicineDialog from './EditMedicineDialog';
 import { ConfirmationDialog } from '@/components/ui/confirmation-dialog';
@@ -49,12 +50,13 @@ export default function InventoryManagement() {
   const [medicineToDelete, setMedicineToDelete] = useState<string | null>(null);
   const { toast } = useToast();
   const { profile } = useAuth();
+  const { selectedBranch } = useBranchContext();
   
   const itemsPerPage = 15;
 
   useEffect(() => {
     fetchMedicines();
-  }, []);
+  }, [selectedBranch]);
 
   useEffect(() => {
     let filtered = medicines.filter(medicine => {
@@ -96,10 +98,17 @@ export default function InventoryManagement() {
 
   const fetchMedicines = async () => {
     try {
-      const { data, error } = await supabase
+      let query = supabase
         .from('medicines')
         .select('*, created_at')
         .order('name');
+
+      // Filter by selected branch if one is selected
+      if (selectedBranch) {
+        query = query.eq('branch_id', selectedBranch);
+      }
+
+      const { data, error } = await query;
 
       if (error) throw error;
       setMedicines(data || []);

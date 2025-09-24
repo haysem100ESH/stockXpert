@@ -11,6 +11,7 @@ import { Search, Plus, Minus, ShoppingCart, Trash2, CreditCard, Percent, Filter 
 import { supabase } from '@/integrations/supabase/client';
 import { useToast } from '@/hooks/use-toast';
 import { useAuth } from '@/hooks/useAuth';
+import { useBranchContext } from '@/hooks/useBranchContext';
 import { ConfirmationDialog } from '@/components/ui/confirmation-dialog';
 
 interface Medicine {
@@ -43,12 +44,13 @@ export default function SalesManagement() {
   const [showCheckoutConfirm, setShowCheckoutConfirm] = useState(false);
   const { profile } = useAuth();
   const { toast } = useToast();
+  const { selectedBranch } = useBranchContext();
   
   const itemsPerPage = 16;
 
   useEffect(() => {
     fetchMedicines();
-  }, []);
+  }, [selectedBranch]);
 
   useEffect(() => {
     const filtered = medicines.filter(medicine => {
@@ -71,11 +73,18 @@ export default function SalesManagement() {
 
   const fetchMedicines = async () => {
     try {
-      const { data, error } = await supabase
+      let query = supabase
         .from('medicines')
         .select('id, name, generic_name, selling_price, stock_quantity, category, expiry_date')
         .gt('stock_quantity', 0)
         .order('name');
+
+      // Filter by selected branch if one is selected
+      if (selectedBranch) {
+        query = query.eq('branch_id', selectedBranch);
+      }
+
+      const { data, error } = await query;
 
       if (error) throw error;
       setMedicines(data || []);
@@ -200,7 +209,8 @@ export default function SalesManagement() {
           total_amount: calculateTotal(),
           payment_method: paymentMethod,
           discount_amount: calculateDiscount(),
-          sold_by: profile?.id
+          sold_by: profile?.id,
+          branch_id: selectedBranch || profile?.branch_id
         }])
         .select()
         .single();

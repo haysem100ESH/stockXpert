@@ -8,6 +8,7 @@ import { Plus, Search, Edit, Trash2, Truck, Phone, Mail, MapPin, User } from 'lu
 import { supabase } from '@/integrations/supabase/client';
 import { useToast } from '@/hooks/use-toast';
 import { useAuth } from '@/hooks/useAuth';
+import { useBranchContext } from '@/hooks/useBranchContext';
 import AddSupplierDialog from './AddSupplierDialog';
 import EditSupplierDialog from './EditSupplierDialog';
 
@@ -33,12 +34,13 @@ export default function SupplierManagement() {
   const [selectedSupplier, setSelectedSupplier] = useState<Supplier | null>(null);
   const { toast } = useToast();
   const { profile } = useAuth();
+  const { selectedBranch } = useBranchContext();
   
   const itemsPerPage = 15;
 
   useEffect(() => {
     fetchSuppliers();
-  }, []);
+  }, [selectedBranch]);
 
   useEffect(() => {
     const filtered = suppliers.filter(supplier =>
@@ -58,10 +60,17 @@ export default function SupplierManagement() {
 
   const fetchSuppliers = async () => {
     try {
-      const { data, error } = await supabase
+      let query = supabase
         .from('suppliers')
         .select('*')
         .order('name');
+
+      // Filter by selected branch if one is selected
+      if (selectedBranch) {
+        query = query.eq('branch_id', selectedBranch);
+      }
+
+      const { data, error } = await query;
 
       if (error) throw error;
       setSuppliers(data || []);
