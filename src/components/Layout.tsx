@@ -8,6 +8,7 @@ import { AppSidebar } from '@/components/AppSidebar';
 import { LogOut } from 'lucide-react';
 import { Loader2 } from 'lucide-react';
 import { ConfirmationDialog } from '@/components/ui/confirmation-dialog';
+import SubscriptionStatus from '@/components/subscription/SubscriptionStatus';
 
 interface LayoutProps {
   children: ReactNode;
@@ -66,6 +67,7 @@ export default function Layout({ children }: LayoutProps) {
           </header>
           
           <main className="flex-1 overflow-auto p-4">
+            {profile?.role === 'owner' && <SubscriptionStatus />}
             {children}
           </main>
         </div>

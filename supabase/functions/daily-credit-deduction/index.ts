@@ -1,5 +1,5 @@
-import { serve } from "https://deno.land/std@0.190.0/http/server.ts";
-import { createClient } from "https://esm.sh/@supabase/supabase-js@2.56.0";
+import { serve } from "https://deno.land/std@0.168.0/http/server.ts";
+import { createClient } from "https://esm.sh/@supabase/supabase-js@2";
 
 const corsHeaders = {
   'Access-Control-Allow-Origin': '*',
@@ -15,64 +15,40 @@ interface Database {
           pharmacy_owner_id: string;
           subscription_credit: number;
           status: 'active' | 'expiring_soon' | 'expired';
-          deposit_amount: number;
           last_credit_deduction: string;
-          created_at: string;
-          updated_at: string;
-        };
-        Insert: {
-          id?: string;
-          pharmacy_owner_id: string;
-          subscription_credit?: number;
-          status?: 'active' | 'expiring_soon' | 'expired';
-          deposit_amount?: number;
-          last_credit_deduction?: string;
-          created_at?: string;
-          updated_at?: string;
         };
         Update: {
-          id?: string;
-          pharmacy_owner_id?: string;
           subscription_credit?: number;
           status?: 'active' | 'expiring_soon' | 'expired';
-          deposit_amount?: number;
           last_credit_deduction?: string;
-          created_at?: string;
-          updated_at?: string;
         };
       };
     };
   };
 }
 
-const handler = async (req: Request): Promise<Response> => {
+serve(async (req) => {
   // Handle CORS preflight requests
   if (req.method === 'OPTIONS') {
     return new Response(null, { headers: corsHeaders });
   }
 
   try {
-    // Initialize Supabase client with service role key for admin operations
-    const supabaseUrl = Deno.env.get('SUPABASE_URL')!;
-    const supabaseServiceKey = Deno.env.get('SUPABASE_SERVICE_ROLE_KEY')!;
-    
-    const supabase = createClient<Database>(supabaseUrl, supabaseServiceKey, {
-      auth: {
-        autoRefreshToken: false,
-        persistSession: false
-      }
-    });
+    const supabaseClient = createClient<Database>(
+      Deno.env.get('SUPABASE_URL') ?? '',
+      Deno.env.get('SUPABASE_SERVICE_ROLE_KEY') ?? ''
+    );
 
     console.log('Starting daily credit deduction process...');
 
-    // Get current date in YYYY-MM-DD format
-    const currentDate = new Date().toISOString().split('T')[0];
-    
-    // Find all subscriptions that need credit deduction
-    const { data: subscriptions, error: fetchError } = await supabase
+    // Get today's date in YYYY-MM-DD format
+    const today = new Date().toISOString().split('T')[0];
+
+    // Get all active subscriptions that haven't been deducted today
+    const { data: subscriptions, error: fetchError } = await supabaseClient
       .from('pharmacy_subscriptions')
       .select('*')
-      .or(`last_credit_deduction.is.null,last_credit_deduction.lt.${currentDate}`)
+      .neq('last_credit_deduction', today)
       .gt('subscription_credit', 0);
 
     if (fetchError) {
@@ -82,99 +58,74 @@ const handler = async (req: Request): Promise<Response> => {
 
     console.log(`Found ${subscriptions?.length || 0} subscriptions to process`);
 
-    if (!subscriptions || subscriptions.length === 0) {
-      return new Response(
-        JSON.stringify({ 
-          success: true, 
-          message: 'No subscriptions need credit deduction today',
-          processed: 0 
-        }),
-        { 
-          status: 200, 
-          headers: { 'Content-Type': 'application/json', ...corsHeaders } 
-        }
-      );
-    }
-
     let processedCount = 0;
-    const errors: any[] = [];
+    let errorCount = 0;
 
     // Process each subscription
-    for (const subscription of subscriptions) {
+    for (const subscription of subscriptions || []) {
       try {
         const newCredit = Math.max(0, subscription.subscription_credit - 1);
-        let newStatus: 'active' | 'expiring_soon' | 'expired' = 'active';
-        
+        let newStatus: 'active' | 'expiring_soon' | 'expired';
+
         if (newCredit <= 0) {
           newStatus = 'expired';
-        } else if (newCredit <= 7) {
+        } else if (newCredit <= 7) { // 7 days or less = expiring soon
           newStatus = 'expiring_soon';
+        } else {
+          newStatus = 'active';
         }
 
-        // Update the subscription
-        const { error: updateError } = await supabase
+        console.log(`Processing subscription ${subscription.id}: ${subscription.subscription_credit} -> ${newCredit} (${newStatus})`);
+
+        const { error: updateError } = await supabaseClient
           .from('pharmacy_subscriptions')
           .update({
             subscription_credit: newCredit,
             status: newStatus,
-            last_credit_deduction: currentDate,
-            updated_at: new Date().toISOString()
+            last_credit_deduction: today
           })
           .eq('id', subscription.id);
 
         if (updateError) {
           console.error(`Error updating subscription ${subscription.id}:`, updateError);
-          errors.push({
-            subscription_id: subscription.id,
-            pharmacy_owner_id: subscription.pharmacy_owner_id,
-            error: updateError.message
-          });
+          errorCount++;
         } else {
-          console.log(`Successfully updated subscription ${subscription.id}: ${subscription.subscription_credit} -> ${newCredit} (${newStatus})`);
           processedCount++;
         }
       } catch (error) {
         console.error(`Error processing subscription ${subscription.id}:`, error);
-        errors.push({
-          subscription_id: subscription.id,
-          pharmacy_owner_id: subscription.pharmacy_owner_id,
-          error: error instanceof Error ? error.message : 'Unknown error'
-        });
+        errorCount++;
       }
     }
 
-    console.log(`Credit deduction complete. Processed: ${processedCount}, Errors: ${errors.length}`);
+    console.log(`Credit deduction complete: ${processedCount} processed, ${errorCount} errors`);
 
     return new Response(
       JSON.stringify({
         success: true,
         message: `Daily credit deduction completed`,
         processed: processedCount,
-        total: subscriptions.length,
-        errors: errors.length > 0 ? errors : undefined,
-        date: currentDate
+        errors: errorCount,
+        date: today
       }),
       {
+        headers: { ...corsHeaders, 'Content-Type': 'application/json' },
         status: 200,
-        headers: { 'Content-Type': 'application/json', ...corsHeaders }
       }
     );
 
-  } catch (error: any) {
-    console.error('Fatal error in daily credit deduction:', error);
+  } catch (error) {
+    console.error('Error in daily credit deduction:', error);
     
     return new Response(
       JSON.stringify({
         success: false,
-        error: error.message || 'Unknown error occurred',
-        timestamp: new Date().toISOString()
+        error: error.message
       }),
       {
+        headers: { ...corsHeaders, 'Content-Type': 'application/json' },
         status: 500,
-        headers: { 'Content-Type': 'application/json', ...corsHeaders }
       }
     );
   }
-};
-
-serve(handler);
+});

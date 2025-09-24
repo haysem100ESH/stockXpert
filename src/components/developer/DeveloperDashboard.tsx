@@ -1,15 +1,16 @@
 import { useState, useEffect } from 'react';
 import { supabase } from '@/integrations/supabase/client';
-import { useToast } from '@/hooks/use-toast';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
 import { Badge } from '@/components/ui/badge';
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@/components/ui/table';
+import { Dialog, DialogContent, DialogDescription, DialogHeader, DialogTitle, DialogTrigger, DialogFooter } from '@/components/ui/dialog';
+import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
-import { Dialog, DialogContent, DialogDescription, DialogHeader, DialogTitle, DialogTrigger } from '@/components/ui/dialog';
-import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
-import { CreditCard, Users, Building2, DollarSign } from 'lucide-react';
+import { useToast } from '@/hooks/use-toast';
+import { Loader2, Users, Building, CreditCard, AlertTriangle, Wallet, FileText, CheckCircle, XCircle, DollarSign } from 'lucide-react';
+import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
 
 interface PharmacyOwner {
   id: string;
@@ -17,76 +18,146 @@ interface PharmacyOwner {
   email: string;
   subscription: {
     subscription_credit: number;
-    status: 'active' | 'expiring_soon' | 'expired';
+    status: string;
     deposit_amount: number;
+    last_credit_deduction: string;
   } | null;
   branch_count: number;
   pending_payments: number;
 }
 
+interface PaymentRequest {
+  id: string;
+  pharmacy_owner_id: string;
+  pharmacy_owner_name: string;
+  amount: number;
+  months_requested: number;
+  payment_method: string;
+  transaction_reference: string;
+  status: string;
+  created_at: string;
+}
+
 export default function DeveloperDashboard() {
   const [owners, setOwners] = useState<PharmacyOwner[]>([]);
+  const [paymentRequests, setPaymentRequests] = useState<PaymentRequest[]>([]);
   const [loading, setLoading] = useState(true);
+  const [paymentLoading, setPaymentLoading] = useState(true);
   const [selectedOwner, setSelectedOwner] = useState<PharmacyOwner | null>(null);
+  const [creditDialogOpen, setCreditDialogOpen] = useState(false);
+  const [depositDialogOpen, setDepositDialogOpen] = useState(false);
   const [creditAmount, setCreditAmount] = useState<number>(30);
   const [depositAmount, setDepositAmount] = useState<number>(0);
   const { toast } = useToast();
 
   useEffect(() => {
     fetchPharmacyOwners();
+    fetchPaymentRequests();
   }, []);
 
   const fetchPharmacyOwners = async () => {
     try {
       setLoading(true);
       
-      // Get all pharmacy owners with their subscriptions and branch counts
+      // Get all pharmacy owners with their subscription data and counts
       const { data: profiles, error: profilesError } = await supabase
         .from('profiles')
         .select(`
-          id,
-          full_name,
-          pharmacy_subscriptions (
-            subscription_credit,
-            status,
-            deposit_amount
-          ),
-          pharmacy_branches (count)
+          id, 
+          full_name
         `)
         .eq('role', 'owner');
 
       if (profilesError) throw profilesError;
 
-      // Get user emails from auth (this requires service role but we'll handle it)
-      const ownerData: PharmacyOwner[] = await Promise.all(
-        profiles.map(async (profile: any) => {
+      // Get additional data for each owner
+      const ownersWithData = await Promise.all(
+        (profiles || []).map(async (profile: any) => {
+          // Get user email from auth
+          const { data: userData } = await supabase.auth.admin.getUserById(profile.id);
+          const email = userData.user?.email || 'N/A';
+
+          // Get subscription data
+          const { data: subscription } = await supabase
+            .from('pharmacy_subscriptions')
+            .select('subscription_credit, status, deposit_amount, last_credit_deduction')
+            .eq('pharmacy_owner_id', profile.id)
+            .single();
+
+          // Get branch count
+          const { count: branchCount } = await supabase
+            .from('pharmacy_branches')
+            .select('id', { count: 'exact' })
+            .eq('pharmacy_owner_id', profile.id);
+
           // Get pending payment requests count
-          const { count: pendingCount } = await supabase
+          const { count: pendingPayments } = await supabase
             .from('payment_requests')
-            .select('*', { count: 'exact', head: true })
+            .select('id', { count: 'exact' })
             .eq('pharmacy_owner_id', profile.id)
             .eq('status', 'pending');
 
           return {
             id: profile.id,
             full_name: profile.full_name,
-            email: 'Contact support for email', // We can't access auth.users directly
-            subscription: profile.pharmacy_subscriptions?.[0] || null,
-            branch_count: profile.pharmacy_branches?.[0]?.count || 0,
-            pending_payments: pendingCount || 0
+            email,
+            subscription,
+            branch_count: branchCount || 0,
+            pending_payments: pendingPayments || 0
           };
         })
       );
 
-      setOwners(ownerData);
+      setOwners(ownersWithData);
     } catch (error: any) {
+      console.error('Error fetching pharmacy owners:', error);
       toast({
         title: "Error",
-        description: error.message,
+        description: "Failed to fetch pharmacy owners data",
         variant: "destructive"
       });
     } finally {
       setLoading(false);
+    }
+  };
+
+  const fetchPaymentRequests = async () => {
+    try {
+      setPaymentLoading(true);
+      
+      const { data, error } = await supabase
+        .from('payment_requests')
+        .select('*')
+        .order('created_at', { ascending: false });
+
+      if (error) throw error;
+
+      // Get owner names for each payment request
+      const requestsWithOwnerNames = await Promise.all(
+        (data || []).map(async (request: any) => {
+          const { data: ownerData } = await supabase
+            .from('profiles')
+            .select('full_name')
+            .eq('id', request.pharmacy_owner_id)
+            .single();
+
+          return {
+            ...request,
+            pharmacy_owner_name: ownerData?.full_name || 'Unknown'
+          };
+        })
+      );
+
+      setPaymentRequests(requestsWithOwnerNames);
+    } catch (error: any) {
+      console.error('Error fetching payment requests:', error);
+      toast({
+        title: "Error",
+        description: "Failed to fetch payment requests",
+        variant: "destructive"
+      });
+    } finally {
+      setPaymentLoading(false);
     }
   };
 
@@ -100,13 +171,22 @@ export default function DeveloperDashboard() {
         .single();
 
       const newCredit = (currentSub?.subscription_credit || 0) + days;
+      let newStatus: 'active' | 'expiring_soon' | 'expired';
+
+      if (newCredit <= 0) {
+        newStatus = 'expired';
+      } else if (newCredit <= 7) {
+        newStatus = 'expiring_soon';
+      } else {
+        newStatus = 'active';
+      }
 
       const { error } = await supabase
         .from('pharmacy_subscriptions')
         .upsert({
           pharmacy_owner_id: ownerId,
           subscription_credit: newCredit,
-          status: 'active'
+          status: newStatus
         }, {
           onConflict: 'pharmacy_owner_id'
         });
@@ -118,6 +198,7 @@ export default function DeveloperDashboard() {
         description: `Added ${days} days credit successfully`
       });
 
+      setCreditDialogOpen(false);
       fetchPharmacyOwners();
     } catch (error: any) {
       toast({
@@ -144,6 +225,83 @@ export default function DeveloperDashboard() {
       toast({
         title: "Success",
         description: "Deposit amount updated successfully"
+      });
+
+      setDepositDialogOpen(false);
+      fetchPharmacyOwners();
+    } catch (error: any) {
+      toast({
+        title: "Error",
+        description: error.message,
+        variant: "destructive"
+      });
+    }
+  };
+
+  const approvePayment = async (requestId: string, ownerId: string, monthsRequested: number) => {
+    try {
+      // First approve the payment request
+      const { error: approveError } = await supabase
+        .from('payment_requests')
+        .update({ status: 'approved' })
+        .eq('id', requestId);
+
+      if (approveError) throw approveError;
+
+      // Then add credit to the subscription
+      const daysToAdd = monthsRequested * 30;
+      await addCredit(ownerId, daysToAdd);
+
+      toast({
+        title: "Success",
+        description: `Payment approved and ${daysToAdd} days credit added`
+      });
+
+      fetchPaymentRequests();
+    } catch (error: any) {
+      toast({
+        title: "Error",
+        description: error.message,
+        variant: "destructive"
+      });
+    }
+  };
+
+  const declinePayment = async (requestId: string) => {
+    try {
+      const { error } = await supabase
+        .from('payment_requests')
+        .update({ status: 'declined' })
+        .eq('id', requestId);
+
+      if (error) throw error;
+
+      toast({
+        title: "Success",
+        description: "Payment request declined"
+      });
+
+      fetchPaymentRequests();
+    } catch (error: any) {
+      toast({
+        title: "Error",
+        description: error.message,
+        variant: "destructive"
+      });
+    }
+  };
+
+  const triggerDailyDeduction = async () => {
+    try {
+      const { data, error } = await supabase.functions.invoke('daily-credit-deduction', {
+        body: { manual: true }
+      });
+
+      if (error) throw error;
+
+      toast({
+        title: "Success",
+        description: "Daily credit deduction triggered successfully"
       });
 
       fetchPharmacyOwners();
@@ -210,7 +368,7 @@ export default function DeveloperDashboard() {
         <Card>
           <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
             <CardTitle className="text-sm font-medium">Total Branches</CardTitle>
-            <Building2 className="h-4 w-4 text-muted-foreground" />
+            <Building className="h-4 w-4 text-muted-foreground" />
           </CardHeader>
           <CardContent>
             <div className="text-2xl font-bold">
