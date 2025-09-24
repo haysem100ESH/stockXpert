@@ -119,12 +119,11 @@ export default function StaffDashboard() {
       const { start, end } = getDateRange();
       
       // Build queries with branch filtering for staff (only their branch)
-      let medicinesQuery = supabase.from('medicines').select('stock_quantity, minimum_stock_level');
-      if (userBranch) {
-        medicinesQuery = medicinesQuery.eq('branch_id', userBranch);
-      }
-
-      const { data: medicinesData } = await medicinesQuery;
+      const medicinesResult = userBranch 
+        ? await supabase.from('medicines').select('stock_quantity, minimum_stock_level').eq('branch_id', userBranch)
+        : await supabase.from('medicines').select('stock_quantity, minimum_stock_level');
+      
+      const medicinesData = medicinesResult.data;
 
       const totalProducts = medicinesData?.length || 0;
       const lowStockItems = medicinesData?.filter(med => 
@@ -133,17 +132,20 @@ export default function StaffDashboard() {
       const outOfStockItems = medicinesData?.filter(med => med.stock_quantity === 0).length || 0;
 
       // Fetch sales for the selected period with branch filtering
-      let salesQuery = supabase
-        .from('sales')
-        .select('id, total_amount, payment_method, discount_amount')
-        .gte('created_at', start.toISOString())
-        .lte('created_at', end.toISOString());
+      const salesResult = userBranch 
+        ? await supabase
+            .from('sales')
+            .select('id, total_amount, payment_method, discount_amount')
+            .gte('created_at', start.toISOString())
+            .lte('created_at', end.toISOString())
+            .eq('branch_id', userBranch)
+        : await supabase
+            .from('sales')
+            .select('id, total_amount, payment_method, discount_amount')
+            .gte('created_at', start.toISOString())
+            .lte('created_at', end.toISOString());
       
-      if (userBranch) {
-        salesQuery = salesQuery.eq('branch_id', userBranch);
-      }
-
-      const { data: periodSalesData } = await salesQuery;
+      const periodSalesData = salesResult.data;
 
       const todaySales = periodSalesData?.length || 0;
 
@@ -151,27 +153,30 @@ export default function StaffDashboard() {
       const periodSalesRevenue = periodSalesData?.reduce((sum, sale) => sum + Number(sale.total_amount), 0) || 0;
 
       // Fetch out of stock items details with branch filtering
-      let outOfStockQuery = supabase
-        .from('medicines')
-        .select('id, name, category, stock_quantity')
-        .eq('stock_quantity', 0);
+      const outOfStockResult = userBranch 
+        ? await supabase
+            .from('medicines')
+            .select('id, name, category, stock_quantity')
+            .eq('stock_quantity', 0)
+            .eq('branch_id', userBranch)
+        : await supabase
+            .from('medicines')
+            .select('id, name, category, stock_quantity')
+            .eq('stock_quantity', 0);
       
-      if (userBranch) {
-        outOfStockQuery = outOfStockQuery.eq('branch_id', userBranch);
-      }
-
-      const { data: outOfStockDetails } = await outOfStockQuery;
+      const outOfStockDetails = outOfStockResult.data;
 
       // Fetch low stock items details with branch filtering
-      let lowStockQuery = supabase
-        .from('low_stock_medicines')
-        .select('id, name, category, stock_quantity, minimum_stock_level');
-      
-      if (userBranch) {
-        lowStockQuery = lowStockQuery.eq('branch_id', userBranch);
-      }
+      const lowStockDetails = userBranch 
+        ? await supabase
+            .from('low_stock_medicines')
+            .select('id, name, category, stock_quantity, minimum_stock_level')
+            .eq('branch_id', userBranch)
+        : await supabase
+            .from('low_stock_medicines')
+            .select('id, name, category, stock_quantity, minimum_stock_level');
 
-      const { data: lowStockDetails } = await lowStockQuery;
+      const lowStockData = lowStockDetails.data;
 
       // Fetch expiring items (within 30 days, excluding today)
       const thirtyDaysFromNow = new Date();
@@ -268,7 +273,7 @@ export default function StaffDashboard() {
         expiredItems: expiredDetails?.length || 0
       });
       setOutOfStockItems(outOfStockDetails || []);
-      setLowStockItems(lowStockDetails || []);
+      setLowStockItems(lowStockData || []);
       setExpiringItems(expiringDetails || []);
       setExpiredItems(expiredDetails || []);
       setCategorySales(categorySalesArray);
