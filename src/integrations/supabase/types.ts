@@ -17,6 +17,7 @@ export type Database = {
       expenses: {
         Row: {
           amount: number
+          branch_id: string | null
           category: string | null
           created_at: string | null
           created_by: string | null
@@ -25,6 +26,7 @@ export type Database = {
         }
         Insert: {
           amount: number
+          branch_id?: string | null
           category?: string | null
           created_at?: string | null
           created_by?: string | null
@@ -33,6 +35,7 @@ export type Database = {
         }
         Update: {
           amount?: number
+          branch_id?: string | null
           category?: string | null
           created_at?: string | null
           created_by?: string | null
@@ -52,6 +55,7 @@ export type Database = {
       medicines: {
         Row: {
           batch_number: string | null
+          branch_id: string | null
           category: Database["public"]["Enums"]["medicine_category"]
           created_at: string | null
           expiry_alert_enabled: boolean | null
@@ -69,6 +73,7 @@ export type Database = {
         }
         Insert: {
           batch_number?: string | null
+          branch_id?: string | null
           category: Database["public"]["Enums"]["medicine_category"]
           created_at?: string | null
           expiry_alert_enabled?: boolean | null
@@ -86,6 +91,7 @@ export type Database = {
         }
         Update: {
           batch_number?: string | null
+          branch_id?: string | null
           category?: Database["public"]["Enums"]["medicine_category"]
           created_at?: string | null
           expiry_alert_enabled?: boolean | null
@@ -110,6 +116,114 @@ export type Database = {
             referencedColumns: ["id"]
           },
         ]
+      }
+      payment_requests: {
+        Row: {
+          amount: number
+          approved_by: string | null
+          created_at: string
+          id: string
+          months_requested: number
+          payment_method: string
+          pharmacy_owner_id: string
+          status: Database["public"]["Enums"]["payment_status"]
+          transaction_reference: string | null
+          updated_at: string
+        }
+        Insert: {
+          amount: number
+          approved_by?: string | null
+          created_at?: string
+          id?: string
+          months_requested: number
+          payment_method: string
+          pharmacy_owner_id: string
+          status?: Database["public"]["Enums"]["payment_status"]
+          transaction_reference?: string | null
+          updated_at?: string
+        }
+        Update: {
+          amount?: number
+          approved_by?: string | null
+          created_at?: string
+          id?: string
+          months_requested?: number
+          payment_method?: string
+          pharmacy_owner_id?: string
+          status?: Database["public"]["Enums"]["payment_status"]
+          transaction_reference?: string | null
+          updated_at?: string
+        }
+        Relationships: []
+      }
+      pharmacy_branches: {
+        Row: {
+          address: string | null
+          created_at: string
+          id: string
+          is_main_branch: boolean | null
+          manager_staff_id: string | null
+          name: string
+          pharmacy_owner_id: string
+          phone: string | null
+          updated_at: string
+        }
+        Insert: {
+          address?: string | null
+          created_at?: string
+          id?: string
+          is_main_branch?: boolean | null
+          manager_staff_id?: string | null
+          name: string
+          pharmacy_owner_id: string
+          phone?: string | null
+          updated_at?: string
+        }
+        Update: {
+          address?: string | null
+          created_at?: string
+          id?: string
+          is_main_branch?: boolean | null
+          manager_staff_id?: string | null
+          name?: string
+          pharmacy_owner_id?: string
+          phone?: string | null
+          updated_at?: string
+        }
+        Relationships: []
+      }
+      pharmacy_subscriptions: {
+        Row: {
+          created_at: string
+          deposit_amount: number | null
+          id: string
+          last_credit_deduction: string | null
+          pharmacy_owner_id: string
+          status: Database["public"]["Enums"]["subscription_status"]
+          subscription_credit: number
+          updated_at: string
+        }
+        Insert: {
+          created_at?: string
+          deposit_amount?: number | null
+          id?: string
+          last_credit_deduction?: string | null
+          pharmacy_owner_id: string
+          status?: Database["public"]["Enums"]["subscription_status"]
+          subscription_credit?: number
+          updated_at?: string
+        }
+        Update: {
+          created_at?: string
+          deposit_amount?: number | null
+          id?: string
+          last_credit_deduction?: string | null
+          pharmacy_owner_id?: string
+          status?: Database["public"]["Enums"]["subscription_status"]
+          subscription_credit?: number
+          updated_at?: string
+        }
+        Relationships: []
       }
       profiles: {
         Row: {
@@ -195,6 +309,7 @@ export type Database = {
       }
       sales: {
         Row: {
+          branch_id: string | null
           created_at: string | null
           discount_amount: number | null
           id: string
@@ -203,6 +318,7 @@ export type Database = {
           total_amount: number
         }
         Insert: {
+          branch_id?: string | null
           created_at?: string | null
           discount_amount?: number | null
           id?: string
@@ -211,6 +327,7 @@ export type Database = {
           total_amount: number
         }
         Update: {
+          branch_id?: string | null
           created_at?: string | null
           discount_amount?: number | null
           id?: string
@@ -231,6 +348,7 @@ export type Database = {
       suppliers: {
         Row: {
           address: string | null
+          branch_id: string | null
           contact_person: string | null
           created_at: string | null
           email: string | null
@@ -241,6 +359,7 @@ export type Database = {
         }
         Insert: {
           address?: string | null
+          branch_id?: string | null
           contact_person?: string | null
           created_at?: string | null
           email?: string | null
@@ -251,6 +370,7 @@ export type Database = {
         }
         Update: {
           address?: string | null
+          branch_id?: string | null
           contact_person?: string | null
           created_at?: string | null
           email?: string | null
@@ -360,6 +480,8 @@ export type Database = {
         | "drops"
         | "inhaler"
         | "other"
+      payment_status: "pending" | "approved" | "declined"
+      subscription_status: "active" | "expiring_soon" | "expired"
       user_role: "owner" | "staff" | "developer"
     }
     CompositeTypes: {
@@ -499,6 +621,8 @@ export const Constants = {
         "inhaler",
         "other",
       ],
+      payment_status: ["pending", "approved", "declined"],
+      subscription_status: ["active", "expiring_soon", "expired"],
       user_role: ["owner", "staff", "developer"],
     },
   },
