@@ -619,15 +619,15 @@ export default function StaffDashboard() {
               }}
               className="h-[300px]"
             >
-              <PieChart width={533} height={300}>
+               <PieChart width={533} height={300}>
                 <Pie
-                  data={productPerformance.slice(0, 5)}
+                  data={productPerformance.slice(0, 5) as any[]}
                   cx="50%"
                   cy="50%"
                   outerRadius={80}
                   fill="hsl(var(--secondary))"
                   dataKey="sales"
-                  label={(entry) => entry.name}
+                  label={(entry: any) => entry.name}
                 >
                   {productPerformance.slice(0, 5).map((entry, index) => (
                     <Cell key={`cell-${index}`} fill={COLORS[index % COLORS.length]} />
@@ -652,15 +652,15 @@ export default function StaffDashboard() {
               }}
               className="h-[300px]"
             >
-              <PieChart width={533} height={300}>
+               <PieChart width={533} height={300}>
                 <Pie
-                  data={paymentMethodData}
+                  data={paymentMethodData as any[]}
                   cx="50%"
                   cy="50%"
                   outerRadius={80}
                   fill="hsl(var(--primary))"
                   dataKey="amount"
-                  label={(entry) => `${entry.method}: ETB ${entry.amount.toFixed(2)}`}
+                  label={(entry: any) => `${entry.method}: ETB ${Number(entry.amount).toFixed(2)}`}
                 >
                   {paymentMethodData.map((entry, index) => (
                     <Cell key={`cell-${index}`} fill={COLORS[index % COLORS.length]} />
