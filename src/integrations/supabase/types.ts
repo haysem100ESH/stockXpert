@@ -235,6 +235,7 @@ export type Database = {
       }
       profiles: {
         Row: {
+          branch_id: string | null
           created_at: string | null
           full_name: string
           id: string
@@ -245,6 +246,7 @@ export type Database = {
           updated_at: string | null
         }
         Insert: {
+          branch_id?: string | null
           created_at?: string | null
           full_name: string
           id: string
@@ -255,6 +257,7 @@ export type Database = {
           updated_at?: string | null
         }
         Update: {
+          branch_id?: string | null
           created_at?: string | null
           full_name?: string
           id?: string
@@ -264,7 +267,15 @@ export type Database = {
           security_question?: string | null
           updated_at?: string | null
         }
-        Relationships: []
+        Relationships: [
+          {
+            foreignKeyName: "profiles_branch_id_fkey"
+            columns: ["branch_id"]
+            isOneToOne: false
+            referencedRelation: "pharmacy_branches"
+            referencedColumns: ["id"]
+          },
+        ]
       }
       sale_items: {
         Row: {
@@ -471,6 +482,10 @@ export type Database = {
       get_subscription_status: {
         Args: Record<PropertyKey, never>
         Returns: Database["public"]["Enums"]["subscription_status"]
+      }
+      get_user_branch: {
+        Args: Record<PropertyKey, never>
+        Returns: string
       }
       is_developer: {
         Args: Record<PropertyKey, never>
