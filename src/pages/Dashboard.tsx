@@ -11,6 +11,7 @@ import { DollarSign, Package, ShoppingCart, AlertTriangle, Download, CalendarIco
 import { BarChart, Bar, XAxis, YAxis, CartesianGrid, ResponsiveContainer, PieChart, Pie, Cell, LineChart, Line } from 'recharts';
 import { format, subDays, subWeeks, subMonths, subYears, startOfDay, endOfDay } from 'date-fns';
 import { supabase } from '@/integrations/supabase/client';
+import SubscriptionStatus from '@/components/subscription/SubscriptionStatus';
 
 interface DashboardStats {
   totalRevenue: number;

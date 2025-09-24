@@ -16,7 +16,7 @@ import CreateStaffDialog from './CreateStaffDialog';
 interface StaffMember {
   id: string;
   full_name: string;
-  role: 'owner' | 'staff';
+  role: 'owner' | 'staff' | 'developer';
   phone?: string;
   created_at: string;
 }

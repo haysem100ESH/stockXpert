@@ -7,7 +7,9 @@ import {
   DollarSign, 
   Truck, 
   Users,
-  Settings
+  Settings,
+  Building2,
+  Shield
 } from "lucide-react";
 
 import {
@@ -32,6 +34,7 @@ const ownerNavItems = [
   { title: "Finance", url: "/finance", icon: DollarSign },
   { title: "Suppliers", url: "/suppliers", icon: Truck },
   { title: "Staff", url: "/staff", icon: Users },
+  { title: "Branches", url: "/branches", icon: Building2 },
   { title: "Account", url: "/account", icon: Settings },
 ];
 
@@ -42,13 +45,24 @@ const staffNavItems = [
   { title: "Account", url: "/account", icon: Settings },
 ];
 
+const developerNavItems = [
+  { title: "Developer Portal", url: "/developer", icon: Shield },
+  { title: "Account", url: "/account", icon: Settings },
+];
+
 export function AppSidebar() {
   const { state } = useSidebar();
   const location = useLocation();
   const { profile } = useAuth();
   const currentPath = location.pathname;
 
-  const navItems = profile?.role === 'owner' ? ownerNavItems : staffNavItems;
+  const getNavItems = () => {
+    if (profile?.role === 'developer') return developerNavItems;
+    if (profile?.role === 'owner') return ownerNavItems;
+    return staffNavItems;
+  };
+
+  const navItems = getNavItems();
   const isCollapsed = state === "collapsed";
 
   const isActive = (path: string) => {
@@ -78,10 +92,10 @@ export function AppSidebar() {
               <h1 className="text-lg font-bold">PharmaXpert</h1>
               {profile && (
                 <Badge 
-                  variant={profile.role === 'owner' ? 'default' : 'secondary'}
+                  variant={profile.role === 'owner' ? 'default' : profile.role === 'developer' ? 'destructive' : 'secondary'}
                   className="text-xs"
                 >
-                  {profile.role === 'owner' ? 'Owner' : 'Staff'}
+                  {profile.role === 'owner' ? 'Owner' : profile.role === 'developer' ? 'Developer' : 'Staff'}
                 </Badge>
               )}
             </div>

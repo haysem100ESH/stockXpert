@@ -460,6 +460,14 @@ export type Database = {
           updated_at: string
         }[]
       }
+      get_subscription_status: {
+        Args: Record<PropertyKey, never>
+        Returns: Database["public"]["Enums"]["subscription_status"]
+      }
+      is_developer: {
+        Args: Record<PropertyKey, never>
+        Returns: boolean
+      }
       is_owner: {
         Args: Record<PropertyKey, never>
         Returns: boolean

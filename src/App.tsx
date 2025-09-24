@@ -6,6 +6,7 @@ import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
 import { BrowserRouter, Routes, Route } from "react-router-dom";
 import { AuthProvider } from "@/hooks/useAuth";
 import Layout from "@/components/Layout";
+import SubscriptionGuard from "@/components/subscription/SubscriptionGuard";
 import Dashboard from "./pages/Dashboard";
 import InventoryPage from "./pages/InventoryPage";
 import SalesPage from "./pages/SalesPage";
@@ -13,6 +14,8 @@ import FinancePage from "./pages/FinancePage";
 import SuppliersPage from "./pages/SuppliersPage";
 import StaffPage from "./pages/StaffPage";
 import AccountPage from "./pages/AccountPage";
+import DeveloperPage from "./pages/DeveloperPage";
+import BranchPage from "./pages/BranchPage";
 import Auth from "./pages/Auth";
 import NotFound from "./pages/NotFound";
 
@@ -37,12 +40,14 @@ const App = () => {
           <BrowserRouter future={{ v7_startTransition: true, v7_relativeSplatPath: true }}>
             <Routes>
               <Route path="/auth" element={<Auth />} />
-              <Route path="/" element={<Layout><Dashboard /></Layout>} />
-              <Route path="/inventory" element={<Layout><InventoryPage /></Layout>} />
-              <Route path="/sales" element={<Layout><SalesPage /></Layout>} />
-              <Route path="/finance" element={<Layout><FinancePage /></Layout>} />
-              <Route path="/suppliers" element={<Layout><SuppliersPage /></Layout>} />
-              <Route path="/staff" element={<Layout><StaffPage /></Layout>} />
+              <Route path="/" element={<Layout><SubscriptionGuard><Dashboard /></SubscriptionGuard></Layout>} />
+              <Route path="/inventory" element={<Layout><SubscriptionGuard><InventoryPage /></SubscriptionGuard></Layout>} />
+              <Route path="/sales" element={<Layout><SubscriptionGuard><SalesPage /></SubscriptionGuard></Layout>} />
+              <Route path="/finance" element={<Layout><SubscriptionGuard><FinancePage /></SubscriptionGuard></Layout>} />
+              <Route path="/suppliers" element={<Layout><SubscriptionGuard><SuppliersPage /></SubscriptionGuard></Layout>} />
+              <Route path="/staff" element={<Layout><SubscriptionGuard><StaffPage /></SubscriptionGuard></Layout>} />
+              <Route path="/branches" element={<Layout><SubscriptionGuard><BranchPage /></SubscriptionGuard></Layout>} />
+              <Route path="/developer" element={<Layout><DeveloperPage /></Layout>} />
               <Route path="/account" element={<Layout><AccountPage /></Layout>} />
               {/* ADD ALL CUSTOM ROUTES ABOVE THE CATCH-ALL "*" ROUTE */}
               <Route path="*" element={<NotFound />} />
