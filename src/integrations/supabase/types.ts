@@ -190,7 +190,15 @@ export type Database = {
           phone?: string | null
           updated_at?: string
         }
-        Relationships: []
+        Relationships: [
+          {
+            foreignKeyName: "pharmacy_branches_manager_staff_id_fkey"
+            columns: ["manager_staff_id"]
+            isOneToOne: false
+            referencedRelation: "profiles"
+            referencedColumns: ["id"]
+          },
+        ]
       }
       pharmacy_subscriptions: {
         Row: {

@@ -54,26 +54,42 @@ export default function BranchManagement() {
   const fetchBranches = async () => {
     try {
       setLoading(true);
-      const { data, error } = await supabase
+      
+      // First get branches
+      const { data: branchesData, error: branchesError } = await supabase
         .from('pharmacy_branches')
-        .select(`
-          *,
-          profiles!pharmacy_branches_manager_staff_id_fkey (
-            full_name
-          )
-        `)
+        .select('*')
         .eq('pharmacy_owner_id', user!.id)
         .order('is_main_branch', { ascending: false })
         .order('created_at', { ascending: true });
 
-      if (error) throw error;
+      if (branchesError) throw branchesError;
 
-      const branchesWithManager = data.map((branch: any) => ({
-        ...branch,
-        manager_name: branch.profiles?.full_name || 'Unassigned'
-      }));
+      // Then get manager names for branches that have managers
+      const branchesWithManagers = await Promise.all(
+        (branchesData || []).map(async (branch) => {
+          let managerName = 'Unassigned';
+          
+          if (branch.manager_staff_id) {
+            const { data: managerData } = await supabase
+              .from('profiles')
+              .select('full_name')
+              .eq('id', branch.manager_staff_id)
+              .single();
+            
+            if (managerData) {
+              managerName = managerData.full_name;
+            }
+          }
+          
+          return {
+            ...branch,
+            manager_name: managerName
+          };
+        })
+      );
 
-      setBranches(branchesWithManager);
+      setBranches(branchesWithManagers);
     } catch (error: any) {
       toast({
         title: "Error",
