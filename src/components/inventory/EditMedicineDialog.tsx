@@ -78,21 +78,23 @@ export default function EditMedicineDialog({
 
     try {
       const { error } = await supabase
-        .from('medicines')
-        .update({
-          name: medicineData.name,
-          generic_name: medicineData.generic_name || null,
-          category: medicineData.category,
-          manufacturer: medicineData.manufacturer || null,
-          batch_number: medicineData.batch_number || null,
-          purchase_price: parseFloat(medicineData.purchase_price),
-          selling_price: parseFloat(medicineData.selling_price),
-          stock_quantity: parseInt(medicineData.stock_quantity),
-          minimum_stock_level: parseInt(medicineData.minimum_stock_level),
-          expiry_date: medicineData.expiry_date || null,
-          expiry_alert_enabled: medicineData.expiry_alert_enabled
-        })
-        .eq('id', medicine.id);
+  .from('medicines')
+  .update({
+    name: medicineData.name,
+    generic_name: medicineData.generic_name || null,
+    category: medicineData.category,
+    manufacturer: medicineData.manufacturer || null,
+    batch_number: medicineData.batch_number || null,
+    purchase_price: parseFloat(medicineData.purchase_price),
+    selling_price: parseFloat(medicineData.selling_price),
+    stock_quantity: parseInt(medicineData.stock_quantity),
+    minimum_stock_level: parseInt(medicineData.minimum_stock_level),
+    expiry_date: medicineData.expiry_date || null,
+    expiry_alert_enabled: medicineData.expiry_alert_enabled
+  })
+  .eq('id', medicine.id)
+  .eq('branch_id', selectedBranch); // 👈 branch awareness
+
 
       if (error) throw error;
 
