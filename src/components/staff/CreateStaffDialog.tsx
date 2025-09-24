@@ -1,4 +1,4 @@
-import { useState } from 'react';
+import { useState, useEffect } from 'react';
 import { Dialog, DialogContent, DialogDescription, DialogHeader, DialogTitle } from '@/components/ui/dialog';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
@@ -7,11 +7,18 @@ import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@
 import { Loader2 } from 'lucide-react';
 import { supabase } from '@/integrations/supabase/client';
 import { useToast } from '@/hooks/use-toast';
+import { useAuth } from '@/hooks/useAuth';
 
 interface CreateStaffDialogProps {
   open: boolean;
   onOpenChange: (open: boolean) => void;
   onStaffCreated: () => void;
+}
+
+interface Branch {
+  id: string;
+  name: string;
+  is_main_branch: boolean;
 }
 
 // Security questions list
@@ -42,11 +49,36 @@ export default function CreateStaffDialog({ open, onOpenChange, onStaffCreated }
     fullName: '',
     phone: '',
     role: 'staff' as 'owner' | 'staff',
+    branchId: '',
     securityQuestion: '',
     securityAnswer: ''
   });
+  const [branches, setBranches] = useState<Branch[]>([]);
   const [isSubmitting, setIsSubmitting] = useState(false);
   const { toast } = useToast();
+  const { user } = useAuth();
+
+  useEffect(() => {
+    if (open) {
+      fetchBranches();
+    }
+  }, [open]);
+
+  const fetchBranches = async () => {
+    try {
+      const { data, error } = await supabase
+        .from('pharmacy_branches')
+        .select('id, name, is_main_branch')
+        .eq('pharmacy_owner_id', user?.id)
+        .order('is_main_branch', { ascending: false })
+        .order('created_at', { ascending: true });
+
+      if (error) throw error;
+      setBranches(data || []);
+    } catch (error) {
+      console.error('Error fetching branches:', error);
+    }
+  };
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
@@ -55,6 +87,15 @@ export default function CreateStaffDialog({ open, onOpenChange, onStaffCreated }
       toast({
         title: "Error",
         description: "Please fill in all required fields",
+        variant: "destructive"
+      });
+      return;
+    }
+
+    if (formData.role === 'staff' && !formData.branchId) {
+      toast({
+        title: "Error",
+        description: "Please select a branch for the staff member",
         variant: "destructive"
       });
       return;
@@ -88,6 +129,7 @@ export default function CreateStaffDialog({ open, onOpenChange, onStaffCreated }
           fullName: formData.fullName,
           phone: formData.phone,
           role: formData.role,
+          branchId: formData.role === 'staff' ? formData.branchId : null,
           securityQuestion: formData.securityQuestion,
           securityAnswer: formData.securityAnswer
         }
@@ -114,6 +156,7 @@ export default function CreateStaffDialog({ open, onOpenChange, onStaffCreated }
         fullName: '',
         phone: '',
         role: 'staff',
+        branchId: '',
         securityQuestion: '',
         securityAnswer: ''
       });
@@ -200,6 +243,24 @@ export default function CreateStaffDialog({ open, onOpenChange, onStaffCreated }
               </SelectContent>
             </Select>
           </div>
+
+          {formData.role === 'staff' && (
+            <div className="space-y-2">
+              <Label htmlFor="branchId">Branch Assignment *</Label>
+              <Select value={formData.branchId} onValueChange={(value) => setFormData({ ...formData, branchId: value })}>
+                <SelectTrigger>
+                  <SelectValue placeholder="Select a branch" />
+                </SelectTrigger>
+                <SelectContent>
+                  {branches.map((branch) => (
+                    <SelectItem key={branch.id} value={branch.id}>
+                      {branch.name} {branch.is_main_branch && '(Main)'}
+                    </SelectItem>
+                  ))}
+                </SelectContent>
+              </Select>
+            </div>
+          )}
 
           <div className="space-y-2">
             <Label htmlFor="securityQuestion">Security Question *</Label>

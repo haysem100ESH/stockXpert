@@ -1,28 +1,54 @@
 import { createContext, useContext, useState, useEffect } from 'react';
 import { useAuth } from './useAuth';
+import { supabase } from '@/integrations/supabase/client';
 
 interface BranchContextType {
   selectedBranch: string | null;
   setSelectedBranch: (branchId: string | null) => void;
+  userBranch: string | null;
 }
 
 const BranchContext = createContext<BranchContextType | undefined>(undefined);
 
 export function BranchProvider({ children }: { children: React.ReactNode }) {
   const [selectedBranch, setSelectedBranch] = useState<string | null>(null);
-  const { profile } = useAuth();
+  const [userBranch, setUserBranch] = useState<string | null>(null);
+  const { profile, user } = useAuth();
 
-  // Staff users should have a fixed branch, owners can switch
+  // Get user's assigned branch if they are staff
   useEffect(() => {
-    if (profile?.role === 'staff') {
-      // For staff, we'll need to get their assigned branch from the database
-      // For now, set to null and they'll be restricted by RLS policies
-      setSelectedBranch(null);
-    }
-  }, [profile]);
+    const fetchUserBranch = async () => {
+      if (profile?.role === 'staff' && user?.id) {
+        try {
+          const { data } = await supabase
+            .from('profiles')
+            .select('branch_id')
+            .eq('id', user.id)
+            .maybeSingle();
+          
+          if (data?.branch_id) {
+            setUserBranch(data.branch_id);
+            setSelectedBranch(data.branch_id); // Staff can only see their branch
+          }
+        } catch (error) {
+          console.error('Error fetching user branch:', error);
+        }
+      } else if (profile?.role === 'owner') {
+        // Owners can switch branches, start with "all" branches
+        setSelectedBranch(null);
+        setUserBranch(null);
+      }
+    };
+
+    fetchUserBranch();
+  }, [profile, user]);
 
   return (
-    <BranchContext.Provider value={{ selectedBranch, setSelectedBranch }}>
+    <BranchContext.Provider value={{ 
+      selectedBranch, 
+      setSelectedBranch: profile?.role === 'staff' ? () => {} : setSelectedBranch, // Staff can't change branch
+      userBranch
+    }}>
       {children}
     </BranchContext.Provider>
   );

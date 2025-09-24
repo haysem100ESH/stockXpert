@@ -71,18 +71,24 @@ export default function DeveloperDashboard() {
 
       if (profilesError) throw profilesError;
 
+      if (!profiles || profiles.length === 0) {
+        console.log('No pharmacy owners found');
+        setOwners([]);
+        return;
+      }
+
       // Get additional data for each owner
       const ownersWithData = await Promise.all(
-        (profiles || []).map(async (profile: any) => {
-          // Use profile email or create a placeholder since we can't access auth.users on client side
-          const email = `${profile.full_name.toLowerCase().replace(' ', '')}@pharmacy.com`;
+        profiles.map(async (profile: any) => {
+          // Use profile name as email placeholder since we can't access auth.users directly
+          const email = `${profile.full_name.toLowerCase().replace(/\s+/g, '')}@pharmacy.com`;
 
-          // Get subscription data
+          // Get subscription data - use maybeSingle to handle cases where no subscription exists
           const { data: subscription } = await supabase
             .from('pharmacy_subscriptions')
             .select('subscription_credit, status, deposit_amount, last_credit_deduction')
             .eq('pharmacy_owner_id', profile.id)
-            .single();
+            .maybeSingle();
 
           // Get branch count
           const { count: branchCount } = await supabase
@@ -101,13 +107,19 @@ export default function DeveloperDashboard() {
             id: profile.id,
             full_name: profile.full_name,
             email,
-            subscription,
+            subscription: subscription || {
+              subscription_credit: 0,
+              status: 'expired',
+              deposit_amount: 0,
+              last_credit_deduction: new Date().toISOString()
+            },
             branch_count: branchCount || 0,
             pending_payments: pendingPayments || 0
           };
         })
       );
 
+      console.log('Fetched pharmacy owners:', ownersWithData);
       setOwners(ownersWithData);
     } catch (error: any) {
       console.error('Error fetching pharmacy owners:', error);
