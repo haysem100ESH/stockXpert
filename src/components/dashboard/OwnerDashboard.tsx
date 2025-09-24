@@ -76,11 +76,19 @@ export default function OwnerDashboard() {
       // Build queries with branch filtering
       let salesQuery = supabase.from('sales').select('total_amount, payment_method, discount_amount');
       let medicinesQuery = supabase.from('medicines').select('stock_quantity, minimum_stock_level, expiry_date');
-      let saleItemsQuery = supabase.from('sale_items').select('quantity');
+      
+      // For sale_items, we need to join with sales to get branch filtering
+      let saleItemsQuery = supabase
+        .from('sale_items')
+        .select(`
+          quantity,
+          sales!inner(branch_id)
+        `);
 
       if (selectedBranch) {
         salesQuery = salesQuery.eq('branch_id', selectedBranch);
         medicinesQuery = medicinesQuery.eq('branch_id', selectedBranch);
+        saleItemsQuery = saleItemsQuery.eq('sales.branch_id', selectedBranch);
       }
 
       // Fetch data

@@ -10,6 +10,7 @@ import { Plus, Users, Phone, Mail, Edit, Trash2, Search } from 'lucide-react';
 import { supabase } from '@/integrations/supabase/client';
 import { useToast } from '@/hooks/use-toast';
 import { useAuth } from '@/hooks/useAuth';
+import { useBranchContext } from '@/hooks/useBranchContext';
 import EditStaffDialog from './EditStaffDialog';
 import CreateStaffDialog from './CreateStaffDialog';
 
@@ -35,18 +36,26 @@ export default function StaffManagement() {
   const [selectedStaff, setSelectedStaff] = useState<StaffMember | null>(null);
   const { toast } = useToast();
   const { profile } = useAuth();
+  const { selectedBranch } = useBranchContext();
 
   useEffect(() => {
     fetchStaff();
-  }, []);
+  }, [selectedBranch]);
 
   useEffect(() => {
-    const filtered = staff.filter(member =>
+    // Filter by search term first
+    let filtered = staff.filter(member =>
       member.full_name.toLowerCase().includes(searchTerm.toLowerCase()) ||
       member.phone?.toLowerCase().includes(searchTerm.toLowerCase())
     );
+
+    // Then filter by selected branch (only for owners)
+    if (profile?.role === 'owner' && selectedBranch) {
+      filtered = filtered.filter(member => member.branch_id === selectedBranch);
+    }
+
     setFilteredStaff(filtered);
-  }, [staff, searchTerm]);
+  }, [staff, searchTerm, selectedBranch, profile?.role]);
 
   const fetchStaff = async () => {
     try {
