@@ -32,11 +32,7 @@ interface DashboardStats {
   expiredItems: number;
 }
 
-interface OwnerDashboardProps {
-  selectedBranch?: string | null;
-}
-
-export default function OwnerDashboard({ selectedBranch }: OwnerDashboardProps) {
+export default function OwnerDashboard() {
   const [stats, setStats] = useState<DashboardStats>({
     totalRevenue: 0,
     totalProducts: 0,
@@ -50,34 +46,21 @@ export default function OwnerDashboard({ selectedBranch }: OwnerDashboardProps) 
 
   useEffect(() => {
     fetchDashboardStats();
-  }, [selectedBranch]);
+  }, []);
 
   const fetchDashboardStats = async () => {
     try {
-      // Build query with branch filter if selected
-      let salesQuery = supabase.from('sales').select('total_amount');
-      let medicinesQuery = supabase.from('medicines').select('stock_quantity, minimum_stock_level');
-      let saleItemsQuery = supabase.from('sale_items').select('quantity');
-      let expiredQuery = supabase.from('medicines').select('id').not('expiry_date', 'is', null).lte('expiry_date', new Date().toISOString().split('T')[0]);
-
-      if (selectedBranch) {
-        salesQuery = salesQuery.eq('branch_id', selectedBranch);
-        medicinesQuery = medicinesQuery.eq('branch_id', selectedBranch);
-        expiredQuery = expiredQuery.eq('branch_id', selectedBranch);
-        // For sale_items, we need to join with sales to filter by branch
-        saleItemsQuery = supabase
-          .from('sale_items')
-          .select('quantity, sales!inner(branch_id)')
-          .eq('sales.branch_id', selectedBranch);
-      }
-
       // Fetch total revenue
-      const { data: salesData } = await salesQuery;
+      const { data: salesData } = await supabase
+        .from('sales')
+        .select('total_amount');
       
       const totalRevenue = salesData?.reduce((sum, sale) => sum + Number(sale.total_amount), 0) || 0;
 
       // Fetch total products
-      const { data: medicinesData } = await medicinesQuery;
+      const { data: medicinesData } = await supabase
+        .from('medicines')
+        .select('stock_quantity, minimum_stock_level');
       
       const totalProducts = medicinesData?.length || 0;
       const lowStockItems = medicinesData?.filter(
@@ -86,12 +69,18 @@ export default function OwnerDashboard({ selectedBranch }: OwnerDashboardProps) 
       const outOfStockItems = medicinesData?.filter(medicine => medicine.stock_quantity === 0).length || 0;
 
       // Fetch total sold items
-      const { data: saleItemsData } = await saleItemsQuery;
+      const { data: saleItemsData } = await supabase
+        .from('sale_items')
+        .select('quantity');
       
       const totalSoldItems = saleItemsData?.reduce((sum, item) => sum + item.quantity, 0) || 0;
 
       // Fetch expired items count
-      const { data: expiredMedicinesData } = await expiredQuery;
+      const { data: expiredMedicinesData } = await supabase
+        .from('medicines')
+        .select('id')
+        .not('expiry_date', 'is', null)
+        .lte('expiry_date', new Date().toISOString().split('T')[0]);
       
       const expiredItems = expiredMedicinesData?.length || 0;
 
@@ -118,9 +107,6 @@ export default function OwnerDashboard({ selectedBranch }: OwnerDashboardProps) 
     <div className="space-y-6">
       <div className="flex items-center justify-between">
         <h1 className="text-3xl font-bold">Owner Dashboard</h1>
-        <div className="text-sm text-muted-foreground">
-          {selectedBranch ? 'Branch-specific data' : 'All branches data'}
-        </div>
       </div>
 
       {/* Stats Cards */}

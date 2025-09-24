@@ -18,12 +18,7 @@ interface StaffMember {
   full_name: string;
   role: 'owner' | 'staff' | 'developer';
   phone?: string;
-  branch_id?: string;
   created_at: string;
-  pharmacy_branches?: {
-    name: string;
-    is_main_branch: boolean;
-  };
 }
 
 export default function StaffManagement() {
@@ -53,10 +48,7 @@ export default function StaffManagement() {
     try {
       const { data, error } = await supabase
         .from('profiles')
-        .select(`
-          *,
-          pharmacy_branches!profiles_branch_id_fkey(name, is_main_branch)
-        `)
+        .select('*')
         .order('created_at');
 
       if (error) throw error;
@@ -194,16 +186,6 @@ export default function StaffManagement() {
                     <div className="flex items-center space-x-2 text-sm">
                       <Phone className="h-4 w-4 text-muted-foreground" />
                       <span>{member.phone}</span>
-                    </div>
-                  )}
-
-                  {member.role === 'staff' && member.pharmacy_branches && (
-                    <div className="flex items-center space-x-2 text-sm">
-                      <span className="text-muted-foreground">Branch:</span>
-                      <Badge variant="outline">
-                        {member.pharmacy_branches.name} 
-                        {member.pharmacy_branches.is_main_branch && ' (Main)'}
-                      </Badge>
                     </div>
                   )}
                   
