@@ -21,11 +21,7 @@ interface Supplier {
   created_at: string;
 }
 
-interface SupplierManagementProps {
-  selectedBranch?: string | null;
-}
-
-export default function SupplierManagement({ selectedBranch }: SupplierManagementProps) {
+export default function SupplierManagement() {
   const [suppliers, setSuppliers] = useState<Supplier[]>([]);
   const [filteredSuppliers, setFilteredSuppliers] = useState<Supplier[]>([]);
   const [paginatedSuppliers, setPaginatedSuppliers] = useState<Supplier[]>([]);
@@ -42,7 +38,7 @@ export default function SupplierManagement({ selectedBranch }: SupplierManagemen
 
   useEffect(() => {
     fetchSuppliers();
-  }, [selectedBranch]);
+  }, []);
 
   useEffect(() => {
     const filtered = suppliers.filter(supplier =>
@@ -62,17 +58,10 @@ export default function SupplierManagement({ selectedBranch }: SupplierManagemen
 
   const fetchSuppliers = async () => {
     try {
-      let query = supabase
+      const { data, error } = await supabase
         .from('suppliers')
         .select('*')
         .order('name');
-
-      // Apply branch filter if selected
-      if (selectedBranch) {
-        query = query.eq('branch_id', selectedBranch);
-      }
-
-      const { data, error } = await query;
 
       if (error) throw error;
       setSuppliers(data || []);

@@ -64,8 +64,7 @@ export default function DeveloperDashboard() {
         .from('profiles')
         .select(`
           id, 
-          full_name,
-          created_at
+          full_name
         `)
         .eq('role', 'owner');
 
@@ -74,8 +73,9 @@ export default function DeveloperDashboard() {
       // Get additional data for each owner
       const ownersWithData = await Promise.all(
         (profiles || []).map(async (profile: any) => {
-          // Use profile email or create a placeholder since we can't access auth.users on client side
-          const email = `${profile.full_name.toLowerCase().replace(' ', '')}@pharmacy.com`;
+          // Get user email from auth
+          const { data: userData } = await supabase.auth.admin.getUserById(profile.id);
+          const email = userData.user?.email || 'N/A';
 
           // Get subscription data
           const { data: subscription } = await supabase

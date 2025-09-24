@@ -32,11 +32,7 @@ interface Medicine {
   created_at?: string;
 }
 
-interface InventoryManagementProps {
-  selectedBranch?: string | null;
-}
-
-export default function InventoryManagement({ selectedBranch }: InventoryManagementProps) {
+export default function InventoryManagement() {
   const [medicines, setMedicines] = useState<Medicine[]>([]);
   const [filteredMedicines, setFilteredMedicines] = useState<Medicine[]>([]);
   const [paginatedMedicines, setPaginatedMedicines] = useState<Medicine[]>([]);
@@ -58,7 +54,7 @@ export default function InventoryManagement({ selectedBranch }: InventoryManagem
 
   useEffect(() => {
     fetchMedicines();
-  }, [selectedBranch]);
+  }, []);
 
   useEffect(() => {
     let filtered = medicines.filter(medicine => {
@@ -100,17 +96,10 @@ export default function InventoryManagement({ selectedBranch }: InventoryManagem
 
   const fetchMedicines = async () => {
     try {
-      let query = supabase
+      const { data, error } = await supabase
         .from('medicines')
         .select('*, created_at')
         .order('name');
-
-      // Apply branch filter if selected
-      if (selectedBranch) {
-        query = query.eq('branch_id', selectedBranch);
-      }
-
-      const { data, error } = await query;
 
       if (error) throw error;
       setMedicines(data || []);

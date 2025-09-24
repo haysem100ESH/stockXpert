@@ -28,11 +28,7 @@ interface CartItem extends Medicine {
   total: number;
 }
 
-interface SalesManagementProps {
-  selectedBranch?: string | null;
-}
-
-export default function SalesManagement({ selectedBranch }: SalesManagementProps) {
+export default function SalesManagement() {
   const [medicines, setMedicines] = useState<Medicine[]>([]);
   const [filteredMedicines, setFilteredMedicines] = useState<Medicine[]>([]);
   const [paginatedMedicines, setPaginatedMedicines] = useState<Medicine[]>([]);
@@ -52,7 +48,7 @@ export default function SalesManagement({ selectedBranch }: SalesManagementProps
 
   useEffect(() => {
     fetchMedicines();
-  }, [selectedBranch]);
+  }, []);
 
   useEffect(() => {
     const filtered = medicines.filter(medicine => {
@@ -75,18 +71,11 @@ export default function SalesManagement({ selectedBranch }: SalesManagementProps
 
   const fetchMedicines = async () => {
     try {
-      let query = supabase
+      const { data, error } = await supabase
         .from('medicines')
         .select('id, name, generic_name, selling_price, stock_quantity, category, expiry_date')
         .gt('stock_quantity', 0)
         .order('name');
-
-      // Apply branch filter if selected
-      if (selectedBranch) {
-        query = query.eq('branch_id', selectedBranch);
-      }
-
-      const { data, error } = await query;
 
       if (error) throw error;
       setMedicines(data || []);
@@ -211,8 +200,7 @@ export default function SalesManagement({ selectedBranch }: SalesManagementProps
           total_amount: calculateTotal(),
           payment_method: paymentMethod,
           discount_amount: calculateDiscount(),
-          sold_by: profile?.id,
-          branch_id: selectedBranch
+          sold_by: profile?.id
         }])
         .select()
         .single();

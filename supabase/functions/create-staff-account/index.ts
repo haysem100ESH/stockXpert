@@ -23,7 +23,6 @@ interface CreateStaffRequest {
   fullName: string;
   phone?: string;
   role: 'owner' | 'staff';
-  branchId?: string;
   securityQuestion: string;
   securityAnswer: string;
 }
@@ -41,7 +40,7 @@ const handler = async (req: Request): Promise<Response> => {
     // Create admin client
     const supabaseAdmin = createClient(supabaseUrl, supabaseServiceKey);
 
-    const { email, password, fullName, phone, role, branchId, securityQuestion, securityAnswer }: CreateStaffRequest = await req.json();
+    const { email, password, fullName, phone, role, securityQuestion, securityAnswer }: CreateStaffRequest = await req.json();
 
     console.log(`Creating ${role} account for email: ${email}`);
 
@@ -86,7 +85,6 @@ const handler = async (req: Request): Promise<Response> => {
       .from('profiles')
       .update({
         phone: phone || null,
-        branch_id: role === 'staff' ? branchId : null,
         security_question: securityQuestion,
         security_answer_hash: hashedAnswer
       })
