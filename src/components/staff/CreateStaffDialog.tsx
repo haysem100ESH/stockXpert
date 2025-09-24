@@ -1,4 +1,4 @@
-import { useState } from 'react';
+import { useState, useEffect } from 'react';
 import { Dialog, DialogContent, DialogDescription, DialogHeader, DialogTitle } from '@/components/ui/dialog';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
@@ -14,6 +14,12 @@ interface CreateStaffDialogProps {
   onStaffCreated: () => void;
 }
 
+interface Branch {
+  id: string;
+  name: string;
+  is_main_branch: boolean;
+}
+
 // Security questions list
 const SECURITY_QUESTIONS = [
   "What was the name of your first pet?",
@@ -24,17 +30,6 @@ const SECURITY_QUESTIONS = [
   "What was your childhood nickname?"
 ];
 
-// Simple hash function for security answers
-const hashAnswer = (answer: string) => {
-  let hash = 0;
-  for (let i = 0; i < answer.length; i++) {
-    const char = answer.charCodeAt(i);
-    hash = ((hash << 5) - hash) + char;
-    hash = hash & hash; // Convert to 32-bit integer
-  }
-  return Math.abs(hash).toString();
-};
-
 export default function CreateStaffDialog({ open, onOpenChange, onStaffCreated }: CreateStaffDialogProps) {
   const [formData, setFormData] = useState({
     email: '',
@@ -42,11 +37,34 @@ export default function CreateStaffDialog({ open, onOpenChange, onStaffCreated }
     fullName: '',
     phone: '',
     role: 'staff' as 'owner' | 'staff',
+    branchId: '',
     securityQuestion: '',
     securityAnswer: ''
   });
+  const [branches, setBranches] = useState<Branch[]>([]);
   const [isSubmitting, setIsSubmitting] = useState(false);
   const { toast } = useToast();
+
+  useEffect(() => {
+    if (open) {
+      fetchBranches();
+    }
+  }, [open]);
+
+  const fetchBranches = async () => {
+    try {
+      const { data, error } = await supabase
+        .from('pharmacy_branches')
+        .select('id, name, is_main_branch')
+        .order('is_main_branch', { ascending: false })
+        .order('created_at', { ascending: true });
+
+      if (error) throw error;
+      setBranches(data || []);
+    } catch (error) {
+      console.error('Error fetching branches:', error);
+    }
+  };
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
@@ -55,6 +73,15 @@ export default function CreateStaffDialog({ open, onOpenChange, onStaffCreated }
       toast({
         title: "Error",
         description: "Please fill in all required fields",
+        variant: "destructive"
+      });
+      return;
+    }
+
+    if (formData.role === 'staff' && !formData.branchId) {
+      toast({
+        title: "Error",
+        description: "Please select a branch for staff members",
         variant: "destructive"
       });
       return;
@@ -88,6 +115,7 @@ export default function CreateStaffDialog({ open, onOpenChange, onStaffCreated }
           fullName: formData.fullName,
           phone: formData.phone,
           role: formData.role,
+          branchId: formData.role === 'staff' ? formData.branchId : null,
           securityQuestion: formData.securityQuestion,
           securityAnswer: formData.securityAnswer
         }
@@ -114,6 +142,7 @@ export default function CreateStaffDialog({ open, onOpenChange, onStaffCreated }
         fullName: '',
         phone: '',
         role: 'staff',
+        branchId: '',
         securityQuestion: '',
         securityAnswer: ''
       });
@@ -190,7 +219,7 @@ export default function CreateStaffDialog({ open, onOpenChange, onStaffCreated }
 
           <div className="space-y-2">
             <Label htmlFor="role">Role *</Label>
-            <Select value={formData.role} onValueChange={(value: 'owner' | 'staff') => setFormData({ ...formData, role: value })}>
+            <Select value={formData.role} onValueChange={(value: 'owner' | 'staff') => setFormData({ ...formData, role: value, branchId: value === 'owner' ? '' : formData.branchId })}>
               <SelectTrigger>
                 <SelectValue />
               </SelectTrigger>
@@ -200,6 +229,24 @@ export default function CreateStaffDialog({ open, onOpenChange, onStaffCreated }
               </SelectContent>
             </Select>
           </div>
+
+          {formData.role === 'staff' && (
+            <div className="space-y-2">
+              <Label htmlFor="branch">Branch Assignment *</Label>
+              <Select value={formData.branchId} onValueChange={(value) => setFormData({ ...formData, branchId: value })}>
+                <SelectTrigger>
+                  <SelectValue placeholder="Select branch" />
+                </SelectTrigger>
+                <SelectContent>
+                  {branches.map((branch) => (
+                    <SelectItem key={branch.id} value={branch.id}>
+                      {branch.name} {branch.is_main_branch && '(Main)'}
+                    </SelectItem>
+                  ))}
+                </SelectContent>
+              </Select>
+            </div>
+          )}
 
           <div className="space-y-2">
             <Label htmlFor="securityQuestion">Security Question *</Label>
