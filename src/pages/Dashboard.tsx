@@ -76,6 +76,7 @@ interface IncomeExpenseData {
 
 export default function Dashboard() {
   const { profile } = useAuth();
+  const [selectedBranch, setSelectedBranch] = useState<string | null>(null);
   const [stats, setStats] = useState<DashboardStats>({
     totalRevenue: 0,
     totalProducts: 0,
