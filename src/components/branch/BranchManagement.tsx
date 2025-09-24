@@ -41,7 +41,7 @@ export default function BranchManagement() {
   const [branchName, setBranchName] = useState('');
   const [branchAddress, setBranchAddress] = useState('');
   const [branchPhone, setBranchPhone] = useState('');
-  const [managerId, setManagerId] = useState('');
+  const [managerId, setManagerId] = useState('unassigned');
   const [isMainBranch, setIsMainBranch] = useState(false);
 
   useEffect(() => {
@@ -103,7 +103,7 @@ export default function BranchManagement() {
     setBranchName('');
     setBranchAddress('');
     setBranchPhone('');
-    setManagerId('');
+    setManagerId('unassigned');
     setIsMainBranch(false);
     setEditingBranch(null);
   };
@@ -117,7 +117,7 @@ export default function BranchManagement() {
           name: branchName,
           address: branchAddress || null,
           phone: branchPhone || null,
-          manager_staff_id: managerId || null,
+          manager_staff_id: managerId === 'unassigned' ? null : managerId,
           is_main_branch: isMainBranch
         });
 
@@ -150,7 +150,7 @@ export default function BranchManagement() {
           name: branchName,
           address: branchAddress || null,
           phone: branchPhone || null,
-          manager_staff_id: managerId || null,
+          manager_staff_id: managerId === 'unassigned' ? null : managerId,
           is_main_branch: isMainBranch
         })
         .eq('id', editingBranch.id);
@@ -179,7 +179,7 @@ export default function BranchManagement() {
     setBranchName(branch.name);
     setBranchAddress(branch.address || '');
     setBranchPhone(branch.phone || '');
-    setManagerId(branch.manager_staff_id || '');
+    setManagerId(branch.manager_staff_id || 'unassigned');
     setIsMainBranch(branch.is_main_branch);
   };
 
@@ -257,7 +257,7 @@ export default function BranchManagement() {
                     <SelectValue placeholder="Select manager (optional)" />
                   </SelectTrigger>
                   <SelectContent>
-                    <SelectItem value="">No manager assigned</SelectItem>
+                    <SelectItem value="unassigned">No manager assigned</SelectItem>
                     {staffMembers.map((staff) => (
                       <SelectItem key={staff.id} value={staff.id}>
                         {staff.full_name}
@@ -397,7 +397,7 @@ export default function BranchManagement() {
                                   <SelectValue placeholder="Select manager (optional)" />
                                 </SelectTrigger>
                                 <SelectContent>
-                                  <SelectItem value="">No manager assigned</SelectItem>
+                                  <SelectItem value="unassigned">No manager assigned</SelectItem>
                                   {staffMembers.map((staff) => (
                                     <SelectItem key={staff.id} value={staff.id}>
                                       {staff.full_name}
