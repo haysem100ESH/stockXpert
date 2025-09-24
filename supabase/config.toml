@@ -61,3 +61,6 @@ verify_jwt = false
 
 [functions.create-staff-account]
 verify_jwt = true
+
+[functions.daily-credit-deduction]
+verify_jwt = false

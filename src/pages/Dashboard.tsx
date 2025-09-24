@@ -374,6 +374,11 @@ export default function Dashboard() {
 
   return (
     <div className="space-y-6">
+      {/* Subscription Status for Owners */}
+      {profile?.role === 'owner' && (
+        <SubscriptionStatus />
+      )}
+      
       <div className="flex items-center justify-between">
         <div>
           <h2 className="text-3xl font-bold tracking-tight">Dashboard</h2>
