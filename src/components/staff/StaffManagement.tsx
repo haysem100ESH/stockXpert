@@ -18,7 +18,11 @@ interface StaffMember {
   full_name: string;
   role: 'owner' | 'staff' | 'developer';
   phone?: string;
+  branch_id?: string;
   created_at: string;
+  pharmacy_branches?: {
+    name: string;
+  } | null;
 }
 
 export default function StaffManagement() {
@@ -48,11 +52,23 @@ export default function StaffManagement() {
     try {
       const { data, error } = await supabase
         .from('profiles')
-        .select('*')
+        .select(`
+          *,
+          pharmacy_branches (
+            name
+          )
+        `)
         .order('created_at');
 
       if (error) throw error;
-      setStaff(data || []);
+      
+      // Map the data to handle the relationship properly
+      const mappedData = data?.map((item: any) => ({
+        ...item,
+        pharmacy_branches: item.pharmacy_branches?.[0] || null
+      })) || [];
+      
+      setStaff(mappedData);
     } catch (error) {
       toast({
         title: "Error",
@@ -186,6 +202,13 @@ export default function StaffManagement() {
                     <div className="flex items-center space-x-2 text-sm">
                       <Phone className="h-4 w-4 text-muted-foreground" />
                       <span>{member.phone}</span>
+                    </div>
+                  )}
+                  
+                  {member.pharmacy_branches?.name && (
+                    <div className="flex items-center space-x-2 text-sm">
+                      <span className="text-muted-foreground font-medium">Branch:</span>
+                      <span>{member.pharmacy_branches.name}</span>
                     </div>
                   )}
                   

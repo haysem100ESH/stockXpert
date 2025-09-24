@@ -1,5 +1,6 @@
 import { useState, useEffect } from 'react';
 import { useAuth } from '@/hooks/useAuth';
+import { useBranchContext } from '@/hooks/useBranchContext';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
 import { Badge } from '@/components/ui/badge';
 import { Button } from '@/components/ui/button';
@@ -71,6 +72,7 @@ interface PaymentMethodData {
 
 export default function StaffDashboard() {
   const { profile } = useAuth();
+  const { userBranch } = useBranchContext(); // Staff can only see their branch
   const [stats, setStats] = useState<DashboardStats>({
     totalProducts: 0,
     todaySales: 0,
@@ -116,10 +118,13 @@ export default function StaffDashboard() {
     try {
       const { start, end } = getDateRange();
       
-      // Fetch total products and stock info
-      const { data: medicinesData } = await supabase
-        .from('medicines')
-        .select('stock_quantity, minimum_stock_level');
+      // Build queries with branch filtering for staff (only their branch)
+      let medicinesQuery = supabase.from('medicines').select('stock_quantity, minimum_stock_level');
+      if (userBranch) {
+        medicinesQuery = medicinesQuery.eq('branch_id', userBranch);
+      }
+
+      const { data: medicinesData } = await medicinesQuery;
 
       const totalProducts = medicinesData?.length || 0;
       const lowStockItems = medicinesData?.filter(med => 
@@ -127,28 +132,46 @@ export default function StaffDashboard() {
       ).length || 0;
       const outOfStockItems = medicinesData?.filter(med => med.stock_quantity === 0).length || 0;
 
-      // Fetch sales for the selected period
-      const { data: periodSalesData } = await supabase
+      // Fetch sales for the selected period with branch filtering
+      let salesQuery = supabase
         .from('sales')
         .select('id, total_amount, payment_method, discount_amount')
         .gte('created_at', start.toISOString())
         .lte('created_at', end.toISOString());
+      
+      if (userBranch) {
+        salesQuery = salesQuery.eq('branch_id', userBranch);
+      }
+
+      const { data: periodSalesData } = await salesQuery;
 
       const todaySales = periodSalesData?.length || 0;
 
       // Calculate period sales revenue 
       const periodSalesRevenue = periodSalesData?.reduce((sum, sale) => sum + Number(sale.total_amount), 0) || 0;
 
-      // Fetch out of stock items details
-      const { data: outOfStockDetails } = await supabase
+      // Fetch out of stock items details with branch filtering
+      let outOfStockQuery = supabase
         .from('medicines')
         .select('id, name, category, stock_quantity')
         .eq('stock_quantity', 0);
+      
+      if (userBranch) {
+        outOfStockQuery = outOfStockQuery.eq('branch_id', userBranch);
+      }
 
-      // Fetch low stock items details
-      const { data: lowStockDetails } = await supabase
+      const { data: outOfStockDetails } = await outOfStockQuery;
+
+      // Fetch low stock items details with branch filtering
+      let lowStockQuery = supabase
         .from('low_stock_medicines')
         .select('id, name, category, stock_quantity, minimum_stock_level');
+      
+      if (userBranch) {
+        lowStockQuery = lowStockQuery.eq('branch_id', userBranch);
+      }
+
+      const { data: lowStockDetails } = await lowStockQuery;
 
       // Fetch expiring items (within 30 days, excluding today)
       const thirtyDaysFromNow = new Date();

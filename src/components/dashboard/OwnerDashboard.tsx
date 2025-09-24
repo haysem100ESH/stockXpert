@@ -13,8 +13,10 @@ import {
   FileText,
   ShoppingCart
 } from 'lucide-react';
+import { BarChart, Bar, XAxis, YAxis, CartesianGrid, ResponsiveContainer, PieChart, Pie, Cell } from 'recharts';
 import { supabase } from '@/integrations/supabase/client';
 import { useToast } from '@/hooks/use-toast';
+import { useBranchContext } from '@/hooks/useBranchContext';
 import InventoryManagement from '@/components/inventory/InventoryManagement';
 import SalesManagement from '@/components/sales/SalesManagement';
 import FinanceManagement from '@/components/finance/FinanceManagement';
@@ -32,6 +34,23 @@ interface DashboardStats {
   expiredItems: number;
 }
 
+interface CategorySalesData {
+  category: string;
+  sales: number;
+  revenue: number;
+}
+
+interface ProductPerformanceData {
+  name: string;
+  sales: number;
+  revenue: number;
+}
+
+interface PaymentMethodData {
+  method: string;
+  amount: number;
+}
+
 export default function OwnerDashboard() {
   const [stats, setStats] = useState<DashboardStats>({
     totalRevenue: 0,
@@ -41,48 +60,126 @@ export default function OwnerDashboard() {
     outOfStockItems: 0,
     expiredItems: 0
   });
+  const [categorySales, setCategorySales] = useState<CategorySalesData[]>([]);
+  const [productPerformance, setProductPerformance] = useState<ProductPerformanceData[]>([]);
+  const [paymentMethodData, setPaymentMethodData] = useState<PaymentMethodData[]>([]);
   const [loading, setLoading] = useState(true);
   const { toast } = useToast();
+  const { selectedBranch } = useBranchContext();
 
   useEffect(() => {
     fetchDashboardStats();
-  }, []);
+  }, [selectedBranch]);
 
   const fetchDashboardStats = async () => {
     try {
-      // Fetch total revenue
-      const { data: salesData } = await supabase
-        .from('sales')
-        .select('total_amount');
+      // Build queries with branch filtering
+      let salesQuery = supabase.from('sales').select('total_amount, payment_method, discount_amount');
+      let medicinesQuery = supabase.from('medicines').select('stock_quantity, minimum_stock_level, expiry_date');
+      let saleItemsQuery = supabase.from('sale_items').select('quantity');
+
+      if (selectedBranch) {
+        salesQuery = salesQuery.eq('branch_id', selectedBranch);
+        medicinesQuery = medicinesQuery.eq('branch_id', selectedBranch);
+      }
+
+      // Fetch data
+      const { data: salesData } = await salesQuery;
+      const { data: medicinesData } = await medicinesQuery;
+      const { data: saleItemsData } = await saleItemsQuery;
       
       const totalRevenue = salesData?.reduce((sum, sale) => sum + Number(sale.total_amount), 0) || 0;
-
-      // Fetch total products
-      const { data: medicinesData } = await supabase
-        .from('medicines')
-        .select('stock_quantity, minimum_stock_level');
-      
       const totalProducts = medicinesData?.length || 0;
       const lowStockItems = medicinesData?.filter(
         medicine => medicine.stock_quantity <= medicine.minimum_stock_level && medicine.stock_quantity > 0
       ).length || 0;
       const outOfStockItems = medicinesData?.filter(medicine => medicine.stock_quantity === 0).length || 0;
-
-      // Fetch total sold items
-      const { data: saleItemsData } = await supabase
-        .from('sale_items')
-        .select('quantity');
-      
       const totalSoldItems = saleItemsData?.reduce((sum, item) => sum + item.quantity, 0) || 0;
 
-      // Fetch expired items count
-      const { data: expiredMedicinesData } = await supabase
+      // Fetch expired items count with branch filtering
+      let expiredQuery = supabase
         .from('medicines')
         .select('id')
         .not('expiry_date', 'is', null)
         .lte('expiry_date', new Date().toISOString().split('T')[0]);
       
+      if (selectedBranch) {
+        expiredQuery = expiredQuery.eq('branch_id', selectedBranch);
+      }
+
+      const { data: expiredMedicinesData } = await expiredQuery;
       const expiredItems = expiredMedicinesData?.length || 0;
+
+      // Fetch sales data with items for charts
+      let salesWithItemsQuery = supabase
+        .from('sales')
+        .select(`
+          *,
+          sale_items (
+            quantity,
+            medicine_id,
+            medicines (name, category)
+          )
+        `);
+      
+      if (selectedBranch) {
+        salesWithItemsQuery = salesWithItemsQuery.eq('branch_id', selectedBranch);
+      }
+
+      const { data: salesWithItems } = await salesWithItemsQuery;
+
+      // Process category sales data
+      const categoryMap = new Map<string, { sales: number; revenue: number }>();
+      salesWithItems?.forEach(sale => {
+        sale.sale_items?.forEach((item: any) => {
+          if (item.medicines) {
+            const category = item.medicines.category;
+            const existing = categoryMap.get(category) || { sales: 0, revenue: 0 };
+            categoryMap.set(category, {
+              sales: existing.sales + item.quantity,
+              revenue: existing.revenue + (item.quantity * Number(sale.total_amount) / sale.sale_items.length)
+            });
+          }
+        });
+      });
+
+      const categorySalesArray = Array.from(categoryMap.entries()).map(([category, data]) => ({
+        category,
+        ...data
+      }));
+
+      // Process product performance data
+      const productMap = new Map<string, { sales: number; revenue: number }>();
+      salesWithItems?.forEach(sale => {
+        sale.sale_items?.forEach((item: any) => {
+          if (item.medicines) {
+            const name = item.medicines.name;
+            const existing = productMap.get(name) || { sales: 0, revenue: 0 };
+            productMap.set(name, {
+              sales: existing.sales + item.quantity,
+              revenue: existing.revenue + (item.quantity * Number(sale.total_amount) / sale.sale_items.length)
+            });
+          }
+        });
+      });
+
+      const productPerformanceArray = Array.from(productMap.entries())
+        .map(([name, data]) => ({ name, ...data }))
+        .sort((a, b) => b.sales - a.sales)
+        .slice(0, 10);
+
+      // Process payment method data
+      const paymentMap = new Map<string, number>();
+      salesData?.forEach(sale => {
+        const method = sale.payment_method || 'Cash';
+        const amount = Number(sale.total_amount) - (Number(sale.discount_amount) || 0);
+        paymentMap.set(method, (paymentMap.get(method) || 0) + amount);
+      });
+
+      const paymentMethodArray = Array.from(paymentMap.entries()).map(([method, amount]) => ({
+        method,
+        amount
+      }));
 
       setStats({
         totalRevenue,
@@ -92,6 +189,9 @@ export default function OwnerDashboard() {
         outOfStockItems,
         expiredItems
       });
+      setCategorySales(categorySalesArray);
+      setProductPerformance(productPerformanceArray);
+      setPaymentMethodData(paymentMethodArray);
     } catch (error) {
       toast({
         title: "Error",
@@ -203,26 +303,75 @@ export default function OwnerDashboard() {
 
         <TabsContent value="overview" className="space-y-4">          
           <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
+            {/* Items Sold per Day (by category) */}
             <Card>
               <CardHeader>
-                <CardTitle>Recent Activity</CardTitle>
-                <CardDescription>Latest transactions and updates</CardDescription>
+                <CardTitle>Items Sold by Category</CardTitle>
+                <CardDescription>Sales performance by medicine category</CardDescription>
               </CardHeader>
               <CardContent>
-                <div className="space-y-3">
-                  <div className="flex items-center space-x-2">
-                    <Badge variant="secondary">Sale</Badge>
-                    <span className="text-sm">Medicine sold - ETB 25.50</span>
-                  </div>
-                  <div className="flex items-center space-x-2">
-                    <Badge variant="outline">Stock</Badge>
-                    <span className="text-sm">Low stock alert - Paracetamol</span>
-                  </div>
-                  <div className="flex items-center space-x-2">
-                    <Badge variant="secondary">Expense</Badge>
-                    <span className="text-sm">Utility bill - ETB 150.00</span>
-                  </div>
-                </div>
+                <ResponsiveContainer width="100%" height={300}>
+                  <BarChart data={categorySales}>
+                    <CartesianGrid strokeDasharray="3 3" />
+                    <XAxis dataKey="category" />
+                    <YAxis />
+                    <Bar dataKey="sales" fill="hsl(var(--primary))" />
+                  </BarChart>
+                </ResponsiveContainer>
+              </CardContent>
+            </Card>
+
+            {/* Top-Selling Products */}
+            <Card>
+              <CardHeader>
+                <CardTitle>Top-Selling Products</CardTitle>
+                <CardDescription>Best performing medicines</CardDescription>
+              </CardHeader>
+              <CardContent>
+                <ResponsiveContainer width="100%" height={300}>
+                  <PieChart>
+                    <Pie
+                      data={productPerformance.slice(0, 5)}
+                      cx="50%"
+                      cy="50%"
+                      outerRadius={80}
+                      fill="hsl(var(--secondary))"
+                      dataKey="sales"
+                      label={(entry: any) => entry.name}
+                    >
+                      {productPerformance.slice(0, 5).map((entry, index) => (
+                        <Cell key={`cell-${index}`} fill={`hsl(${(index * 72) % 360}, 70%, 50%)`} />
+                      ))}
+                    </Pie>
+                  </PieChart>
+                </ResponsiveContainer>
+              </CardContent>
+            </Card>
+
+            {/* Payment Method Distribution */}
+            <Card>
+              <CardHeader>
+                <CardTitle>Payment Methods</CardTitle>
+                <CardDescription>Revenue by payment method</CardDescription>
+              </CardHeader>
+              <CardContent>
+                <ResponsiveContainer width="100%" height={300}>
+                  <PieChart>
+                    <Pie
+                      data={paymentMethodData}
+                      cx="50%"
+                      cy="50%"
+                      outerRadius={80}
+                      fill="hsl(var(--accent))"
+                      dataKey="amount"
+                      label={(entry: any) => `${entry.method}: ETB ${Number(entry.amount).toFixed(2)}`}
+                    >
+                      {paymentMethodData.map((entry, index) => (
+                        <Cell key={`cell-${index}`} fill={`hsl(${(index * 90) % 360}, 65%, 55%)`} />
+                      ))}
+                    </Pie>
+                  </PieChart>
+                </ResponsiveContainer>
               </CardContent>
             </Card>
 

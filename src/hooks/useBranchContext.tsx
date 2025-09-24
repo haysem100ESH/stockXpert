@@ -20,15 +20,10 @@ export function BranchProvider({ children }: { children: React.ReactNode }) {
     const fetchUserBranch = async () => {
       if (profile?.role === 'staff' && user?.id) {
         try {
-          const { data } = await supabase
-            .from('profiles')
-            .select('branch_id')
-            .eq('id', user.id)
-            .maybeSingle();
-          
-          if (data?.branch_id) {
-            setUserBranch(data.branch_id);
-            setSelectedBranch(data.branch_id); // Staff can only see their branch
+          // Get the branch_id directly from the profile since we have it in context
+          if (profile.branch_id) {
+            setUserBranch(profile.branch_id);
+            setSelectedBranch(profile.branch_id); // Staff can only see their branch
           }
         } catch (error) {
           console.error('Error fetching user branch:', error);

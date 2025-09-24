@@ -8,6 +8,7 @@ interface Profile {
   full_name: string;
   role: 'owner' | 'staff' | 'developer';
   phone?: string;
+  branch_id?: string;
   security_question?: string;
   security_answer_hash?: string;
 }
