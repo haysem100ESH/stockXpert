@@ -22,6 +22,7 @@ import SupplierManagement from '@/components/suppliers/SupplierManagement';
 import StaffManagement from '@/components/staff/StaffManagement';
 import ExpiredMedicinesTable from './ExpiredMedicinesTable';
 import LowStockItemsTable from './LowStockItemsTable';
+import { BarChart, Bar, XAxis, YAxis, CartesianGrid, ResponsiveContainer, PieChart, Pie, Cell, LineChart, Line, Tooltip } from 'recharts';
 
 interface DashboardStats {
   totalRevenue: number;
@@ -30,6 +31,13 @@ interface DashboardStats {
   lowStockItems: number;
   outOfStockItems: number;
   expiredItems: number;
+}
+
+interface ChartData {
+  categoryChart: { name: string; value: number; color: string; }[];
+  topProducts: { name: string; sold: number; }[];
+  incomeExpenseChart: { month: string; income: number; expense: number; }[];
+  paymentMethodChart: { method: string; amount: number; color: string; }[];
 }
 
 interface OwnerDashboardProps {
@@ -45,6 +53,12 @@ export default function OwnerDashboard({ selectedBranch }: OwnerDashboardProps) 
     outOfStockItems: 0,
     expiredItems: 0
   });
+  const [chartData, setChartData] = useState<ChartData>({
+    categoryChart: [],
+    topProducts: [],
+    incomeExpenseChart: [],
+    paymentMethodChart: []
+  });
   const [loading, setLoading] = useState(true);
   const { toast } = useToast();
 
@@ -55,19 +69,21 @@ export default function OwnerDashboard({ selectedBranch }: OwnerDashboardProps) 
   const fetchDashboardStats = async () => {
     try {
       // Build query with branch filter if selected
-      let salesQuery = supabase.from('sales').select('total_amount');
-      let medicinesQuery = supabase.from('medicines').select('stock_quantity, minimum_stock_level');
-      let saleItemsQuery = supabase.from('sale_items').select('quantity');
+      let salesQuery = supabase.from('sales').select('total_amount, payment_method, created_at');
+      let medicinesQuery = supabase.from('medicines').select('stock_quantity, minimum_stock_level, category');
+      let saleItemsQuery = supabase.from('sale_items').select('quantity, medicines(name, category)');
       let expiredQuery = supabase.from('medicines').select('id').not('expiry_date', 'is', null).lte('expiry_date', new Date().toISOString().split('T')[0]);
+      let expensesQuery = supabase.from('expenses').select('amount, created_at');
 
       if (selectedBranch) {
         salesQuery = salesQuery.eq('branch_id', selectedBranch);
         medicinesQuery = medicinesQuery.eq('branch_id', selectedBranch);
         expiredQuery = expiredQuery.eq('branch_id', selectedBranch);
+        expensesQuery = expensesQuery.eq('branch_id', selectedBranch);
         // For sale_items, we need to join with sales to filter by branch
         saleItemsQuery = supabase
           .from('sale_items')
-          .select('quantity, sales!inner(branch_id)')
+          .select('quantity, medicines(name, category), sales!inner(branch_id)')
           .eq('sales.branch_id', selectedBranch);
       }
 
@@ -95,6 +111,9 @@ export default function OwnerDashboard({ selectedBranch }: OwnerDashboardProps) 
       
       const expiredItems = expiredMedicinesData?.length || 0;
 
+      // Fetch expenses
+      const { data: expensesData } = await expensesQuery;
+
       setStats({
         totalRevenue,
         totalProducts,
@@ -102,6 +121,74 @@ export default function OwnerDashboard({ selectedBranch }: OwnerDashboardProps) 
         lowStockItems,
         outOfStockItems,
         expiredItems
+      });
+
+      // Process chart data
+      const categoryColors = ['#8b5cf6', '#06b6d4', '#10b981', '#f59e0b', '#ef4444', '#f97316', '#8b5a2b'];
+      
+      // Category chart (items sold by category)
+      const categoryMap = new Map();
+      saleItemsData?.forEach(item => {
+        const category = item.medicines?.category || 'Other';
+        categoryMap.set(category, (categoryMap.get(category) || 0) + item.quantity);
+      });
+      
+      const categoryChart = Array.from(categoryMap.entries()).map(([name, value], index) => ({
+        name,
+        value,
+        color: categoryColors[index % categoryColors.length]
+      }));
+
+      // Top products
+      const productMap = new Map();
+      saleItemsData?.forEach(item => {
+        const name = item.medicines?.name || 'Unknown';
+        productMap.set(name, (productMap.get(name) || 0) + item.quantity);
+      });
+      
+      const topProducts = Array.from(productMap.entries())
+        .map(([name, sold]) => ({ name, sold }))
+        .sort((a, b) => b.sold - a.sold)
+        .slice(0, 5);
+
+      // Income vs Expense (last 6 months)
+      const last6Months = [];
+      const today = new Date();
+      for (let i = 5; i >= 0; i--) {
+        const date = new Date(today.getFullYear(), today.getMonth() - i, 1);
+        const monthName = date.toLocaleDateString('en', { month: 'short' });
+        
+        const monthIncome = salesData?.filter(sale => {
+          const saleDate = new Date(sale.created_at);
+          return saleDate.getMonth() === date.getMonth() && saleDate.getFullYear() === date.getFullYear();
+        }).reduce((sum, sale) => sum + (sale.total_amount ? Number(sale.total_amount) : 0), 0) || 0;
+
+        const monthExpense = expensesData?.filter(expense => {
+          const expenseDate = new Date(expense.created_at);
+          return expenseDate.getMonth() === date.getMonth() && expenseDate.getFullYear() === date.getFullYear();
+        }).reduce((sum, expense) => sum + (expense.amount ? Number(expense.amount) : 0), 0) || 0;
+
+        last6Months.push({ month: monthName, income: monthIncome, expense: monthExpense });
+      }
+
+      const paymentMap = new Map();
+      salesData?.forEach(sale => {
+        const method = sale.payment_method || 'Cash';
+        paymentMap.set(method, (paymentMap.get(method) || 0) + (sale.total_amount ? Number(sale.total_amount) : 0));
+      });
+
+      const paymentMethodColors = ['#06b6d4', '#10b981', '#f59e0b', '#8b5cf6', '#ef4444'];
+      const paymentMethodChart = Array.from(paymentMap.entries()).map(([method, amount], index) => ({
+        method,
+        amount,
+        color: paymentMethodColors[index % paymentMethodColors.length]
+      }));
+
+      setChartData({
+        categoryChart,
+        topProducts,
+        incomeExpenseChart: last6Months,
+        paymentMethodChart
       });
     } catch (error) {
       toast({
@@ -215,54 +302,101 @@ export default function OwnerDashboard({ selectedBranch }: OwnerDashboardProps) 
           <TabsTrigger value="staff">Staff</TabsTrigger>
         </TabsList>
 
-        <TabsContent value="overview" className="space-y-4">          
-          <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
+        <TabsContent value="overview" className="space-y-4">
+          <div className="grid grid-cols-1 lg:grid-cols-2 gap-6 mb-6">
+            {/* Items Sold per Day by Category */}
             <Card>
               <CardHeader>
-                <CardTitle>Recent Activity</CardTitle>
-                <CardDescription>Latest transactions and updates</CardDescription>
+                <CardTitle>Items Sold by Category</CardTitle>
+                <CardDescription>Distribution of sold items by category</CardDescription>
               </CardHeader>
               <CardContent>
-                <div className="space-y-3">
-                  <div className="flex items-center space-x-2">
-                    <Badge variant="secondary">Sale</Badge>
-                    <span className="text-sm">Medicine sold - ETB 25.50</span>
-                  </div>
-                  <div className="flex items-center space-x-2">
-                    <Badge variant="outline">Stock</Badge>
-                    <span className="text-sm">Low stock alert - Paracetamol</span>
-                  </div>
-                  <div className="flex items-center space-x-2">
-                    <Badge variant="secondary">Expense</Badge>
-                    <span className="text-sm">Utility bill - ETB 150.00</span>
-                  </div>
+                <div className="h-[300px]">
+                  <ResponsiveContainer width="100%" height="100%">
+                    <BarChart data={chartData.categoryChart}>
+                      <CartesianGrid strokeDasharray="3 3" />
+                      <XAxis dataKey="name" />
+                      <YAxis />
+                      <Tooltip />
+                      <Bar dataKey="value" fill="#8b5cf6" />
+                    </BarChart>
+                  </ResponsiveContainer>
                 </div>
               </CardContent>
             </Card>
 
+            {/* Income vs Expense Chart */}
             <Card>
               <CardHeader>
-                <CardTitle>Quick Actions</CardTitle>
-                <CardDescription>Frequently used actions</CardDescription>
+                <CardTitle>Income vs Expense (6 Months)</CardTitle>
+                <CardDescription>Monthly comparison of income and expenses</CardDescription>
               </CardHeader>
               <CardContent>
-                <div className="grid grid-cols-2 gap-4">
-                  <Button variant="outline" className="h-20 flex flex-col">
-                    <Plus className="h-6 w-6 mb-2" />
-                    Add Medicine
-                  </Button>
-                  <Button variant="outline" className="h-20 flex flex-col">
-                    <ShoppingCart className="h-6 w-6 mb-2" />
-                    New Sale
-                  </Button>
-                  <Button variant="outline" className="h-20 flex flex-col">
-                    <Users className="h-6 w-6 mb-2" />
-                    Manage Staff
-                  </Button>
-                  <Button variant="outline" className="h-20 flex flex-col">
-                    <FileText className="h-6 w-6 mb-2" />
-                    Reports
-                  </Button>
+                <div className="h-[300px]">
+                  <ResponsiveContainer width="100%" height="100%">
+                    <LineChart data={chartData.incomeExpenseChart}>
+                      <CartesianGrid strokeDasharray="3 3" />
+                      <XAxis dataKey="month" />
+                      <YAxis />
+                      <Tooltip />
+                      <Line type="monotone" dataKey="income" stroke="#10b981" strokeWidth={2} />
+                      <Line type="monotone" dataKey="expense" stroke="#ef4444" strokeWidth={2} />
+                    </LineChart>
+                  </ResponsiveContainer>
+                </div>
+              </CardContent>
+            </Card>
+          </div>
+
+          <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
+            {/* Top-Selling Products */}
+            <Card>
+              <CardHeader>
+                <CardTitle>Top-Selling Products</CardTitle>
+                <CardDescription>Most popular items by quantity sold</CardDescription>
+              </CardHeader>
+              <CardContent>
+                <div className="h-[300px]">
+                  <ResponsiveContainer width="100%" height="100%">
+                    <BarChart data={chartData.topProducts} layout="horizontal">
+                      <CartesianGrid strokeDasharray="3 3" />
+                      <XAxis type="number" />
+                      <YAxis dataKey="name" type="category" width={100} />
+                      <Tooltip />
+                      <Bar dataKey="sold" fill="#06b6d4" />
+                    </BarChart>
+                  </ResponsiveContainer>
+                </div>
+              </CardContent>
+            </Card>
+
+            {/* Payment Method Pie Chart */}
+            <Card>
+              <CardHeader>
+                <CardTitle>Payment Methods</CardTitle>
+                <CardDescription>Revenue distribution by payment method</CardDescription>
+              </CardHeader>
+              <CardContent>
+                <div className="h-[300px]">
+                  <ResponsiveContainer width="100%" height="100%">
+                    <PieChart>
+                      <Pie
+                        data={chartData.paymentMethodChart}
+                        cx="50%"
+                        cy="50%"
+                        labelLine={false}
+                        label={({ method, percent }) => `${method} ${(Number(percent) * 100).toFixed(0)}%`}
+                        outerRadius={80}
+                        fill="#8884d8"
+                        dataKey="amount"
+                      >
+                        {chartData.paymentMethodChart.map((entry, index) => (
+                          <Cell key={`cell-${index}`} fill={entry.color} />
+                        ))}
+                      </Pie>
+                      <Tooltip />
+                    </PieChart>
+                  </ResponsiveContainer>
                 </div>
               </CardContent>
             </Card>
@@ -270,23 +404,23 @@ export default function OwnerDashboard({ selectedBranch }: OwnerDashboardProps) 
         </TabsContent>
 
         <TabsContent value="inventory">
-          <InventoryManagement />
+          <InventoryManagement selectedBranch={selectedBranch} />
         </TabsContent>
 
         <TabsContent value="sales">
-          <SalesManagement />
+          <SalesManagement selectedBranch={selectedBranch} />
         </TabsContent>
 
         <TabsContent value="finance">
-          <FinanceManagement />
+          <FinanceManagement selectedBranch={selectedBranch} />
         </TabsContent>
 
         <TabsContent value="suppliers">
-          <SupplierManagement />
+          <SupplierManagement selectedBranch={selectedBranch} />
         </TabsContent>
 
         <TabsContent value="staff">
-          <StaffManagement />
+          <StaffManagement selectedBranch={selectedBranch} />
         </TabsContent>
       </Tabs>
     </div>

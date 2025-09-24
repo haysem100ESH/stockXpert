@@ -26,7 +26,11 @@ interface StaffMember {
   };
 }
 
-export default function StaffManagement() {
+interface StaffManagementProps {
+  selectedBranch?: string | null;
+}
+
+export default function StaffManagement({ selectedBranch }: StaffManagementProps) {
   const [staff, setStaff] = useState<StaffMember[]>([]);
   const [filteredStaff, setFilteredStaff] = useState<StaffMember[]>([]);
   const [searchTerm, setSearchTerm] = useState('');
@@ -39,7 +43,7 @@ export default function StaffManagement() {
 
   useEffect(() => {
     fetchStaff();
-  }, []);
+  }, [selectedBranch]);
 
   useEffect(() => {
     const filtered = staff.filter(member =>
@@ -51,13 +55,20 @@ export default function StaffManagement() {
 
   const fetchStaff = async () => {
     try {
-      const { data, error } = await supabase
+      let query = supabase
         .from('profiles')
         .select(`
           *,
           pharmacy_branches!profiles_branch_id_fkey(name, is_main_branch)
         `)
         .order('created_at');
+
+      // Apply branch filter if selected
+      if (selectedBranch) {
+        query = query.eq('branch_id', selectedBranch);
+      }
+
+      const { data, error } = await query;
 
       if (error) throw error;
       setStaff(data || []);

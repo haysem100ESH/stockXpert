@@ -42,7 +42,11 @@ interface Sale {
   }[];
 }
 
-export default function FinanceManagement() {
+interface FinanceManagementProps {
+  selectedBranch?: string | null;
+}
+
+export default function FinanceManagement({ selectedBranch }: FinanceManagementProps) {
   const [stats, setStats] = useState<FinanceStats>({
     totalIncome: 0,
     totalExpenses: 0,
@@ -82,7 +86,7 @@ export default function FinanceManagement() {
     return () => {
       supabase.removeChannel(expenseSubscription);
     };
-  }, [period, startDate, endDate]);
+  }, [period, startDate, endDate, selectedBranch]);
 
   const fetchFinanceData = async () => {
     try {
@@ -108,7 +112,7 @@ export default function FinanceManagement() {
       }
 
       // Fetch sales with medicine details
-      const { data: salesData, error: salesError } = await supabase
+      let salesQuery = supabase
         .from('sales')
         .select(`
           *,
@@ -123,15 +127,29 @@ export default function FinanceManagement() {
         .lte('created_at', queryEndDate.toISOString())
         .order('created_at', { ascending: false });
 
+      // Apply branch filter if selected
+      if (selectedBranch) {
+        salesQuery = salesQuery.eq('branch_id', selectedBranch);
+      }
+
+      const { data: salesData, error: salesError } = await salesQuery;
+
       if (salesError) throw salesError;
 
       // Fetch expenses
-      const { data: expensesData, error: expensesError } = await supabase
+      let expensesQuery = supabase
         .from('expenses')
         .select('*')
         .gte('created_at', queryStartDate.toISOString())
         .lte('created_at', queryEndDate.toISOString())
         .order('created_at', { ascending: false });
+
+      // Apply branch filter if selected
+      if (selectedBranch) {
+        expensesQuery = expensesQuery.eq('branch_id', selectedBranch);
+      }
+
+      const { data: expensesData, error: expensesError } = await expensesQuery;
 
       if (expensesError) throw expensesError;
 
@@ -185,7 +203,8 @@ export default function FinanceManagement() {
       description: formData.get('description') as string,
       amount: parseFloat(formData.get('amount') as string),
       category: formData.get('category') as string,
-      created_by: profile?.id
+      created_by: profile?.id,
+      branch_id: selectedBranch
     };
 
     try {
