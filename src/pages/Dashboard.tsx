@@ -12,7 +12,7 @@ import { BarChart, Bar, XAxis, YAxis, CartesianGrid, ResponsiveContainer, PieCha
 import { format, subDays, subWeeks, subMonths, subYears, startOfDay, endOfDay } from 'date-fns';
 import { supabase } from '@/integrations/supabase/client';
 import SubscriptionStatus from '@/components/subscription/SubscriptionStatus';
-
+import { useBranchContext } from '@/hooks/useBranchContext';
 interface DashboardStats {
   totalRevenue: number;
   totalProducts: number;
@@ -76,7 +76,7 @@ interface IncomeExpenseData {
 
 export default function Dashboard() {
   const { profile } = useAuth();
-  const [selectedBranch, setSelectedBranch] = useState<string | null>(null);
+  const { selectedBranch, userBranch } = useBranchContext();
   const [stats, setStats] = useState<DashboardStats>({
     totalRevenue: 0,
     totalProducts: 0,
@@ -99,7 +99,7 @@ export default function Dashboard() {
 
   useEffect(() => {
     fetchDashboardData();
-  }, [reportPeriod, customDate]);
+  }, [reportPeriod, customDate, selectedBranch, userBranch]);
 
   const getDateRange = () => {
     const now = new Date();
@@ -123,19 +123,30 @@ export default function Dashboard() {
     try {
       const { start, end } = getDateRange();
       
+      // Determine which branch to filter by (staff fixed to their branch)
+      const effectiveBranchId = profile?.role === 'staff' ? userBranch : selectedBranch;
+      
       // Fetch revenue for the selected period
-      const { data: salesData } = await supabase
+      let salesQuery = supabase
         .from('sales')
         .select('total_amount, created_at, payment_method, discount_amount')
         .gte('created_at', start.toISOString())
         .lte('created_at', end.toISOString());
+      if (effectiveBranchId) {
+        salesQuery = salesQuery.eq('branch_id', effectiveBranchId);
+      }
+      const { data: salesData } = await salesQuery;
       
       const totalRevenue = salesData?.reduce((sum, sale) => sum + Number(sale.total_amount), 0) || 0;
 
       // Fetch total products and stock info
-      const { data: medicinesData } = await supabase
+      let medicinesQuery = supabase
         .from('medicines')
         .select('stock_quantity, minimum_stock_level');
+      if (effectiveBranchId) {
+        medicinesQuery = medicinesQuery.eq('branch_id', effectiveBranchId);
+      }
+      const { data: medicinesData } = await medicinesQuery;
 
       const totalProducts = medicinesData?.length || 0;
       const lowStockItems = medicinesData?.filter(med => 
@@ -144,41 +155,67 @@ export default function Dashboard() {
       const outOfStockItems = medicinesData?.filter(med => med.stock_quantity === 0).length || 0;
 
       // Fetch sales for the selected period
-      const { data: periodSalesData } = await supabase
+      let periodSalesQuery = supabase
         .from('sales')
         .select('id')
         .gte('created_at', start.toISOString())
         .lte('created_at', end.toISOString());
+      if (effectiveBranchId) {
+        periodSalesQuery = periodSalesQuery.eq('branch_id', effectiveBranchId);
+      }
+      const { data: periodSalesData } = await periodSalesQuery;
 
       const todaySales = periodSalesData?.length || 0;
 
       // Fetch out of stock items details
-      const { data: outOfStockDetails } = await supabase
+      let outOfStockQuery = supabase
         .from('medicines')
         .select('id, name, category, stock_quantity')
         .eq('stock_quantity', 0);
+      if (effectiveBranchId) {
+        outOfStockQuery = outOfStockQuery.eq('branch_id', effectiveBranchId);
+      }
+      const { data: outOfStockDetails } = await outOfStockQuery;
 
       // Fetch low stock items details
-      const { data: lowStockDetails } = await supabase
-        .from('low_stock_medicines')
-        .select('id, name, category, stock_quantity, minimum_stock_level');
+      let lowStockQuery = supabase
+        .from('medicines')
+        .select('id, name, category, stock_quantity, minimum_stock_level')
+        .gt('stock_quantity', 0);
+      if (effectiveBranchId) {
+        lowStockQuery = lowStockQuery.eq('branch_id', effectiveBranchId);
+      }
+      const { data: lowStockSource } = await lowStockQuery;
+      const lowStockDetails = (lowStockSource || []).filter((m: any) => m.stock_quantity <= m.minimum_stock_level);
 
       // Fetch expiring items (within 30 days)
       const thirtyDaysFromNow = new Date();
       thirtyDaysFromNow.setDate(thirtyDaysFromNow.getDate() + 30);
-      const { data: expiringDetails } = await supabase
-        .from('medicines')
-        .select('id, name, category, expiry_date')
-        .not('expiry_date', 'is', null)
-        .lte('expiry_date', thirtyDaysFromNow.toISOString().split('T')[0])
-        .gte('expiry_date', new Date().toISOString().split('T')[0]);
+      const { data: expiringDetails } = await (function(){
+        let expiringQuery = supabase
+          .from('medicines')
+          .select('id, name, category, expiry_date')
+          .not('expiry_date', 'is', null)
+          .lte('expiry_date', thirtyDaysFromNow.toISOString().split('T')[0])
+          .gte('expiry_date', new Date().toISOString().split('T')[0]);
+        if (effectiveBranchId) {
+          expiringQuery = expiringQuery.eq('branch_id', effectiveBranchId);
+        }
+        return expiringQuery;
+      })();
 
       // Fetch expired items
-      const { data: expiredDetails, error: expiredError } = await supabase
-        .from('medicines')
-        .select('id, name, category, expiry_date')
-        .not('expiry_date', 'is', null)
-        .lte('expiry_date', new Date().toISOString().split('T')[0]);
+      const { data: expiredDetails, error: expiredError } = await (function(){
+        let expiredQuery = supabase
+          .from('medicines')
+          .select('id, name, category, expiry_date')
+          .not('expiry_date', 'is', null)
+          .lte('expiry_date', new Date().toISOString().split('T')[0]);
+        if (effectiveBranchId) {
+          expiredQuery = expiredQuery.eq('branch_id', effectiveBranchId);
+        }
+        return expiredQuery;
+      })();
 
       if (expiredError) {
         console.error('Error fetching expired medicines:', expiredError);
@@ -187,18 +224,24 @@ export default function Dashboard() {
       }
 
       // Fetch sales data with medicine details for charts
-      const { data: salesWithItems } = await supabase
-        .from('sales')
-        .select(`
-          *,
-          sale_items (
-            quantity,
-            medicine_id,
-            medicines (name, category)
-          )
-        `)
-        .gte('created_at', start.toISOString())
-        .lte('created_at', end.toISOString());
+      const { data: salesWithItems } = await (function(){
+        let salesWithItemsQuery = supabase
+          .from('sales')
+          .select(`
+            *,
+            sale_items (
+              quantity,
+              medicine_id,
+              medicines (name, category)
+            )
+          `)
+          .gte('created_at', start.toISOString())
+          .lte('created_at', end.toISOString());
+        if (effectiveBranchId) {
+          salesWithItemsQuery = salesWithItemsQuery.eq('branch_id', effectiveBranchId);
+        }
+        return salesWithItemsQuery;
+      })();
 
       // Process category sales data
       const categoryMap = new Map<string, { sales: number; revenue: number }>();
@@ -241,11 +284,17 @@ export default function Dashboard() {
         .slice(0, 10);
 
       // Fetch expenses for income vs expense chart
-      const { data: expensesData } = await supabase
-        .from('expenses')
-        .select('amount, created_at')
-        .gte('created_at', start.toISOString())
-        .lte('created_at', end.toISOString());
+      const { data: expensesData } = await (function(){
+        let expensesQuery = supabase
+          .from('expenses')
+          .select('amount, created_at')
+          .gte('created_at', start.toISOString())
+          .lte('created_at', end.toISOString());
+        if (effectiveBranchId) {
+          expensesQuery = expensesQuery.eq('branch_id', effectiveBranchId);
+        }
+        return expensesQuery;
+      })();
 
       // Process income vs expense data by day
       const dateMap = new Map<string, { income: number; expenses: number }>();
