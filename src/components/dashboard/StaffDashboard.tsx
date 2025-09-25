@@ -51,7 +51,7 @@ export default function StaffDashboard() {
 
   useEffect(() => {
     fetchDashboardData();
-  }, [reportPeriod, customDate]);
+  }, [reportPeriod, customDate, userBranch]);
 
   const getDateRange = () => {
     const now = new Date();
@@ -76,47 +76,91 @@ export default function StaffDashboard() {
       const { start, end } = getDateRange();
       
       // Use explicit any types to bypass complex inference
-      const medicinesResult = await supabase
+      let medicinesQuery = supabase
         .from('medicines')
         .select('stock_quantity, minimum_stock_level');
+      
+      if (userBranch) {
+        medicinesQuery = medicinesQuery.eq('branch_id', userBranch);
+      }
+      
+      const medicinesResult = await medicinesQuery;
       const medicinesData = medicinesResult.data as any[] || [];
 
-      const salesResult = await supabase
+      let salesQuery = supabase
         .from('sales')
         .select('id, total_amount, payment_method, discount_amount')
         .gte('created_at', start.toISOString())
         .lte('created_at', end.toISOString());
+      
+      if (userBranch) {
+        salesQuery = salesQuery.eq('branch_id', userBranch);
+      }
+      
+      const salesResult = await salesQuery;
       const salesData = salesResult.data as any[] || [];
 
-      const outOfStockResult = await supabase
+      let outOfStockQuery = supabase
         .from('medicines')
         .select('id, name, category, stock_quantity')
         .eq('stock_quantity', 0);
+      
+      if (userBranch) {
+        outOfStockQuery = outOfStockQuery.eq('branch_id', userBranch);
+      }
+      
+      const outOfStockResult = await outOfStockQuery;
       const outOfStockData = outOfStockResult.data as SimpleItem[] || [];
 
-      const lowStockResult = await supabase
-        .from('low_stock_medicines')
-        .select('id, name, category, stock_quantity, minimum_stock_level');
-      const lowStockData = lowStockResult.data as SimpleItem[] || [];
+      // For low stock items, query medicines directly since we need branch filtering
+      let lowStockQuery = supabase
+        .from('medicines')
+        .select('id, name, category, stock_quantity, minimum_stock_level')
+        .gt('stock_quantity', 0);
+      
+      if (userBranch) {
+        lowStockQuery = lowStockQuery.eq('branch_id', userBranch);
+      }
+      
+      const lowStockResult = await lowStockQuery;
+      const allMedicines = lowStockResult.data as SimpleItem[] || [];
+      
+      // Filter low stock items client-side
+      const lowStockData = allMedicines.filter(med => 
+        med.stock_quantity && med.minimum_stock_level && 
+        med.stock_quantity <= med.minimum_stock_level
+      );
 
       const thirtyDaysFromNow = new Date();
       thirtyDaysFromNow.setDate(thirtyDaysFromNow.getDate() + 30);
       const tomorrow = new Date();
       tomorrow.setDate(tomorrow.getDate() + 1);
       
-      const expiringResult = await supabase
+      let expiringQuery = supabase
         .from('medicines')
         .select('id, name, category, expiry_date')
         .not('expiry_date', 'is', null)
         .lte('expiry_date', thirtyDaysFromNow.toISOString().split('T')[0])
         .gte('expiry_date', tomorrow.toISOString().split('T')[0]);
+      
+      if (userBranch) {
+        expiringQuery = expiringQuery.eq('branch_id', userBranch);
+      }
+      
+      const expiringResult = await expiringQuery;
       const expiringData = expiringResult.data as SimpleItem[] || [];
 
-      const expiredResult = await supabase
+      let expiredQuery = supabase
         .from('medicines')
         .select('id, name, category, expiry_date')
         .not('expiry_date', 'is', null)
         .lte('expiry_date', new Date().toISOString().split('T')[0]);
+      
+      if (userBranch) {
+        expiredQuery = expiredQuery.eq('branch_id', userBranch);
+      }
+      
+      const expiredResult = await expiredQuery;
       const expiredData = expiredResult.data as SimpleItem[] || [];
 
       const totalProducts = medicinesData.length;
