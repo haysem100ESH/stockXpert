@@ -11,6 +11,8 @@ interface Profile {
   branch_id?: string;
   security_question?: string;
   security_answer_hash?: string;
+  active?: boolean;
+  manually_deactivated?: boolean;
 }
 
 interface AuthContextType {
@@ -133,17 +135,38 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     if (data.user) {
       const { data: profile } = await supabase
         .from('profiles')
-        .select('active, role')
+        .select('active, role, manually_deactivated')
         .eq('id', data.user.id)
         .single();
 
       if (profile && !profile.active) {
-        // Sign out the user immediately
+        // Check subscription status for owners
+        if (profile.role === 'owner') {
+          const { data: subscription } = await supabase
+            .from('pharmacy_subscriptions')
+            .select('status')
+            .eq('pharmacy_owner_id', data.user.id)
+            .single();
+
+          // If subscription is inactive (manually deactivated by admin)
+          if (subscription?.status === 'inactive') {
+            await supabase.auth.signOut();
+            const deactivatedError = new Error('🚫 Your account has been deactivated by the system administrator. Please contact support.');
+            toast({
+              title: "Account Inactive",
+              description: "🚫 Your account has been deactivated by the system administrator. Please contact support.",
+              variant: "destructive"
+            });
+            return { error: deactivatedError };
+          }
+        }
+
+        // Sign out the user immediately for other deactivation reasons
         await supabase.auth.signOut();
-        const deactivatedError = new Error('🚫 Your account has been deactivated by the system administrator. Please contact support.');
+        const deactivatedError = new Error('🚫 Your account has been deactivated. Please contact support.');
         toast({
           title: "Account Deactivated",
-          description: "🚫 Your account has been deactivated by the system administrator. Please contact support.",
+          description: "🚫 Your account has been deactivated. Please contact support.",
           variant: "destructive"
         });
         return { error: deactivatedError };

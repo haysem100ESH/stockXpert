@@ -525,7 +525,7 @@ export type Database = {
         | "inhaler"
         | "other"
       payment_status: "pending" | "approved" | "declined"
-      subscription_status: "active" | "expiring_soon" | "expired"
+      subscription_status: "active" | "expiring_soon" | "expired" | "inactive"
       user_role: "owner" | "staff" | "developer"
     }
     CompositeTypes: {
@@ -666,7 +666,7 @@ export const Constants = {
         "other",
       ],
       payment_status: ["pending", "approved", "declined"],
-      subscription_status: ["active", "expiring_soon", "expired"],
+      subscription_status: ["active", "expiring_soon", "expired", "inactive"],
       user_role: ["owner", "staff", "developer"],
     },
   },

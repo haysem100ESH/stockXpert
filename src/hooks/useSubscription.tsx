@@ -5,7 +5,7 @@ import { useAuth } from '@/hooks/useAuth';
 interface SubscriptionData {
   id: string;
   subscription_credit: number;
-  status: 'active' | 'expiring_soon' | 'expired';
+  status: 'active' | 'expiring_soon' | 'expired' | 'inactive';
   deposit_amount: number;
   created_at: string;
   updated_at: string;

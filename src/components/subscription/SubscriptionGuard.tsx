@@ -13,7 +13,7 @@ interface SubscriptionGuardProps {
 
 export default function SubscriptionGuard({ children, fallback }: SubscriptionGuardProps) {
   const { user, profile } = useAuth();
-  const [subscriptionStatus, setSubscriptionStatus] = useState<'active' | 'expiring_soon' | 'expired' | 'loading'>('loading');
+  const [subscriptionStatus, setSubscriptionStatus] = useState<'active' | 'expiring_soon' | 'expired' | 'inactive' | 'loading'>('loading');
   const [daysRemaining, setDaysRemaining] = useState<number>(0);
 
   useEffect(() => {
@@ -60,8 +60,9 @@ export default function SubscriptionGuard({ children, fallback }: SubscriptionGu
     );
   }
 
-  // If subscription is expired, show blocked access
-  if (subscriptionStatus === 'expired') {
+  // If subscription is expired or inactive, show blocked access
+  if (subscriptionStatus === 'expired' || subscriptionStatus === 'inactive') {
+    const isInactive = subscriptionStatus === 'inactive';
     const blockedContent = fallback || (
       <div className="flex items-center justify-center min-h-[60vh]">
         <Card className="max-w-md mx-auto">
@@ -69,20 +70,28 @@ export default function SubscriptionGuard({ children, fallback }: SubscriptionGu
             <div className="mx-auto w-12 h-12 bg-red-100 rounded-full flex items-center justify-center">
               <Lock className="h-6 w-6 text-red-600" />
             </div>
-            <CardTitle className="text-red-600">Subscription Expired</CardTitle>
+            <CardTitle className="text-red-600">
+              {isInactive ? 'Account Deactivated' : 'Subscription Expired'}
+            </CardTitle>
             <CardDescription>
-              Your subscription has expired. Please contact support to renew your subscription.
+              {isInactive 
+                ? 'Your account has been deactivated by the system administrator.'
+                : 'Your subscription has expired. Please contact support to renew your subscription.'
+              }
             </CardDescription>
           </CardHeader>
           <CardContent className="text-center space-y-4">
             <Alert className="border-red-200 bg-red-50">
               <AlertTriangle className="h-4 w-4 text-red-600" />
               <AlertDescription className="text-red-800">
-                🚫 Access blocked until subscription is renewed
+                🚫 {isInactive 
+                  ? 'Your account has been deactivated by the system administrator. Please contact support.'
+                  : 'Access blocked until subscription is renewed'
+                }
               </AlertDescription>
             </Alert>
             <p className="text-sm text-muted-foreground">
-              Contact our support team to renew your subscription and regain access to all features.
+              Contact our support team {isInactive ? 'for assistance' : 'to renew your subscription and regain access to all features'}.
             </p>
             <div className="space-y-2 text-sm">
               <p><strong>Email:</strong> support@pharmaxpert.com</p>

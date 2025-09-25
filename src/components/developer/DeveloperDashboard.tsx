@@ -242,15 +242,52 @@ export default function DeveloperDashboard() {
     }
 
     try {
-      const { error } = await supabase
+      // Update profile status
+      const { error: profileError } = await supabase
         .from('profiles')
         .update({ 
           active: newStatus,
-          manually_deactivated: !newStatus // Set manually_deactivated when we're deactivating
+          manually_deactivated: !newStatus
         })
         .eq('id', ownerId);
 
-      if (error) throw error;
+      if (profileError) throw profileError;
+
+      // Update subscription status
+      if (!newStatus) {
+        // When inactivating, set subscription status to inactive
+        const { error: subscriptionError } = await supabase
+          .from('pharmacy_subscriptions')
+          .update({ status: 'inactive' })
+          .eq('pharmacy_owner_id', ownerId);
+
+        if (subscriptionError) throw subscriptionError;
+      } else {
+        // When reactivating, restore subscription status based on credit
+        const { data: subscription } = await supabase
+          .from('pharmacy_subscriptions')
+          .select('subscription_credit')
+          .eq('pharmacy_owner_id', ownerId)
+          .single();
+
+        if (subscription) {
+          let newSubscriptionStatus: 'active' | 'expiring_soon' | 'expired';
+          if (subscription.subscription_credit <= 0) {
+            newSubscriptionStatus = 'expired';
+          } else if (subscription.subscription_credit <= 7) {
+            newSubscriptionStatus = 'expiring_soon';
+          } else {
+            newSubscriptionStatus = 'active';
+          }
+
+          const { error: subscriptionError } = await supabase
+            .from('pharmacy_subscriptions')
+            .update({ status: newSubscriptionStatus })
+            .eq('pharmacy_owner_id', ownerId);
+
+          if (subscriptionError) throw subscriptionError;
+        }
+      }
 
       toast({
         title: "Success",
@@ -280,6 +317,8 @@ export default function DeveloperDashboard() {
         return <Badge className="bg-yellow-100 text-yellow-800">Expiring Soon</Badge>;
       case 'expired':
         return <Badge className="bg-red-100 text-red-800">Expired</Badge>;
+      case 'inactive':
+        return <Badge className="bg-gray-100 text-gray-800">Inactive</Badge>;
       default:
         return <Badge className="bg-gray-100 text-gray-800">No Subscription</Badge>;
     }
@@ -287,7 +326,9 @@ export default function DeveloperDashboard() {
 
   const getAccountStatusBadge = (active: boolean, manuallyDeactivated?: boolean, subscriptionStatus?: string) => {
     if (!active) {
-      if (manuallyDeactivated) {
+      if (subscriptionStatus === 'inactive') {
+        return <Badge className="bg-gray-100 text-gray-800">Inactive</Badge>;
+      } else if (manuallyDeactivated) {
         return <Badge className="bg-red-100 text-red-800">Deactivated</Badge>;
       } else if (subscriptionStatus === 'expired') {
         return <Badge className="bg-orange-100 text-orange-800">Expired</Badge>;
