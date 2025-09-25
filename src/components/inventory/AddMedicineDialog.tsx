@@ -8,7 +8,7 @@ import { Switch } from '@/components/ui/switch';
 import { Loader2 } from 'lucide-react';
 import { supabase } from '@/integrations/supabase/client';
 import { useToast } from '@/hooks/use-toast';
-
+import { useBranchContext } from '@/hooks/useBranchContext';
 interface AddMedicineDialogProps {
   open: boolean;
   onOpenChange: (open: boolean) => void;
@@ -22,7 +22,7 @@ const categories = [
 export default function AddMedicineDialog({ open, onOpenChange, onMedicineAdded }: AddMedicineDialogProps) {
   const [loading, setLoading] = useState(false);
   const { toast } = useToast();
-
+  const { selectedBranch, userBranch } = useBranchContext();
   const handleSubmit = async (e: React.FormEvent<HTMLFormElement>) => {
     e.preventDefault();
     setLoading(true);
@@ -39,7 +39,8 @@ export default function AddMedicineDialog({ open, onOpenChange, onMedicineAdded 
       stock_quantity: parseInt(formData.get('stock_quantity') as string),
       minimum_stock_level: parseInt(formData.get('minimum_stock_level') as string),
       expiry_date: formData.get('expiry_date') as string || null,
-      expiry_alert_enabled: formData.get('expiry_alert_enabled') === 'on'
+      expiry_alert_enabled: formData.get('expiry_alert_enabled') === 'on',
+      branch_id: userBranch || selectedBranch || null
     };
 
     try {
