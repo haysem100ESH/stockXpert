@@ -115,7 +115,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
   };
 
   const signIn = async (email: string, password: string) => {
-    const { error } = await supabase.auth.signInWithPassword({
+    const { data, error } = await supabase.auth.signInWithPassword({
       email,
       password
     });
@@ -126,6 +126,28 @@ export function AuthProvider({ children }: { children: ReactNode }) {
         description: error.message,
         variant: "destructive"
       });
+      return { error };
+    }
+
+    // Check if the user account is active
+    if (data.user) {
+      const { data: profile } = await supabase
+        .from('profiles')
+        .select('active, role')
+        .eq('id', data.user.id)
+        .single();
+
+      if (profile && !profile.active) {
+        // Sign out the user immediately
+        await supabase.auth.signOut();
+        const deactivatedError = new Error('Your account has been deactivated. Please contact support.');
+        toast({
+          title: "Account Deactivated",
+          description: "Your account has been deactivated. Please contact support.",
+          variant: "destructive"
+        });
+        return { error: deactivatedError };
+      }
     }
 
     return { error };

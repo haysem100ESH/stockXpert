@@ -235,10 +235,12 @@ export type Database = {
       }
       profiles: {
         Row: {
+          active: boolean | null
           branch_id: string | null
           created_at: string | null
           full_name: string
           id: string
+          pharmacy_address: string | null
           phone: string | null
           role: Database["public"]["Enums"]["user_role"]
           security_answer_hash: string | null
@@ -246,10 +248,12 @@ export type Database = {
           updated_at: string | null
         }
         Insert: {
+          active?: boolean | null
           branch_id?: string | null
           created_at?: string | null
           full_name: string
           id: string
+          pharmacy_address?: string | null
           phone?: string | null
           role?: Database["public"]["Enums"]["user_role"]
           security_answer_hash?: string | null
@@ -257,10 +261,12 @@ export type Database = {
           updated_at?: string | null
         }
         Update: {
+          active?: boolean | null
           branch_id?: string | null
           created_at?: string | null
           full_name?: string
           id?: string
+          pharmacy_address?: string | null
           phone?: string | null
           role?: Database["public"]["Enums"]["user_role"]
           security_answer_hash?: string | null
