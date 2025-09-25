@@ -9,10 +9,10 @@ import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
 import { useToast } from '@/hooks/use-toast';
-import { Loader2, Users, Building, CreditCard, AlertTriangle, Wallet, FileText, CheckCircle, XCircle, DollarSign, Edit, Trash2 } from 'lucide-react';
+import { Users, Building, CreditCard, AlertTriangle, DollarSign, Edit } from 'lucide-react';
 import CreateOwnerDialog from './CreateOwnerDialog';
 import EditOwnerDialog from './EditOwnerDialog';
-import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
+
 
 interface PharmacyOwner {
   id: string;
@@ -21,6 +21,7 @@ interface PharmacyOwner {
   phone?: string;
   pharmacy_address?: string;
   active: boolean;
+  manually_deactivated: boolean;
   subscription: {
     subscription_credit: number;
     status: string;
@@ -28,26 +29,12 @@ interface PharmacyOwner {
     last_credit_deduction: string;
   } | null;
   branch_count: number;
-  pending_payments: number;
 }
 
-interface PaymentRequest {
-  id: string;
-  pharmacy_owner_id: string;
-  pharmacy_owner_name: string;
-  amount: number;
-  months_requested: number;
-  payment_method: string;
-  transaction_reference: string;
-  status: string;
-  created_at: string;
-}
 
 export default function DeveloperDashboard() {
   const [owners, setOwners] = useState<PharmacyOwner[]>([]);
-  const [paymentRequests, setPaymentRequests] = useState<PaymentRequest[]>([]);
   const [loading, setLoading] = useState(true);
-  const [paymentLoading, setPaymentLoading] = useState(true);
   const [selectedOwner, setSelectedOwner] = useState<PharmacyOwner | null>(null);
   const [editOwner, setEditOwner] = useState<PharmacyOwner | null>(null);
   const [editDialogOpen, setEditDialogOpen] = useState(false);
@@ -59,7 +46,6 @@ export default function DeveloperDashboard() {
 
   useEffect(() => {
     fetchPharmacyOwners();
-    fetchPaymentRequests();
   }, []);
 
   const fetchPharmacyOwners = async () => {
@@ -75,6 +61,7 @@ export default function DeveloperDashboard() {
           phone,
           pharmacy_address,
           active,
+          manually_deactivated,
           created_at
         `)
         .eq('role', 'owner');
@@ -107,13 +94,6 @@ export default function DeveloperDashboard() {
             .select('id', { count: 'exact' })
             .eq('pharmacy_owner_id', profile.id);
 
-          // Get pending payment requests count
-          const { count: pendingPayments } = await supabase
-            .from('payment_requests')
-            .select('id', { count: 'exact' })
-            .eq('pharmacy_owner_id', profile.id)
-            .eq('status', 'pending');
-
           return {
             id: profile.id,
             full_name: profile.full_name,
@@ -121,14 +101,14 @@ export default function DeveloperDashboard() {
             phone: profile.phone,
             pharmacy_address: profile.pharmacy_address,
             active: profile.active,
+            manually_deactivated: profile.manually_deactivated,
             subscription: subscription || {
               subscription_credit: 0,
               status: 'expired',
               deposit_amount: 0,
               last_credit_deduction: new Date().toISOString()
             },
-            branch_count: branchCount || 0,
-            pending_payments: pendingPayments || 0
+            branch_count: branchCount || 0
           };
         })
       );
@@ -147,45 +127,6 @@ export default function DeveloperDashboard() {
     }
   };
 
-  const fetchPaymentRequests = async () => {
-    try {
-      setPaymentLoading(true);
-      
-      const { data, error } = await supabase
-        .from('payment_requests')
-        .select('*')
-        .order('created_at', { ascending: false });
-
-      if (error) throw error;
-
-      // Get owner names for each payment request
-      const requestsWithOwnerNames = await Promise.all(
-        (data || []).map(async (request: any) => {
-          const { data: ownerData } = await supabase
-            .from('profiles')
-            .select('full_name')
-            .eq('id', request.pharmacy_owner_id)
-            .single();
-
-          return {
-            ...request,
-            pharmacy_owner_name: ownerData?.full_name || 'Unknown'
-          };
-        })
-      );
-
-      setPaymentRequests(requestsWithOwnerNames);
-    } catch (error: any) {
-      console.error('Error fetching payment requests:', error);
-      toast({
-        title: "Error",
-        description: "Failed to fetch payment requests",
-        variant: "destructive"
-      });
-    } finally {
-      setPaymentLoading(false);
-    }
-  };
 
   const addCredit = async (ownerId: string, days: number) => {
     try {
@@ -273,58 +214,6 @@ export default function DeveloperDashboard() {
     }
   };
 
-  const approvePayment = async (requestId: string, ownerId: string, monthsRequested: number) => {
-    try {
-      // First approve the payment request
-      const { error: approveError } = await supabase
-        .from('payment_requests')
-        .update({ status: 'approved' })
-        .eq('id', requestId);
-
-      if (approveError) throw approveError;
-
-      // Then add credit to the subscription
-      const daysToAdd = monthsRequested * 30;
-      await addCredit(ownerId, daysToAdd);
-
-      toast({
-        title: "Success",
-        description: `Payment approved and ${daysToAdd} days credit added`
-      });
-
-      fetchPaymentRequests();
-    } catch (error: any) {
-      toast({
-        title: "Error",
-        description: error.message,
-        variant: "destructive"
-      });
-    }
-  };
-
-  const declinePayment = async (requestId: string) => {
-    try {
-      const { error } = await supabase
-        .from('payment_requests')
-        .update({ status: 'declined' })
-        .eq('id', requestId);
-
-      if (error) throw error;
-
-      toast({
-        title: "Success",
-        description: "Payment request declined"
-      });
-
-      fetchPaymentRequests();
-    } catch (error: any) {
-      toast({
-        title: "Error",
-        description: error.message,
-        variant: "destructive"
-      });
-    }
-  };
 
   const triggerDailyDeduction = async () => {
     try {
@@ -349,30 +238,35 @@ export default function DeveloperDashboard() {
     }
   };
 
-  const deleteOwner = async (ownerId: string, ownerName: string) => {
-    if (!confirm(`Are you sure you want to delete ${ownerName}? This action cannot be undone.`)) {
+  const toggleAccountStatus = async (ownerId: string, ownerName: string, currentStatus: boolean) => {
+    const action = currentStatus ? 'deactivate' : 'reactivate';
+    
+    if (!confirm(`Are you sure you want to ${action} ${ownerName}?`)) {
       return;
     }
 
     try {
-      // Delete from profiles table (cascading will handle related data)
+      // Update account status and manually_deactivated flag
       const { error } = await supabase
         .from('profiles')
-        .delete()
+        .update({ 
+          active: !currentStatus,
+          manually_deactivated: !currentStatus // Set to true when deactivating, false when reactivating
+        })
         .eq('id', ownerId);
 
       if (error) throw error;
 
       toast({
         title: "Success",
-        description: `${ownerName} has been deleted successfully`
+        description: `${ownerName} has been ${action}d successfully`
       });
 
       fetchPharmacyOwners();
     } catch (error: any) {
       toast({
         title: "Error",
-        description: error.message || "Failed to delete owner",
+        description: error.message || `Failed to ${action} owner`,
         variant: "destructive"
       });
     }
@@ -396,10 +290,18 @@ export default function DeveloperDashboard() {
     }
   };
 
-  const getAccountStatusBadge = (active: boolean) => {
-    return active 
-      ? <Badge className="bg-green-100 text-green-800">Active</Badge>
-      : <Badge className="bg-red-100 text-red-800">Deactivated</Badge>;
+  const getAccountStatusBadge = (active: boolean, manuallyDeactivated: boolean, subscriptionStatus: string | null) => {
+    if (active) {
+      return <Badge className="bg-green-100 text-green-800">Active</Badge>;
+    } else {
+      if (manuallyDeactivated) {
+        return <Badge className="bg-red-100 text-red-800">Deactivated</Badge>;
+      } else if (subscriptionStatus === 'expired') {
+        return <Badge className="bg-orange-100 text-orange-800">Expired</Badge>;
+      } else {
+        return <Badge className="bg-red-100 text-red-800">Inactive</Badge>;
+      }
+    }
   };
 
   if (loading) {
@@ -457,29 +359,24 @@ export default function DeveloperDashboard() {
 
         <Card>
           <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
-            <CardTitle className="text-sm font-medium">Pending Payments</CardTitle>
+            <CardTitle className="text-sm font-medium">Deactivated Accounts</CardTitle>
             <DollarSign className="h-4 w-4 text-muted-foreground" />
           </CardHeader>
           <CardContent>
             <div className="text-2xl font-bold">
-              {owners.reduce((sum, o) => sum + o.pending_payments, 0)}
+              {owners.filter(o => !o.active).length}
             </div>
           </CardContent>
         </Card>
       </div>
 
-      <Tabs defaultValue="owners" className="w-full">
-        <TabsList>
-          <TabsTrigger value="owners">Pharmacy Owners</TabsTrigger>
-          <TabsTrigger value="payments">Payment Requests</TabsTrigger>
-        </TabsList>
+      <div className="w-full">
         
-        <TabsContent value="owners">
-          <Card>
-            <CardHeader>
-              <CardTitle>Pharmacy Owners</CardTitle>
-              <CardDescription>Manage owner accounts, subscriptions, and activation status</CardDescription>
-            </CardHeader>
+        <Card>
+          <CardHeader>
+            <CardTitle>Pharmacy Owners</CardTitle>
+            <CardDescription>Manage owner accounts, subscriptions, and activation status</CardDescription>
+          </CardHeader>
             <CardContent>
               <Table>
                 <TableHeader>
@@ -502,7 +399,7 @@ export default function DeveloperDashboard() {
                           <div className="text-sm text-muted-foreground">{owner.email}</div>
                         </div>
                       </TableCell>
-                      <TableCell>{getAccountStatusBadge(owner.active)}</TableCell>
+                      <TableCell>{getAccountStatusBadge(owner.active, owner.manually_deactivated, owner.subscription?.status || null)}</TableCell>
                       <TableCell>{getStatusBadge(owner.subscription?.status || null)}</TableCell>
                       <TableCell>{owner.subscription?.subscription_credit || 0}</TableCell>
                       <TableCell>{owner.branch_count}</TableCell>
@@ -577,12 +474,11 @@ export default function DeveloperDashboard() {
                           </Dialog>
 
                           <Button 
-                            variant="destructive" 
+                            variant={owner.active ? "destructive" : "default"}
                             size="sm"
-                            onClick={() => deleteOwner(owner.id, owner.full_name)}
+                            onClick={() => toggleAccountStatus(owner.id, owner.full_name, owner.active)}
                           >
-                            <Trash2 className="h-4 w-4 mr-1" />
-                            Delete
+                            {owner.active ? 'Inactivate Account' : 'Reactivate Account'}
                           </Button>
                         </div>
                       </TableCell>
@@ -591,82 +487,8 @@ export default function DeveloperDashboard() {
                 </TableBody>
               </Table>
             </CardContent>
-          </Card>
-        </TabsContent>
-
-        <TabsContent value="payments">
-          <Card>
-            <CardHeader>
-              <CardTitle>Payment Requests</CardTitle>
-              <CardDescription>Review and manage payment requests from pharmacy owners</CardDescription>
-            </CardHeader>
-            <CardContent>
-              {paymentLoading ? (
-                <div className="flex justify-center items-center h-32">
-                  <Loader2 className="h-8 w-8 animate-spin" />
-                </div>
-              ) : (
-                <Table>
-                  <TableHeader>
-                    <TableRow>
-                      <TableHead>Owner</TableHead>
-                      <TableHead>Amount</TableHead>
-                      <TableHead>Months</TableHead>
-                      <TableHead>Payment Method</TableHead>
-                      <TableHead>Status</TableHead>
-                      <TableHead>Date</TableHead>
-                      <TableHead>Actions</TableHead>
-                    </TableRow>
-                  </TableHeader>
-                  <TableBody>
-                    {paymentRequests.map((request) => (
-                      <TableRow key={request.id}>
-                        <TableCell className="font-medium">{request.pharmacy_owner_name}</TableCell>
-                        <TableCell>${request.amount}</TableCell>
-                        <TableCell>{request.months_requested}</TableCell>
-                        <TableCell>{request.payment_method}</TableCell>
-                        <TableCell>
-                          {request.status === 'pending' && (
-                            <Badge className="bg-yellow-100 text-yellow-800">Pending</Badge>
-                          )}
-                          {request.status === 'approved' && (
-                            <Badge className="bg-green-100 text-green-800">Approved</Badge>
-                          )}
-                          {request.status === 'declined' && (
-                            <Badge className="bg-red-100 text-red-800">Declined</Badge>
-                          )}
-                        </TableCell>
-                        <TableCell>{new Date(request.created_at).toLocaleDateString()}</TableCell>
-                        <TableCell>
-                          {request.status === 'pending' && (
-                            <div className="flex gap-2">
-                              <Button
-                                size="sm"
-                                onClick={() => approvePayment(request.id, request.pharmacy_owner_id, request.months_requested)}
-                              >
-                                <CheckCircle className="h-4 w-4 mr-1" />
-                                Approve
-                              </Button>
-                              <Button
-                                variant="destructive"
-                                size="sm"
-                                onClick={() => declinePayment(request.id)}
-                              >
-                                <XCircle className="h-4 w-4 mr-1" />
-                                Decline
-                              </Button>
-                            </div>
-                          )}
-                        </TableCell>
-                      </TableRow>
-                    ))}
-                  </TableBody>
-                </Table>
-              )}
-            </CardContent>
-          </Card>
-        </TabsContent>
-      </Tabs>
+        </Card>
+      </div>
 
       {/* System Actions */}
       <Card>

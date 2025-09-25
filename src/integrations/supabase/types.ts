@@ -240,6 +240,7 @@ export type Database = {
           created_at: string | null
           full_name: string
           id: string
+          manually_deactivated: boolean | null
           pharmacy_address: string | null
           phone: string | null
           role: Database["public"]["Enums"]["user_role"]
@@ -253,6 +254,7 @@ export type Database = {
           created_at?: string | null
           full_name: string
           id: string
+          manually_deactivated?: boolean | null
           pharmacy_address?: string | null
           phone?: string | null
           role?: Database["public"]["Enums"]["user_role"]
@@ -266,6 +268,7 @@ export type Database = {
           created_at?: string | null
           full_name?: string
           id?: string
+          manually_deactivated?: boolean | null
           pharmacy_address?: string | null
           phone?: string | null
           role?: Database["public"]["Enums"]["user_role"]
