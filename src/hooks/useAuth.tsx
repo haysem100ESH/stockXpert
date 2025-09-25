@@ -133,38 +133,17 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     if (data.user) {
       const { data: profile } = await supabase
         .from('profiles')
-        .select('active, role, manually_deactivated')
+        .select('active, role')
         .eq('id', data.user.id)
         .single();
 
       if (profile && !profile.active) {
         // Sign out the user immediately
         await supabase.auth.signOut();
-        
-        let errorMessage = "Your account has been deactivated. Please contact support.";
-        let toastTitle = "Account Deactivated";
-        
-        if (profile.manually_deactivated) {
-          errorMessage = "🚫 Your account has been deactivated by the system administrator. Please contact support.";
-          toastTitle = "Account Deactivated by Administrator";
-        } else {
-          // Check if subscription expired
-          const { data: subscription } = await supabase
-            .from('pharmacy_subscriptions')
-            .select('status, subscription_credit')
-            .eq('pharmacy_owner_id', data.user.id)
-            .single();
-          
-          if (subscription && subscription.status === 'expired' && subscription.subscription_credit <= 0) {
-            errorMessage = "Your subscription has expired and your account has been deactivated. Please renew your subscription.";
-            toastTitle = "Subscription Expired";
-          }
-        }
-        
-        const deactivatedError = new Error(errorMessage);
+        const deactivatedError = new Error('🚫 Your account has been deactivated by the system administrator. Please contact support.');
         toast({
-          title: toastTitle,
-          description: errorMessage,
+          title: "Account Deactivated",
+          description: "🚫 Your account has been deactivated by the system administrator. Please contact support.",
           variant: "destructive"
         });
         return { error: deactivatedError };

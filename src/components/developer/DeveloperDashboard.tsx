@@ -4,15 +4,14 @@ import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/com
 import { Button } from '@/components/ui/button';
 import { Badge } from '@/components/ui/badge';
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@/components/ui/table';
-import { Dialog, DialogContent, DialogDescription, DialogHeader, DialogTitle, DialogTrigger, DialogFooter } from '@/components/ui/dialog';
+import { Dialog, DialogContent, DialogDescription, DialogHeader, DialogTitle, DialogTrigger } from '@/components/ui/dialog';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
 import { useToast } from '@/hooks/use-toast';
-import { Users, Building, CreditCard, AlertTriangle, DollarSign, Edit } from 'lucide-react';
+import { Users, Building, CreditCard, AlertTriangle, Edit, UserX, UserCheck } from 'lucide-react';
 import CreateOwnerDialog from './CreateOwnerDialog';
 import EditOwnerDialog from './EditOwnerDialog';
-
 
 interface PharmacyOwner {
   id: string;
@@ -21,7 +20,7 @@ interface PharmacyOwner {
   phone?: string;
   pharmacy_address?: string;
   active: boolean;
-  manually_deactivated: boolean;
+  manually_deactivated?: boolean;
   subscription: {
     subscription_credit: number;
     status: string;
@@ -31,15 +30,12 @@ interface PharmacyOwner {
   branch_count: number;
 }
 
-
 export default function DeveloperDashboard() {
   const [owners, setOwners] = useState<PharmacyOwner[]>([]);
   const [loading, setLoading] = useState(true);
   const [selectedOwner, setSelectedOwner] = useState<PharmacyOwner | null>(null);
   const [editOwner, setEditOwner] = useState<PharmacyOwner | null>(null);
   const [editDialogOpen, setEditDialogOpen] = useState(false);
-  const [creditDialogOpen, setCreditDialogOpen] = useState(false);
-  const [depositDialogOpen, setDepositDialogOpen] = useState(false);
   const [creditAmount, setCreditAmount] = useState<number>(30);
   const [depositAmount, setDepositAmount] = useState<number>(0);
   const { toast } = useToast();
@@ -127,7 +123,6 @@ export default function DeveloperDashboard() {
     }
   };
 
-
   const addCredit = async (ownerId: string, days: number) => {
     try {
       // Get current subscription first
@@ -160,11 +155,14 @@ export default function DeveloperDashboard() {
 
       if (error) throw error;
 
-      // If adding credit and status becomes active, reactivate the account
+      // If adding credit and status becomes active, reactivate the account only if it wasn't manually deactivated
       if (newStatus === 'active' || newStatus === 'expiring_soon') {
         await supabase
           .from('profiles')
-          .update({ active: true })
+          .update({ 
+            active: true,
+            manually_deactivated: false // Reset manual deactivation when adding credit
+          })
           .eq('id', ownerId)
           .eq('role', 'owner');
       }
@@ -174,7 +172,6 @@ export default function DeveloperDashboard() {
         description: `Added ${days} days credit successfully. Account ${newStatus === 'active' || newStatus === 'expiring_soon' ? 'activated' : 'remains deactivated'}.`
       });
 
-      setCreditDialogOpen(false);
       fetchPharmacyOwners();
     } catch (error: any) {
       toast({
@@ -203,7 +200,6 @@ export default function DeveloperDashboard() {
         description: "Deposit amount updated successfully"
       });
 
-      setDepositDialogOpen(false);
       fetchPharmacyOwners();
     } catch (error: any) {
       toast({
@@ -213,7 +209,6 @@ export default function DeveloperDashboard() {
       });
     }
   };
-
 
   const triggerDailyDeduction = async () => {
     try {
@@ -239,19 +234,19 @@ export default function DeveloperDashboard() {
   };
 
   const toggleAccountStatus = async (ownerId: string, ownerName: string, currentStatus: boolean) => {
-    const action = currentStatus ? 'deactivate' : 'reactivate';
+    const newStatus = !currentStatus;
+    const action = newStatus ? 'reactivate' : 'inactivate';
     
-    if (!confirm(`Are you sure you want to ${action} ${ownerName}?`)) {
+    if (!confirm(`Are you sure you want to ${action} ${ownerName}'s account?`)) {
       return;
     }
 
     try {
-      // Update account status and manually_deactivated flag
       const { error } = await supabase
         .from('profiles')
         .update({ 
-          active: !currentStatus,
-          manually_deactivated: !currentStatus // Set to true when deactivating, false when reactivating
+          active: newStatus,
+          manually_deactivated: !newStatus // Set manually_deactivated when we're deactivating
         })
         .eq('id', ownerId);
 
@@ -259,14 +254,14 @@ export default function DeveloperDashboard() {
 
       toast({
         title: "Success",
-        description: `${ownerName} has been ${action}d successfully`
+        description: `${ownerName}'s account has been ${action}d successfully`
       });
 
       fetchPharmacyOwners();
     } catch (error: any) {
       toast({
         title: "Error",
-        description: error.message || `Failed to ${action} owner`,
+        description: error.message || `Failed to ${action} account`,
         variant: "destructive"
       });
     }
@@ -290,18 +285,17 @@ export default function DeveloperDashboard() {
     }
   };
 
-  const getAccountStatusBadge = (active: boolean, manuallyDeactivated: boolean, subscriptionStatus: string | null) => {
-    if (active) {
-      return <Badge className="bg-green-100 text-green-800">Active</Badge>;
-    } else {
+  const getAccountStatusBadge = (active: boolean, manuallyDeactivated?: boolean, subscriptionStatus?: string) => {
+    if (!active) {
       if (manuallyDeactivated) {
         return <Badge className="bg-red-100 text-red-800">Deactivated</Badge>;
       } else if (subscriptionStatus === 'expired') {
         return <Badge className="bg-orange-100 text-orange-800">Expired</Badge>;
       } else {
-        return <Badge className="bg-red-100 text-red-800">Inactive</Badge>;
+        return <Badge className="bg-red-100 text-red-800">Deactivated</Badge>;
       }
     }
+    return <Badge className="bg-green-100 text-green-800">Active</Badge>;
   };
 
   if (loading) {
@@ -360,7 +354,7 @@ export default function DeveloperDashboard() {
         <Card>
           <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
             <CardTitle className="text-sm font-medium">Deactivated Accounts</CardTitle>
-            <DollarSign className="h-4 w-4 text-muted-foreground" />
+            <UserX className="h-4 w-4 text-muted-foreground" />
           </CardHeader>
           <CardContent>
             <div className="text-2xl font-bold">
@@ -370,125 +364,133 @@ export default function DeveloperDashboard() {
         </Card>
       </div>
 
-      <div className="w-full">
-        
-        <Card>
-          <CardHeader>
-            <CardTitle>Pharmacy Owners</CardTitle>
-            <CardDescription>Manage owner accounts, subscriptions, and activation status</CardDescription>
-          </CardHeader>
-            <CardContent>
-              <Table>
-                <TableHeader>
-                  <TableRow>
-                    <TableHead>Owner Name</TableHead>
-                    <TableHead>Account Status</TableHead>
-                    <TableHead>Subscription</TableHead>
-                    <TableHead>Credit (Days)</TableHead>
-                    <TableHead>Branches</TableHead>
-                    <TableHead>Deposit</TableHead>
-                    <TableHead>Actions</TableHead>
-                  </TableRow>
-                </TableHeader>
-                <TableBody>
-                  {owners.map((owner) => (
-                    <TableRow key={owner.id}>
-                      <TableCell>
-                        <div>
-                          <div className="font-medium">{owner.full_name}</div>
-                          <div className="text-sm text-muted-foreground">{owner.email}</div>
-                        </div>
-                      </TableCell>
-                      <TableCell>{getAccountStatusBadge(owner.active, owner.manually_deactivated, owner.subscription?.status || null)}</TableCell>
-                      <TableCell>{getStatusBadge(owner.subscription?.status || null)}</TableCell>
-                      <TableCell>{owner.subscription?.subscription_credit || 0}</TableCell>
-                      <TableCell>{owner.branch_count}</TableCell>
-                      <TableCell>${owner.subscription?.deposit_amount || 0}</TableCell>
-                      <TableCell>
-                        <div className="flex gap-2">
+      {/* Pharmacy Owners Table */}
+      <Card>
+        <CardHeader>
+          <CardTitle>Pharmacy Owners</CardTitle>
+          <CardDescription>Manage owner accounts, subscriptions, and activation status</CardDescription>
+        </CardHeader>
+        <CardContent>
+          <Table>
+            <TableHeader>
+              <TableRow>
+                <TableHead>Owner Name</TableHead>
+                <TableHead>Account Status</TableHead>
+                <TableHead>Subscription</TableHead>
+                <TableHead>Credit (Days)</TableHead>
+                <TableHead>Branches</TableHead>
+                <TableHead>Deposit</TableHead>
+                <TableHead>Actions</TableHead>
+              </TableRow>
+            </TableHeader>
+            <TableBody>
+              {owners.map((owner) => (
+                <TableRow key={owner.id}>
+                  <TableCell>
+                    <div>
+                      <div className="font-medium">{owner.full_name}</div>
+                      <div className="text-sm text-muted-foreground">{owner.email}</div>
+                    </div>
+                  </TableCell>
+                  <TableCell>{getAccountStatusBadge(owner.active, owner.manually_deactivated, owner.subscription?.status)}</TableCell>
+                  <TableCell>{getStatusBadge(owner.subscription?.status || null)}</TableCell>
+                  <TableCell>{owner.subscription?.subscription_credit || 0}</TableCell>
+                  <TableCell>{owner.branch_count}</TableCell>
+                  <TableCell>${owner.subscription?.deposit_amount || 0}</TableCell>
+                  <TableCell>
+                    <div className="flex gap-2">
+                      <Button 
+                        variant="outline" 
+                        size="sm"
+                        onClick={() => handleEditOwner(owner)}
+                      >
+                        <Edit className="h-4 w-4 mr-1" />
+                        Edit
+                      </Button>
+                      
+                      <Dialog>
+                        <DialogTrigger asChild>
                           <Button 
                             variant="outline" 
                             size="sm"
-                            onClick={() => handleEditOwner(owner)}
+                            onClick={() => setSelectedOwner(owner)}
                           >
-                            <Edit className="h-4 w-4 mr-1" />
-                            Edit
+                            Manage
                           </Button>
+                        </DialogTrigger>
+                        <DialogContent>
+                          <DialogHeader>
+                            <DialogTitle>Manage {owner.full_name}</DialogTitle>
+                            <DialogDescription>
+                              Update subscription credit and deposit amount
+                            </DialogDescription>
+                          </DialogHeader>
                           
-                          <Dialog>
-                            <DialogTrigger asChild>
-                              <Button 
-                                variant="outline" 
-                                size="sm"
-                                onClick={() => setSelectedOwner(owner)}
-                              >
-                                Manage
-                              </Button>
-                            </DialogTrigger>
-                            <DialogContent>
-                              <DialogHeader>
-                                <DialogTitle>Manage {owner.full_name}</DialogTitle>
-                                <DialogDescription>
-                                  Update subscription credit and deposit amount
-                                </DialogDescription>
-                              </DialogHeader>
-                              
-                              <div className="space-y-4">
-                                <div>
-                                  <Label htmlFor="credit">Add Credit (Days)</Label>
-                                  <div className="flex gap-2 mt-2">
-                                    <Select value={creditAmount.toString()} onValueChange={(val) => setCreditAmount(Number(val))}>
-                                      <SelectTrigger>
-                                        <SelectValue />
-                                      </SelectTrigger>
-                                      <SelectContent>
-                                        <SelectItem value="30">1 Month (30 days)</SelectItem>
-                                        <SelectItem value="60">2 Months (60 days)</SelectItem>
-                                        <SelectItem value="90">3 Months (90 days)</SelectItem>
-                                        <SelectItem value="180">6 Months (180 days)</SelectItem>
-                                        <SelectItem value="365">1 Year (365 days)</SelectItem>
-                                      </SelectContent>
-                                    </Select>
-                                    <Button onClick={() => addCredit(owner.id, creditAmount)}>
-                                      Add Credit
-                                    </Button>
-                                  </div>
-                                </div>
-
-                                <div>
-                                  <Label htmlFor="deposit">Update Deposit Amount</Label>
-                                  <div className="flex gap-2 mt-2">
-                                    <Input
-                                      type="number"
-                                      value={depositAmount}
-                                      onChange={(e) => setDepositAmount(Number(e.target.value))}
-                                      placeholder="Enter amount"
-                                    />
-                                    <Button onClick={() => updateDeposit(owner.id, depositAmount)}>
-                                      Update
-                                    </Button>
-                                  </div>
-                                </div>
+                          <div className="space-y-4">
+                            <div>
+                              <Label htmlFor="credit">Add Credit (Days)</Label>
+                              <div className="flex gap-2 mt-2">
+                                <Select value={creditAmount.toString()} onValueChange={(val) => setCreditAmount(Number(val))}>
+                                  <SelectTrigger>
+                                    <SelectValue />
+                                  </SelectTrigger>
+                                  <SelectContent>
+                                    <SelectItem value="30">1 Month (30 days)</SelectItem>
+                                    <SelectItem value="60">2 Months (60 days)</SelectItem>
+                                    <SelectItem value="90">3 Months (90 days)</SelectItem>
+                                    <SelectItem value="180">6 Months (180 days)</SelectItem>
+                                    <SelectItem value="365">1 Year (365 days)</SelectItem>
+                                  </SelectContent>
+                                </Select>
+                                <Button onClick={() => addCredit(owner.id, creditAmount)}>
+                                  Add Credit
+                                </Button>
                               </div>
-                            </DialogContent>
-                          </Dialog>
+                            </div>
 
-                          <Button 
-                            variant={owner.active ? "destructive" : "default"}
-                            size="sm"
-                            onClick={() => toggleAccountStatus(owner.id, owner.full_name, owner.active)}
-                          >
-                            {owner.active ? 'Inactivate Account' : 'Reactivate Account'}
-                          </Button>
-                        </div>
-                      </TableCell>
-                    </TableRow>
-                  ))}
-                </TableBody>
-              </Table>
-            </CardContent>
-        </Card>
-      </div>
+                            <div>
+                              <Label htmlFor="deposit">Update Deposit Amount</Label>
+                              <div className="flex gap-2 mt-2">
+                                <Input
+                                  type="number"
+                                  value={depositAmount}
+                                  onChange={(e) => setDepositAmount(Number(e.target.value))}
+                                  placeholder="Enter amount"
+                                />
+                                <Button onClick={() => updateDeposit(owner.id, depositAmount)}>
+                                  Update
+                                </Button>
+                              </div>
+                            </div>
+                          </div>
+                        </DialogContent>
+                      </Dialog>
+
+                      <Button 
+                        variant={owner.active ? "destructive" : "default"} 
+                        size="sm"
+                        onClick={() => toggleAccountStatus(owner.id, owner.full_name, owner.active)}
+                      >
+                        {owner.active ? (
+                          <>
+                            <UserX className="h-4 w-4 mr-1" />
+                            Inactivate
+                          </>
+                        ) : (
+                          <>
+                            <UserCheck className="h-4 w-4 mr-1" />
+                            Reactivate
+                          </>
+                        )}
+                      </Button>
+                    </div>
+                  </TableCell>
+                </TableRow>
+              ))}
+            </TableBody>
+          </Table>
+        </CardContent>
+      </Card>
 
       {/* System Actions */}
       <Card>
