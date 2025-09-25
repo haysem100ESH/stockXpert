@@ -132,18 +132,24 @@ export default function Dashboard() {
         .select('total_amount, created_at, payment_method, discount_amount')
         .gte('created_at', start.toISOString())
         .lte('created_at', end.toISOString());
-      if (effectiveBranchId) {
+      // For staff, always filter by their branch
+      if (profile?.role === 'staff') {
+        salesQuery = salesQuery.eq('branch_id', userBranch || profile?.branch_id);
+      } else if (effectiveBranchId) {
         salesQuery = salesQuery.eq('branch_id', effectiveBranchId);
       }
       const { data: salesData } = await salesQuery;
       
       const totalRevenue = salesData?.reduce((sum, sale) => sum + Number(sale.total_amount), 0) || 0;
 
-      // Fetch total products and stock info
+      // Fetch total products and stock info  
       let medicinesQuery = supabase
         .from('medicines')
         .select('stock_quantity, minimum_stock_level');
-      if (effectiveBranchId) {
+      // For staff, always filter by their branch - no data without branch filter
+      if (profile?.role === 'staff') {
+        medicinesQuery = medicinesQuery.eq('branch_id', userBranch || profile?.branch_id);
+      } else if (effectiveBranchId) {
         medicinesQuery = medicinesQuery.eq('branch_id', effectiveBranchId);
       }
       const { data: medicinesData } = await medicinesQuery;
@@ -160,7 +166,10 @@ export default function Dashboard() {
         .select('id')
         .gte('created_at', start.toISOString())
         .lte('created_at', end.toISOString());
-      if (effectiveBranchId) {
+      // For staff, always filter by their branch
+      if (profile?.role === 'staff') {
+        periodSalesQuery = periodSalesQuery.eq('branch_id', userBranch || profile?.branch_id);
+      } else if (effectiveBranchId) {
         periodSalesQuery = periodSalesQuery.eq('branch_id', effectiveBranchId);
       }
       const { data: periodSalesData } = await periodSalesQuery;
@@ -172,7 +181,10 @@ export default function Dashboard() {
         .from('medicines')
         .select('id, name, category, stock_quantity')
         .eq('stock_quantity', 0);
-      if (effectiveBranchId) {
+      // For staff, always filter by their branch
+      if (profile?.role === 'staff') {
+        outOfStockQuery = outOfStockQuery.eq('branch_id', userBranch || profile?.branch_id);
+      } else if (effectiveBranchId) {
         outOfStockQuery = outOfStockQuery.eq('branch_id', effectiveBranchId);
       }
       const { data: outOfStockDetails } = await outOfStockQuery;
@@ -182,7 +194,10 @@ export default function Dashboard() {
         .from('medicines')
         .select('id, name, category, stock_quantity, minimum_stock_level')
         .gt('stock_quantity', 0);
-      if (effectiveBranchId) {
+      // For staff, always filter by their branch
+      if (profile?.role === 'staff') {
+        lowStockQuery = lowStockQuery.eq('branch_id', userBranch || profile?.branch_id);
+      } else if (effectiveBranchId) {
         lowStockQuery = lowStockQuery.eq('branch_id', effectiveBranchId);
       }
       const { data: lowStockSource } = await lowStockQuery;
@@ -198,7 +213,10 @@ export default function Dashboard() {
           .not('expiry_date', 'is', null)
           .lte('expiry_date', thirtyDaysFromNow.toISOString().split('T')[0])
           .gte('expiry_date', new Date().toISOString().split('T')[0]);
-        if (effectiveBranchId) {
+        // For staff, always filter by their branch
+        if (profile?.role === 'staff') {
+          expiringQuery = expiringQuery.eq('branch_id', userBranch || profile?.branch_id);
+        } else if (effectiveBranchId) {
           expiringQuery = expiringQuery.eq('branch_id', effectiveBranchId);
         }
         return expiringQuery;
@@ -211,7 +229,10 @@ export default function Dashboard() {
           .select('id, name, category, expiry_date')
           .not('expiry_date', 'is', null)
           .lte('expiry_date', new Date().toISOString().split('T')[0]);
-        if (effectiveBranchId) {
+        // For staff, always filter by their branch
+        if (profile?.role === 'staff') {
+          expiredQuery = expiredQuery.eq('branch_id', userBranch || profile?.branch_id);
+        } else if (effectiveBranchId) {
           expiredQuery = expiredQuery.eq('branch_id', effectiveBranchId);
         }
         return expiredQuery;
@@ -237,7 +258,10 @@ export default function Dashboard() {
           `)
           .gte('created_at', start.toISOString())
           .lte('created_at', end.toISOString());
-        if (effectiveBranchId) {
+        // For staff, always filter by their branch
+        if (profile?.role === 'staff') {
+          salesWithItemsQuery = salesWithItemsQuery.eq('branch_id', userBranch || profile?.branch_id);
+        } else if (effectiveBranchId) {
           salesWithItemsQuery = salesWithItemsQuery.eq('branch_id', effectiveBranchId);
         }
         return salesWithItemsQuery;
@@ -290,7 +314,10 @@ export default function Dashboard() {
           .select('amount, created_at')
           .gte('created_at', start.toISOString())
           .lte('created_at', end.toISOString());
-        if (effectiveBranchId) {
+        // For staff, always filter by their branch
+        if (profile?.role === 'staff') {
+          expensesQuery = expensesQuery.eq('branch_id', userBranch || profile?.branch_id);
+        } else if (effectiveBranchId) {
           expensesQuery = expensesQuery.eq('branch_id', effectiveBranchId);
         }
         return expensesQuery;
