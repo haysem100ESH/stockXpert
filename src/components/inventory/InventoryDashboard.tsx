@@ -6,6 +6,7 @@ import { AlertTriangle, Package, CalendarDays } from 'lucide-react';
 import { supabase } from '@/integrations/supabase/client';
 import { useToast } from '@/hooks/use-toast';
 import { ConfirmationDialog } from '@/components/ui/confirmation-dialog';
+import { useBranchContext } from '@/hooks/useBranchContext';
 
 interface OutOfStockItem {
   id: string;
@@ -54,10 +55,11 @@ export default function InventoryDashboard() {
     medicineName: ''
   });
   const { toast } = useToast();
+  const { selectedBranch } = useBranchContext();
 
   useEffect(() => {
     fetchInventoryData();
-  }, []);
+  }, [selectedBranch]);
 
   // Set up real-time subscription for medicines table changes
   useEffect(() => {
@@ -86,36 +88,72 @@ export default function InventoryDashboard() {
   const fetchInventoryData = async () => {
     try {
       // Fetch out of stock items
-      const { data: outOfStockDetails } = await supabase
+      let outOfStockQuery = supabase
         .from('medicines')
         .select('id, name, category, stock_quantity')
         .eq('stock_quantity', 0);
+      
+      if (selectedBranch) {
+        outOfStockQuery = outOfStockQuery.eq('branch_id', selectedBranch);
+      }
+
+      const { data: outOfStockDetails } = await outOfStockQuery;
 
       // Fetch low stock items
-      const { data: lowStockDetails } = await supabase
+      let lowStockQuery = supabase
         .from('low_stock_medicines')
         .select('id, name, category, stock_quantity, minimum_stock_level');
+
+      // Note: The low_stock_medicines view doesn't have branch_id, so we'll use direct query
+      let lowStockDirectQuery = supabase
+        .from('medicines')
+        .select('id, name, category, stock_quantity, minimum_stock_level')
+        .gt('stock_quantity', 0);
+      
+      if (selectedBranch) {
+        lowStockDirectQuery = lowStockDirectQuery.eq('branch_id', selectedBranch);
+      }
+
+      const { data: allMedicines } = await lowStockDirectQuery;
+      
+      // Filter low stock items client-side
+      const lowStockDetails = allMedicines?.filter(med => 
+        med.stock_quantity <= med.minimum_stock_level
+      ) || [];
 
       // Fetch expiring items (within 30 days, excluding today)
       const thirtyDaysFromNow = new Date();
       thirtyDaysFromNow.setDate(thirtyDaysFromNow.getDate() + 30);
       const tomorrow = new Date();
       tomorrow.setDate(tomorrow.getDate() + 1);
-      const { data: expiringDetails } = await supabase
+      
+      let expiringQuery = supabase
         .from('medicines')
         .select('id, name, category, expiry_date, stock_quantity')
         .not('expiry_date', 'is', null)
         .lte('expiry_date', thirtyDaysFromNow.toISOString().split('T')[0])
         .gte('expiry_date', tomorrow.toISOString().split('T')[0])
         .gt('stock_quantity', 0);
+      
+      if (selectedBranch) {
+        expiringQuery = expiringQuery.eq('branch_id', selectedBranch);
+      }
+
+      const { data: expiringDetails } = await expiringQuery;
 
       // Fetch expired items
-      const { data: expiredDetails } = await supabase
+      let expiredQuery = supabase
         .from('medicines')
         .select('id, name, category, expiry_date, stock_quantity')
         .not('expiry_date', 'is', null)
         .lte('expiry_date', new Date().toISOString().split('T')[0])
         .gt('stock_quantity', 0);
+      
+      if (selectedBranch) {
+        expiredQuery = expiredQuery.eq('branch_id', selectedBranch);
+      }
+
+      const { data: expiredDetails } = await expiredQuery;
 
       setOutOfStockItems(outOfStockDetails || []);
       setLowStockItems(lowStockDetails || []);

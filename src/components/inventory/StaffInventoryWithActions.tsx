@@ -8,6 +8,7 @@ import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
 import { Search, Edit2, Plus, Trash2, Filter } from 'lucide-react';
 import { supabase } from '@/integrations/supabase/client';
 import { useToast } from '@/hooks/use-toast';
+import { useBranchContext } from '@/hooks/useBranchContext';
 import AddMedicineDialog from './AddMedicineDialog';
 import EditMedicineDialog from './EditMedicineDialog';
 import { ConfirmationDialog } from '@/components/ui/confirmation-dialog';
@@ -47,10 +48,11 @@ export default function StaffInventoryWithActions() {
     medicineName: ''
   });
   const { toast } = useToast();
+  const { selectedBranch } = useBranchContext();
 
   useEffect(() => {
     fetchMedicines();
-  }, []);
+  }, [selectedBranch]);
 
   useEffect(() => {
     const filtered = medicines.filter(medicine => {
@@ -64,10 +66,17 @@ export default function StaffInventoryWithActions() {
 
   const fetchMedicines = async () => {
     try {
-      const { data, error } = await supabase
+      let query = supabase
         .from('medicines')
         .select('*')
         .order('name');
+
+      // Filter by selected branch if one is selected
+      if (selectedBranch) {
+        query = query.eq('branch_id', selectedBranch);
+      }
+
+      const { data, error } = await query;
 
       if (error) throw error;
       setMedicines(data || []);
