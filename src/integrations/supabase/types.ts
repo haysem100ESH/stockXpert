@@ -472,6 +472,10 @@ export type Database = {
       }
     }
     Functions: {
+      deduct_daily_credit: {
+        Args: Record<PropertyKey, never>
+        Returns: undefined
+      }
       get_profile_by_email: {
         Args: { user_email: string }
         Returns: {

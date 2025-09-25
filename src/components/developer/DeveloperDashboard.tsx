@@ -91,12 +91,8 @@ export default function DeveloperDashboard() {
       const ownersWithData = await Promise.all(
         profiles.map(async (profile: any) => {
           // Get actual email from auth.users via get_profile_by_email function
-          const { data: authData } = await supabase.rpc('get_profile_by_email', {
-            user_email: profile.full_name
-          });
-          
-          // Fallback email if we can't get the real one
-          const email = authData?.id ? `${profile.full_name.toLowerCase().replace(/\s+/g, '')}@pharmacy.com` : `${profile.full_name.toLowerCase().replace(/\s+/g, '')}@pharmacy.com`;
+          // Since we can't directly access auth.users, use a fallback email
+          const email = `${profile.full_name.toLowerCase().replace(/\s+/g, '')}@pharmacy.com`;
 
           // Get subscription data - use maybeSingle to handle cases where no subscription exists
           const { data: subscription } = await supabase
@@ -223,9 +219,18 @@ export default function DeveloperDashboard() {
 
       if (error) throw error;
 
+      // If adding credit and status becomes active, reactivate the account
+      if (newStatus === 'active' || newStatus === 'expiring_soon') {
+        await supabase
+          .from('profiles')
+          .update({ active: true })
+          .eq('id', ownerId)
+          .eq('role', 'owner');
+      }
+
       toast({
         title: "Success",
-        description: `Added ${days} days credit successfully`
+        description: `Added ${days} days credit successfully. Account ${newStatus === 'active' || newStatus === 'expiring_soon' ? 'activated' : 'remains deactivated'}.`
       });
 
       setCreditDialogOpen(false);
@@ -684,10 +689,6 @@ export default function DeveloperDashboard() {
         onOpenChange={setEditDialogOpen}
         onOwnerUpdated={fetchPharmacyOwners}
       />
-    </div>
-  );
-}
-      </Card>
     </div>
   );
 }
