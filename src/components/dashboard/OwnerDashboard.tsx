@@ -17,6 +17,7 @@ import { BarChart, Bar, XAxis, YAxis, CartesianGrid, ResponsiveContainer, PieCha
 import { supabase } from '@/integrations/supabase/client';
 import { useToast } from '@/hooks/use-toast';
 import { useBranchContext } from '@/hooks/useBranchContext';
+import { useAuth } from '@/hooks/useAuth';
 import InventoryManagement from '@/components/inventory/InventoryManagement';
 import SalesManagement from '@/components/sales/SalesManagement';
 import FinanceManagement from '@/components/finance/FinanceManagement';
@@ -66,16 +67,25 @@ export default function OwnerDashboard() {
   const [loading, setLoading] = useState(true);
   const { toast } = useToast();
   const { selectedBranch } = useBranchContext();
+  const { profile } = useAuth();
 
   useEffect(() => {
     fetchDashboardStats();
-  }, [selectedBranch]);
+  }, [selectedBranch, profile]);
 
   const fetchDashboardStats = async () => {
     try {
+      // Get user's branches first for "All Branches" filtering
+      const { data: userBranches } = await supabase
+        .from('pharmacy_branches')
+        .select('id')
+        .eq('pharmacy_owner_id', profile?.id);
+      
+      const userBranchIds = userBranches?.map(b => b.id) || [];
+
       // Build queries with branch filtering
-      let salesQuery = supabase.from('sales').select('total_amount, payment_method, discount_amount');
-      let medicinesQuery = supabase.from('medicines').select('stock_quantity, minimum_stock_level, expiry_date');
+      let salesQuery = supabase.from('sales').select('total_amount, payment_method, discount_amount, branch_id');
+      let medicinesQuery = supabase.from('medicines').select('stock_quantity, minimum_stock_level, expiry_date, branch_id');
       
       // For sale_items, we need to join with sales to get branch filtering
       let saleItemsQuery = supabase
@@ -86,9 +96,17 @@ export default function OwnerDashboard() {
         `);
 
       if (selectedBranch) {
+        // Filter by specific branch
         salesQuery = salesQuery.eq('branch_id', selectedBranch);
         medicinesQuery = medicinesQuery.eq('branch_id', selectedBranch);
         saleItemsQuery = saleItemsQuery.eq('sales.branch_id', selectedBranch);
+      } else {
+        // Filter by user's branches only (All Branches)
+        if (userBranchIds.length > 0) {
+          salesQuery = salesQuery.in('branch_id', userBranchIds);
+          medicinesQuery = medicinesQuery.in('branch_id', userBranchIds);
+          saleItemsQuery = saleItemsQuery.in('sales.branch_id', userBranchIds);
+        }
       }
 
       // Fetch data
@@ -113,6 +131,8 @@ export default function OwnerDashboard() {
       
       if (selectedBranch) {
         expiredQuery = expiredQuery.eq('branch_id', selectedBranch);
+      } else if (userBranchIds.length > 0) {
+        expiredQuery = expiredQuery.in('branch_id', userBranchIds);
       }
 
       const { data: expiredMedicinesData } = await expiredQuery;
@@ -132,6 +152,8 @@ export default function OwnerDashboard() {
       
       if (selectedBranch) {
         salesWithItemsQuery = salesWithItemsQuery.eq('branch_id', selectedBranch);
+      } else if (userBranchIds.length > 0) {
+        salesWithItemsQuery = salesWithItemsQuery.in('branch_id', userBranchIds);
       }
 
       const { data: salesWithItems } = await salesWithItemsQuery;

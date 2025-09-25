@@ -22,15 +22,22 @@ export default function BranchSelector({ selectedBranch, onBranchChange, showAll
 
   useEffect(() => {
     fetchBranches();
-  }, []);
+  }, [profile]);
 
   const fetchBranches = async () => {
     try {
-      const { data, error } = await supabase
+      let query = supabase
         .from('pharmacy_branches')
         .select('id, name, is_main_branch')
         .order('is_main_branch', { ascending: false })
         .order('created_at', { ascending: true });
+
+      // Filter by pharmacy owner if user is an owner
+      if (profile?.role === 'owner' && profile?.id) {
+        query = query.eq('pharmacy_owner_id', profile.id);
+      }
+
+      const { data, error } = await query;
 
       if (error) throw error;
       setBranches(data || []);
