@@ -409,6 +409,39 @@ export type Database = {
         }
         Relationships: []
       }
+      transactions: {
+        Row: {
+          amount_collected: number
+          created_at: string
+          credit_days_added: number
+          id: string
+          notes: string | null
+          pharmacy_owner_id: string
+          processed_by: string
+          transaction_type: string
+        }
+        Insert: {
+          amount_collected: number
+          created_at?: string
+          credit_days_added: number
+          id?: string
+          notes?: string | null
+          pharmacy_owner_id: string
+          processed_by: string
+          transaction_type?: string
+        }
+        Update: {
+          amount_collected?: number
+          created_at?: string
+          credit_days_added?: number
+          id?: string
+          notes?: string | null
+          pharmacy_owner_id?: string
+          processed_by?: string
+          transaction_type?: string
+        }
+        Relationships: []
+      }
     }
     Views: {
       low_stock_medicines: {

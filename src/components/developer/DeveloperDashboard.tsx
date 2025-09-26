@@ -9,7 +9,7 @@ import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
 import { useToast } from '@/hooks/use-toast';
-import { Users, Building, CreditCard, AlertTriangle, Edit, UserX, UserCheck } from 'lucide-react';
+import { Users, Building, CreditCard, AlertTriangle, Edit, UserX, UserCheck, DollarSign, Calendar, TrendingUp } from 'lucide-react';
 import CreateOwnerDialog from './CreateOwnerDialog';
 import EditOwnerDialog from './EditOwnerDialog';
 
@@ -30,6 +30,17 @@ interface PharmacyOwner {
   branch_count: number;
 }
 
+interface Transaction {
+  id: string;
+  pharmacy_owner_id: string;
+  amount_collected: number;
+  credit_days_added: number;
+  transaction_type: string;
+  processed_by: string;
+  created_at: string;
+  notes?: string;
+}
+
 export default function DeveloperDashboard() {
   const [owners, setOwners] = useState<PharmacyOwner[]>([]);
   const [loading, setLoading] = useState(true);
@@ -38,11 +49,38 @@ export default function DeveloperDashboard() {
   const [editDialogOpen, setEditDialogOpen] = useState(false);
   const [creditAmount, setCreditAmount] = useState<number>(30);
   const [depositAmount, setDepositAmount] = useState<number>(0);
+  const [transactions, setTransactions] = useState<Transaction[]>([]);
+  const [showTransactions, setShowTransactions] = useState(false);
   const { toast } = useToast();
 
   useEffect(() => {
     fetchPharmacyOwners();
+    fetchTransactions();
   }, []);
+
+  const fetchTransactions = async () => {
+    try {
+      const { data: transactionData, error } = await supabase
+        .from('transactions')
+        .select(`
+          id,
+          pharmacy_owner_id,
+          amount_collected,
+          credit_days_added,
+          transaction_type,
+          processed_by,
+          created_at,
+          notes
+        `)
+        .order('created_at', { ascending: false })
+        .limit(50);
+
+      if (error) throw error;
+      setTransactions(transactionData || []);
+    } catch (error: any) {
+      console.error('Error fetching transactions:', error);
+    }
+  };
 
   const fetchPharmacyOwners = async () => {
     try {
@@ -123,7 +161,7 @@ export default function DeveloperDashboard() {
     }
   };
 
-  const addCredit = async (ownerId: string, days: number) => {
+  const addCredit = async (ownerId: string, days: number, amountCollected: number = 0) => {
     try {
       // Get current subscription first
       const { data: currentSub } = await supabase
@@ -155,6 +193,26 @@ export default function DeveloperDashboard() {
 
       if (error) throw error;
 
+      // Log transaction if amount was collected
+      if (amountCollected > 0) {
+        const { data: profile } = await supabase
+          .from('profiles')
+          .select('id')
+          .eq('role', 'developer')
+          .single();
+
+        await supabase
+          .from('transactions')
+          .insert({
+            pharmacy_owner_id: ownerId,
+            amount_collected: amountCollected,
+            credit_days_added: days,
+            transaction_type: 'credit_payment',
+            processed_by: profile?.id || '',
+            notes: `Added ${days} days credit`
+          });
+      }
+
       // If adding credit and status becomes active, reactivate the account only if it wasn't manually deactivated
       if (newStatus === 'active' || newStatus === 'expiring_soon') {
         await supabase
@@ -173,6 +231,7 @@ export default function DeveloperDashboard() {
       });
 
       fetchPharmacyOwners();
+      fetchTransactions();
     } catch (error: any) {
       toast({
         title: "Error",
@@ -304,6 +363,49 @@ export default function DeveloperDashboard() {
     }
   };
 
+  const expireAccount = async (ownerId: string, ownerName: string) => {
+    if (!confirm(`Are you sure you want to expire ${ownerName}'s account?`)) {
+      return;
+    }
+
+    try {
+      // Set subscription to expired and deactivate account
+      const { error: subscriptionError } = await supabase
+        .from('pharmacy_subscriptions')
+        .update({ 
+          status: 'expired',
+          subscription_credit: 0
+        })
+        .eq('pharmacy_owner_id', ownerId);
+
+      if (subscriptionError) throw subscriptionError;
+
+      // Update profile status
+      const { error: profileError } = await supabase
+        .from('profiles')
+        .update({ 
+          active: false,
+          manually_deactivated: false // This is system expiration, not manual
+        })
+        .eq('id', ownerId);
+
+      if (profileError) throw profileError;
+
+      toast({
+        title: "Success",
+        description: `${ownerName}'s account has been expired successfully`
+      });
+
+      fetchPharmacyOwners();
+    } catch (error: any) {
+      toast({
+        title: "Error",
+        description: error.message || `Failed to expire account`,
+        variant: "destructive"
+      });
+    }
+  };
+
   const handleEditOwner = (owner: PharmacyOwner) => {
     setEditOwner(owner);
     setEditDialogOpen(true);
@@ -357,7 +459,7 @@ export default function DeveloperDashboard() {
       </div>
 
       {/* Summary Cards */}
-      <div className="grid grid-cols-1 md:grid-cols-4 gap-4">
+      <div className="grid grid-cols-1 md:grid-cols-6 gap-4">
         <Card>
           <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
             <CardTitle className="text-sm font-medium">Total Owners</CardTitle>
@@ -382,12 +484,24 @@ export default function DeveloperDashboard() {
 
         <Card>
           <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
-            <CardTitle className="text-sm font-medium">Total Branches</CardTitle>
-            <Building className="h-4 w-4 text-muted-foreground" />
+            <CardTitle className="text-sm font-medium">Expiring Soon</CardTitle>
+            <Calendar className="h-4 w-4 text-muted-foreground" />
           </CardHeader>
           <CardContent>
             <div className="text-2xl font-bold">
-              {owners.reduce((sum, o) => sum + o.branch_count, 0)}
+              {owners.filter(o => o.subscription?.status === 'expiring_soon').length}
+            </div>
+          </CardContent>
+        </Card>
+
+        <Card>
+          <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
+            <CardTitle className="text-sm font-medium">Expired Subscriptions</CardTitle>
+            <AlertTriangle className="h-4 w-4 text-muted-foreground" />
+          </CardHeader>
+          <CardContent>
+            <div className="text-2xl font-bold">
+              {owners.filter(o => o.subscription?.status === 'expired').length}
             </div>
           </CardContent>
         </Card>
@@ -399,7 +513,19 @@ export default function DeveloperDashboard() {
           </CardHeader>
           <CardContent>
             <div className="text-2xl font-bold">
-              {owners.filter(o => !o.active).length}
+              {owners.filter(o => !o.active || o.subscription?.status === 'inactive').length}
+            </div>
+          </CardContent>
+        </Card>
+
+        <Card>
+          <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
+            <CardTitle className="text-sm font-medium">Total Branches</CardTitle>
+            <Building className="h-4 w-4 text-muted-foreground" />
+          </CardHeader>
+          <CardContent>
+            <div className="text-2xl font-bold">
+              {owners.reduce((sum, o) => sum + o.branch_count, 0)}
             </div>
           </CardContent>
         </Card>
@@ -454,7 +580,10 @@ export default function DeveloperDashboard() {
                           <Button 
                             variant="outline" 
                             size="sm"
-                            onClick={() => setSelectedOwner(owner)}
+                            onClick={() => {
+                              setSelectedOwner(owner);
+                              setDepositAmount(owner.subscription?.deposit_amount || 0);
+                            }}
                           >
                             Manage
                           </Button>
@@ -469,6 +598,11 @@ export default function DeveloperDashboard() {
                           
                           <div className="space-y-4">
                             <div>
+                              <div className="mb-2">
+                                <Label className="text-sm font-medium text-muted-foreground">
+                                  Total Credit (Days): {owner.subscription?.subscription_credit || 0}
+                                </Label>
+                              </div>
                               <Label htmlFor="credit">Add Credit (Days)</Label>
                               <div className="flex gap-2 mt-2">
                                 <Select value={creditAmount.toString()} onValueChange={(val) => setCreditAmount(Number(val))}>
@@ -483,7 +617,7 @@ export default function DeveloperDashboard() {
                                     <SelectItem value="365">1 Year (365 days)</SelectItem>
                                   </SelectContent>
                                 </Select>
-                                <Button onClick={() => addCredit(owner.id, creditAmount)}>
+                                <Button onClick={() => addCredit(owner.id, creditAmount, depositAmount)}>
                                   Add Credit
                                 </Button>
                               </div>
@@ -496,7 +630,7 @@ export default function DeveloperDashboard() {
                                   type="number"
                                   value={depositAmount}
                                   onChange={(e) => setDepositAmount(Number(e.target.value))}
-                                  placeholder="Enter amount"
+                                  placeholder="Current deposit amount"
                                 />
                                 <Button onClick={() => updateDeposit(owner.id, depositAmount)}>
                                   Update
@@ -508,22 +642,33 @@ export default function DeveloperDashboard() {
                       </Dialog>
 
                       <Button 
-                        variant={owner.active ? "destructive" : "default"} 
+                        variant="outline" 
                         size="sm"
-                        onClick={() => toggleAccountStatus(owner.id, owner.full_name, owner.active)}
+                        onClick={() => expireAccount(owner.id, owner.full_name)}
                       >
-                        {owner.active ? (
-                          <>
-                            <UserX className="h-4 w-4 mr-1" />
-                            Inactivate
-                          </>
-                        ) : (
-                          <>
-                            <UserCheck className="h-4 w-4 mr-1" />
-                            Reactivate
-                          </>
-                        )}
+                        <AlertTriangle className="h-4 w-4 mr-1" />
+                        Expire Account
                       </Button>
+
+                      {owner.active ? (
+                        <Button 
+                          variant="destructive" 
+                          size="sm"
+                          onClick={() => toggleAccountStatus(owner.id, owner.full_name, owner.active)}
+                        >
+                          <UserX className="h-4 w-4 mr-1" />
+                          Inactivate
+                        </Button>
+                      ) : (
+                        <Button 
+                          variant="default" 
+                          size="sm"
+                          onClick={() => toggleAccountStatus(owner.id, owner.full_name, owner.active)}
+                        >
+                          <UserCheck className="h-4 w-4 mr-1" />
+                          Activate
+                        </Button>
+                      )}
                     </div>
                   </TableCell>
                 </TableRow>
@@ -539,13 +684,61 @@ export default function DeveloperDashboard() {
           <CardTitle>System Actions</CardTitle>
           <CardDescription>Developer tools and system maintenance</CardDescription>
         </CardHeader>
-        <CardContent>
+        <CardContent className="flex gap-2">
           <Button onClick={triggerDailyDeduction} variant="outline">
             <AlertTriangle className="h-4 w-4 mr-2" />
             Trigger Daily Credit Deduction
           </Button>
+          <Button onClick={() => setShowTransactions(!showTransactions)} variant="outline">
+            <TrendingUp className="h-4 w-4 mr-2" />
+            {showTransactions ? 'Hide' : 'Show'} Transaction Logs
+          </Button>
         </CardContent>
       </Card>
+
+      {/* Transaction Logs */}
+      {showTransactions && (
+        <Card>
+          <CardHeader>
+            <CardTitle>Transaction Logs</CardTitle>
+            <CardDescription>Payment history and credit additions</CardDescription>
+          </CardHeader>
+          <CardContent>
+            <Table>
+              <TableHeader>
+                <TableRow>
+                  <TableHead>Date</TableHead>
+                  <TableHead>Owner</TableHead>
+                  <TableHead>Amount Collected</TableHead>
+                  <TableHead>Credit Added</TableHead>
+                  <TableHead>Notes</TableHead>
+                </TableRow>
+              </TableHeader>
+              <TableBody>
+                {transactions.map((transaction) => {
+                  const owner = owners.find(o => o.id === transaction.pharmacy_owner_id);
+                  return (
+                    <TableRow key={transaction.id}>
+                      <TableCell>{new Date(transaction.created_at).toLocaleDateString()}</TableCell>
+                      <TableCell>{owner?.full_name || 'Unknown'}</TableCell>
+                      <TableCell>${transaction.amount_collected}</TableCell>
+                      <TableCell>{transaction.credit_days_added} days</TableCell>
+                      <TableCell>{transaction.notes || '-'}</TableCell>
+                    </TableRow>
+                  );
+                })}
+                {transactions.length === 0 && (
+                  <TableRow>
+                    <TableCell colSpan={5} className="text-center text-muted-foreground">
+                      No transactions found
+                    </TableCell>
+                  </TableRow>
+                )}
+              </TableBody>
+            </Table>
+          </CardContent>
+        </Card>
+      )}
 
       {/* Edit Owner Dialog */}
       <EditOwnerDialog 
