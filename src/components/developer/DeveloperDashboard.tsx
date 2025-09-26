@@ -363,29 +363,16 @@ export default function DeveloperDashboard() {
     }
   };
 
-  const expireAccount = async (ownerId: string, ownerName: string) => {
-    if (!confirm(`Are you sure you want to expire ${ownerName}'s account?`)) {
-      return;
-    }
-
+  const handleAccountStatusChange = async (ownerId: string, status: string) => {
+    const newStatus = status === "active";
+    
     try {
-      // Set subscription to expired and deactivate account
-      const { error: subscriptionError } = await supabase
-        .from('pharmacy_subscriptions')
-        .update({ 
-          status: 'expired',
-          subscription_credit: 0
-        })
-        .eq('pharmacy_owner_id', ownerId);
-
-      if (subscriptionError) throw subscriptionError;
-
       // Update profile status
       const { error: profileError } = await supabase
         .from('profiles')
         .update({ 
-          active: false,
-          manually_deactivated: false // This is system expiration, not manual
+          active: newStatus,
+          manually_deactivated: !newStatus
         })
         .eq('id', ownerId);
 
@@ -393,14 +380,47 @@ export default function DeveloperDashboard() {
 
       toast({
         title: "Success",
-        description: `${ownerName}'s account has been expired successfully`
+        description: `Account status updated to ${status}`
       });
 
       fetchPharmacyOwners();
     } catch (error: any) {
       toast({
         title: "Error",
-        description: error.message || `Failed to expire account`,
+        description: error.message || `Failed to update account status`,
+        variant: "destructive"
+      });
+    }
+  };
+
+  const handleSubscriptionStatusChange = async (ownerId: string, status: string) => {
+    try {
+      // Update subscription status
+      const { error: subscriptionError } = await supabase
+        .from('pharmacy_subscriptions')
+        .update({ status: status as 'active' | 'expiring_soon' | 'expired' | 'inactive' })
+        .eq('pharmacy_owner_id', ownerId);
+
+      if (subscriptionError) throw subscriptionError;
+
+      // If setting to expired, also set credit to 0
+      if (status === 'expired') {
+        await supabase
+          .from('pharmacy_subscriptions')
+          .update({ subscription_credit: 0 })
+          .eq('pharmacy_owner_id', ownerId);
+      }
+
+      toast({
+        title: "Success",
+        description: `Subscription status updated to ${status}`
+      });
+
+      fetchPharmacyOwners();
+    } catch (error: any) {
+      toast({
+        title: "Error",
+        description: error.message || `Failed to update subscription status`,
         variant: "destructive"
       });
     }
@@ -641,35 +661,32 @@ export default function DeveloperDashboard() {
                         </DialogContent>
                       </Dialog>
 
-                      <Button 
-                        variant="outline" 
-                        size="sm"
-                        onClick={() => expireAccount(owner.id, owner.full_name)}
+                      <Select 
+                        value={owner.active ? "active" : "inactive"} 
+                        onValueChange={(value) => handleAccountStatusChange(owner.id, value)}
                       >
-                        <AlertTriangle className="h-4 w-4 mr-1" />
-                        Expire Account
-                      </Button>
+                        <SelectTrigger className="w-32">
+                          <SelectValue />
+                        </SelectTrigger>
+                        <SelectContent>
+                          <SelectItem value="active">Active</SelectItem>
+                          <SelectItem value="inactive">Inactive</SelectItem>
+                        </SelectContent>
+                      </Select>
 
-                      {owner.active ? (
-                        <Button 
-                          variant="destructive" 
-                          size="sm"
-                          onClick={() => toggleAccountStatus(owner.id, owner.full_name, owner.active)}
-                        >
-                          <UserX className="h-4 w-4 mr-1" />
-                          Inactivate
-                        </Button>
-                      ) : (
-                        <Button 
-                          variant="default" 
-                          size="sm"
-                          className="bg-green-600 hover:bg-green-700 text-white"
-                          onClick={() => toggleAccountStatus(owner.id, owner.full_name, owner.active)}
-                        >
-                          <UserCheck className="h-4 w-4 mr-1" />
-                          Activate
-                        </Button>
-                      )}
+                      <Select 
+                        value={owner.subscription?.status || "expired"} 
+                        onValueChange={(value) => handleSubscriptionStatusChange(owner.id, value)}
+                      >
+                        <SelectTrigger className="w-32">
+                          <SelectValue />
+                        </SelectTrigger>
+                        <SelectContent>
+                          <SelectItem value="active">Active</SelectItem>
+                          <SelectItem value="inactive">Inactive</SelectItem>
+                          <SelectItem value="expired">Expired</SelectItem>
+                        </SelectContent>
+                      </Select>
                     </div>
                   </TableCell>
                 </TableRow>
