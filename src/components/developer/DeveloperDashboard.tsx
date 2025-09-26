@@ -39,6 +39,8 @@ interface Transaction {
   processed_by: string;
   created_at: string;
   notes?: string;
+  owner_name?: string;
+  pharmacy_name?: string;
 }
 
 export default function DeveloperDashboard() {
@@ -51,6 +53,9 @@ export default function DeveloperDashboard() {
   const [depositAmount, setDepositAmount] = useState<number>(0);
   const [transactions, setTransactions] = useState<Transaction[]>([]);
   const [showTransactions, setShowTransactions] = useState(false);
+  const [selectedOwnerForCredit, setSelectedOwnerForCredit] = useState<PharmacyOwner | null>(null);
+  const [creditDialogOpen, setCreditDialogOpen] = useState(false);
+  const [ownerCreditPlans, setOwnerCreditPlans] = useState<any[]>([]);
   const { toast } = useToast();
 
   useEffect(() => {
@@ -76,7 +81,25 @@ export default function DeveloperDashboard() {
         .limit(50);
 
       if (error) throw error;
-      setTransactions(transactionData || []);
+
+      // Fetch owner details for each transaction
+      const transactionsWithDetails = await Promise.all(
+        (transactionData || []).map(async (transaction: any) => {
+          const { data: profileData } = await supabase
+            .from('profiles')
+            .select('full_name, pharmacy_address')
+            .eq('id', transaction.pharmacy_owner_id)
+            .single();
+
+          return {
+            ...transaction,
+            owner_name: profileData?.full_name || 'Unknown',
+            pharmacy_name: profileData?.pharmacy_address || 'Unknown Pharmacy'
+          };
+        })
+      );
+
+      setTransactions(transactionsWithDetails);
     } catch (error: any) {
       console.error('Error fetching transactions:', error);
     }
@@ -111,9 +134,9 @@ export default function DeveloperDashboard() {
       // Get additional data for each owner
       const ownersWithData = await Promise.all(
         profiles.map(async (profile: any) => {
-          // Get actual email from auth.users via get_profile_by_email function
-          // Since we can't directly access auth.users, use a fallback email
-          const email = `${profile.full_name.toLowerCase().replace(/\s+/g, '')}@pharmacy.com`;
+          // Get actual email from auth.users
+          const { data: authData } = await supabase.auth.admin.getUserById(profile.id);
+          const email = authData?.user?.email || `${profile.full_name.toLowerCase().replace(/\s+/g, '')}@pharmacy.com`;
 
           // Get subscription data - use maybeSingle to handle cases where no subscription exists
           const { data: subscription } = await supabase
@@ -153,7 +176,7 @@ export default function DeveloperDashboard() {
       console.error('Error fetching pharmacy owners:', error);
       toast({
         title: "Error",
-        description: "Failed to fetch pharmacy owners data",
+        description: "Failed to fetch pharmacy owners",
         variant: "destructive"
       });
     } finally {
@@ -161,69 +184,55 @@ export default function DeveloperDashboard() {
     }
   };
 
-  const addCredit = async (ownerId: string, days: number, amountCollected: number = 0) => {
+  const addCredit = async (ownerId: string, days: number, amount: number) => {
     try {
-      // Get current subscription first
-      const { data: currentSub } = await supabase
+      // Get current subscription info
+      const { data: currentSub, error: fetchError } = await supabase
         .from('pharmacy_subscriptions')
         .select('subscription_credit')
         .eq('pharmacy_owner_id', ownerId)
-        .single();
+        .maybeSingle();
 
-      const newCredit = (currentSub?.subscription_credit || 0) + days;
+      if (fetchError) throw fetchError;
+
+      const newCreditTotal = (currentSub?.subscription_credit || 0) + days;
       let newStatus: 'active' | 'expiring_soon' | 'expired';
-
-      if (newCredit <= 0) {
+      
+      if (newCreditTotal <= 0) {
         newStatus = 'expired';
-      } else if (newCredit <= 7) {
+      } else if (newCreditTotal <= 7) {
         newStatus = 'expiring_soon';
       } else {
         newStatus = 'active';
       }
 
-      const { error } = await supabase
+      // Update subscription
+      const { error: updateError } = await supabase
         .from('pharmacy_subscriptions')
         .upsert({
           pharmacy_owner_id: ownerId,
-          subscription_credit: newCredit,
-          status: newStatus
+          subscription_credit: newCreditTotal,
+          status: newStatus,
+          deposit_amount: amount
         }, {
           onConflict: 'pharmacy_owner_id'
         });
 
-      if (error) throw error;
+      if (updateError) throw updateError;
 
-      // Log transaction if amount was collected
-      if (amountCollected > 0) {
-        const { data: profile } = await supabase
-          .from('profiles')
-          .select('id')
-          .eq('role', 'developer')
-          .single();
+      // Log transaction
+      const { error: transactionError } = await supabase
+        .from('transactions')
+        .insert({
+          pharmacy_owner_id: ownerId,
+          amount_collected: amount,
+          credit_days_added: days,
+          transaction_type: 'credit_payment',
+          processed_by: 'developer',
+          notes: `Added ${days} days credit for $${amount}`
+        });
 
-        await supabase
-          .from('transactions')
-          .insert({
-            pharmacy_owner_id: ownerId,
-            amount_collected: amountCollected,
-            credit_days_added: days,
-            transaction_type: 'credit_payment',
-            processed_by: profile?.id || '',
-            notes: `Added ${days} days credit`
-          });
-      }
-
-      // If adding credit and status becomes active, reactivate the account only if it wasn't manually deactivated
-      if (newStatus === 'active' || newStatus === 'expiring_soon') {
-        await supabase
-          .from('profiles')
-          .update({ 
-            active: true,
-            manually_deactivated: false // Reset manual deactivation when adding credit
-          })
-          .eq('id', ownerId)
-          .eq('role', 'owner');
-      }
+      if (transactionError) throw transactionError;
 
       toast({
         title: "Success",
@@ -292,77 +301,6 @@ export default function DeveloperDashboard() {
     }
   };
 
-  const toggleAccountStatus = async (ownerId: string, ownerName: string, currentStatus: boolean) => {
-    const newStatus = !currentStatus;
-    const action = newStatus ? 'reactivate' : 'inactivate';
-    
-    if (!confirm(`Are you sure you want to ${action} ${ownerName}'s account?`)) {
-      return;
-    }
-
-    try {
-      // Update profile status
-      const { error: profileError } = await supabase
-        .from('profiles')
-        .update({ 
-          active: newStatus,
-          manually_deactivated: !newStatus
-        })
-        .eq('id', ownerId);
-
-      if (profileError) throw profileError;
-
-      // Update subscription status
-      if (!newStatus) {
-        // When inactivating, set subscription status to inactive
-        const { error: subscriptionError } = await supabase
-          .from('pharmacy_subscriptions')
-          .update({ status: 'inactive' })
-          .eq('pharmacy_owner_id', ownerId);
-
-        if (subscriptionError) throw subscriptionError;
-      } else {
-        // When reactivating, restore subscription status based on credit
-        const { data: subscription } = await supabase
-          .from('pharmacy_subscriptions')
-          .select('subscription_credit')
-          .eq('pharmacy_owner_id', ownerId)
-          .single();
-
-        if (subscription) {
-          let newSubscriptionStatus: 'active' | 'expiring_soon' | 'expired';
-          if (subscription.subscription_credit <= 0) {
-            newSubscriptionStatus = 'expired';
-          } else if (subscription.subscription_credit <= 7) {
-            newSubscriptionStatus = 'expiring_soon';
-          } else {
-            newSubscriptionStatus = 'active';
-          }
-
-          const { error: subscriptionError } = await supabase
-            .from('pharmacy_subscriptions')
-            .update({ status: newSubscriptionStatus })
-            .eq('pharmacy_owner_id', ownerId);
-
-          if (subscriptionError) throw subscriptionError;
-        }
-      }
-
-      toast({
-        title: "Success",
-        description: `${ownerName}'s account has been ${action}d successfully`
-      });
-
-      fetchPharmacyOwners();
-    } catch (error: any) {
-      toast({
-        title: "Error",
-        description: error.message || `Failed to ${action} account`,
-        variant: "destructive"
-      });
-    }
-  };
-
   const handleAccountStatusChange = async (ownerId: string, status: string) => {
     const newStatus = status === "active";
     
@@ -421,6 +359,75 @@ export default function DeveloperDashboard() {
       toast({
         title: "Error",
         description: error.message || `Failed to update subscription status`,
+        variant: "destructive"
+      });
+    }
+  };
+
+  const openCreditDialog = async (owner: PharmacyOwner) => {
+    setSelectedOwnerForCredit(owner);
+    
+    // Fetch credit plans for this owner
+    const { data: creditPlans, error } = await supabase
+      .from('credit_plans')
+      .select('*')
+      .eq('pharmacy_owner_id', owner.id)
+      .order('days', { ascending: true });
+
+    if (error) {
+      console.error('Error fetching credit plans:', error);
+      setOwnerCreditPlans([]);
+    } else {
+      setOwnerCreditPlans(creditPlans || []);
+    }
+    
+    setCreditDialogOpen(true);
+  };
+
+  const addCreditToOwner = async (planId: string, days: number, amount: number) => {
+    if (!selectedOwnerForCredit) return;
+
+    try {
+      // Log the transaction
+      const { error: transactionError } = await supabase
+        .from('transactions')
+        .insert({
+          pharmacy_owner_id: selectedOwnerForCredit.id,
+          amount_collected: amount,
+          credit_days_added: days,
+          transaction_type: 'credit_payment',
+          processed_by: 'developer', // This should be the current user ID in a real app
+          notes: `Added ${days} days credit for $${amount}`
+        });
+
+      if (transactionError) throw transactionError;
+
+      // Add the credit days
+      const { error: creditError } = await supabase
+        .from('pharmacy_subscriptions')
+        .upsert({
+          pharmacy_owner_id: selectedOwnerForCredit.id,
+          subscription_credit: (selectedOwnerForCredit.subscription?.subscription_credit || 0) + days,
+          status: 'active'
+        }, {
+          onConflict: 'pharmacy_owner_id'
+        });
+
+      if (creditError) throw creditError;
+
+      toast({
+        title: "Success",
+        description: `Added ${days} days credit to ${selectedOwnerForCredit.full_name}'s account`
+      });
+
+      setCreditDialogOpen(false);
+      setSelectedOwnerForCredit(null);
+      fetchPharmacyOwners();
+      fetchTransactions();
+    } catch (error: any) {
+      toast({
+        title: "Error",
+        description: error.message || "Failed to add credit",
         variant: "destructive"
       });
     }
@@ -579,8 +586,35 @@ export default function DeveloperDashboard() {
                       <div className="text-sm text-muted-foreground">{owner.email}</div>
                     </div>
                   </TableCell>
-                  <TableCell>{getAccountStatusBadge(owner.active, owner.manually_deactivated, owner.subscription?.status)}</TableCell>
-                  <TableCell>{getStatusBadge(owner.subscription?.status || null)}</TableCell>
+                  <TableCell>
+                    <Select 
+                      value={owner.active ? "active" : "inactive"} 
+                      onValueChange={(value) => handleAccountStatusChange(owner.id, value)}
+                    >
+                      <SelectTrigger className="w-28">
+                        <SelectValue />
+                      </SelectTrigger>
+                      <SelectContent>
+                        <SelectItem value="active">Active</SelectItem>
+                        <SelectItem value="inactive">Inactive</SelectItem>
+                      </SelectContent>
+                    </Select>
+                  </TableCell>
+                  <TableCell>
+                    <Select 
+                      value={owner.subscription?.status || "expired"} 
+                      onValueChange={(value) => handleSubscriptionStatusChange(owner.id, value)}
+                    >
+                      <SelectTrigger className="w-32">
+                        <SelectValue />
+                      </SelectTrigger>
+                      <SelectContent>
+                        <SelectItem value="active">Active</SelectItem>
+                        <SelectItem value="inactive">Inactive</SelectItem>
+                        <SelectItem value="expired">Expired</SelectItem>
+                      </SelectContent>
+                    </Select>
+                  </TableCell>
                   <TableCell>{owner.subscription?.subscription_credit || 0}</TableCell>
                   <TableCell>{owner.branch_count}</TableCell>
                   <TableCell>${owner.subscription?.deposit_amount || 0}</TableCell>
@@ -595,98 +629,15 @@ export default function DeveloperDashboard() {
                         Edit
                       </Button>
                       
-                      <Dialog>
-                        <DialogTrigger asChild>
-                          <Button 
-                            variant="outline" 
-                            size="sm"
-                            onClick={() => {
-                              setSelectedOwner(owner);
-                              setDepositAmount(owner.subscription?.deposit_amount || 0);
-                            }}
-                          >
-                            Manage
-                          </Button>
-                        </DialogTrigger>
-                        <DialogContent>
-                          <DialogHeader>
-                            <DialogTitle>Manage {owner.full_name}</DialogTitle>
-                            <DialogDescription>
-                              Update subscription credit and deposit amount
-                            </DialogDescription>
-                          </DialogHeader>
-                          
-                          <div className="space-y-4">
-                            <div>
-                              <div className="mb-2">
-                                <Label className="text-sm font-medium text-muted-foreground">
-                                  Total Credit (Days): {owner.subscription?.subscription_credit || 0}
-                                </Label>
-                              </div>
-                              <Label htmlFor="credit">Add Credit (Days)</Label>
-                              <div className="flex gap-2 mt-2">
-                                <Select value={creditAmount.toString()} onValueChange={(val) => setCreditAmount(Number(val))}>
-                                  <SelectTrigger>
-                                    <SelectValue />
-                                  </SelectTrigger>
-                                  <SelectContent>
-                                    <SelectItem value="30">1 Month (30 days)</SelectItem>
-                                    <SelectItem value="60">2 Months (60 days)</SelectItem>
-                                    <SelectItem value="90">3 Months (90 days)</SelectItem>
-                                    <SelectItem value="180">6 Months (180 days)</SelectItem>
-                                    <SelectItem value="365">1 Year (365 days)</SelectItem>
-                                  </SelectContent>
-                                </Select>
-                                <Button onClick={() => addCredit(owner.id, creditAmount, depositAmount)}>
-                                  Add Credit
-                                </Button>
-                              </div>
-                            </div>
-
-                            <div>
-                              <Label htmlFor="deposit">Update Deposit Amount</Label>
-                              <div className="flex gap-2 mt-2">
-                                <Input
-                                  type="number"
-                                  value={depositAmount}
-                                  onChange={(e) => setDepositAmount(Number(e.target.value))}
-                                  placeholder="Current deposit amount"
-                                />
-                                <Button onClick={() => updateDeposit(owner.id, depositAmount)}>
-                                  Update
-                                </Button>
-                              </div>
-                            </div>
-                          </div>
-                        </DialogContent>
-                      </Dialog>
-
-                      <Select 
-                        value={owner.active ? "active" : "inactive"} 
-                        onValueChange={(value) => handleAccountStatusChange(owner.id, value)}
+                      <Button 
+                        variant="default"
+                        className="bg-green-600 hover:bg-green-700"
+                        size="sm"
+                        onClick={() => openCreditDialog(owner)}
                       >
-                        <SelectTrigger className="w-32">
-                          <SelectValue />
-                        </SelectTrigger>
-                        <SelectContent>
-                          <SelectItem value="active">Active</SelectItem>
-                          <SelectItem value="inactive">Inactive</SelectItem>
-                        </SelectContent>
-                      </Select>
-
-                      <Select 
-                        value={owner.subscription?.status || "expired"} 
-                        onValueChange={(value) => handleSubscriptionStatusChange(owner.id, value)}
-                      >
-                        <SelectTrigger className="w-32">
-                          <SelectValue />
-                        </SelectTrigger>
-                        <SelectContent>
-                          <SelectItem value="active">Active</SelectItem>
-                          <SelectItem value="inactive">Inactive</SelectItem>
-                          <SelectItem value="expired">Expired</SelectItem>
-                        </SelectContent>
-                      </Select>
+                        <DollarSign className="h-4 w-4 mr-1" />
+                        Add Credit
+                      </Button>
                     </div>
                   </TableCell>
                 </TableRow>
@@ -725,7 +676,8 @@ export default function DeveloperDashboard() {
             <Table>
               <TableHeader>
                 <TableRow>
-                  <TableHead>Date</TableHead>
+                  <TableHead>Date & Time</TableHead>
+                  <TableHead>Pharmacy Name</TableHead>
                   <TableHead>Owner</TableHead>
                   <TableHead>Amount Collected</TableHead>
                   <TableHead>Credit Added</TableHead>
@@ -733,21 +685,29 @@ export default function DeveloperDashboard() {
                 </TableRow>
               </TableHeader>
               <TableBody>
-                {transactions.map((transaction) => {
-                  const owner = owners.find(o => o.id === transaction.pharmacy_owner_id);
-                  return (
-                    <TableRow key={transaction.id}>
-                      <TableCell>{new Date(transaction.created_at).toLocaleDateString()}</TableCell>
-                      <TableCell>{owner?.full_name || 'Unknown'}</TableCell>
-                      <TableCell>${transaction.amount_collected}</TableCell>
-                      <TableCell>{transaction.credit_days_added} days</TableCell>
-                      <TableCell>{transaction.notes || '-'}</TableCell>
-                    </TableRow>
-                  );
-                })}
+                {transactions.map((transaction) => (
+                  <TableRow key={transaction.id}>
+                    <TableCell>
+                      {new Date(transaction.created_at).toLocaleString('en-US', {
+                        year: 'numeric',
+                        month: '2-digit',
+                        day: '2-digit',
+                        hour: '2-digit',
+                        minute: '2-digit',
+                        second: '2-digit',
+                        hour12: false
+                      })}
+                    </TableCell>
+                    <TableCell>{transaction.pharmacy_name}</TableCell>
+                    <TableCell>{transaction.owner_name}</TableCell>
+                    <TableCell>${transaction.amount_collected}</TableCell>
+                    <TableCell>{transaction.credit_days_added} days</TableCell>
+                    <TableCell>{transaction.notes}</TableCell>
+                  </TableRow>
+                ))}
                 {transactions.length === 0 && (
                   <TableRow>
-                    <TableCell colSpan={5} className="text-center text-muted-foreground">
+                    <TableCell colSpan={6} className="text-center text-muted-foreground">
                       No transactions found
                     </TableCell>
                   </TableRow>
@@ -758,13 +718,56 @@ export default function DeveloperDashboard() {
         </Card>
       )}
 
+      {/* Add Credit Dialog */}
+      <Dialog open={creditDialogOpen} onOpenChange={setCreditDialogOpen}>
+        <DialogContent className="max-w-md">
+          <DialogHeader>
+            <DialogTitle>Add Credit to {selectedOwnerForCredit?.full_name}</DialogTitle>
+            <DialogDescription>
+              Select a credit plan to add to this pharmacy owner's account
+            </DialogDescription>
+          </DialogHeader>
+          
+          <div className="space-y-4">
+            {ownerCreditPlans.length > 0 ? (
+              <div>
+                <Label>Available Credit Plans</Label>
+                <div className="space-y-2 mt-2">
+                  {ownerCreditPlans.map((plan) => (
+                    <div key={plan.id} className="flex items-center justify-between p-3 border rounded-lg">
+                      <div>
+                        <span className="font-medium">{plan.days} days</span>
+                        <span className="text-muted-foreground"> → ${plan.price}</span>
+                      </div>
+                      <Button 
+                        size="sm"
+                        onClick={() => addCreditToOwner(plan.id, plan.days, plan.price)}
+                      >
+                        Select
+                      </Button>
+                    </div>
+                  ))}
+                </div>
+              </div>
+            ) : (
+              <div className="text-center py-4">
+                <p className="text-muted-foreground">No credit plans found for this owner.</p>
+                <p className="text-sm text-muted-foreground mt-1">Credit plans should be set up when creating the owner account.</p>
+              </div>
+            )}
+          </div>
+        </DialogContent>
+      </Dialog>
+
       {/* Edit Owner Dialog */}
-      <EditOwnerDialog 
-        owner={editOwner}
-        open={editDialogOpen}
-        onOpenChange={setEditDialogOpen}
-        onOwnerUpdated={fetchPharmacyOwners}
-      />
+      {editOwner && (
+        <EditOwnerDialog
+          owner={editOwner}
+          open={editDialogOpen}
+          onOpenChange={setEditDialogOpen}
+          onOwnerUpdated={fetchPharmacyOwners}
+        />
+      )}
     </div>
   );
 }

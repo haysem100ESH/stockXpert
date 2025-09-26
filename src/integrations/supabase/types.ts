@@ -14,6 +14,33 @@ export type Database = {
   }
   public: {
     Tables: {
+      credit_plans: {
+        Row: {
+          created_at: string
+          days: number
+          id: string
+          pharmacy_owner_id: string
+          price: number
+          updated_at: string
+        }
+        Insert: {
+          created_at?: string
+          days: number
+          id?: string
+          pharmacy_owner_id: string
+          price: number
+          updated_at?: string
+        }
+        Update: {
+          created_at?: string
+          days?: number
+          id?: string
+          pharmacy_owner_id?: string
+          price?: number
+          updated_at?: string
+        }
+        Relationships: []
+      }
       expenses: {
         Row: {
           amount: number

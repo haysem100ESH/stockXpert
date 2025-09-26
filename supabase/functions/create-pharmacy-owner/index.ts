@@ -12,6 +12,7 @@ interface CreateOwnerRequest {
   password: string;
   phone?: string;
   pharmacy_address?: string;
+  creditPlans?: Array<{ days: number; price: number }>;
 }
 
 const handler = async (req: Request): Promise<Response> => {
@@ -37,7 +38,7 @@ const handler = async (req: Request): Promise<Response> => {
     });
 
     const requestBody = await req.json() as CreateOwnerRequest;
-    const { full_name, email, password, phone, pharmacy_address } = requestBody;
+    const { full_name, email, password, phone, pharmacy_address, creditPlans } = requestBody;
 
     // Validate required fields
     if (!full_name || !email || !password) {
@@ -97,6 +98,25 @@ const handler = async (req: Request): Promise<Response> => {
         JSON.stringify({ error: 'Failed to create profile: ' + profileError.message }),
         { status: 500, headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
       );
+    }
+
+    // Create credit plans if provided
+    if (creditPlans && creditPlans.length > 0) {
+      const creditPlanInserts = creditPlans.map((plan: any) => ({
+        pharmacy_owner_id: user.user.id,
+        days: plan.days,
+        price: plan.price
+      }));
+
+      const { error: creditPlanError } = await supabaseAdmin
+        .from('credit_plans')
+        .insert(creditPlanInserts);
+
+      if (creditPlanError) {
+        console.error('Credit plan creation error:', creditPlanError);
+      } else {
+        console.log('Credit plans created successfully');
+      }
     }
 
     console.log('Pharmacy owner created successfully');

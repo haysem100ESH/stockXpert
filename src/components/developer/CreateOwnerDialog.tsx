@@ -6,7 +6,7 @@ import { Label } from '@/components/ui/label';
 import { Textarea } from '@/components/ui/textarea';
 import { useToast } from '@/hooks/use-toast';
 import { supabase } from '@/integrations/supabase/client';
-import { Plus, Loader2 } from 'lucide-react';
+import { Plus, Loader2, Trash2 } from 'lucide-react';
 
 interface CreateOwnerDialogProps {
   onOwnerCreated: () => void;
@@ -22,6 +22,7 @@ export default function CreateOwnerDialog({ onOwnerCreated }: CreateOwnerDialogP
     phone: '',
     pharmacy_address: ''
   });
+  const [creditPlans, setCreditPlans] = useState([{ days: 30, price: 50 }]);
   const { toast } = useToast();
 
   const handleInputChange = (field: string, value: string) => {
@@ -29,6 +30,22 @@ export default function CreateOwnerDialog({ onOwnerCreated }: CreateOwnerDialogP
       ...prev,
       [field]: value
     }));
+  };
+
+  const addCreditPlan = () => {
+    setCreditPlans([...creditPlans, { days: 30, price: 50 }]);
+  };
+
+  const removeCreditPlan = (index: number) => {
+    if (creditPlans.length > 1) {
+      setCreditPlans(creditPlans.filter((_, i) => i !== index));
+    }
+  };
+
+  const updateCreditPlan = (index: number, field: 'days' | 'price', value: number) => {
+    const updated = [...creditPlans];
+    updated[index] = { ...updated[index], [field]: value };
+    setCreditPlans(updated);
   };
 
   const handleSubmit = async (e: React.FormEvent) => {
@@ -56,7 +73,7 @@ export default function CreateOwnerDialog({ onOwnerCreated }: CreateOwnerDialogP
 
     try {
       const { data, error } = await supabase.functions.invoke('create-pharmacy-owner', {
-        body: formData
+        body: { ...formData, creditPlans }
       });
 
       if (error) throw error;
@@ -73,6 +90,7 @@ export default function CreateOwnerDialog({ onOwnerCreated }: CreateOwnerDialogP
         phone: '',
         pharmacy_address: ''
       });
+      setCreditPlans([{ days: 30, price: 50 }]);
       
       setOpen(false);
       onOwnerCreated();
@@ -161,6 +179,48 @@ export default function CreateOwnerDialog({ onOwnerCreated }: CreateOwnerDialogP
               placeholder="123 Main St, City, State 12345"
               rows={3}
             />
+          </div>
+
+          <div>
+            <div className="flex items-center justify-between">
+              <Label>Credit Plans</Label>
+              <Button type="button" variant="outline" size="sm" onClick={addCreditPlan}>
+                <Plus className="h-4 w-4 mr-1" />
+                Add Plan
+              </Button>
+            </div>
+            <div className="space-y-2 mt-2">
+              {creditPlans.map((plan, index) => (
+                <div key={index} className="flex items-center gap-2">
+                  <Input
+                    type="number"
+                    placeholder="Days"
+                    value={plan.days}
+                    onChange={(e) => updateCreditPlan(index, 'days', parseInt(e.target.value) || 0)}
+                    className="w-20"
+                  />
+                  <span className="text-sm text-muted-foreground">days →</span>
+                  <span className="text-sm">$</span>
+                  <Input
+                    type="number"
+                    placeholder="Price"
+                    value={plan.price}
+                    onChange={(e) => updateCreditPlan(index, 'price', parseFloat(e.target.value) || 0)}
+                    className="w-20"
+                  />
+                  {creditPlans.length > 1 && (
+                    <Button
+                      type="button"
+                      variant="ghost"
+                      size="sm"
+                      onClick={() => removeCreditPlan(index)}
+                    >
+                      <Trash2 className="h-4 w-4" />
+                    </Button>
+                  )}
+                </div>
+              ))}
+            </div>
           </div>
 
           <DialogFooter>
