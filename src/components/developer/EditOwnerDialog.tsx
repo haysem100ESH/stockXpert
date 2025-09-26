@@ -4,7 +4,7 @@ import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
 import { Textarea } from '@/components/ui/textarea';
-import { Switch } from '@/components/ui/switch';
+
 import { useToast } from '@/hooks/use-toast';
 import { supabase } from '@/integrations/supabase/client';
 import { Loader2 } from 'lucide-react';
@@ -58,45 +58,6 @@ export default function EditOwnerDialog({ owner, open, onOpenChange, onOwnerUpda
     }));
   };
 
-  const handleActivationToggle = async (newActiveStatus: boolean) => {
-    if (!owner) return;
-
-    setLoading(true);
-
-    try {
-      const { error } = await supabase
-        .from('profiles')
-        .update({ active: newActiveStatus })
-        .eq('id', owner.id);
-
-      if (error) throw error;
-
-      // If deactivating and user has active subscription, update subscription status
-      if (!newActiveStatus && owner.subscription?.status === 'active') {
-        await supabase
-          .from('pharmacy_subscriptions')
-          .update({ status: 'expired' })
-          .eq('pharmacy_owner_id', owner.id);
-      }
-
-      toast({
-        title: "Success",
-        description: `Account ${newActiveStatus ? 'activated' : 'deactivated'} successfully`
-      });
-
-      handleInputChange('active', newActiveStatus);
-      onOwnerUpdated();
-    } catch (error: any) {
-      console.error('Error updating activation status:', error);
-      toast({
-        title: "Error",
-        description: error.message || "Failed to update account status",
-        variant: "destructive"
-      });
-    } finally {
-      setLoading(false);
-    }
-  };
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
@@ -156,20 +117,6 @@ export default function EditOwnerDialog({ owner, open, onOpenChange, onOwnerUpda
         </DialogHeader>
         
         <form onSubmit={handleSubmit} className="space-y-4">
-          <div className="flex items-center justify-between p-3 border rounded-lg">
-            <div className="space-y-0.5">
-              <Label className="text-base">Account Status</Label>
-              <div className="text-sm text-muted-foreground">
-                {formData.active ? 'Account is active' : 'Account is deactivated'}
-              </div>
-            </div>
-            <Switch
-              checked={formData.active}
-              onCheckedChange={handleActivationToggle}
-              disabled={loading}
-            />
-          </div>
-
           <div>
             <Label htmlFor="full_name">Owner Name *</Label>
             <Input

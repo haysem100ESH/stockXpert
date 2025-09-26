@@ -663,6 +663,7 @@ export default function DeveloperDashboard() {
                         <Button 
                           variant="default" 
                           size="sm"
+                          className="bg-green-600 hover:bg-green-700 text-white"
                           onClick={() => toggleAccountStatus(owner.id, owner.full_name, owner.active)}
                         >
                           <UserCheck className="h-4 w-4 mr-1" />
