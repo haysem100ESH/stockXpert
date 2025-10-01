@@ -382,6 +382,10 @@ export default function DeveloperDashboard() {
     if (!selectedOwnerForCredit) return;
 
     try {
+      // Get current user ID
+      const { data: { user } } = await supabase.auth.getUser();
+      if (!user) throw new Error('No authenticated user found');
+
       // Log the transaction
       const { error: transactionError } = await supabase
         .from('transactions')
@@ -390,7 +394,7 @@ export default function DeveloperDashboard() {
           amount_collected: amount,
           credit_days_added: days,
           transaction_type: 'credit_payment',
-          processed_by: 'developer', // This should be the current user ID in a real app
+          processed_by: user.id,
           notes: `Added ${days} days credit for $${amount}`
         });
 
