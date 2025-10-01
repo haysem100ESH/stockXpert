@@ -3,7 +3,8 @@ import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/com
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
 import { Badge } from '@/components/ui/badge';
 import { Button } from '@/components/ui/button';
-import { 
+import { Skeleton } from '@/components/ui/skeleton';
+import {
   DollarSign, 
   Package, 
   TrendingUp, 
@@ -75,7 +76,7 @@ export default function OwnerDashboard() {
 
   const fetchDashboardStats = async () => {
     try {
-      // Get user's branches first for "All Branches" filtering
+      // Get user's branches first for proper filtering
       const { data: userBranches } = await supabase
         .from('pharmacy_branches')
         .select('id')
@@ -100,13 +101,15 @@ export default function OwnerDashboard() {
         salesQuery = salesQuery.eq('branch_id', selectedBranch);
         medicinesQuery = medicinesQuery.eq('branch_id', selectedBranch);
         saleItemsQuery = saleItemsQuery.eq('sales.branch_id', selectedBranch);
+      } else if (userBranchIds.length > 0) {
+        // When "All Branches" selected, only show owner's branches
+        salesQuery = salesQuery.in('branch_id', userBranchIds);
+        medicinesQuery = medicinesQuery.in('branch_id', userBranchIds);
+        saleItemsQuery = saleItemsQuery.in('sales.branch_id', userBranchIds);
       } else {
-        // Filter by user's branches only (All Branches)
-        if (userBranchIds.length > 0) {
-          salesQuery = salesQuery.in('branch_id', userBranchIds);
-          medicinesQuery = medicinesQuery.in('branch_id', userBranchIds);
-          saleItemsQuery = saleItemsQuery.in('sales.branch_id', userBranchIds);
-        }
+        // No branches, return early
+        setLoading(false);
+        return;
       }
 
       // Fetch data
@@ -238,6 +241,30 @@ export default function OwnerDashboard() {
       setLoading(false);
     }
   };
+
+  if (loading) {
+    return (
+      <div className="space-y-6">
+        <div className="flex items-center justify-between">
+          <h1 className="text-3xl font-bold">Owner Dashboard</h1>
+        </div>
+        <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-6 gap-6">
+          {[...Array(6)].map((_, i) => (
+            <Card key={i}>
+              <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
+                <Skeleton className="h-4 w-24" />
+                <Skeleton className="h-4 w-4 rounded" />
+              </CardHeader>
+              <CardContent>
+                <Skeleton className="h-8 w-20 mb-2" />
+                <Skeleton className="h-3 w-32" />
+              </CardContent>
+            </Card>
+          ))}
+        </div>
+      </div>
+    );
+  }
 
   return (
     <div className="space-y-6">

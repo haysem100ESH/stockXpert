@@ -3,6 +3,7 @@ import { useAuth } from '@/hooks/useAuth';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
 import { Badge } from '@/components/ui/badge';
 import { Button } from '@/components/ui/button';
+import { Skeleton } from '@/components/ui/skeleton';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
 import { Calendar } from '@/components/ui/calendar';
 import { Popover, PopoverContent, PopoverTrigger } from '@/components/ui/popover';
@@ -126,6 +127,16 @@ export default function Dashboard() {
       // Determine which branch to filter by (staff fixed to their branch)
       const effectiveBranchId = profile?.role === 'staff' ? userBranch : selectedBranch;
       
+      // Get owner's branches for "All Branches" filtering
+      let userBranchIds: string[] = [];
+      if (profile?.role === 'owner') {
+        const { data: userBranches } = await supabase
+          .from('pharmacy_branches')
+          .select('id')
+          .eq('pharmacy_owner_id', profile?.id);
+        userBranchIds = userBranches?.map(b => b.id) || [];
+      }
+      
       // Fetch revenue for the selected period
       let salesQuery = supabase
         .from('sales')
@@ -137,6 +148,9 @@ export default function Dashboard() {
         salesQuery = salesQuery.eq('branch_id', userBranch || profile?.branch_id);
       } else if (effectiveBranchId) {
         salesQuery = salesQuery.eq('branch_id', effectiveBranchId);
+      } else if (profile?.role === 'owner' && userBranchIds.length > 0) {
+        // "All Branches" for owner - only show their branches
+        salesQuery = salesQuery.in('branch_id', userBranchIds);
       }
       const { data: salesData } = await salesQuery;
       
@@ -151,6 +165,8 @@ export default function Dashboard() {
         medicinesQuery = medicinesQuery.eq('branch_id', userBranch || profile?.branch_id);
       } else if (effectiveBranchId) {
         medicinesQuery = medicinesQuery.eq('branch_id', effectiveBranchId);
+      } else if (profile?.role === 'owner' && userBranchIds.length > 0) {
+        medicinesQuery = medicinesQuery.in('branch_id', userBranchIds);
       }
       const { data: medicinesData } = await medicinesQuery;
 
@@ -171,6 +187,8 @@ export default function Dashboard() {
         periodSalesQuery = periodSalesQuery.eq('branch_id', userBranch || profile?.branch_id);
       } else if (effectiveBranchId) {
         periodSalesQuery = periodSalesQuery.eq('branch_id', effectiveBranchId);
+      } else if (profile?.role === 'owner' && userBranchIds.length > 0) {
+        periodSalesQuery = periodSalesQuery.in('branch_id', userBranchIds);
       }
       const { data: periodSalesData } = await periodSalesQuery;
 
@@ -186,6 +204,8 @@ export default function Dashboard() {
         outOfStockQuery = outOfStockQuery.eq('branch_id', userBranch || profile?.branch_id);
       } else if (effectiveBranchId) {
         outOfStockQuery = outOfStockQuery.eq('branch_id', effectiveBranchId);
+      } else if (profile?.role === 'owner' && userBranchIds.length > 0) {
+        outOfStockQuery = outOfStockQuery.in('branch_id', userBranchIds);
       }
       const { data: outOfStockDetails } = await outOfStockQuery;
 
@@ -199,6 +219,8 @@ export default function Dashboard() {
         lowStockQuery = lowStockQuery.eq('branch_id', userBranch || profile?.branch_id);
       } else if (effectiveBranchId) {
         lowStockQuery = lowStockQuery.eq('branch_id', effectiveBranchId);
+      } else if (profile?.role === 'owner' && userBranchIds.length > 0) {
+        lowStockQuery = lowStockQuery.in('branch_id', userBranchIds);
       }
       const { data: lowStockSource } = await lowStockQuery;
       const lowStockDetails = (lowStockSource || []).filter((m: any) => m.stock_quantity <= m.minimum_stock_level);
@@ -218,6 +240,8 @@ export default function Dashboard() {
           expiringQuery = expiringQuery.eq('branch_id', userBranch || profile?.branch_id);
         } else if (effectiveBranchId) {
           expiringQuery = expiringQuery.eq('branch_id', effectiveBranchId);
+        } else if (profile?.role === 'owner' && userBranchIds.length > 0) {
+          expiringQuery = expiringQuery.in('branch_id', userBranchIds);
         }
         return expiringQuery;
       })();
@@ -234,6 +258,8 @@ export default function Dashboard() {
           expiredQuery = expiredQuery.eq('branch_id', userBranch || profile?.branch_id);
         } else if (effectiveBranchId) {
           expiredQuery = expiredQuery.eq('branch_id', effectiveBranchId);
+        } else if (profile?.role === 'owner' && userBranchIds.length > 0) {
+          expiredQuery = expiredQuery.in('branch_id', userBranchIds);
         }
         return expiredQuery;
       })();
@@ -263,6 +289,8 @@ export default function Dashboard() {
           salesWithItemsQuery = salesWithItemsQuery.eq('branch_id', userBranch || profile?.branch_id);
         } else if (effectiveBranchId) {
           salesWithItemsQuery = salesWithItemsQuery.eq('branch_id', effectiveBranchId);
+        } else if (profile?.role === 'owner' && userBranchIds.length > 0) {
+          salesWithItemsQuery = salesWithItemsQuery.in('branch_id', userBranchIds);
         }
         return salesWithItemsQuery;
       })();
@@ -319,6 +347,8 @@ export default function Dashboard() {
           expensesQuery = expensesQuery.eq('branch_id', userBranch || profile?.branch_id);
         } else if (effectiveBranchId) {
           expensesQuery = expensesQuery.eq('branch_id', effectiveBranchId);
+        } else if (profile?.role === 'owner' && userBranchIds.length > 0) {
+          expensesQuery = expensesQuery.in('branch_id', userBranchIds);
         }
         return expensesQuery;
       })();
@@ -435,7 +465,30 @@ export default function Dashboard() {
   }
 
   if (loading) {
-    return <div>Loading dashboard...</div>;
+    return (
+      <div className="space-y-6">
+        <div className="flex items-center justify-between">
+          <div>
+            <Skeleton className="h-9 w-48 mb-2" />
+            <Skeleton className="h-5 w-96" />
+          </div>
+        </div>
+        <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-6 gap-6">
+          {[...Array(6)].map((_, i) => (
+            <Card key={i}>
+              <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
+                <Skeleton className="h-4 w-24" />
+                <Skeleton className="h-4 w-4 rounded" />
+              </CardHeader>
+              <CardContent>
+                <Skeleton className="h-8 w-20 mb-2" />
+                <Skeleton className="h-3 w-32" />
+              </CardContent>
+            </Card>
+          ))}
+        </div>
+      </div>
+    );
   }
 
   const COLORS = [

@@ -15,7 +15,7 @@ export function BranchProvider({ children }: { children: React.ReactNode }) {
   const [userBranch, setUserBranch] = useState<string | null>(null);
   const { profile, user } = useAuth();
 
-  // Get user's assigned branch if they are staff
+  // Get user's assigned branch if they are staff, or owner's first branch
   useEffect(() => {
     const fetchUserBranch = async () => {
       if (profile?.role === 'staff' && user?.id) {
@@ -28,10 +28,28 @@ export function BranchProvider({ children }: { children: React.ReactNode }) {
         } catch (error) {
           console.error('Error fetching user branch:', error);
         }
-      } else if (profile?.role === 'owner') {
-        // Owners can switch branches, start with "all" branches
-        setSelectedBranch(null);
-        setUserBranch(null);
+      } else if (profile?.role === 'owner' && profile?.id) {
+        // Owners default to their first branch for better performance
+        try {
+          const { data: branches } = await supabase
+            .from('pharmacy_branches')
+            .select('id')
+            .eq('pharmacy_owner_id', profile.id)
+            .order('is_main_branch', { ascending: false })
+            .order('created_at', { ascending: true })
+            .limit(1);
+          
+          if (branches && branches.length > 0) {
+            setSelectedBranch(branches[0].id);
+          } else {
+            setSelectedBranch(null); // No branches, default to "all"
+          }
+          setUserBranch(null); // Owners don't have a fixed branch
+        } catch (error) {
+          console.error('Error fetching owner branches:', error);
+          setSelectedBranch(null);
+          setUserBranch(null);
+        }
       }
     };
 
