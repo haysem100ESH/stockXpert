@@ -109,23 +109,16 @@ export default function DeveloperDashboard() {
     try {
       setLoading(true);
       
-      // Get all pharmacy owners with their subscription data and counts
-      const { data: profiles, error: profilesError } = await supabase
-        .from('profiles')
-        .select(`
-          id, 
-          full_name,
-          phone,
-          pharmacy_address,
-          active,
-          manually_deactivated,
-          created_at
-        `)
-        .eq('role', 'owner');
+      // Get all pharmacy owners with their email using RPC call
+      const { data: profilesWithEmail, error: profilesError } = await supabase
+        .rpc('get_owners_with_email');
 
-      if (profilesError) throw profilesError;
+      if (profilesError) {
+        console.error('RPC error:', profilesError);
+        throw profilesError;
+      }
 
-      if (!profiles || profiles.length === 0) {
+      if (!profilesWithEmail || profilesWithEmail.length === 0) {
         console.log('No pharmacy owners found');
         setOwners([]);
         return;
@@ -133,11 +126,7 @@ export default function DeveloperDashboard() {
 
       // Get additional data for each owner
       const ownersWithData = await Promise.all(
-        profiles.map(async (profile: any) => {
-          // Get actual email from auth.users
-          const { data: authData } = await supabase.auth.admin.getUserById(profile.id);
-          const email = authData?.user?.email || `${profile.full_name.toLowerCase().replace(/\s+/g, '')}@pharmacy.com`;
-
+        profilesWithEmail.map(async (profile: any) => {
           // Get subscription data - use maybeSingle to handle cases where no subscription exists
           const { data: subscription } = await supabase
             .from('pharmacy_subscriptions')
@@ -154,7 +143,7 @@ export default function DeveloperDashboard() {
           return {
             id: profile.id,
             full_name: profile.full_name,
-            email,
+            email: profile.email,
             phone: profile.phone,
             pharmacy_address: profile.pharmacy_address,
             active: profile.active,
@@ -220,6 +209,11 @@ export default function DeveloperDashboard() {
 
       if (updateError) throw updateError;
 
+      // Get current user ID
+      const { data: { user } } = await supabase.auth.getUser();
+      
+      if (!user) throw new Error('No authenticated user found');
+
       // Log transaction
       const { error: transactionError } = await supabase
         .from('transactions')
@@ -228,7 +222,7 @@ export default function DeveloperDashboard() {
           amount_collected: amount,
           credit_days_added: days,
           transaction_type: 'credit_payment',
-          processed_by: 'developer',
+          processed_by: user.id,
           notes: `Added ${days} days credit for $${amount}`
         });
 
