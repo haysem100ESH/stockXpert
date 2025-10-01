@@ -539,6 +539,19 @@ export type Database = {
         Args: Record<PropertyKey, never>
         Returns: undefined
       }
+      get_owners_with_email: {
+        Args: Record<PropertyKey, never>
+        Returns: {
+          active: boolean
+          email: string
+          full_name: string
+          id: string
+          manually_deactivated: boolean
+          pharmacy_address: string
+          phone: string
+          role: Database["public"]["Enums"]["user_role"]
+        }[]
+      }
       get_profile_by_email: {
         Args: { user_email: string }
         Returns: {
