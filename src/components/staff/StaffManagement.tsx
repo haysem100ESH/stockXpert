@@ -56,24 +56,38 @@ export default function StaffManagement() {
     try {
       setLoading(true);
       
-      const { data: profilesData, error } = await supabase
+      // Get user's branches first for proper filtering
+      const { data: userBranches } = await supabase
+        .from('pharmacy_branches')
+        .select('id')
+        .eq('pharmacy_owner_id', profile?.id);
+      
+      const userBranchIds = userBranches?.map(b => b.id) || [];
+
+      let query = supabase
         .from('profiles')
-        .select('id, full_name, role, phone, created_at')
+        .select('id, full_name, role, phone, branch_id, created_at, pharmacy_branches(name)')
+        .eq('role', 'staff')
         .order('created_at');
+
+      // Filter by selected branch if one is selected
+      if (selectedBranch) {
+        query = query.eq('branch_id', selectedBranch);
+      } else if (userBranchIds.length > 0) {
+        // When "All Branches" selected, only show owner's staff
+        query = query.in('branch_id', userBranchIds);
+      } else {
+        // No branches, return empty
+        setStaff([]);
+        setLoading(false);
+        return;
+      }
+
+      const { data: profilesData, error } = await query;
 
       if (error) throw error;
       
-      // For now, show all staff since branch_id doesn't exist in profiles table
-      // This will need to be fixed when the proper branch relationship is established
-      const staffData: StaffMember[] = profilesData?.map(profile => ({
-        id: profile.id,
-        full_name: profile.full_name,
-        role: profile.role,
-        phone: profile.phone,
-        branch_id: undefined,
-        created_at: profile.created_at,
-        pharmacy_branches: null
-      })) || [];
+      const staffData: StaffMember[] = profilesData || [];
       
       setStaff(staffData);
     } catch (error) {

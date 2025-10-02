@@ -73,6 +73,14 @@ export default function SalesManagement() {
 
   const fetchMedicines = async () => {
     try {
+      // Get user's branches first for proper filtering
+      const { data: userBranches } = await supabase
+        .from('pharmacy_branches')
+        .select('id')
+        .eq('pharmacy_owner_id', profile?.id);
+      
+      const userBranchIds = userBranches?.map(b => b.id) || [];
+
       let query = supabase
         .from('medicines')
         .select('id, name, generic_name, selling_price, stock_quantity, category, expiry_date')
@@ -82,6 +90,14 @@ export default function SalesManagement() {
       // Filter by selected branch if one is selected
       if (selectedBranch) {
         query = query.eq('branch_id', selectedBranch);
+      } else if (userBranchIds.length > 0) {
+        // When "All Branches" selected, only show owner's branches
+        query = query.in('branch_id', userBranchIds);
+      } else {
+        // No branches, return empty
+        setMedicines([]);
+        setLoading(false);
+        return;
       }
 
       const { data, error } = await query;
