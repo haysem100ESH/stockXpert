@@ -127,46 +127,33 @@ export default function Dashboard() {
       // Determine which branch to filter by (staff fixed to their branch)
       const effectiveBranchId = profile?.role === 'staff' ? userBranch : selectedBranch;
       
-      // Get owner's branches for "All Branches" filtering
-      let userBranchIds: string[] = [];
-      if (profile?.role === 'owner') {
-        const { data: userBranches } = await supabase
-          .from('pharmacy_branches')
-          .select('id')
-          .eq('pharmacy_owner_id', profile?.id);
-        userBranchIds = userBranches?.map(b => b.id) || [];
-      }
-      
-      // Fetch revenue for the selected period
+      // Fetch revenue for the selected period - RLS handles ownership filtering
       let salesQuery = supabase
         .from('sales')
         .select('total_amount, created_at, payment_method, discount_amount')
         .gte('created_at', start.toISOString())
         .lte('created_at', end.toISOString());
-      // For staff, always filter by their branch
+      
+      // For staff, filter by their branch; for owners, optionally filter by selected branch
       if (profile?.role === 'staff') {
         salesQuery = salesQuery.eq('branch_id', userBranch || profile?.branch_id);
       } else if (effectiveBranchId) {
         salesQuery = salesQuery.eq('branch_id', effectiveBranchId);
-      } else if (profile?.role === 'owner' && userBranchIds.length > 0) {
-        // "All Branches" for owner - only show their branches
-        salesQuery = salesQuery.in('branch_id', userBranchIds);
       }
       const { data: salesData } = await salesQuery;
       
       const totalRevenue = salesData?.reduce((sum, sale) => sum + Number(sale.total_amount), 0) || 0;
 
-      // Fetch total products and stock info  
+      // Fetch total products and stock info - RLS handles ownership filtering
       let medicinesQuery = supabase
         .from('medicines')
         .select('stock_quantity, minimum_stock_level');
-      // For staff, always filter by their branch - no data without branch filter
+      
+      // For staff, filter by their branch; for owners, optionally filter by selected branch
       if (profile?.role === 'staff') {
         medicinesQuery = medicinesQuery.eq('branch_id', userBranch || profile?.branch_id);
       } else if (effectiveBranchId) {
         medicinesQuery = medicinesQuery.eq('branch_id', effectiveBranchId);
-      } else if (profile?.role === 'owner' && userBranchIds.length > 0) {
-        medicinesQuery = medicinesQuery.in('branch_id', userBranchIds);
       }
       const { data: medicinesData } = await medicinesQuery;
 
@@ -176,51 +163,48 @@ export default function Dashboard() {
       ).length || 0;
       const outOfStockItems = medicinesData?.filter(med => med.stock_quantity === 0).length || 0;
 
-      // Fetch sales for the selected period
+      // Fetch sales for the selected period - RLS handles ownership filtering
       let periodSalesQuery = supabase
         .from('sales')
         .select('id')
         .gte('created_at', start.toISOString())
         .lte('created_at', end.toISOString());
-      // For staff, always filter by their branch
+      
+      // For staff, filter by their branch; for owners, optionally filter by selected branch
       if (profile?.role === 'staff') {
         periodSalesQuery = periodSalesQuery.eq('branch_id', userBranch || profile?.branch_id);
       } else if (effectiveBranchId) {
         periodSalesQuery = periodSalesQuery.eq('branch_id', effectiveBranchId);
-      } else if (profile?.role === 'owner' && userBranchIds.length > 0) {
-        periodSalesQuery = periodSalesQuery.in('branch_id', userBranchIds);
       }
       const { data: periodSalesData } = await periodSalesQuery;
 
       const todaySales = periodSalesData?.length || 0;
 
-      // Fetch out of stock items details
+      // Fetch out of stock items details - RLS handles ownership filtering
       let outOfStockQuery = supabase
         .from('medicines')
         .select('id, name, category, stock_quantity')
         .eq('stock_quantity', 0);
-      // For staff, always filter by their branch
+      
+      // For staff, filter by their branch; for owners, optionally filter by selected branch
       if (profile?.role === 'staff') {
         outOfStockQuery = outOfStockQuery.eq('branch_id', userBranch || profile?.branch_id);
       } else if (effectiveBranchId) {
         outOfStockQuery = outOfStockQuery.eq('branch_id', effectiveBranchId);
-      } else if (profile?.role === 'owner' && userBranchIds.length > 0) {
-        outOfStockQuery = outOfStockQuery.in('branch_id', userBranchIds);
       }
       const { data: outOfStockDetails } = await outOfStockQuery;
 
-      // Fetch low stock items details
+      // Fetch low stock items details - RLS handles ownership filtering
       let lowStockQuery = supabase
         .from('medicines')
         .select('id, name, category, stock_quantity, minimum_stock_level')
         .gt('stock_quantity', 0);
-      // For staff, always filter by their branch
+      
+      // For staff, filter by their branch; for owners, optionally filter by selected branch
       if (profile?.role === 'staff') {
         lowStockQuery = lowStockQuery.eq('branch_id', userBranch || profile?.branch_id);
       } else if (effectiveBranchId) {
         lowStockQuery = lowStockQuery.eq('branch_id', effectiveBranchId);
-      } else if (profile?.role === 'owner' && userBranchIds.length > 0) {
-        lowStockQuery = lowStockQuery.in('branch_id', userBranchIds);
       }
       const { data: lowStockSource } = await lowStockQuery;
       const lowStockDetails = (lowStockSource || []).filter((m: any) => m.stock_quantity <= m.minimum_stock_level);
@@ -235,13 +219,12 @@ export default function Dashboard() {
           .not('expiry_date', 'is', null)
           .lte('expiry_date', thirtyDaysFromNow.toISOString().split('T')[0])
           .gte('expiry_date', new Date().toISOString().split('T')[0]);
-        // For staff, always filter by their branch
+        
+        // For staff, filter by their branch; for owners, optionally filter by selected branch
         if (profile?.role === 'staff') {
           expiringQuery = expiringQuery.eq('branch_id', userBranch || profile?.branch_id);
         } else if (effectiveBranchId) {
           expiringQuery = expiringQuery.eq('branch_id', effectiveBranchId);
-        } else if (profile?.role === 'owner' && userBranchIds.length > 0) {
-          expiringQuery = expiringQuery.in('branch_id', userBranchIds);
         }
         return expiringQuery;
       })();
@@ -253,13 +236,12 @@ export default function Dashboard() {
           .select('id, name, category, expiry_date')
           .not('expiry_date', 'is', null)
           .lte('expiry_date', new Date().toISOString().split('T')[0]);
-        // For staff, always filter by their branch
+        
+        // For staff, filter by their branch; for owners, optionally filter by selected branch
         if (profile?.role === 'staff') {
           expiredQuery = expiredQuery.eq('branch_id', userBranch || profile?.branch_id);
         } else if (effectiveBranchId) {
           expiredQuery = expiredQuery.eq('branch_id', effectiveBranchId);
-        } else if (profile?.role === 'owner' && userBranchIds.length > 0) {
-          expiredQuery = expiredQuery.in('branch_id', userBranchIds);
         }
         return expiredQuery;
       })();
@@ -284,13 +266,12 @@ export default function Dashboard() {
           `)
           .gte('created_at', start.toISOString())
           .lte('created_at', end.toISOString());
-        // For staff, always filter by their branch
+        
+        // For staff, filter by their branch; for owners, optionally filter by selected branch
         if (profile?.role === 'staff') {
           salesWithItemsQuery = salesWithItemsQuery.eq('branch_id', userBranch || profile?.branch_id);
         } else if (effectiveBranchId) {
           salesWithItemsQuery = salesWithItemsQuery.eq('branch_id', effectiveBranchId);
-        } else if (profile?.role === 'owner' && userBranchIds.length > 0) {
-          salesWithItemsQuery = salesWithItemsQuery.in('branch_id', userBranchIds);
         }
         return salesWithItemsQuery;
       })();
@@ -342,13 +323,12 @@ export default function Dashboard() {
           .select('amount, created_at')
           .gte('created_at', start.toISOString())
           .lte('created_at', end.toISOString());
-        // For staff, always filter by their branch
+        
+        // For staff, filter by their branch; for owners, optionally filter by selected branch
         if (profile?.role === 'staff') {
           expensesQuery = expensesQuery.eq('branch_id', userBranch || profile?.branch_id);
         } else if (effectiveBranchId) {
           expensesQuery = expensesQuery.eq('branch_id', effectiveBranchId);
-        } else if (profile?.role === 'owner' && userBranchIds.length > 0) {
-          expensesQuery = expensesQuery.in('branch_id', userBranchIds);
         }
         return expensesQuery;
       })();

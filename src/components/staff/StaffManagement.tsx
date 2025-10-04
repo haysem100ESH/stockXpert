@@ -56,31 +56,16 @@ export default function StaffManagement() {
     try {
       setLoading(true);
       
-      // Get user's branches first for proper filtering
-      const { data: userBranches } = await supabase
-        .from('pharmacy_branches')
-        .select('id')
-        .eq('pharmacy_owner_id', profile?.id);
-      
-      const userBranchIds = userBranches?.map(b => b.id) || [];
-
+      // RLS policies handle ownership filtering automatically
       let query = supabase
         .from('profiles')
         .select('id, full_name, role, phone, branch_id, created_at, pharmacy_branches(name)')
         .eq('role', 'staff')
         .order('created_at');
 
-      // Filter by selected branch if one is selected
+      // Filter by specific branch if selected
       if (selectedBranch) {
         query = query.eq('branch_id', selectedBranch);
-      } else if (userBranchIds.length > 0) {
-        // When "All Branches" selected, only show owner's staff
-        query = query.in('branch_id', userBranchIds);
-      } else {
-        // No branches, return empty
-        setStaff([]);
-        setLoading(false);
-        return;
       }
 
       const { data: profilesData, error } = await query;

@@ -88,14 +88,6 @@ export default function FinanceManagement() {
 
   const fetchFinanceData = async () => {
     try {
-      // Get user's branches first for proper filtering
-      const { data: userBranches } = await supabase
-        .from('pharmacy_branches')
-        .select('id')
-        .eq('pharmacy_owner_id', profile?.id);
-      
-      const userBranchIds = userBranches?.map(b => b.id) || [];
-
       const now = new Date();
       let queryStartDate = startDate || new Date();
       let queryEndDate = endDate || now;
@@ -117,7 +109,7 @@ export default function FinanceManagement() {
         }
       }
 
-      // Fetch sales with medicine details
+      // Fetch sales with medicine details - RLS handles ownership filtering
       let salesQuery = supabase
         .from('sales')
         .select(`
@@ -133,19 +125,16 @@ export default function FinanceManagement() {
         .lte('created_at', queryEndDate.toISOString())
         .order('created_at', { ascending: false });
 
-      // Filter by selected branch if one is selected
+      // Filter by specific branch if selected
       if (selectedBranch) {
         salesQuery = salesQuery.eq('branch_id', selectedBranch);
-      } else if (userBranchIds.length > 0) {
-        // When "All Branches" selected, only show owner's branches
-        salesQuery = salesQuery.in('branch_id', userBranchIds);
       }
 
       const { data: salesData, error: salesError } = await salesQuery;
 
       if (salesError) throw salesError;
 
-      // Fetch expenses
+      // Fetch expenses - RLS handles ownership filtering
       let expensesQuery = supabase
         .from('expenses')
         .select('*')
@@ -153,12 +142,9 @@ export default function FinanceManagement() {
         .lte('created_at', queryEndDate.toISOString())
         .order('created_at', { ascending: false });
 
-      // Filter by selected branch if one is selected
+      // Filter by specific branch if selected
       if (selectedBranch) {
         expensesQuery = expensesQuery.eq('branch_id', selectedBranch);
-      } else if (userBranchIds.length > 0) {
-        // When "All Branches" selected, only show owner's branches
-        expensesQuery = expensesQuery.in('branch_id', userBranchIds);
       }
 
       const { data: expensesData, error: expensesError } = await expensesQuery;

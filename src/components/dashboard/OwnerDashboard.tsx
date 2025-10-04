@@ -76,19 +76,9 @@ export default function OwnerDashboard() {
 
   const fetchDashboardStats = async () => {
     try {
-      // Get user's branches first for proper filtering
-      const { data: userBranches } = await supabase
-        .from('pharmacy_branches')
-        .select('id')
-        .eq('pharmacy_owner_id', profile?.id);
-      
-      const userBranchIds = userBranches?.map(b => b.id) || [];
-
-      // Build queries with branch filtering
+      // Build queries - RLS policies handle ownership filtering automatically
       let salesQuery = supabase.from('sales').select('total_amount, payment_method, discount_amount, branch_id');
       let medicinesQuery = supabase.from('medicines').select('stock_quantity, minimum_stock_level, expiry_date, branch_id');
-      
-      // For sale_items, we need to join with sales to get branch filtering
       let saleItemsQuery = supabase
         .from('sale_items')
         .select(`
@@ -96,20 +86,11 @@ export default function OwnerDashboard() {
           sales!inner(branch_id)
         `);
 
+      // Filter by specific branch if selected
       if (selectedBranch) {
-        // Filter by specific branch
         salesQuery = salesQuery.eq('branch_id', selectedBranch);
         medicinesQuery = medicinesQuery.eq('branch_id', selectedBranch);
         saleItemsQuery = saleItemsQuery.eq('sales.branch_id', selectedBranch);
-      } else if (userBranchIds.length > 0) {
-        // When "All Branches" selected, only show owner's branches
-        salesQuery = salesQuery.in('branch_id', userBranchIds);
-        medicinesQuery = medicinesQuery.in('branch_id', userBranchIds);
-        saleItemsQuery = saleItemsQuery.in('sales.branch_id', userBranchIds);
-      } else {
-        // No branches, return early
-        setLoading(false);
-        return;
       }
 
       // Fetch data
@@ -125,7 +106,7 @@ export default function OwnerDashboard() {
       const outOfStockItems = medicinesData?.filter(medicine => medicine.stock_quantity === 0).length || 0;
       const totalSoldItems = saleItemsData?.reduce((sum, item) => sum + item.quantity, 0) || 0;
 
-      // Fetch expired items count with branch filtering
+      // Fetch expired items count
       let expiredQuery = supabase
         .from('medicines')
         .select('id')
@@ -134,8 +115,6 @@ export default function OwnerDashboard() {
       
       if (selectedBranch) {
         expiredQuery = expiredQuery.eq('branch_id', selectedBranch);
-      } else if (userBranchIds.length > 0) {
-        expiredQuery = expiredQuery.in('branch_id', userBranchIds);
       }
 
       const { data: expiredMedicinesData } = await expiredQuery;
@@ -155,8 +134,6 @@ export default function OwnerDashboard() {
       
       if (selectedBranch) {
         salesWithItemsQuery = salesWithItemsQuery.eq('branch_id', selectedBranch);
-      } else if (userBranchIds.length > 0) {
-        salesWithItemsQuery = salesWithItemsQuery.in('branch_id', userBranchIds);
       }
 
       const { data: salesWithItems } = await salesWithItemsQuery;
