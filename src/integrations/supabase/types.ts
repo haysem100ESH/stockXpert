@@ -552,6 +552,10 @@ export type Database = {
           role: Database["public"]["Enums"]["user_role"]
         }[]
       }
+      get_pharmacy_owner_id: {
+        Args: Record<PropertyKey, never>
+        Returns: string
+      }
       get_profile_by_email: {
         Args: { user_email: string }
         Returns: {
@@ -583,6 +587,10 @@ export type Database = {
       }
       is_staff: {
         Args: Record<PropertyKey, never>
+        Returns: boolean
+      }
+      user_owns_branch: {
+        Args: { branch_id_param: string }
         Returns: boolean
       }
     }
