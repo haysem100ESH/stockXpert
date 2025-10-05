@@ -59,7 +59,7 @@ export default function StaffManagement() {
       // RLS policies handle ownership filtering automatically
       let query = supabase
         .from('profiles')
-        .select('id, full_name, role, phone, branch_id, created_at, pharmacy_branches(name)')
+        .select('id, full_name, role, phone, branch_id, created_at, pharmacy_branches!profiles_branch_id_fkey(name)')
         .eq('role', 'staff')
         .order('created_at');
 

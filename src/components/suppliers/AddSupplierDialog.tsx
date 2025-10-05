@@ -6,6 +6,7 @@ import { Label } from '@/components/ui/label';
 import { Textarea } from '@/components/ui/textarea';
 import { supabase } from '@/integrations/supabase/client';
 import { useToast } from '@/hooks/use-toast';
+import { useBranchContext } from '@/hooks/useBranchContext';
 
 interface AddSupplierDialogProps {
   open: boolean;
@@ -27,6 +28,7 @@ export default function AddSupplierDialog({
   });
   const [loading, setLoading] = useState(false);
   const { toast } = useToast();
+  const { selectedBranch } = useBranchContext();
 
   const resetForm = () => {
     setFormData({
@@ -42,6 +44,17 @@ export default function AddSupplierDialog({
     e.preventDefault();
     setLoading(true);
 
+    // Ensure a branch is selected (required by RLS)
+    if (!selectedBranch) {
+      toast({
+        title: "Select a branch",
+        description: "Please select a branch before adding a supplier.",
+        variant: "destructive",
+      });
+      setLoading(false);
+      return;
+    }
+
     try {
       const { error } = await supabase
         .from('suppliers')
@@ -50,7 +63,8 @@ export default function AddSupplierDialog({
           contact_person: formData.contact_person || null,
           phone: formData.phone || null,
           email: formData.email || null,
-          address: formData.address || null
+          address: formData.address || null,
+          branch_id: selectedBranch
         });
 
       if (error) throw error;
