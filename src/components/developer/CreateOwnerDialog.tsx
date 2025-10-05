@@ -20,6 +20,7 @@ export default function CreateOwnerDialog({ onOwnerCreated }: CreateOwnerDialogP
     email: '',
     password: '',
     phone: '',
+    pharmacy_name: '',
     pharmacy_address: ''
   });
   const [creditPlans, setCreditPlans] = useState([{ days: 30, price: 50 }]);
@@ -88,6 +89,7 @@ export default function CreateOwnerDialog({ onOwnerCreated }: CreateOwnerDialogP
         email: '',
         password: '',
         phone: '',
+        pharmacy_name: '',
         pharmacy_address: ''
       });
       setCreditPlans([{ days: 30, price: 50 }]);
@@ -167,6 +169,16 @@ export default function CreateOwnerDialog({ onOwnerCreated }: CreateOwnerDialogP
               value={formData.phone}
               onChange={(e) => handleInputChange('phone', e.target.value)}
               placeholder="+1 (555) 123-4567"
+            />
+          </div>
+
+          <div>
+            <Label htmlFor="pharmacy_name">Pharmacy Name</Label>
+            <Input
+              id="pharmacy_name"
+              value={formData.pharmacy_name}
+              onChange={(e) => handleInputChange('pharmacy_name', e.target.value)}
+              placeholder="ABC Pharmacy"
             />
           </div>
 

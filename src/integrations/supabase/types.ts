@@ -269,6 +269,7 @@ export type Database = {
           id: string
           manually_deactivated: boolean | null
           pharmacy_address: string | null
+          pharmacy_name: string | null
           phone: string | null
           role: Database["public"]["Enums"]["user_role"]
           security_answer_hash: string | null
@@ -283,6 +284,7 @@ export type Database = {
           id: string
           manually_deactivated?: boolean | null
           pharmacy_address?: string | null
+          pharmacy_name?: string | null
           phone?: string | null
           role?: Database["public"]["Enums"]["user_role"]
           security_answer_hash?: string | null
@@ -297,6 +299,7 @@ export type Database = {
           id?: string
           manually_deactivated?: boolean | null
           pharmacy_address?: string | null
+          pharmacy_name?: string | null
           phone?: string | null
           role?: Database["public"]["Enums"]["user_role"]
           security_answer_hash?: string | null

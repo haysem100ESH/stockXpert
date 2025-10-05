@@ -11,6 +11,7 @@ interface CreateOwnerRequest {
   email: string;
   password: string;
   phone?: string;
+  pharmacy_name?: string;
   pharmacy_address?: string;
   creditPlans?: Array<{ days: number; price: number }>;
 }
@@ -38,7 +39,7 @@ const handler = async (req: Request): Promise<Response> => {
     });
 
     const requestBody = await req.json() as CreateOwnerRequest;
-    const { full_name, email, password, phone, pharmacy_address, creditPlans } = requestBody;
+    const { full_name, email, password, phone, pharmacy_name, pharmacy_address, creditPlans } = requestBody;
 
     // Validate required fields
     if (!full_name || !email || !password) {
@@ -84,6 +85,7 @@ const handler = async (req: Request): Promise<Response> => {
       .update({
         full_name,
         phone,
+        pharmacy_name,
         pharmacy_address,
         role: 'owner',
         active: true

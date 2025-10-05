@@ -18,6 +18,7 @@ interface PharmacyOwner {
   full_name: string;
   email: string;
   phone?: string;
+  pharmacy_name?: string;
   pharmacy_address?: string;
   active: boolean;
   manually_deactivated?: boolean;
@@ -41,6 +42,7 @@ interface Transaction {
   notes?: string;
   owner_name?: string;
   pharmacy_name?: string;
+  pharmacy_address?: string;
 }
 
 export default function DeveloperDashboard() {
@@ -56,6 +58,9 @@ export default function DeveloperDashboard() {
   const [selectedOwnerForCredit, setSelectedOwnerForCredit] = useState<PharmacyOwner | null>(null);
   const [creditDialogOpen, setCreditDialogOpen] = useState(false);
   const [ownerCreditPlans, setOwnerCreditPlans] = useState<any[]>([]);
+  const [filterPharmacyName, setFilterPharmacyName] = useState('');
+  const [filterMonth, setFilterMonth] = useState('');
+  const [filterCreditAdded, setFilterCreditAdded] = useState('');
   const { toast } = useToast();
 
   useEffect(() => {
@@ -87,14 +92,15 @@ export default function DeveloperDashboard() {
         (transactionData || []).map(async (transaction: any) => {
           const { data: profileData } = await supabase
             .from('profiles')
-            .select('full_name, pharmacy_address')
+            .select('full_name, pharmacy_name, pharmacy_address')
             .eq('id', transaction.pharmacy_owner_id)
             .single();
 
           return {
             ...transaction,
             owner_name: profileData?.full_name || 'Unknown',
-            pharmacy_name: profileData?.pharmacy_address || 'Unknown Pharmacy'
+            pharmacy_name: profileData?.pharmacy_name || 'N/A',
+            pharmacy_address: profileData?.pharmacy_address || 'N/A'
           };
         })
       );
@@ -145,6 +151,7 @@ export default function DeveloperDashboard() {
             full_name: profile.full_name,
             email: profile.email,
             phone: profile.phone,
+            pharmacy_name: profile.pharmacy_name,
             pharmacy_address: profile.pharmacy_address,
             active: profile.active,
             manually_deactivated: profile.manually_deactivated,
@@ -671,11 +678,44 @@ export default function DeveloperDashboard() {
             <CardDescription>Payment history and credit additions</CardDescription>
           </CardHeader>
           <CardContent>
+            {/* Filters */}
+            <div className="grid grid-cols-1 md:grid-cols-3 gap-4 mb-4">
+              <div>
+                <Label htmlFor="filter-pharmacy">Filter by Pharmacy Name</Label>
+                <Input
+                  id="filter-pharmacy"
+                  placeholder="Search pharmacy..."
+                  value={filterPharmacyName}
+                  onChange={(e) => setFilterPharmacyName(e.target.value)}
+                />
+              </div>
+              <div>
+                <Label htmlFor="filter-month">Filter by Month</Label>
+                <Input
+                  id="filter-month"
+                  type="month"
+                  value={filterMonth}
+                  onChange={(e) => setFilterMonth(e.target.value)}
+                />
+              </div>
+              <div>
+                <Label htmlFor="filter-credit">Filter by Credit Added</Label>
+                <Input
+                  id="filter-credit"
+                  type="number"
+                  placeholder="e.g., 30"
+                  value={filterCreditAdded}
+                  onChange={(e) => setFilterCreditAdded(e.target.value)}
+                />
+              </div>
+            </div>
+
             <Table>
               <TableHeader>
                 <TableRow>
                   <TableHead>Date & Time</TableHead>
                   <TableHead>Pharmacy Name</TableHead>
+                  <TableHead>Address</TableHead>
                   <TableHead>Owner</TableHead>
                   <TableHead>Amount Collected</TableHead>
                   <TableHead>Credit Added</TableHead>
@@ -683,29 +723,45 @@ export default function DeveloperDashboard() {
                 </TableRow>
               </TableHeader>
               <TableBody>
-                {transactions.map((transaction) => (
-                  <TableRow key={transaction.id}>
-                    <TableCell>
-                      {new Date(transaction.created_at).toLocaleString('en-US', {
-                        year: 'numeric',
-                        month: '2-digit',
-                        day: '2-digit',
-                        hour: '2-digit',
-                        minute: '2-digit',
-                        second: '2-digit',
-                        hour12: false
-                      })}
-                    </TableCell>
-                    <TableCell>{transaction.pharmacy_name}</TableCell>
-                    <TableCell>{transaction.owner_name}</TableCell>
-                    <TableCell>${transaction.amount_collected}</TableCell>
-                    <TableCell>{transaction.credit_days_added} days</TableCell>
-                    <TableCell>{transaction.notes}</TableCell>
-                  </TableRow>
-                ))}
+                {transactions
+                  .filter((transaction) => {
+                    const matchesPharmacy = !filterPharmacyName || 
+                      transaction.pharmacy_name?.toLowerCase().includes(filterPharmacyName.toLowerCase());
+                    
+                    const matchesMonth = !filterMonth || 
+                      new Date(transaction.created_at).toISOString().slice(0, 7) === filterMonth;
+                    
+                    const matchesCredit = !filterCreditAdded || 
+                      transaction.credit_days_added === parseInt(filterCreditAdded);
+
+                    return matchesPharmacy && matchesMonth && matchesCredit;
+                  })
+                  .map((transaction) => (
+                    <TableRow key={transaction.id}>
+                      <TableCell>
+                        {new Date(transaction.created_at).toLocaleString('en-US', {
+                          year: 'numeric',
+                          month: '2-digit',
+                          day: '2-digit',
+                          hour: '2-digit',
+                          minute: '2-digit',
+                          second: '2-digit',
+                          hour12: false
+                        })}
+                      </TableCell>
+                      <TableCell>{transaction.pharmacy_name}</TableCell>
+                      <TableCell className="text-sm text-muted-foreground">
+                        {transaction.pharmacy_address}
+                      </TableCell>
+                      <TableCell>{transaction.owner_name}</TableCell>
+                      <TableCell>${transaction.amount_collected}</TableCell>
+                      <TableCell>{transaction.credit_days_added} days</TableCell>
+                      <TableCell>{transaction.notes}</TableCell>
+                    </TableRow>
+                  ))}
                 {transactions.length === 0 && (
                   <TableRow>
-                    <TableCell colSpan={6} className="text-center text-muted-foreground">
+                    <TableCell colSpan={7} className="text-center text-muted-foreground">
                       No transactions found
                     </TableCell>
                   </TableRow>
