@@ -9,17 +9,34 @@ import { Loader2 } from 'lucide-react';
 import { supabase } from '@/integrations/supabase/client';
 import { useToast } from '@/hooks/use-toast';
 import { useBranchContext } from '@/hooks/useBranchContext';
+interface Medicine {
+  id: string;
+  name: string;
+  generic_name?: string;
+  category: string;
+  manufacturer?: string;
+  batch_number?: string;
+  country_name?: string;
+  purchase_price: number;
+  selling_price: number;
+  stock_quantity: number;
+  minimum_stock_level: number;
+  expiry_date?: string;
+  expiry_alert_enabled?: boolean;
+}
+
 interface AddMedicineDialogProps {
   open: boolean;
   onOpenChange: (open: boolean) => void;
   onMedicineAdded: () => void;
+  replicateData?: Medicine | null;
 }
 
 const categories = [
   'tablet', 'capsule', 'syrup', 'injection', 'cream', 'ointment', 'drops', 'inhaler', 'other'
 ];
 
-export default function AddMedicineDialog({ open, onOpenChange, onMedicineAdded }: AddMedicineDialogProps) {
+export default function AddMedicineDialog({ open, onOpenChange, onMedicineAdded, replicateData }: AddMedicineDialogProps) {
   const [loading, setLoading] = useState(false);
   const { toast } = useToast();
   const { selectedBranch, userBranch } = useBranchContext();
@@ -34,6 +51,7 @@ export default function AddMedicineDialog({ open, onOpenChange, onMedicineAdded 
       category: formData.get('category') as 'tablet' | 'capsule' | 'syrup' | 'injection' | 'cream' | 'ointment' | 'drops' | 'inhaler' | 'other',
       manufacturer: formData.get('manufacturer') as string || null,
       batch_number: formData.get('batch_number') as string || null,
+      country_name: formData.get('country_name') as string || null,
       purchase_price: parseFloat(formData.get('purchase_price') as string),
       selling_price: parseFloat(formData.get('selling_price') as string),
       stock_quantity: parseInt(formData.get('stock_quantity') as string),
@@ -71,9 +89,9 @@ export default function AddMedicineDialog({ open, onOpenChange, onMedicineAdded 
     <Dialog open={open} onOpenChange={onOpenChange}>
       <DialogContent className="max-w-2xl max-h-[90vh] overflow-y-auto">
         <DialogHeader>
-          <DialogTitle>Add New Medicine</DialogTitle>
+          <DialogTitle>{replicateData ? 'Replicate Medicine' : 'Add New Medicine'}</DialogTitle>
           <DialogDescription>
-            Enter the details for the new medicine
+            {replicateData ? 'Create a new medicine based on existing data' : 'Enter the details for the new medicine'}
           </DialogDescription>
         </DialogHeader>
 
@@ -81,17 +99,17 @@ export default function AddMedicineDialog({ open, onOpenChange, onMedicineAdded 
           <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
             <div className="space-y-2">
               <Label htmlFor="name">Medicine Name *</Label>
-              <Input id="name" name="name" required />
+              <Input id="name" name="name" defaultValue={replicateData?.name} required />
             </div>
 
             <div className="space-y-2">
               <Label htmlFor="generic_name">Generic Name</Label>
-              <Input id="generic_name" name="generic_name" />
+              <Input id="generic_name" name="generic_name" defaultValue={replicateData?.generic_name} />
             </div>
 
             <div className="space-y-2">
               <Label htmlFor="category">Category *</Label>
-              <Select name="category" required>
+              <Select name="category" defaultValue={replicateData?.category} required>
                 <SelectTrigger>
                   <SelectValue placeholder="Select category" />
                 </SelectTrigger>
@@ -107,12 +125,17 @@ export default function AddMedicineDialog({ open, onOpenChange, onMedicineAdded 
 
             <div className="space-y-2">
               <Label htmlFor="manufacturer">Manufacturer</Label>
-              <Input id="manufacturer" name="manufacturer" />
+              <Input id="manufacturer" name="manufacturer" defaultValue={replicateData?.manufacturer} />
             </div>
 
             <div className="space-y-2">
               <Label htmlFor="batch_number">Batch Number</Label>
-              <Input id="batch_number" name="batch_number" />
+              <Input id="batch_number" name="batch_number" defaultValue={replicateData?.batch_number} />
+            </div>
+
+            <div className="space-y-2">
+              <Label htmlFor="country_name">Country Name</Label>
+              <Input id="country_name" name="country_name" defaultValue={replicateData?.country_name} />
             </div>
 
             <div className="space-y-2">
@@ -123,6 +146,7 @@ export default function AddMedicineDialog({ open, onOpenChange, onMedicineAdded 
                 type="number"
                 step="0.01"
                 min="0"
+                defaultValue={replicateData?.purchase_price}
                 required
               />
             </div>
@@ -135,6 +159,7 @@ export default function AddMedicineDialog({ open, onOpenChange, onMedicineAdded 
                 type="number"
                 step="0.01"
                 min="0"
+                defaultValue={replicateData?.selling_price}
                 required
               />
             </div>
@@ -146,6 +171,7 @@ export default function AddMedicineDialog({ open, onOpenChange, onMedicineAdded 
                 name="stock_quantity"
                 type="number"
                 min="0"
+                defaultValue={replicateData?.stock_quantity}
                 required
               />
             </div>
@@ -157,14 +183,14 @@ export default function AddMedicineDialog({ open, onOpenChange, onMedicineAdded 
                 name="minimum_stock_level"
                 type="number"
                 min="0"
-                defaultValue="10"
+                defaultValue={replicateData ? replicateData.minimum_stock_level : 10}
                 required
               />
             </div>
 
             <div className="space-y-2">
               <Label htmlFor="expiry_date">Expiry Date</Label>
-              <Input id="expiry_date" name="expiry_date" type="date" />
+              <Input id="expiry_date" name="expiry_date" type="date" defaultValue={replicateData?.expiry_date} />
             </div>
           </div>
 
@@ -192,7 +218,7 @@ export default function AddMedicineDialog({ open, onOpenChange, onMedicineAdded 
             </Button>
             <Button type="submit" disabled={loading}>
               {loading && <Loader2 className="mr-2 h-4 w-4 animate-spin" />}
-              Add Medicine
+              {replicateData ? 'Create Medicine' : 'Add Medicine'}
             </Button>
           </div>
         </form>

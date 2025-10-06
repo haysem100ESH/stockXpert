@@ -15,6 +15,7 @@ interface Medicine {
   category: string;
   manufacturer?: string;
   batch_number?: string;
+  country_name?: string;
   purchase_price: number;
   selling_price: number;
   stock_quantity: number;
@@ -42,6 +43,7 @@ export default function EditMedicineDialog({
     category: '' as 'tablet' | 'capsule' | 'syrup' | 'injection' | 'cream' | 'ointment' | 'drops' | 'inhaler' | 'other',
     manufacturer: '',
     batch_number: '',
+    country_name: '',
     purchase_price: '',
     selling_price: '',
     stock_quantity: '',
@@ -60,6 +62,7 @@ export default function EditMedicineDialog({
         category: medicine.category as any,
         manufacturer: medicine.manufacturer || '',
         batch_number: medicine.batch_number || '',
+        country_name: medicine.country_name || '',
         purchase_price: medicine.purchase_price.toString(),
         selling_price: medicine.selling_price.toString(),
         stock_quantity: medicine.stock_quantity.toString(),
@@ -85,6 +88,7 @@ export default function EditMedicineDialog({
           category: medicineData.category,
           manufacturer: medicineData.manufacturer || null,
           batch_number: medicineData.batch_number || null,
+          country_name: medicineData.country_name || null,
           purchase_price: parseFloat(medicineData.purchase_price),
           selling_price: parseFloat(medicineData.selling_price),
           stock_quantity: parseInt(medicineData.stock_quantity),
@@ -181,6 +185,15 @@ export default function EditMedicineDialog({
               id="batch_number"
               value={medicineData.batch_number}
               onChange={(e) => setMedicineData({ ...medicineData, batch_number: e.target.value })}
+            />
+          </div>
+
+          <div className="space-y-2">
+            <Label htmlFor="country_name">Country Name</Label>
+            <Input
+              id="country_name"
+              value={medicineData.country_name}
+              onChange={(e) => setMedicineData({ ...medicineData, country_name: e.target.value })}
             />
           </div>
 

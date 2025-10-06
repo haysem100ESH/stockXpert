@@ -24,6 +24,7 @@ interface Medicine {
   category: string;
   manufacturer?: string;
   batch_number?: string;
+  country_name?: string;
   purchase_price: number;
   selling_price: number;
   stock_quantity: number;
@@ -46,7 +47,9 @@ export default function InventoryManagement() {
   const [showAddDialog, setShowAddDialog] = useState(false);
   const [showEditDialog, setShowEditDialog] = useState(false);
   const [showDeleteConfirm, setShowDeleteConfirm] = useState(false);
+  const [showReplicateDialog, setShowReplicateDialog] = useState(false);
   const [selectedMedicine, setSelectedMedicine] = useState<Medicine | null>(null);
+  const [medicineToReplicate, setMedicineToReplicate] = useState<Medicine | null>(null);
   const [medicineToDelete, setMedicineToDelete] = useState<string | null>(null);
   const { toast } = useToast();
   const { profile } = useAuth();
@@ -166,6 +169,11 @@ export default function InventoryManagement() {
   const handleEditMedicine = (medicine: Medicine) => {
     setSelectedMedicine(medicine);
     setShowEditDialog(true);
+  };
+
+  const handleReplicateMedicine = (medicine: Medicine) => {
+    setMedicineToReplicate(medicine);
+    setShowReplicateDialog(true);
   };
 
   const handleDeleteMedicine = (medicineId: string) => {
@@ -298,14 +306,24 @@ export default function InventoryManagement() {
                     variant="ghost" 
                     size="sm"
                     onClick={() => handleEditMedicine(medicine)}
+                    title="Edit"
                   >
                     <Edit className="h-4 w-4" />
+                  </Button>
+                  <Button 
+                    variant="ghost" 
+                    size="sm"
+                    onClick={() => handleReplicateMedicine(medicine)}
+                    title="Replicate"
+                  >
+                    <Plus className="h-4 w-4" />
                   </Button>
                   {profile?.role === 'owner' && (
                     <Button 
                       variant="ghost" 
                       size="sm"
                       onClick={() => handleDeleteMedicine(medicine.id)}
+                      title="Delete"
                     >
                       <Trash2 className="h-4 w-4" />
                     </Button>
@@ -319,6 +337,18 @@ export default function InventoryManagement() {
                   <span>Category:</span>
                   <Badge variant="outline">{medicine.category}</Badge>
                 </div>
+                {medicine.batch_number && (
+                  <div className="flex justify-between text-sm">
+                    <span>Batch:</span>
+                    <span>{medicine.batch_number}</span>
+                  </div>
+                )}
+                {medicine.country_name && (
+                  <div className="flex justify-between text-sm">
+                    <span>Country:</span>
+                    <span>{medicine.country_name}</span>
+                  </div>
+                )}
                 {medicine.manufacturer && (
                   <div className="flex justify-between text-sm">
                     <span>Manufacturer:</span>
@@ -446,6 +476,13 @@ export default function InventoryManagement() {
         onOpenChange={setShowEditDialog}
         medicine={selectedMedicine}
         onMedicineUpdated={handleMedicineAdded}
+      />
+
+      <AddMedicineDialog
+        open={showReplicateDialog}
+        onOpenChange={setShowReplicateDialog}
+        onMedicineAdded={handleMedicineAdded}
+        replicateData={medicineToReplicate}
       />
 
       <ConfirmationDialog

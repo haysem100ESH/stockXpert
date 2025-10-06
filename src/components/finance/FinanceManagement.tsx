@@ -34,6 +34,7 @@ interface Expense {
 interface Sale {
   id: string;
   total_amount: number;
+  discount_amount?: number;
   created_at: string;
   sale_items?: {
     medicines: {
@@ -432,7 +433,7 @@ export default function FinanceManagement() {
               <div className="space-y-4">
                 {paginatedSales.map((sale) => (
                   <div key={sale.id} className="flex justify-between items-start p-2 border rounded">
-                    <div>
+                    <div className="flex-1">
                       <div className="font-medium">
                         {sale.sale_items && sale.sale_items.length > 0
                           ? sale.sale_items.map((item, index) => (
@@ -447,8 +448,13 @@ export default function FinanceManagement() {
                       <div className="text-xs text-muted-foreground">
                         {new Date(sale.created_at).toLocaleDateString()}
                       </div>
+                      {sale.discount_amount && sale.discount_amount > 0 && (
+                        <div className="text-xs text-muted-foreground mt-1">
+                          Discount: ETB {Number(sale.discount_amount).toFixed(2)}
+                        </div>
+                      )}
                     </div>
-                    <div className="text-success font-medium">${Number(sale.total_amount).toFixed(2)}</div>
+                    <div className="text-success font-medium">ETB {Number(sale.total_amount).toFixed(2)}</div>
                   </div>
                 ))}
                 {sales.length === 0 && (

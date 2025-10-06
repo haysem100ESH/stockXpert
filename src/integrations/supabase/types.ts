@@ -84,6 +84,7 @@ export type Database = {
           batch_number: string | null
           branch_id: string | null
           category: Database["public"]["Enums"]["medicine_category"]
+          country_name: string | null
           created_at: string | null
           expiry_alert_enabled: boolean | null
           expiry_date: string | null
@@ -102,6 +103,7 @@ export type Database = {
           batch_number?: string | null
           branch_id?: string | null
           category: Database["public"]["Enums"]["medicine_category"]
+          country_name?: string | null
           created_at?: string | null
           expiry_alert_enabled?: boolean | null
           expiry_date?: string | null
@@ -120,6 +122,7 @@ export type Database = {
           batch_number?: string | null
           branch_id?: string | null
           category?: Database["public"]["Enums"]["medicine_category"]
+          country_name?: string | null
           created_at?: string | null
           expiry_alert_enabled?: boolean | null
           expiry_date?: string | null
