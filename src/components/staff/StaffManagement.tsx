@@ -56,11 +56,22 @@ export default function StaffManagement() {
     try {
       setLoading(true);
       
-      // RLS policies handle ownership filtering automatically
+      // Get owner's branches first
+      const { data: ownerBranches, error: branchesError } = await supabase
+        .from('pharmacy_branches')
+        .select('id')
+        .eq('pharmacy_owner_id', profile?.id);
+
+      if (branchesError) throw branchesError;
+
+      const branchIds = ownerBranches?.map(b => b.id) || [];
+
+      // Fetch staff only from owner's branches
       let query = supabase
         .from('profiles')
         .select('id, full_name, role, phone, branch_id, created_at, pharmacy_branches!profiles_branch_id_fkey(name)')
         .eq('role', 'staff')
+        .in('branch_id', branchIds)
         .order('created_at');
 
       // Filter by specific branch if selected
@@ -216,30 +227,6 @@ export default function StaffManagement() {
                     <div className="flex items-center space-x-2 text-sm">
                       <span className="text-muted-foreground font-medium">Branch:</span>
                       <span>{member.pharmacy_branches.name}</span>
-                    </div>
-                  )}
-                  
-                  {profile?.role === 'owner' && (
-                    <div className="space-y-2">
-                      <Label className="text-xs text-muted-foreground">Quick Role Update</Label>
-                      <div className="flex gap-2">
-                        <Button
-                          size="sm"
-                          variant={member.role === 'owner' ? 'default' : 'outline'}
-                          onClick={() => handleEditStaff(member)}
-                          className="flex-1"
-                        >
-                          {member.role === 'owner' ? 'Owner' : 'Make Owner'}
-                        </Button>
-                        <Button
-                          size="sm"
-                          variant={member.role === 'staff' ? 'default' : 'outline'}
-                          onClick={() => handleEditStaff(member)}
-                          className="flex-1"
-                        >
-                          {member.role === 'staff' ? 'Staff' : 'Make Staff'}
-                        </Button>
-                      </div>
                     </div>
                   )}
 

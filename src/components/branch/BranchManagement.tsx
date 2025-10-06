@@ -266,23 +266,6 @@ export default function BranchManagement() {
                 />
               </div>
 
-              <div>
-                <Label>Branch Manager</Label>
-                <Select value={managerId} onValueChange={setManagerId}>
-                  <SelectTrigger className="mt-2">
-                    <SelectValue placeholder="Select manager (optional)" />
-                  </SelectTrigger>
-                  <SelectContent>
-                    <SelectItem value="unassigned">No manager assigned</SelectItem>
-                    {staffMembers.map((staff) => (
-                      <SelectItem key={staff.id} value={staff.id}>
-                        {staff.full_name}
-                      </SelectItem>
-                    ))}
-                  </SelectContent>
-                </Select>
-              </div>
-
               <div className="flex items-center space-x-2">
                 <input
                   type="checkbox"
@@ -317,7 +300,6 @@ export default function BranchManagement() {
                   <TableHead>Branch Name</TableHead>
                   <TableHead>Address</TableHead>
                   <TableHead>Phone</TableHead>
-                  <TableHead>Manager</TableHead>
                   <TableHead>Type</TableHead>
                   <TableHead>Actions</TableHead>
                 </TableRow>
@@ -345,12 +327,6 @@ export default function BranchManagement() {
                       ) : (
                         <span className="text-muted-foreground">No phone</span>
                       )}
-                    </TableCell>
-                    <TableCell>
-                      <div className="flex items-center gap-1">
-                        <User className="h-3 w-3 text-muted-foreground" />
-                        {branch.manager_name}
-                      </div>
                     </TableCell>
                     <TableCell>
                       {branch.is_main_branch ? (
@@ -404,23 +380,6 @@ export default function BranchManagement() {
                                 placeholder="Enter branch phone"
                                 className="mt-2"
                               />
-                            </div>
-
-                            <div>
-                              <Label>Branch Manager</Label>
-                              <Select value={managerId} onValueChange={setManagerId}>
-                                <SelectTrigger className="mt-2">
-                                  <SelectValue placeholder="Select manager (optional)" />
-                                </SelectTrigger>
-                                <SelectContent>
-                                  <SelectItem value="unassigned">No manager assigned</SelectItem>
-                                  {staffMembers.map((staff) => (
-                                    <SelectItem key={staff.id} value={staff.id}>
-                                      {staff.full_name}
-                                    </SelectItem>
-                                  ))}
-                                </SelectContent>
-                              </Select>
                             </div>
 
                             <div className="flex items-center space-x-2">
