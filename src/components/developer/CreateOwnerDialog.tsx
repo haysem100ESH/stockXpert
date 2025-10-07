@@ -1,4 +1,4 @@
-import { useState } from 'react';
+import { useState, useEffect } from 'react';
 import { Dialog, DialogContent, DialogDescription, DialogHeader, DialogTitle, DialogTrigger, DialogFooter } from '@/components/ui/dialog';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
@@ -23,8 +23,38 @@ export default function CreateOwnerDialog({ onOwnerCreated }: CreateOwnerDialogP
     pharmacy_name: '',
     pharmacy_address: ''
   });
-  const [creditPlans, setCreditPlans] = useState([{ days: 30, price: 50 }]);
+  const [creditPlans, setCreditPlans] = useState<Array<{ days: number; price: number }>>([]);
+  const [universalPlans, setUniversalPlans] = useState<Array<{ id: string; days: number; price: number }>>([]);
   const { toast } = useToast();
+
+  // Fetch universal credit plans on mount
+  useEffect(() => {
+    fetchUniversalCreditPlans();
+  }, []);
+
+  const fetchUniversalCreditPlans = async () => {
+    try {
+      const { data, error } = await supabase
+        .from('universal_credit_plans')
+        .select('*')
+        .order('days', { ascending: true });
+
+      if (error) throw error;
+      
+      if (data && data.length > 0) {
+        setUniversalPlans(data);
+        // Set the credit plans from universal plans
+        setCreditPlans(data.map(plan => ({ days: plan.days, price: plan.price })));
+      } else {
+        // Fallback to default if no universal plans exist
+        setCreditPlans([{ days: 30, price: 50 }]);
+      }
+    } catch (error: any) {
+      console.error('Error fetching universal credit plans:', error);
+      // Fallback to default
+      setCreditPlans([{ days: 30, price: 50 }]);
+    }
+  };
 
   const handleInputChange = (field: string, value: string) => {
     setFormData(prev => ({
@@ -92,7 +122,8 @@ export default function CreateOwnerDialog({ onOwnerCreated }: CreateOwnerDialogP
         pharmacy_name: '',
         pharmacy_address: ''
       });
-      setCreditPlans([{ days: 30, price: 50 }]);
+      // Reset to universal plans
+      await fetchUniversalCreditPlans();
       
       setOpen(false);
       onOwnerCreated();
@@ -195,7 +226,7 @@ export default function CreateOwnerDialog({ onOwnerCreated }: CreateOwnerDialogP
 
           <div>
             <div className="flex items-center justify-between">
-              <Label>Credit Plans</Label>
+              <Label>Credit Plans {universalPlans.length > 0 && <span className="text-xs text-muted-foreground ml-2">(from Universal Setup)</span>}</Label>
               <Button type="button" variant="outline" size="sm" onClick={addCreditPlan}>
                 <Plus className="h-4 w-4 mr-1" />
                 Add Plan

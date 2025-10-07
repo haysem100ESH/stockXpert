@@ -1,4 +1,4 @@
-import { useState } from 'react';
+import { useState, useEffect } from 'react';
 import { Dialog, DialogContent, DialogDescription, DialogHeader, DialogTitle } from '@/components/ui/dialog';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
@@ -45,6 +45,10 @@ export default function AddMedicineDialog({ open, onOpenChange, onMedicineAdded,
     setLoading(true);
 
     const formData = new FormData(e.currentTarget);
+    
+    // Get current user ID
+    const { data: { user } } = await supabase.auth.getUser();
+    
     const medicineData = {
       name: formData.get('name') as string,
       generic_name: formData.get('generic_name') as string || null,
@@ -58,7 +62,8 @@ export default function AddMedicineDialog({ open, onOpenChange, onMedicineAdded,
       minimum_stock_level: parseInt(formData.get('minimum_stock_level') as string),
       expiry_date: formData.get('expiry_date') as string || null,
       expiry_alert_enabled: formData.get('expiry_alert_enabled') === 'on',
-      branch_id: userBranch || selectedBranch || null
+      branch_id: userBranch || selectedBranch || null,
+      created_by: user?.id || null
     };
 
     try {

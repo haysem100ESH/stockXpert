@@ -86,6 +86,7 @@ export type Database = {
           category: Database["public"]["Enums"]["medicine_category"]
           country_name: string | null
           created_at: string | null
+          created_by: string | null
           expiry_alert_enabled: boolean | null
           expiry_date: string | null
           generic_name: string | null
@@ -105,6 +106,7 @@ export type Database = {
           category: Database["public"]["Enums"]["medicine_category"]
           country_name?: string | null
           created_at?: string | null
+          created_by?: string | null
           expiry_alert_enabled?: boolean | null
           expiry_date?: string | null
           generic_name?: string | null
@@ -124,6 +126,7 @@ export type Database = {
           category?: Database["public"]["Enums"]["medicine_category"]
           country_name?: string | null
           created_at?: string | null
+          created_by?: string | null
           expiry_alert_enabled?: boolean | null
           expiry_date?: string | null
           generic_name?: string | null
@@ -472,6 +475,30 @@ export type Database = {
           pharmacy_owner_id?: string
           processed_by?: string
           transaction_type?: string
+        }
+        Relationships: []
+      }
+      universal_credit_plans: {
+        Row: {
+          created_at: string
+          days: number
+          id: string
+          price: number
+          updated_at: string
+        }
+        Insert: {
+          created_at?: string
+          days: number
+          id?: string
+          price: number
+          updated_at?: string
+        }
+        Update: {
+          created_at?: string
+          days?: number
+          id?: string
+          price?: number
+          updated_at?: string
         }
         Relationships: []
       }

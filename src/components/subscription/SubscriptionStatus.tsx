@@ -3,12 +3,25 @@ import { Alert, AlertDescription } from '@/components/ui/alert';
 import { AlertTriangle, Lock, Clock } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { useNavigate } from 'react-router-dom';
+import { useEffect, useState } from 'react';
 
 export default function SubscriptionStatus() {
   const { subscription, isSubscriptionExpired, isSubscriptionExpiring, getDaysRemaining } = useSubscription();
   const navigate = useNavigate();
+  const [hasShownWarning, setHasShownWarning] = useState(false);
 
-  if (!subscription) return null;
+  // Reset warning shown status when subscription changes
+  useEffect(() => {
+    setHasShownWarning(false);
+  }, [subscription?.subscription_credit]);
+
+  useEffect(() => {
+    if ((isSubscriptionExpiring() || isSubscriptionExpired()) && !hasShownWarning) {
+      setHasShownWarning(true);
+    }
+  }, [isSubscriptionExpiring, isSubscriptionExpired, hasShownWarning]);
+
+  if (!subscription || !hasShownWarning) return null;
 
   if (isSubscriptionExpired()) {
     return (

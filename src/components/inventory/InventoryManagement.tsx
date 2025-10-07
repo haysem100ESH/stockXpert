@@ -32,6 +32,10 @@ interface Medicine {
   expiry_date?: string;
   expiry_alert_enabled?: boolean;
   created_at?: string;
+  creator?: {
+    full_name: string;
+    email: string;
+  };
 }
 
 export default function InventoryManagement() {
@@ -104,7 +108,7 @@ export default function InventoryManagement() {
       // RLS policies handle ownership filtering automatically
       let query = supabase
         .from('medicines')
-        .select('*, created_at')
+        .select('*')
         .order('name');
 
       // Filter by specific branch if selected
@@ -115,7 +119,27 @@ export default function InventoryManagement() {
       const { data, error } = await query;
 
       if (error) throw error;
-      setMedicines(data || []);
+      
+      // Fetch creator information for each medicine
+      const medicinesWithCreator = await Promise.all(
+        (data || []).map(async (medicine: any) => {
+          if (medicine.created_by) {
+            const { data: creatorData } = await supabase
+              .from('profiles')
+              .select('full_name, email')
+              .eq('id', medicine.created_by)
+              .single();
+            
+            return {
+              ...medicine,
+              creator: creatorData
+            };
+          }
+          return medicine;
+        })
+      );
+      
+      setMedicines(medicinesWithCreator);
     } catch (error) {
       toast({
         title: "Error",
@@ -353,6 +377,12 @@ export default function InventoryManagement() {
                   <div className="flex justify-between text-sm">
                     <span>Manufacturer:</span>
                     <span>{medicine.manufacturer}</span>
+                  </div>
+                )}
+                {medicine.creator && (
+                  <div className="flex justify-between text-sm">
+                    <span>Added by:</span>
+                    <span className="text-xs">{medicine.creator.full_name || medicine.creator.email}</span>
                   </div>
                 )}
                 <div className="flex justify-between text-sm">

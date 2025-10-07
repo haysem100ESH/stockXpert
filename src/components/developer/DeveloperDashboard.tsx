@@ -12,6 +12,7 @@ import { useToast } from '@/hooks/use-toast';
 import { Users, Building, CreditCard, AlertTriangle, Edit, UserX, UserCheck, DollarSign, Calendar, TrendingUp } from 'lucide-react';
 import CreateOwnerDialog from './CreateOwnerDialog';
 import EditOwnerDialog from './EditOwnerDialog';
+import CreditSetupSection from './CreditSetupSection';
 
 interface PharmacyOwner {
   id: string;
@@ -489,6 +490,9 @@ export default function DeveloperDashboard() {
           <Button variant="outline" onClick={fetchPharmacyOwners}>Refresh Data</Button>
         </div>
       </div>
+
+      {/* Universal Credit Setup Section */}
+      <CreditSetupSection />
 
       {/* Summary Cards */}
       <div className="grid grid-cols-1 md:grid-cols-6 gap-4">

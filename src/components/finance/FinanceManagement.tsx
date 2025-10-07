@@ -36,6 +36,11 @@ interface Sale {
   total_amount: number;
   discount_amount?: number;
   created_at: string;
+  sold_by?: string;
+  seller?: {
+    full_name: string;
+    email: string;
+  };
   sale_items?: {
     medicines: {
       name: string;
@@ -134,6 +139,25 @@ export default function FinanceManagement() {
       const { data: salesData, error: salesError } = await salesQuery;
 
       if (salesError) throw salesError;
+      
+      // Fetch seller information for each sale
+      const salesWithSeller = await Promise.all(
+        (salesData || []).map(async (sale: any) => {
+          if (sale.sold_by) {
+            const { data: sellerData } = await supabase
+              .from('profiles')
+              .select('full_name, email')
+              .eq('id', sale.sold_by)
+              .single();
+            
+            return {
+              ...sale,
+              seller: sellerData
+            };
+          }
+          return sale;
+        })
+      );
 
       // Fetch expenses - RLS handles ownership filtering
       let expensesQuery = supabase
@@ -152,7 +176,7 @@ export default function FinanceManagement() {
 
       if (expensesError) throw expensesError;
 
-      setSales(salesData || []);
+      setSales(salesWithSeller || []);
       setExpenses(expensesData || []);
 
       // Calculate stats
@@ -451,6 +475,11 @@ export default function FinanceManagement() {
                       {sale.discount_amount && sale.discount_amount > 0 && (
                         <div className="text-xs text-muted-foreground mt-1">
                           Discount: ETB {Number(sale.discount_amount).toFixed(2)}
+                        </div>
+                      )}
+                      {sale.seller && (
+                        <div className="text-xs text-muted-foreground mt-1">
+                          Sold by: {sale.seller.full_name || sale.seller.email}
                         </div>
                       )}
                     </div>
