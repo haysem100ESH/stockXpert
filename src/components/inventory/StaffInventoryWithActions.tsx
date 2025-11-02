@@ -13,6 +13,7 @@ import AddMedicineDialog from './AddMedicineDialog';
 import EditMedicineDialog from './EditMedicineDialog';
 import { ConfirmationDialog } from '@/components/ui/confirmation-dialog';
 import InventoryDashboard from './InventoryDashboard';
+import MedicineTransfer from './MedicineTransfer';
 
 interface Medicine {
   id: string;
@@ -249,9 +250,10 @@ export default function StaffInventoryWithActions() {
       </div>
 
       <Tabs defaultValue="medicines" className="space-y-4">
-        <TabsList className="grid w-full grid-cols-2">
+        <TabsList className="grid w-full grid-cols-3">
           <TabsTrigger value="medicines">Medicines</TabsTrigger>
           <TabsTrigger value="alerts">Inventory Alerts</TabsTrigger>
+          <TabsTrigger value="transfer">Transfer Medicine</TabsTrigger>
         </TabsList>
 
         <TabsContent value="medicines" className="space-y-4">
@@ -442,6 +444,10 @@ export default function StaffInventoryWithActions() {
 
         <TabsContent value="alerts">
           <InventoryDashboard />
+        </TabsContent>
+
+        <TabsContent value="transfer">
+          <MedicineTransfer />
         </TabsContent>
       </Tabs>
 

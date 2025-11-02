@@ -79,6 +79,68 @@ export type Database = {
           },
         ]
       }
+      medicine_transfers: {
+        Row: {
+          created_at: string
+          from_branch_id: string
+          id: string
+          medicine_id: string
+          notes: string | null
+          quantity: number
+          to_branch_id: string
+          transferred_by: string
+        }
+        Insert: {
+          created_at?: string
+          from_branch_id: string
+          id?: string
+          medicine_id: string
+          notes?: string | null
+          quantity: number
+          to_branch_id: string
+          transferred_by: string
+        }
+        Update: {
+          created_at?: string
+          from_branch_id?: string
+          id?: string
+          medicine_id?: string
+          notes?: string | null
+          quantity?: number
+          to_branch_id?: string
+          transferred_by?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "medicine_transfers_from_branch_id_fkey"
+            columns: ["from_branch_id"]
+            isOneToOne: false
+            referencedRelation: "pharmacy_branches"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "medicine_transfers_medicine_id_fkey"
+            columns: ["medicine_id"]
+            isOneToOne: false
+            referencedRelation: "low_stock_medicines"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "medicine_transfers_medicine_id_fkey"
+            columns: ["medicine_id"]
+            isOneToOne: false
+            referencedRelation: "medicines"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "medicine_transfers_to_branch_id_fkey"
+            columns: ["to_branch_id"]
+            isOneToOne: false
+            referencedRelation: "pharmacy_branches"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
       medicines: {
         Row: {
           batch_number: string | null
@@ -568,12 +630,9 @@ export type Database = {
       }
     }
     Functions: {
-      deduct_daily_credit: {
-        Args: Record<PropertyKey, never>
-        Returns: undefined
-      }
+      deduct_daily_credit: { Args: never; Returns: undefined }
       get_owners_with_email: {
-        Args: Record<PropertyKey, never>
+        Args: never
         Returns: {
           active: boolean
           email: string
@@ -585,10 +644,7 @@ export type Database = {
           role: Database["public"]["Enums"]["user_role"]
         }[]
       }
-      get_pharmacy_owner_id: {
-        Args: Record<PropertyKey, never>
-        Returns: string
-      }
+      get_pharmacy_owner_id: { Args: never; Returns: string }
       get_profile_by_email: {
         Args: { user_email: string }
         Returns: {
@@ -603,29 +659,14 @@ export type Database = {
         }[]
       }
       get_subscription_status: {
-        Args: Record<PropertyKey, never>
+        Args: never
         Returns: Database["public"]["Enums"]["subscription_status"]
       }
-      get_user_branch: {
-        Args: Record<PropertyKey, never>
-        Returns: string
-      }
-      is_developer: {
-        Args: Record<PropertyKey, never>
-        Returns: boolean
-      }
-      is_owner: {
-        Args: Record<PropertyKey, never>
-        Returns: boolean
-      }
-      is_staff: {
-        Args: Record<PropertyKey, never>
-        Returns: boolean
-      }
-      user_owns_branch: {
-        Args: { branch_id_param: string }
-        Returns: boolean
-      }
+      get_user_branch: { Args: never; Returns: string }
+      is_developer: { Args: never; Returns: boolean }
+      is_owner: { Args: never; Returns: boolean }
+      is_staff: { Args: never; Returns: boolean }
+      user_owns_branch: { Args: { branch_id_param: string }; Returns: boolean }
     }
     Enums: {
       medicine_category:

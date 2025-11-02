@@ -15,6 +15,7 @@ import { supabase } from '@/integrations/supabase/client';
 import { useToast } from '@/hooks/use-toast';
 import { useAuth } from '@/hooks/useAuth';
 import { useBranchContext } from '@/hooks/useBranchContext';
+import MedicineTransfer from '@/components/inventory/MedicineTransfer';
 
 interface FinanceStats {
   totalIncome: number;
@@ -415,6 +416,7 @@ export default function FinanceManagement() {
           <TabsTrigger value="income">Income</TabsTrigger>
           <TabsTrigger value="expenses">Expenses</TabsTrigger>
           <TabsTrigger value="reports">Reports</TabsTrigger>
+          <TabsTrigger value="transfer">Transfer Medicine</TabsTrigger>
         </TabsList>
 
         <TabsContent value="overview">
@@ -477,13 +479,15 @@ export default function FinanceManagement() {
                           Discount: ETB {Number(sale.discount_amount).toFixed(2)}
                         </div>
                       )}
-                      {sale.seller && (
+                       {sale.seller && (
                         <div className="text-xs mt-1 flex gap-2">
                           <span className="text-muted-foreground">
                             Sold by:
                           </span>
                           <span className="font-medium text-foreground">
-                            {profile?.role === 'owner' && sale.sold_by === profile.id ? 'Owner' : 'Staff'}
+                            {sale.sold_by === profile?.id && profile?.role === 'owner' 
+                              ? 'Owner' 
+                              : 'Staff'}
                           </span>
                           <span className="text-muted-foreground">-</span>
                           <span className="font-medium text-foreground">
@@ -667,6 +671,10 @@ export default function FinanceManagement() {
               </div>
             </CardContent>
           </Card>
+        </TabsContent>
+
+        <TabsContent value="transfer">
+          <MedicineTransfer />
         </TabsContent>
       </Tabs>
     </div>
