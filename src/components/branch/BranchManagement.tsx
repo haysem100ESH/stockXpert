@@ -144,9 +144,9 @@ export default function BranchManagement() {
         description: "Branch created successfully"
       });
 
-      setShowCreateDialog(false);
       resetForm();
-      fetchBranches();
+      setShowCreateDialog(false);
+      await fetchBranches(); // Refresh immediately
     } catch (error: any) {
       toast({
         title: "Error",

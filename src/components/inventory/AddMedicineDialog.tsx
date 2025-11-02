@@ -38,8 +38,57 @@ const categories = [
 
 export default function AddMedicineDialog({ open, onOpenChange, onMedicineAdded, replicateData }: AddMedicineDialogProps) {
   const [loading, setLoading] = useState(false);
+  const [branches, setBranches] = useState<Array<{ id: string; name: string }>>([]);
+  const [selectedBranchId, setSelectedBranchId] = useState<string>('');
   const { toast } = useToast();
   const { selectedBranch, userBranch } = useBranchContext();
+  
+  // Fetch user profile to check role
+  const [userRole, setUserRole] = useState<'owner' | 'staff' | null>(null);
+  
+  useEffect(() => {
+    const fetchUserRoleAndBranches = async () => {
+      const { data: { user } } = await supabase.auth.getUser();
+      if (!user) return;
+      
+      const { data: profile } = await supabase
+        .from('profiles')
+        .select('role')
+        .eq('id', user.id)
+        .single();
+      
+      if (profile) {
+        setUserRole(profile.role as 'owner' | 'staff');
+        
+        // If owner, fetch their branches
+        if (profile.role === 'owner') {
+          const { data: branchesData } = await supabase
+            .from('pharmacy_branches')
+            .select('id, name')
+            .eq('pharmacy_owner_id', user.id)
+            .order('is_main_branch', { ascending: false })
+            .order('name');
+          
+          if (branchesData) {
+            setBranches(branchesData);
+            // Set default to current selected branch or first branch
+            if (selectedBranch) {
+              setSelectedBranchId(selectedBranch);
+            } else if (branchesData.length > 0) {
+              setSelectedBranchId(branchesData[0].id);
+            }
+          }
+        } else if (profile.role === 'staff' && userBranch) {
+          // Staff: auto-assign to their branch
+          setSelectedBranchId(userBranch);
+        }
+      }
+    };
+    
+    if (open) {
+      fetchUserRoleAndBranches();
+    }
+  }, [open, selectedBranch, userBranch]);
   const handleSubmit = async (e: React.FormEvent<HTMLFormElement>) => {
     e.preventDefault();
     setLoading(true);
@@ -62,7 +111,7 @@ export default function AddMedicineDialog({ open, onOpenChange, onMedicineAdded,
       minimum_stock_level: parseInt(formData.get('minimum_stock_level') as string),
       expiry_date: formData.get('expiry_date') as string || null,
       expiry_alert_enabled: formData.get('expiry_alert_enabled') === 'on',
-      branch_id: userBranch || selectedBranch || null,
+      branch_id: selectedBranchId || userBranch || selectedBranch || null,
       created_by: user?.id || null
     };
 
@@ -142,6 +191,24 @@ export default function AddMedicineDialog({ open, onOpenChange, onMedicineAdded,
               <Label htmlFor="country_name">Country Name</Label>
               <Input id="country_name" name="country_name" defaultValue={replicateData?.country_name} />
             </div>
+
+            {userRole === 'owner' && branches.length > 0 && (
+              <div className="space-y-2">
+                <Label htmlFor="branch_id">Assign to Branch *</Label>
+                <Select value={selectedBranchId} onValueChange={setSelectedBranchId} required>
+                  <SelectTrigger>
+                    <SelectValue placeholder="Select branch" />
+                  </SelectTrigger>
+                  <SelectContent>
+                    {branches.map((branch) => (
+                      <SelectItem key={branch.id} value={branch.id}>
+                        {branch.name}
+                      </SelectItem>
+                    ))}
+                  </SelectContent>
+                </Select>
+              </div>
+            )}
 
             <div className="space-y-2">
               <Label htmlFor="purchase_price">Purchase Price *</Label>

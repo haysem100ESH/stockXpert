@@ -31,6 +31,10 @@ interface EditMedicineDialogProps {
   onMedicineUpdated: () => void;
 }
 
+interface MedicineWithBranch extends Medicine {
+  branch_id?: string;
+}
+
 export default function EditMedicineDialog({
   open,
   onOpenChange,
@@ -49,13 +53,52 @@ export default function EditMedicineDialog({
     stock_quantity: '',
     minimum_stock_level: '',
     expiry_date: '',
-    expiry_alert_enabled: true
+    expiry_alert_enabled: true,
+    branch_id: ''
   });
+  const [branches, setBranches] = useState<Array<{ id: string; name: string }>>([]);
+  const [userRole, setUserRole] = useState<'owner' | 'staff' | null>(null);
   const [loading, setLoading] = useState(false);
   const { toast } = useToast();
 
   useEffect(() => {
+    const fetchUserRoleAndBranches = async () => {
+      const { data: { user } } = await supabase.auth.getUser();
+      if (!user) return;
+      
+      const { data: profile } = await supabase
+        .from('profiles')
+        .select('role')
+        .eq('id', user.id)
+        .single();
+      
+      if (profile) {
+        setUserRole(profile.role as 'owner' | 'staff');
+        
+        // If owner, fetch their branches
+        if (profile.role === 'owner') {
+          const { data: branchesData } = await supabase
+            .from('pharmacy_branches')
+            .select('id, name')
+            .eq('pharmacy_owner_id', user.id)
+            .order('is_main_branch', { ascending: false })
+            .order('name');
+          
+          if (branchesData) {
+            setBranches(branchesData);
+          }
+        }
+      }
+    };
+    
+    if (open) {
+      fetchUserRoleAndBranches();
+    }
+  }, [open]);
+
+  useEffect(() => {
     if (medicine && open) {
+      const medicineWithBranch = medicine as MedicineWithBranch;
       setMedicineData({
         name: medicine.name,
         generic_name: medicine.generic_name || '',
@@ -68,7 +111,8 @@ export default function EditMedicineDialog({
         stock_quantity: medicine.stock_quantity.toString(),
         minimum_stock_level: medicine.minimum_stock_level.toString(),
         expiry_date: medicine.expiry_date || '',
-        expiry_alert_enabled: medicine.expiry_alert_enabled ?? true
+        expiry_alert_enabled: medicine.expiry_alert_enabled ?? true,
+        branch_id: medicineWithBranch.branch_id || ''
       });
     }
   }, [medicine, open]);
@@ -80,22 +124,29 @@ export default function EditMedicineDialog({
     setLoading(true);
 
     try {
+      const updateData: any = {
+        name: medicineData.name,
+        generic_name: medicineData.generic_name || null,
+        category: medicineData.category,
+        manufacturer: medicineData.manufacturer || null,
+        batch_number: medicineData.batch_number || null,
+        country_name: medicineData.country_name || null,
+        purchase_price: parseFloat(medicineData.purchase_price),
+        selling_price: parseFloat(medicineData.selling_price),
+        stock_quantity: parseInt(medicineData.stock_quantity),
+        minimum_stock_level: parseInt(medicineData.minimum_stock_level),
+        expiry_date: medicineData.expiry_date || null,
+        expiry_alert_enabled: medicineData.expiry_alert_enabled
+      };
+      
+      // Only update branch_id if user is owner and a branch is selected
+      if (userRole === 'owner' && medicineData.branch_id) {
+        updateData.branch_id = medicineData.branch_id;
+      }
+      
       const { error } = await supabase
         .from('medicines')
-        .update({
-          name: medicineData.name,
-          generic_name: medicineData.generic_name || null,
-          category: medicineData.category,
-          manufacturer: medicineData.manufacturer || null,
-          batch_number: medicineData.batch_number || null,
-          country_name: medicineData.country_name || null,
-          purchase_price: parseFloat(medicineData.purchase_price),
-          selling_price: parseFloat(medicineData.selling_price),
-          stock_quantity: parseInt(medicineData.stock_quantity),
-          minimum_stock_level: parseInt(medicineData.minimum_stock_level),
-          expiry_date: medicineData.expiry_date || null,
-          expiry_alert_enabled: medicineData.expiry_alert_enabled
-        })
+        .update(updateData)
         .eq('id', medicine.id);
 
       if (error) throw error;
@@ -196,6 +247,27 @@ export default function EditMedicineDialog({
               onChange={(e) => setMedicineData({ ...medicineData, country_name: e.target.value })}
             />
           </div>
+
+          {userRole === 'owner' && branches.length > 0 && (
+            <div className="space-y-2">
+              <Label htmlFor="branch_id">Assign to Branch *</Label>
+              <Select 
+                value={medicineData.branch_id} 
+                onValueChange={(value) => setMedicineData({ ...medicineData, branch_id: value })}
+              >
+                <SelectTrigger>
+                  <SelectValue placeholder="Select branch" />
+                </SelectTrigger>
+                <SelectContent>
+                  {branches.map((branch) => (
+                    <SelectItem key={branch.id} value={branch.id}>
+                      {branch.name}
+                    </SelectItem>
+                  ))}
+                </SelectContent>
+              </Select>
+            </div>
+          )}
 
           <div className="grid grid-cols-2 gap-4">
             <div className="space-y-2">

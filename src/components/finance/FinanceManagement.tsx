@@ -478,8 +478,17 @@ export default function FinanceManagement() {
                         </div>
                       )}
                       {sale.seller && (
-                        <div className="text-xs text-muted-foreground mt-1">
-                          Sold by: {sale.seller.full_name || sale.seller.email}
+                        <div className="text-xs mt-1 flex gap-2">
+                          <span className="text-muted-foreground">
+                            Sold by:
+                          </span>
+                          <span className="font-medium text-foreground">
+                            {profile?.role === 'owner' && sale.sold_by === profile.id ? 'Owner' : 'Staff'}
+                          </span>
+                          <span className="text-muted-foreground">-</span>
+                          <span className="font-medium text-foreground">
+                            {sale.seller.full_name || sale.seller.email}
+                          </span>
                         </div>
                       )}
                     </div>
