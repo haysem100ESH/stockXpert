@@ -167,9 +167,9 @@ export default function MedicineTransfer() {
         (data || []).map(async (transfer: any) => {
           const { data: userData } = await supabase
             .from('profiles')
-            .select('full_name, email')
+            .select('full_name')
             .eq('id', transfer.transferred_by)
-            .single();
+            .maybeSingle();
 
           return {
             ...transfer,

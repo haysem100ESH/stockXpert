@@ -126,9 +126,9 @@ export default function InventoryManagement() {
           if (medicine.created_by) {
             const { data: creatorData } = await supabase
               .from('profiles')
-              .select('full_name, email')
+              .select('full_name')
               .eq('id', medicine.created_by)
-              .single();
+              .maybeSingle();
             
             return {
               ...medicine,
