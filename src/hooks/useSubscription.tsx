@@ -17,7 +17,7 @@ export function useSubscription() {
   const [loading, setLoading] = useState(true);
 
   useEffect(() => {
-    if (user && profile?.role === 'owner') {
+    if (user && (profile?.role === 'owner' || profile?.role === 'staff')) {
       fetchSubscription();
     } else {
       setLoading(false);
@@ -27,10 +27,26 @@ export function useSubscription() {
   const fetchSubscription = async () => {
     try {
       setLoading(true);
+      
+      let ownerId = user!.id;
+      
+      // For staff, get owner via their branch
+      if (profile?.role === 'staff' && profile?.branch_id) {
+        const { data: branchData } = await supabase
+          .from('pharmacy_branches')
+          .select('pharmacy_owner_id')
+          .eq('id', profile.branch_id)
+          .single();
+        
+        if (branchData?.pharmacy_owner_id) {
+          ownerId = branchData.pharmacy_owner_id;
+        }
+      }
+      
       const { data, error } = await supabase
         .from('pharmacy_subscriptions')
         .select('*')
-        .eq('pharmacy_owner_id', user!.id)
+        .eq('pharmacy_owner_id', ownerId)
         .single();
 
       if (error && error.code !== 'PGRST116') throw error;

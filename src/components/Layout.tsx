@@ -57,7 +57,7 @@ export default function Layout({ children }: LayoutProps) {
             />
             
             <main className="flex-1 overflow-auto p-4">
-              {profile?.role === 'owner' && <SubscriptionStatus />}
+              {(profile?.role === 'owner' || profile?.role === 'staff') && <SubscriptionStatus />}
               <ExpiringMedicinesAlert />
               {children}
             </main>
