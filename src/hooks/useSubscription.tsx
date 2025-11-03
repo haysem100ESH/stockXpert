@@ -47,9 +47,9 @@ export function useSubscription() {
         .from('pharmacy_subscriptions')
         .select('*')
         .eq('pharmacy_owner_id', ownerId)
-        .single();
+        .maybeSingle();
 
-      if (error && error.code !== 'PGRST116') throw error;
+      if (error) throw error;
       
       setSubscription(data);
     } catch (error) {
