@@ -40,7 +40,6 @@ interface Sale {
   sold_by?: string;
   seller?: {
     full_name: string;
-    email: string;
     role: string;
   };
   sale_items?: {
@@ -148,10 +147,19 @@ export default function FinanceManagement() {
         .filter((id: string | null) => !!id)));
 
       let sellersMap = new Map<string, { full_name: string; email: string; role: string }>();
-      if (sellerIds.length > 0) {
+      if (sellerIds.length === 1) {
+        const { data: oneSeller, error: oneSellerError } = await supabase
+          .from('profiles')
+          .select('id,full_name,role')
+          .eq('id', sellerIds[0])
+          .maybeSingle();
+        if (!oneSellerError && oneSeller) {
+          sellersMap.set(oneSeller.id, oneSeller as any);
+        }
+      } else if (sellerIds.length > 1) {
         const { data: sellersData, error: sellersError } = await supabase
           .from('profiles')
-          .select('id,full_name,email,role')
+          .select('id,full_name,role')
           .in('id', sellerIds);
         if (!sellersError && sellersData) {
           sellersData.forEach((u: any) => sellersMap.set(u.id, u));
@@ -488,7 +496,7 @@ export default function FinanceManagement() {
                           </span>
                           {sale.seller ? (
                             <span className="font-medium text-foreground">
-                              {sale.seller.role === 'owner' ? 'Owner' : 'Staff'} ({sale.seller.full_name || sale.seller.email || 'N/A'})
+                              {sale.seller.role === 'owner' ? 'Owner' : 'Staff'} ({sale.seller.full_name || 'N/A'})
                             </span>
                           ) : (
                             <span className="font-medium text-foreground">
