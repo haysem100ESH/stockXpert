@@ -142,29 +142,26 @@ export default function FinanceManagement() {
 
       if (salesError) throw salesError;
       
-      // Fetch seller information for each sale
-      const salesWithSeller = await Promise.all(
-        (salesData || []).map(async (sale: any) => {
-          // Only fetch seller data if sold_by exists
-          if (!sale.sold_by) {
-            return {
-              ...sale,
-              seller: null,
-            };
-          }
+      // Batch-fetch seller information to avoid N+1 and 400s
+      const sellerIds = Array.from(new Set((salesData || [])
+        .map((s: any) => s.sold_by)
+        .filter((id: string | null) => !!id)));
 
-          const { data: sellerData } = await supabase
-            .from('profiles')
-            .select('full_name,email,role')
-            .eq('id', sale.sold_by)
-            .maybeSingle();
+      let sellersMap = new Map<string, { full_name: string; email: string; role: string }>();
+      if (sellerIds.length > 0) {
+        const { data: sellersData, error: sellersError } = await supabase
+          .from('profiles')
+          .select('id, full_name, email, role')
+          .in('id', sellerIds);
+        if (!sellersError && sellersData) {
+          sellersData.forEach((u: any) => sellersMap.set(u.id, u));
+        }
+      }
 
-          return {
-            ...sale,
-            seller: sellerData,
-          };
-        })
-      );
+      const salesWithSeller = (salesData || []).map((sale: any) => ({
+        ...sale,
+        seller: sale.sold_by ? sellersMap.get(sale.sold_by) || null : null,
+      }));
 
       // Fetch expenses - RLS handles ownership filtering
       let expensesQuery = supabase
