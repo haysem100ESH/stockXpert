@@ -12,7 +12,6 @@ import { DollarSign, Package, ShoppingCart, AlertTriangle, Download, CalendarIco
 import { BarChart, Bar, XAxis, YAxis, CartesianGrid, ResponsiveContainer, PieChart, Pie, Cell, LineChart, Line } from 'recharts';
 import { format, subDays, subWeeks, subMonths, subYears, startOfDay, endOfDay } from 'date-fns';
 import { supabase } from '@/integrations/supabase/client';
-import SubscriptionStatus from '@/components/subscription/SubscriptionStatus';
 import { useBranchContext } from '@/hooks/useBranchContext';
 interface DashboardStats {
   totalRevenue: number;
@@ -484,10 +483,6 @@ export default function Dashboard() {
 
   return (
     <div className="space-y-6">
-      {/* Subscription Status for Owners */}
-      {profile?.role === 'owner' && (
-        <SubscriptionStatus />
-      )}
       
       <div className="flex items-center justify-between">
         <div>

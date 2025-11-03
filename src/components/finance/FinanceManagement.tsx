@@ -155,7 +155,7 @@ export default function FinanceManagement() {
 
           const { data: sellerData } = await supabase
             .from('profiles')
-            .select('full_name, email, role')
+            .select('full_name,email,role')
             .eq('id', sale.sold_by)
             .maybeSingle();
 
