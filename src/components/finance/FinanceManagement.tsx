@@ -41,6 +41,7 @@ interface Sale {
   seller?: {
     full_name: string;
     email: string;
+    role: string;
   };
   sale_items?: {
     medicines: {
@@ -154,7 +155,7 @@ export default function FinanceManagement() {
 
           const { data: sellerData } = await supabase
             .from('profiles')
-            .select('full_name, email')
+            .select('full_name, email, role')
             .eq('id', sale.sold_by)
             .maybeSingle();
 
@@ -485,25 +486,19 @@ export default function FinanceManagement() {
                         </div>
                       )}
                        <div className="text-xs mt-1 flex gap-2">
-                         <span className="text-muted-foreground">
-                           Sold by:
-                         </span>
-                         <span className="font-medium text-foreground">
-                           {!sale.sold_by
-                             ? 'N/A'
-                             : sale.sold_by === profile?.id
-                             ? 'Owner'
-                             : 'Staff'}
-                         </span>
-                         {sale.seller && (
-                           <>
-                             <span className="text-muted-foreground">-</span>
-                             <span className="font-medium text-foreground">
-                               {sale.seller.full_name || sale.seller.email || 'N/A'}
-                             </span>
-                           </>
-                         )}
-                       </div>
+                          <span className="text-muted-foreground">
+                            Sold by:
+                          </span>
+                          {sale.seller ? (
+                            <span className="font-medium text-foreground">
+                              {sale.seller.role === 'owner' ? 'Owner' : 'Staff'} ({sale.seller.full_name || sale.seller.email || 'N/A'})
+                            </span>
+                          ) : (
+                            <span className="font-medium text-foreground">
+                              N/A
+                            </span>
+                          )}
+                        </div>
                     </div>
                     <div className="text-success font-medium">ETB {Number(sale.total_amount).toFixed(2)}</div>
                   </div>

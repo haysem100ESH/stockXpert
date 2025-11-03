@@ -105,21 +105,7 @@ export default function SubscriptionGuard({ children, fallback }: SubscriptionGu
     return <>{blockedContent}</>;
   }
 
-  // If subscription is expiring soon, show warning but allow access
-  if (subscriptionStatus === 'expiring_soon') {
-    return (
-      <div className="space-y-4">
-        <Alert className="border-yellow-200 bg-yellow-50">
-          <AlertTriangle className="h-4 w-4 text-yellow-600" />
-          <AlertDescription className="text-yellow-800">
-            ⚠ Your subscription expires in {daysRemaining} days. Please renew soon to avoid service interruption.
-          </AlertDescription>
-        </Alert>
-        {children}
-      </div>
-    );
-  }
-
+  // If subscription is expiring soon, show children normally (warning handled by SubscriptionStatus component)
   // Active subscription - show children normally
   return <>{children}</>;
 }
