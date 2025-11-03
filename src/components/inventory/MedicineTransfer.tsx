@@ -105,6 +105,25 @@ export default function MedicineTransfer() {
     }
   };
 
+  // Filter branches for "From" dropdown based on user role
+  const getFromBranchOptions = () => {
+    if (profile?.role === 'staff') {
+      // Staff can only transfer FROM their assigned branch
+      return branches.filter((branch) => branch.id === profile.branch_id);
+    }
+    return branches;
+  };
+
+  // Filter branches for "To" dropdown
+  const getToBranchOptions = () => {
+    if (profile?.role === 'staff') {
+      // Staff can transfer TO any branch except their own
+      return branches.filter((branch) => branch.id !== profile.branch_id);
+    }
+    // Owners can transfer to any branch except the selected "from" branch
+    return branches.filter((branch) => branch.id !== fromBranch);
+  };
+
   const fetchMedicines = async (branchId: string) => {
     try {
       const { data, error } = await supabase
@@ -245,7 +264,7 @@ export default function MedicineTransfer() {
 
         if (updateError) throw updateError;
       } else {
-        // Create new medicine record in destination branch
+        // Create new medicine record in destination branch with all details
         const { data: sourceMedDetails } = await supabase
           .from('medicines')
           .select('*')
@@ -256,8 +275,18 @@ export default function MedicineTransfer() {
           const { error: insertError } = await supabase
             .from('medicines')
             .insert({
-              ...sourceMedDetails,
-              id: undefined, // Let it generate new ID
+              name: sourceMedDetails.name,
+              generic_name: sourceMedDetails.generic_name,
+              manufacturer: sourceMedDetails.manufacturer,
+              batch_number: sourceMedDetails.batch_number,
+              country_name: sourceMedDetails.country_name,
+              category: sourceMedDetails.category,
+              purchase_price: sourceMedDetails.purchase_price,
+              selling_price: sourceMedDetails.selling_price,
+              expiry_date: sourceMedDetails.expiry_date,
+              minimum_stock_level: sourceMedDetails.minimum_stock_level,
+              expiry_alert_enabled: sourceMedDetails.expiry_alert_enabled,
+              supplier_id: sourceMedDetails.supplier_id,
               branch_id: toBranch,
               stock_quantity: transferQty,
               created_by: user.id,
@@ -310,9 +339,10 @@ export default function MedicineTransfer() {
                     <SelectValue placeholder="Select source branch" />
                   </SelectTrigger>
                   <SelectContent>
-                    {branches.map((branch) => (
+                    {getFromBranchOptions().map((branch) => (
                       <SelectItem key={branch.id} value={branch.id}>
                         {branch.name}
+                        {profile?.role === 'staff' && branch.id === profile.branch_id && ' (Your Branch)'}
                       </SelectItem>
                     ))}
                   </SelectContent>
@@ -326,13 +356,11 @@ export default function MedicineTransfer() {
                     <SelectValue placeholder="Select destination branch" />
                   </SelectTrigger>
                   <SelectContent>
-                    {branches
-                      .filter((branch) => branch.id !== fromBranch)
-                      .map((branch) => (
-                        <SelectItem key={branch.id} value={branch.id}>
-                          {branch.name}
-                        </SelectItem>
-                      ))}
+                    {getToBranchOptions().map((branch) => (
+                      <SelectItem key={branch.id} value={branch.id}>
+                        {branch.name}
+                      </SelectItem>
+                    ))}
                   </SelectContent>
                 </Select>
               </div>
@@ -346,15 +374,23 @@ export default function MedicineTransfer() {
                 disabled={!fromBranch}
               >
                 <SelectTrigger id="medicine">
-                  <SelectValue placeholder="Select medicine to transfer" />
+                  <SelectValue placeholder="Search and select medicine to transfer" />
                 </SelectTrigger>
                 <SelectContent>
-                  {medicines.map((medicine) => (
-                    <SelectItem key={medicine.id} value={medicine.id}>
-                      {medicine.name} {medicine.generic_name && `(${medicine.generic_name})`} - Stock:{' '}
-                      {medicine.stock_quantity}
-                    </SelectItem>
-                  ))}
+                  {medicines.length === 0 ? (
+                    <div className="p-2 text-sm text-muted-foreground">
+                      No medicines available in selected branch
+                    </div>
+                  ) : (
+                    medicines.map((medicine) => (
+                      <SelectItem key={medicine.id} value={medicine.id}>
+                        {medicine.name} {medicine.generic_name && `(${medicine.generic_name})`}
+                        <span className="ml-2 text-muted-foreground">
+                          • Stock: {medicine.stock_quantity}
+                        </span>
+                      </SelectItem>
+                    ))
+                  )}
                 </SelectContent>
               </Select>
             </div>

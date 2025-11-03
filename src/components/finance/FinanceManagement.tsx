@@ -144,19 +144,24 @@ export default function FinanceManagement() {
       // Fetch seller information for each sale
       const salesWithSeller = await Promise.all(
         (salesData || []).map(async (sale: any) => {
-          if (sale.sold_by) {
-            const { data: sellerData } = await supabase
-              .from('profiles')
-              .select('full_name, email')
-              .eq('id', sale.sold_by)
-              .single();
-            
+          // Only fetch seller data if sold_by exists
+          if (!sale.sold_by) {
             return {
               ...sale,
-              seller: sellerData
+              seller: null,
             };
           }
-          return sale;
+
+          const { data: sellerData } = await supabase
+            .from('profiles')
+            .select('full_name, email')
+            .eq('id', sale.sold_by)
+            .maybeSingle();
+
+          return {
+            ...sale,
+            seller: sellerData,
+          };
         })
       );
 
@@ -479,22 +484,26 @@ export default function FinanceManagement() {
                           Discount: ETB {Number(sale.discount_amount).toFixed(2)}
                         </div>
                       )}
-                       {sale.seller && (
-                        <div className="text-xs mt-1 flex gap-2">
-                          <span className="text-muted-foreground">
-                            Sold by:
-                          </span>
-                          <span className="font-medium text-foreground">
-                            {sale.sold_by === profile?.id && profile?.role === 'owner' 
-                              ? 'Owner' 
-                              : 'Staff'}
-                          </span>
-                          <span className="text-muted-foreground">-</span>
-                          <span className="font-medium text-foreground">
-                            {sale.seller.full_name || sale.seller.email}
-                          </span>
-                        </div>
-                      )}
+                       <div className="text-xs mt-1 flex gap-2">
+                         <span className="text-muted-foreground">
+                           Sold by:
+                         </span>
+                         <span className="font-medium text-foreground">
+                           {!sale.sold_by
+                             ? 'N/A'
+                             : sale.sold_by === profile?.id
+                             ? 'Owner'
+                             : 'Staff'}
+                         </span>
+                         {sale.seller && (
+                           <>
+                             <span className="text-muted-foreground">-</span>
+                             <span className="font-medium text-foreground">
+                               {sale.seller.full_name || sale.seller.email || 'N/A'}
+                             </span>
+                           </>
+                         )}
+                       </div>
                     </div>
                     <div className="text-success font-medium">ETB {Number(sale.total_amount).toFixed(2)}</div>
                   </div>
