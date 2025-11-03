@@ -151,7 +151,7 @@ export default function FinanceManagement() {
       if (sellerIds.length > 0) {
         const { data: sellersData, error: sellersError } = await supabase
           .from('profiles')
-          .select('id, full_name, email, role')
+          .select('id,full_name,email,role')
           .in('id', sellerIds);
         if (!sellersError && sellersData) {
           sellersData.forEach((u: any) => sellersMap.set(u.id, u));
