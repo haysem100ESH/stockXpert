@@ -9,6 +9,7 @@ import { LogOut } from 'lucide-react';
 import { Loader2 } from 'lucide-react';
 import { ConfirmationDialog } from '@/components/ui/confirmation-dialog';
 import SubscriptionStatus from '@/components/subscription/SubscriptionStatus';
+import ExpiringMedicinesAlert from '@/components/inventory/ExpiringMedicinesAlert';
 import { BranchProvider } from '@/hooks/useBranchContext';
 import BranchSelector from '@/components/branch/BranchSelector';
 import { useBranchContext } from '@/hooks/useBranchContext';
@@ -57,6 +58,7 @@ export default function Layout({ children }: LayoutProps) {
             
             <main className="flex-1 overflow-auto p-4">
               {profile?.role === 'owner' && <SubscriptionStatus />}
+              <ExpiringMedicinesAlert />
               {children}
             </main>
           </div>
