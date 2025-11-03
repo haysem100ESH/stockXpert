@@ -21,6 +21,9 @@ interface Medicine {
   name: string;
   stock_quantity: number;
   generic_name?: string;
+  batch_number?: string;
+  expiry_date?: string;
+  manufacturer?: string;
 }
 
 interface Transfer {
@@ -128,7 +131,7 @@ export default function MedicineTransfer() {
     try {
       const { data, error } = await supabase
         .from('medicines')
-        .select('id, name, stock_quantity, generic_name')
+        .select('id, name, stock_quantity, generic_name, batch_number, expiry_date, manufacturer')
         .eq('branch_id', branchId)
         .gt('stock_quantity', 0)
         .order('name');
@@ -209,10 +212,19 @@ export default function MedicineTransfer() {
     const transferQty = parseInt(quantity);
     const selectedMed = medicines.find((m) => m.id === selectedMedicine);
 
-    if (!selectedMed || transferQty > selectedMed.stock_quantity) {
+    if (!selectedMed) {
       toast({
         title: 'Error',
-        description: 'Insufficient stock in source branch',
+        description: 'Selected medicine not found',
+        variant: 'destructive',
+      });
+      return;
+    }
+
+    if (transferQty > selectedMed.stock_quantity) {
+      toast({
+        title: 'Error',
+        description: `Insufficient stock to transfer. Available: ${selectedMed.stock_quantity} units`,
         variant: 'destructive',
       });
       return;
@@ -245,13 +257,44 @@ export default function MedicineTransfer() {
 
       if (deductError) throw deductError;
 
-      // 3. Check if medicine exists in destination branch
-      const { data: destMedicine, error: checkError } = await supabase
+      // 3. Get full source medicine details for composite key matching
+      const { data: sourceMedDetails, error: sourceError } = await supabase
+        .from('medicines')
+        .select('*')
+        .eq('id', selectedMedicine)
+        .single();
+
+      if (sourceError) throw sourceError;
+      if (!sourceMedDetails) throw new Error('Source medicine not found');
+
+      // 4. Check if medicine exists in destination branch using composite key
+      // Match by: name, batch_number, expiry_date, and manufacturer
+      let destQuery = supabase
         .from('medicines')
         .select('id, stock_quantity')
-        .eq('name', selectedMed.name)
-        .eq('branch_id', toBranch)
-        .maybeSingle();
+        .eq('name', sourceMedDetails.name)
+        .eq('branch_id', toBranch);
+
+      // Add composite key conditions
+      if (sourceMedDetails.batch_number) {
+        destQuery = destQuery.eq('batch_number', sourceMedDetails.batch_number);
+      } else {
+        destQuery = destQuery.is('batch_number', null);
+      }
+
+      if (sourceMedDetails.expiry_date) {
+        destQuery = destQuery.eq('expiry_date', sourceMedDetails.expiry_date);
+      } else {
+        destQuery = destQuery.is('expiry_date', null);
+      }
+
+      if (sourceMedDetails.manufacturer) {
+        destQuery = destQuery.eq('manufacturer', sourceMedDetails.manufacturer);
+      } else {
+        destQuery = destQuery.is('manufacturer', null);
+      }
+
+      const { data: destMedicine, error: checkError } = await destQuery.maybeSingle();
 
       if (checkError) throw checkError;
 
@@ -263,43 +306,40 @@ export default function MedicineTransfer() {
           .eq('id', destMedicine.id);
 
         if (updateError) throw updateError;
+        
+        toast({
+          title: 'Success',
+          description: 'Medicine transferred successfully (matched existing record)',
+        });
       } else {
-        // Create new medicine record in destination branch with all details
-        const { data: sourceMedDetails } = await supabase
+        // No match found - create new medicine record in destination branch
+        const { error: insertError } = await supabase
           .from('medicines')
-          .select('*')
-          .eq('id', selectedMedicine)
-          .single();
+          .insert({
+            name: sourceMedDetails.name,
+            generic_name: sourceMedDetails.generic_name,
+            manufacturer: sourceMedDetails.manufacturer,
+            batch_number: sourceMedDetails.batch_number,
+            country_name: sourceMedDetails.country_name,
+            category: sourceMedDetails.category,
+            purchase_price: sourceMedDetails.purchase_price,
+            selling_price: sourceMedDetails.selling_price,
+            expiry_date: sourceMedDetails.expiry_date,
+            minimum_stock_level: sourceMedDetails.minimum_stock_level,
+            expiry_alert_enabled: sourceMedDetails.expiry_alert_enabled,
+            supplier_id: sourceMedDetails.supplier_id,
+            branch_id: toBranch,
+            stock_quantity: transferQty,
+            created_by: user.id,
+          });
 
-        if (sourceMedDetails) {
-          const { error: insertError } = await supabase
-            .from('medicines')
-            .insert({
-              name: sourceMedDetails.name,
-              generic_name: sourceMedDetails.generic_name,
-              manufacturer: sourceMedDetails.manufacturer,
-              batch_number: sourceMedDetails.batch_number,
-              country_name: sourceMedDetails.country_name,
-              category: sourceMedDetails.category,
-              purchase_price: sourceMedDetails.purchase_price,
-              selling_price: sourceMedDetails.selling_price,
-              expiry_date: sourceMedDetails.expiry_date,
-              minimum_stock_level: sourceMedDetails.minimum_stock_level,
-              expiry_alert_enabled: sourceMedDetails.expiry_alert_enabled,
-              supplier_id: sourceMedDetails.supplier_id,
-              branch_id: toBranch,
-              stock_quantity: transferQty,
-              created_by: user.id,
-            });
-
-          if (insertError) throw insertError;
-        }
+        if (insertError) throw insertError;
+        
+        toast({
+          title: 'Success',
+          description: 'Medicine transferred successfully (new record created in destination)',
+        });
       }
-
-      toast({
-        title: 'Success',
-        description: 'Medicine transferred successfully',
-      });
 
       // Reset form
       setFromBranch('');
