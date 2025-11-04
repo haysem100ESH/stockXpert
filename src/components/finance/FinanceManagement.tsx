@@ -47,6 +47,8 @@ interface Sale {
       name: string;
     };
     quantity: number;
+    sale_type?: string;
+    stripes_sold?: number;
   }[];
 }
 
@@ -123,6 +125,8 @@ export default function FinanceManagement() {
           *,
           sale_items (
             quantity,
+            sale_type,
+            stripes_sold,
             medicines (
               name
             )
@@ -476,6 +480,11 @@ export default function FinanceManagement() {
                           ? sale.sale_items.map((item, index) => (
                               <span key={index}>
                                 {item.medicines?.name} (x{item.quantity})
+                                {item.sale_type === 'by_stripe' && item.stripes_sold && (
+                                  <span className="text-xs text-muted-foreground ml-1">
+                                    [{item.stripes_sold} stripes]
+                                  </span>
+                                )}
                                 {index < sale.sale_items!.length - 1 ? ', ' : ''}
                               </span>
                             ))
@@ -488,6 +497,14 @@ export default function FinanceManagement() {
                       {sale.discount_amount && sale.discount_amount > 0 && (
                         <div className="text-xs text-muted-foreground mt-1">
                           Discount: ETB {Number(sale.discount_amount).toFixed(2)}
+                        </div>
+                      )}
+                      {/* Display stripes sold summary */}
+                      {sale.sale_items && sale.sale_items.some(item => item.sale_type === 'by_stripe') && (
+                        <div className="text-xs text-info mt-1">
+                          Stripes Sold: {sale.sale_items
+                            .filter(item => item.sale_type === 'by_stripe')
+                            .reduce((sum, item) => sum + (item.stripes_sold || 0), 0)}
                         </div>
                       )}
                        <div className="text-xs mt-1 flex gap-2">
