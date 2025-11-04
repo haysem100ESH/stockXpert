@@ -11,6 +11,7 @@ import { supabase } from '@/integrations/supabase/client';
 import { useToast } from '@/hooks/use-toast';
 import { useAuth } from '@/hooks/useAuth';
 import { useBranchContext } from '@/hooks/useBranchContext';
+import { ConfirmationDialog } from '@/components/ui/confirmation-dialog';
 import EditStaffDialog from './EditStaffDialog';
 import CreateStaffDialog from './CreateStaffDialog';
 
@@ -35,6 +36,7 @@ export default function StaffManagement() {
   const [loading, setLoading] = useState(true);
   const [showCreateDialog, setShowCreateDialog] = useState(false);
   const [showEditDialog, setShowEditDialog] = useState(false);
+  const [showDeleteDialog, setShowDeleteDialog] = useState(false);
   const [selectedStaff, setSelectedStaff] = useState<StaffMember | null>(null);
   const { toast } = useToast();
   const { profile } = useAuth();
@@ -112,7 +114,7 @@ export default function StaffManagement() {
     setSelectedStaff(null);
   };
 
-  const handleDeleteStaff = async (staffId: string) => {
+  const handleDeleteClick = (staff: StaffMember) => {
     if (!profile || profile.role !== 'owner') {
       toast({
         title: "Error",
@@ -121,17 +123,19 @@ export default function StaffManagement() {
       });
       return;
     }
+    setSelectedStaff(staff);
+    setShowDeleteDialog(true);
+  };
 
-    if (!confirm("Are you sure you want to remove this staff member? This action cannot be undone.")) {
-      return;
-    }
+  const handleDeleteConfirm = async () => {
+    if (!selectedStaff) return;
 
     try {
       // Note: This will also delete the auth.users record due to CASCADE
       const { error } = await supabase
         .from('profiles')
         .delete()
-        .eq('id', staffId);
+        .eq('id', selectedStaff.id);
 
       if (error) throw error;
 
@@ -140,6 +144,8 @@ export default function StaffManagement() {
         description: "Staff member removed successfully"
       });
 
+      setShowDeleteDialog(false);
+      setSelectedStaff(null);
       fetchStaff();
     } catch (error) {
       toast({
@@ -231,7 +237,7 @@ export default function StaffManagement() {
                       <Button 
                         variant="ghost" 
                         size="sm"
-                        onClick={() => handleDeleteStaff(member.id)}
+                        onClick={() => handleDeleteClick(member)}
                       >
                         <Trash2 className="h-4 w-4" />
                       </Button>
@@ -283,6 +289,16 @@ export default function StaffManagement() {
         open={showCreateDialog}
         onOpenChange={setShowCreateDialog}
         onStaffCreated={fetchStaff}
+      />
+
+      <ConfirmationDialog
+        open={showDeleteDialog}
+        onOpenChange={setShowDeleteDialog}
+        title="Delete Staff Member"
+        description={`Are you sure you want to remove ${selectedStaff?.full_name}? This action cannot be undone.`}
+        onConfirm={handleDeleteConfirm}
+        confirmText="Delete"
+        cancelText="Cancel"
       />
     </div>
   );
