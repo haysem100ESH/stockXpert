@@ -4,6 +4,7 @@ import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
 import { Textarea } from '@/components/ui/textarea';
+import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
 import { useToast } from '@/hooks/use-toast';
 import { supabase } from '@/integrations/supabase/client';
 import { Plus, Loader2, Trash2 } from 'lucide-react';
@@ -21,16 +22,47 @@ export default function CreateOwnerDialog({ onOwnerCreated }: CreateOwnerDialogP
     password: '',
     phone: '',
     pharmacy_name: '',
-    pharmacy_address: ''
+    pharmacy_address: '',
+    subscription_plan_id: ''
   });
   const [creditPlans, setCreditPlans] = useState<Array<{ days: number; price: number }>>([]);
   const [universalPlans, setUniversalPlans] = useState<Array<{ id: string; days: number; price: number }>>([]);
+  const [subscriptionPlans, setSubscriptionPlans] = useState<Array<{ id: string; name: string }>>([]);
   const { toast } = useToast();
 
-  // Fetch universal credit plans on mount
+  // Fetch universal credit plans and subscription plans on mount
   useEffect(() => {
     fetchUniversalCreditPlans();
+    fetchSubscriptionPlans();
   }, []);
+
+  const fetchSubscriptionPlans = async () => {
+    try {
+      const { data, error } = await supabase
+        .from('subscription_plans')
+        .select('id, name')
+        .order('branches_limit', { ascending: true });
+
+      if (error) throw error;
+      
+      if (data && data.length > 0) {
+        // Sort manually to put unlimited (null) at the end
+        const sorted = data.sort((a: any, b: any) => {
+          if (a.branches_limit === null) return 1;
+          if (b.branches_limit === null) return -1;
+          return 0;
+        });
+        setSubscriptionPlans(sorted);
+        // Set default to Basic plan
+        const basicPlan = sorted.find(p => p.name === 'Basic');
+        if (basicPlan) {
+          setFormData(prev => ({ ...prev, subscription_plan_id: basicPlan.id }));
+        }
+      }
+    } catch (error: any) {
+      console.error('Error fetching subscription plans:', error);
+    }
+  };
 
   const fetchUniversalCreditPlans = async () => {
     try {
@@ -82,10 +114,10 @@ export default function CreateOwnerDialog({ onOwnerCreated }: CreateOwnerDialogP
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
     
-    if (!formData.full_name || !formData.email || !formData.password) {
+    if (!formData.full_name || !formData.email || !formData.password || !formData.subscription_plan_id) {
       toast({
         title: "Error",
-        description: "Please fill in all required fields",
+        description: "Please fill in all required fields including subscription plan",
         variant: "destructive"
       });
       return;
@@ -120,7 +152,8 @@ export default function CreateOwnerDialog({ onOwnerCreated }: CreateOwnerDialogP
         password: '',
         phone: '',
         pharmacy_name: '',
-        pharmacy_address: ''
+        pharmacy_address: '',
+        subscription_plan_id: subscriptionPlans.find(p => p.name === 'Basic')?.id || ''
       });
       // Reset to universal plans
       await fetchUniversalCreditPlans();
@@ -222,6 +255,25 @@ export default function CreateOwnerDialog({ onOwnerCreated }: CreateOwnerDialogP
               placeholder="123 Main St, City, State 12345"
               rows={3}
             />
+          </div>
+
+          <div>
+            <Label htmlFor="subscription_plan">Subscription Plan *</Label>
+            <Select
+              value={formData.subscription_plan_id}
+              onValueChange={(value) => handleInputChange('subscription_plan_id', value)}
+            >
+              <SelectTrigger>
+                <SelectValue placeholder="Select a plan" />
+              </SelectTrigger>
+              <SelectContent>
+                {subscriptionPlans.map((plan) => (
+                  <SelectItem key={plan.id} value={plan.id}>
+                    {plan.name}
+                  </SelectItem>
+                ))}
+              </SelectContent>
+            </Select>
           </div>
 
           <div>

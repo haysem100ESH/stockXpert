@@ -4,7 +4,7 @@ import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
 import { Textarea } from '@/components/ui/textarea';
-
+import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
 import { useToast } from '@/hooks/use-toast';
 import { supabase } from '@/integrations/supabase/client';
 import { Loader2 } from 'lucide-react';
@@ -20,6 +20,7 @@ interface PharmacyOwner {
     subscription_credit: number;
     status: string;
     deposit_amount: number;
+    plan_id?: string;
   } | null;
 }
 
@@ -36,9 +37,15 @@ export default function EditOwnerDialog({ owner, open, onOpenChange, onOwnerUpda
     full_name: '',
     phone: '',
     pharmacy_address: '',
-    active: true
+    active: true,
+    subscription_plan_id: ''
   });
+  const [subscriptionPlans, setSubscriptionPlans] = useState<Array<{ id: string; name: string }>>([]);
   const { toast } = useToast();
+
+  useEffect(() => {
+    fetchSubscriptionPlans();
+  }, []);
 
   useEffect(() => {
     if (owner) {
@@ -46,10 +53,32 @@ export default function EditOwnerDialog({ owner, open, onOpenChange, onOwnerUpda
         full_name: owner.full_name || '',
         phone: owner.phone || '',
         pharmacy_address: owner.pharmacy_address || '',
-        active: owner.active
+        active: owner.active,
+        subscription_plan_id: owner.subscription?.plan_id || ''
       });
     }
   }, [owner]);
+
+  const fetchSubscriptionPlans = async () => {
+    try {
+      const { data, error } = await supabase
+        .from('subscription_plans')
+        .select('id, name')
+        .order('branches_limit', { ascending: true });
+
+      if (error) throw error;
+      
+      // Sort manually to put unlimited (null) at the end
+      const sorted = (data || []).sort((a: any, b: any) => {
+        if (a.branches_limit === null) return 1;
+        if (b.branches_limit === null) return -1;
+        return 0;
+      });
+      setSubscriptionPlans(sorted);
+    } catch (error: any) {
+      console.error('Error fetching subscription plans:', error);
+    }
+  };
 
   const handleInputChange = (field: string, value: string | boolean) => {
     setFormData(prev => ({
@@ -84,6 +113,16 @@ export default function EditOwnerDialog({ owner, open, onOpenChange, onOwnerUpda
         .eq('id', owner.id);
 
       if (error) throw error;
+
+      // Update subscription plan if changed
+      if (formData.subscription_plan_id && formData.subscription_plan_id !== owner.subscription?.plan_id) {
+        const { error: subError } = await supabase
+          .from('pharmacy_subscriptions')
+          .update({ plan_id: formData.subscription_plan_id })
+          .eq('pharmacy_owner_id', owner.id);
+
+        if (subError) throw subError;
+      }
 
       toast({
         title: "Success",
@@ -158,6 +197,25 @@ export default function EditOwnerDialog({ owner, open, onOpenChange, onOwnerUpda
               placeholder="123 Main St, City, State 12345"
               rows={3}
             />
+          </div>
+
+          <div>
+            <Label htmlFor="subscription_plan">Subscription Plan</Label>
+            <Select
+              value={formData.subscription_plan_id}
+              onValueChange={(value) => handleInputChange('subscription_plan_id', value)}
+            >
+              <SelectTrigger>
+                <SelectValue placeholder="Select a plan" />
+              </SelectTrigger>
+              <SelectContent>
+                {subscriptionPlans.map((plan) => (
+                  <SelectItem key={plan.id} value={plan.id}>
+                    {plan.name}
+                  </SelectItem>
+                ))}
+              </SelectContent>
+            </Select>
           </div>
 
           <DialogFooter>

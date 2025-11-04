@@ -9,6 +9,16 @@ import { useToast } from '@/hooks/use-toast';
 import { Plus, Trash2, Edit, Loader2, DollarSign } from 'lucide-react';
 import { Dialog, DialogContent, DialogDescription, DialogHeader, DialogTitle, DialogTrigger, DialogFooter } from '@/components/ui/dialog';
 
+interface SubscriptionPlan {
+  id: string;
+  name: string;
+  description: string;
+  branches_limit: number | null;
+  staff_limit: number | null;
+  created_at: string;
+  updated_at: string;
+}
+
 interface UniversalCreditPlan {
   id: string;
   days: number;
@@ -18,6 +28,7 @@ interface UniversalCreditPlan {
 }
 
 export default function CreditSetupSection() {
+  const [subscriptionPlans, setSubscriptionPlans] = useState<SubscriptionPlan[]>([]);
   const [plans, setPlans] = useState<UniversalCreditPlan[]>([]);
   const [loading, setLoading] = useState(true);
   const [addDialogOpen, setAddDialogOpen] = useState(false);
@@ -29,7 +40,32 @@ export default function CreditSetupSection() {
 
   useEffect(() => {
     fetchPlans();
+    fetchSubscriptionPlans();
   }, []);
+
+  const fetchSubscriptionPlans = async () => {
+    try {
+      const { data, error } = await supabase
+        .from('subscription_plans')
+        .select('*')
+        .order('branches_limit', { ascending: true });
+
+      if (error) throw error;
+      // Sort manually to put unlimited (null) at the end
+      const sorted = (data || []).sort((a: any, b: any) => {
+        if (a.branches_limit === null) return 1;
+        if (b.branches_limit === null) return -1;
+        return 0;
+      });
+      setSubscriptionPlans(sorted);
+    } catch (error: any) {
+      toast({
+        title: "Error",
+        description: "Failed to fetch subscription plans",
+        variant: "destructive"
+      });
+    }
+  };
 
   const fetchPlans = async () => {
     try {
@@ -166,17 +202,57 @@ export default function CreditSetupSection() {
   }
 
   return (
-    <Card>
-      <CardHeader className="flex flex-row items-center justify-between space-y-0">
-        <div>
-          <CardTitle className="flex items-center gap-2">
-            <DollarSign className="h-5 w-5" />
-            Universal Credit Setup
-          </CardTitle>
+    <>
+      {/* Subscription Plans Section */}
+      <Card className="mb-6">
+        <CardHeader>
+          <CardTitle>Subscription Plans</CardTitle>
           <CardDescription>
-            Manage credit plans that apply to all new pharmacy owner accounts
+            View subscription tiers with branch and staff limits
           </CardDescription>
-        </div>
+        </CardHeader>
+        <CardContent>
+          <div className="grid gap-4 md:grid-cols-2 lg:grid-cols-4">
+            {subscriptionPlans.map((plan) => (
+              <Card key={plan.id} className="border-2">
+                <CardHeader>
+                  <CardTitle className="text-lg">{plan.name}</CardTitle>
+                  <CardDescription className="text-xs">
+                    {plan.description}
+                  </CardDescription>
+                </CardHeader>
+                <CardContent className="space-y-2">
+                  <div className="flex justify-between text-sm">
+                    <span className="text-muted-foreground">Branches:</span>
+                    <span className="font-semibold">
+                      {plan.branches_limit === null ? '∞ Unlimited' : plan.branches_limit}
+                    </span>
+                  </div>
+                  <div className="flex justify-between text-sm">
+                    <span className="text-muted-foreground">Staff:</span>
+                    <span className="font-semibold">
+                      {plan.staff_limit === null ? '∞ Unlimited' : plan.staff_limit}
+                    </span>
+                  </div>
+                </CardContent>
+              </Card>
+            ))}
+          </div>
+        </CardContent>
+      </Card>
+
+      {/* Universal Credit Plans Section */}
+      <Card>
+        <CardHeader className="flex flex-row items-center justify-between space-y-0">
+          <div>
+            <CardTitle className="flex items-center gap-2">
+              <DollarSign className="h-5 w-5" />
+              Universal Credit Setup
+            </CardTitle>
+            <CardDescription>
+              Manage credit plans that apply to all new pharmacy owner accounts
+            </CardDescription>
+          </div>
         <Dialog open={addDialogOpen} onOpenChange={setAddDialogOpen}>
           <DialogTrigger asChild>
             <Button>
@@ -314,5 +390,6 @@ export default function CreditSetupSection() {
         </Dialog>
       </CardContent>
     </Card>
+    </>
   );
 }

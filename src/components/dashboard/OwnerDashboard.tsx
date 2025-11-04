@@ -27,6 +27,8 @@ import StaffManagement from '@/components/staff/StaffManagement';
 import ExpiredMedicinesTable from './ExpiredMedicinesTable';
 import LowStockItemsTable from './LowStockItemsTable';
 
+import SubscriptionPlanCard from '@/components/subscription/SubscriptionPlanCard';
+
 interface DashboardStats {
   totalRevenue: number;
   totalProducts: number;

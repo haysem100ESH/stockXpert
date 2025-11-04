@@ -28,9 +28,14 @@ interface StaffMember {
   full_name: string;
 }
 
+import { usePlanLimits } from '@/hooks/usePlanLimits';
+import { AlertCircle } from 'lucide-react';
+import { Alert, AlertDescription } from '@/components/ui/alert';
+
 export default function BranchManagement() {
   const { user, profile } = useAuth();
   const { toast } = useToast();
+  const { planLimits, refetch: refetchPlanLimits } = usePlanLimits();
   const [branches, setBranches] = useState<Branch[]>([]);
   const [staffMembers, setStaffMembers] = useState<StaffMember[]>([]);
   const [loading, setLoading] = useState(true);
@@ -125,6 +130,16 @@ export default function BranchManagement() {
   };
 
   const handleCreateBranch = async () => {
+    // Check plan limits
+    if (planLimits && !planLimits.canAddBranch) {
+      toast({
+        title: "Plan Limit Reached",
+        description: `You have reached your plan limit of ${planLimits.branchesLimit} branches. Please upgrade to add more branches.`,
+        variant: "destructive"
+      });
+      return;
+    }
+
     try {
       const { error } = await supabase
         .from('pharmacy_branches')
@@ -146,7 +161,8 @@ export default function BranchManagement() {
 
       resetForm();
       setShowCreateDialog(false);
-      await fetchBranches(); // Refresh immediately
+      fetchBranches();
+      refetchPlanLimits();
     } catch (error: any) {
       toast({
         title: "Error",

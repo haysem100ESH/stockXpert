@@ -26,6 +26,8 @@ interface StaffMember {
   } | null;
 }
 
+import { usePlanLimits } from '@/hooks/usePlanLimits';
+
 export default function StaffManagement() {
   const [staff, setStaff] = useState<StaffMember[]>([]);
   const [filteredStaff, setFilteredStaff] = useState<StaffMember[]>([]);
@@ -37,6 +39,7 @@ export default function StaffManagement() {
   const { toast } = useToast();
   const { profile } = useAuth();
   const { selectedBranch } = useBranchContext();
+  const { planLimits } = usePlanLimits();
 
   useEffect(() => {
     fetchStaff();

@@ -308,6 +308,7 @@ export type Database = {
           id: string
           last_credit_deduction: string | null
           pharmacy_owner_id: string
+          plan_id: string | null
           status: Database["public"]["Enums"]["subscription_status"]
           subscription_credit: number
           updated_at: string
@@ -318,6 +319,7 @@ export type Database = {
           id?: string
           last_credit_deduction?: string | null
           pharmacy_owner_id: string
+          plan_id?: string | null
           status?: Database["public"]["Enums"]["subscription_status"]
           subscription_credit?: number
           updated_at?: string
@@ -328,11 +330,20 @@ export type Database = {
           id?: string
           last_credit_deduction?: string | null
           pharmacy_owner_id?: string
+          plan_id?: string | null
           status?: Database["public"]["Enums"]["subscription_status"]
           subscription_credit?: number
           updated_at?: string
         }
-        Relationships: []
+        Relationships: [
+          {
+            foreignKeyName: "pharmacy_subscriptions_plan_id_fkey"
+            columns: ["plan_id"]
+            isOneToOne: false
+            referencedRelation: "subscription_plans"
+            referencedColumns: ["id"]
+          },
+        ]
       }
       profiles: {
         Row: {
@@ -482,6 +493,36 @@ export type Database = {
             referencedColumns: ["id"]
           },
         ]
+      }
+      subscription_plans: {
+        Row: {
+          branches_limit: number | null
+          created_at: string
+          description: string
+          id: string
+          name: string
+          staff_limit: number | null
+          updated_at: string
+        }
+        Insert: {
+          branches_limit?: number | null
+          created_at?: string
+          description: string
+          id?: string
+          name: string
+          staff_limit?: number | null
+          updated_at?: string
+        }
+        Update: {
+          branches_limit?: number | null
+          created_at?: string
+          description?: string
+          id?: string
+          name?: string
+          staff_limit?: number | null
+          updated_at?: string
+        }
+        Relationships: []
       }
       suppliers: {
         Row: {
@@ -642,7 +683,10 @@ export type Database = {
       }
     }
     Functions: {
+      can_add_branch: { Args: { owner_id: string }; Returns: boolean }
+      can_add_staff: { Args: { owner_id: string }; Returns: boolean }
       deduct_daily_credit: { Args: never; Returns: undefined }
+      get_branches_count: { Args: { owner_id: string }; Returns: number }
       get_owners_with_email: {
         Args: never
         Returns: {
@@ -670,6 +714,7 @@ export type Database = {
           updated_at: string
         }[]
       }
+      get_staff_count: { Args: { owner_id: string }; Returns: number }
       get_subscription_status: {
         Args: never
         Returns: Database["public"]["Enums"]["subscription_status"]
