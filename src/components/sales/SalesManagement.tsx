@@ -13,6 +13,7 @@ import { useToast } from '@/hooks/use-toast';
 import { useAuth } from '@/hooks/useAuth';
 import { useBranchContext } from '@/hooks/useBranchContext';
 import { ConfirmationDialog } from '@/components/ui/confirmation-dialog';
+import AddToCartDialog from './AddToCartDialog';
 
 interface Medicine {
   id: string;
@@ -22,11 +23,15 @@ interface Medicine {
   stock_quantity: number;
   category?: string;
   expiry_date?: string;
+  stripes_per_pack?: number;
+  open_pack_stripes?: number;
 }
 
 interface CartItem extends Medicine {
   quantity: number;
   total: number;
+  saleType: 'full_pack' | 'by_stripe';
+  stripesCount?: number; // Number of stripes when selling by stripe
 }
 
 export default function SalesManagement() {
@@ -42,6 +47,8 @@ export default function SalesManagement() {
   const [paymentMethod, setPaymentMethod] = useState<string>('Cash');
   const [discountPercent, setDiscountPercent] = useState<number>(0);
   const [showCheckoutConfirm, setShowCheckoutConfirm] = useState(false);
+  const [selectedMedicine, setSelectedMedicine] = useState<Medicine | null>(null);
+  const [showAddToCartDialog, setShowAddToCartDialog] = useState(false);
   const { profile } = useAuth();
   const { toast } = useToast();
   const { selectedBranch } = useBranchContext();
@@ -76,7 +83,7 @@ export default function SalesManagement() {
       // RLS policies handle ownership filtering automatically
       let query = supabase
         .from('medicines')
-        .select('id, name, generic_name, selling_price, stock_quantity, category, expiry_date')
+        .select('id, name, generic_name, selling_price, stock_quantity, category, expiry_date, stripes_per_pack, open_pack_stripes')
         .gt('stock_quantity', 0)
         .order('name');
 
@@ -119,10 +126,36 @@ export default function SalesManagement() {
     return expiry <= thirtyDaysFromNow;
   };
 
-  const addToCart = (medicine: Medicine) => {
-    const existingItem = cart.find(item => item.id === medicine.id);
+  const addToCart = (medicine: Medicine, saleType: 'full_pack' | 'by_stripe' = 'full_pack', stripesCount: number = 1) => {
+    // Validation for stripe sales
+    if (saleType === 'by_stripe') {
+      if (!medicine.stripes_per_pack) {
+        toast({
+          title: "Error",
+          description: "This medicine is not configured for stripe sales",
+          variant: "destructive"
+        });
+        return;
+      }
+      
+      const totalAvailableStripes = (medicine.stock_quantity * medicine.stripes_per_pack) + (medicine.open_pack_stripes || 0);
+      const stripesInCart = cart
+        .filter(item => item.id === medicine.id && item.saleType === 'by_stripe')
+        .reduce((sum, item) => sum + (item.stripesCount || 0), 0);
+      
+      if (stripesCount > totalAvailableStripes - stripesInCart) {
+        toast({
+          title: "Error",
+          description: "Not enough stripes available",
+          variant: "destructive"
+        });
+        return;
+      }
+    }
     
-    if (existingItem) {
+    const existingItem = cart.find(item => item.id === medicine.id && item.saleType === saleType);
+    
+    if (existingItem && saleType === 'full_pack') {
       if (existingItem.quantity >= medicine.stock_quantity) {
         toast({
           title: "Error",
@@ -133,15 +166,29 @@ export default function SalesManagement() {
       }
       
       setCart(cart.map(item =>
-        item.id === medicine.id
+        item.id === medicine.id && item.saleType === saleType
           ? { ...item, quantity: item.quantity + 1, total: (item.quantity + 1) * item.selling_price }
           : item
       ));
+    } else if (existingItem && saleType === 'by_stripe') {
+      const newStripesCount = (existingItem.stripesCount || 0) + stripesCount;
+      const pricePerStripe = medicine.selling_price / (medicine.stripes_per_pack || 1);
+      setCart(cart.map(item =>
+        item.id === medicine.id && item.saleType === saleType
+          ? { ...item, stripesCount: newStripesCount, total: newStripesCount * pricePerStripe }
+          : item
+      ));
     } else {
+      const pricePerStripe = saleType === 'by_stripe' && medicine.stripes_per_pack 
+        ? medicine.selling_price / medicine.stripes_per_pack 
+        : medicine.selling_price;
+      
       setCart([...cart, {
         ...medicine,
-        quantity: 1,
-        total: medicine.selling_price
+        quantity: saleType === 'full_pack' ? 1 : 0,
+        saleType,
+        stripesCount: saleType === 'by_stripe' ? stripesCount : undefined,
+        total: saleType === 'by_stripe' ? stripesCount * pricePerStripe : medicine.selling_price
       }]);
     }
   };
@@ -222,9 +269,11 @@ export default function SalesManagement() {
       const saleItems = cart.map(item => ({
         sale_id: saleData.id,
         medicine_id: item.id,
-        quantity: item.quantity,
+        quantity: item.saleType === 'full_pack' ? item.quantity : 0,
         unit_price: item.selling_price,
-        total_price: item.total
+        total_price: item.total,
+        sale_type: item.saleType,
+        stripes_sold: item.saleType === 'by_stripe' ? item.stripesCount : null
       }));
 
       const { error: itemsError } = await supabase
@@ -235,14 +284,51 @@ export default function SalesManagement() {
 
       // Update stock quantities
       for (const item of cart) {
-        const { error: stockError } = await supabase
-          .from('medicines')
-          .update({ 
-            stock_quantity: item.stock_quantity - item.quantity 
-          })
-          .eq('id', item.id);
+        if (item.saleType === 'full_pack') {
+          // Deduct full packs
+          const { error: stockError } = await supabase
+            .from('medicines')
+            .update({ 
+              stock_quantity: item.stock_quantity - item.quantity 
+            })
+            .eq('id', item.id);
 
-        if (stockError) throw stockError;
+          if (stockError) throw stockError;
+        } else if (item.saleType === 'by_stripe' && item.stripesCount) {
+          // Handle stripe deduction
+          const medicine = medicines.find(m => m.id === item.id);
+          if (!medicine || !medicine.stripes_per_pack) continue;
+          
+          let stripesToDeduct = item.stripesCount;
+          let newOpenPackStripes = medicine.open_pack_stripes || 0;
+          let newStockQuantity = medicine.stock_quantity;
+          
+          // First, deduct from open pack
+          if (newOpenPackStripes > 0) {
+            const deductFromOpen = Math.min(stripesToDeduct, newOpenPackStripes);
+            newOpenPackStripes -= deductFromOpen;
+            stripesToDeduct -= deductFromOpen;
+          }
+          
+          // If more stripes needed, open new packs
+          while (stripesToDeduct > 0 && newStockQuantity > 0) {
+            newStockQuantity--;
+            newOpenPackStripes = medicine.stripes_per_pack;
+            const deductFromNewPack = Math.min(stripesToDeduct, newOpenPackStripes);
+            newOpenPackStripes -= deductFromNewPack;
+            stripesToDeduct -= deductFromNewPack;
+          }
+          
+          const { error: stockError } = await supabase
+            .from('medicines')
+            .update({ 
+              stock_quantity: newStockQuantity,
+              open_pack_stripes: newOpenPackStripes
+            })
+            .eq('id', item.id);
+
+          if (stockError) throw stockError;
+        }
       }
 
       toast({
@@ -362,7 +448,10 @@ export default function SalesManagement() {
                     </div>
                   )}
                   <Button 
-                    onClick={() => addToCart(medicine)}
+                    onClick={() => {
+                      setSelectedMedicine(medicine);
+                      setShowAddToCartDialog(true);
+                    }}
                     className="w-full"
                     disabled={medicine.stock_quantity === 0 || isExpired(medicine.expiry_date)}
                   >
@@ -447,29 +536,27 @@ export default function SalesManagement() {
             ) : (
               <div className="space-y-4">
                 {cart.map((item) => (
-                  <div key={item.id} className="flex items-center justify-between p-2 border rounded">
-                    <div className="flex-1">
-                       <h4 className="font-medium text-sm">{item.name}</h4>
-                       <p className="text-xs text-muted-foreground">
-                         ETB {item.selling_price} each
-                       </p>
-                    </div>
-                    <div className="flex items-center space-x-2">
-                      <Button
-                        size="sm"
-                        variant="outline"
-                        onClick={() => updateCartItemQuantity(item.id, item.quantity - 1)}
-                      >
-                        <Minus className="h-3 w-3" />
-                      </Button>
-                      <span className="w-8 text-center text-sm">{item.quantity}</span>
-                      <Button
-                        size="sm"
-                        variant="outline"
-                        onClick={() => updateCartItemQuantity(item.id, item.quantity + 1)}
-                      >
-                        <Plus className="h-3 w-3" />
-                      </Button>
+                  <div key={`${item.id}-${item.saleType}`} className="p-3 border rounded space-y-2">
+                    <div className="flex items-start justify-between">
+                      <div className="flex-1">
+                        <h4 className="font-medium text-sm">{item.name}</h4>
+                        <div className="space-y-1 mt-1">
+                          <p className="text-xs text-muted-foreground">
+                            Type: <Badge variant="outline" className="text-xs">
+                              {item.saleType === 'full_pack' ? 'Full Pack' : 'By Stripe'}
+                            </Badge>
+                          </p>
+                          {item.saleType === 'full_pack' ? (
+                            <p className="text-xs text-muted-foreground">
+                              ETB {item.selling_price} × {item.quantity} = ETB {item.total.toFixed(2)}
+                            </p>
+                          ) : (
+                            <p className="text-xs text-muted-foreground">
+                              {item.stripesCount} stripes @ ETB {(item.selling_price / (item.stripes_per_pack || 1)).toFixed(2)} = ETB {item.total.toFixed(2)}
+                            </p>
+                          )}
+                        </div>
+                      </div>
                       <Button
                         size="sm"
                         variant="ghost"
@@ -562,6 +649,13 @@ export default function SalesManagement() {
           description={`Are you sure you want to complete this sale? Total: ETB ${calculateTotal().toFixed(2)} via ${paymentMethod}`}
           onConfirm={confirmCheckout}
           confirmText="Complete Sale"
+        />
+        
+        <AddToCartDialog
+          open={showAddToCartDialog}
+          onOpenChange={setShowAddToCartDialog}
+          medicine={selectedMedicine}
+          onAddToCart={addToCart}
         />
       </div>
     </div>

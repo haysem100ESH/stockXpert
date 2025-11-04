@@ -52,6 +52,7 @@ export default function EditMedicineDialog({
     selling_price: '',
     stock_quantity: '',
     minimum_stock_level: '',
+    stripes_per_pack: '',
     expiry_date: '',
     expiry_alert_enabled: true,
     branch_id: ''
@@ -98,7 +99,7 @@ export default function EditMedicineDialog({
 
   useEffect(() => {
     if (medicine && open) {
-      const medicineWithBranch = medicine as MedicineWithBranch;
+      const medicineWithBranch = medicine as MedicineWithBranch & { stripes_per_pack?: number };
       setMedicineData({
         name: medicine.name,
         generic_name: medicine.generic_name || '',
@@ -110,6 +111,7 @@ export default function EditMedicineDialog({
         selling_price: medicine.selling_price.toString(),
         stock_quantity: medicine.stock_quantity.toString(),
         minimum_stock_level: medicine.minimum_stock_level.toString(),
+        stripes_per_pack: medicineWithBranch.stripes_per_pack ? medicineWithBranch.stripes_per_pack.toString() : '',
         expiry_date: medicine.expiry_date || '',
         expiry_alert_enabled: medicine.expiry_alert_enabled ?? true,
         branch_id: medicineWithBranch.branch_id || ''
@@ -135,6 +137,7 @@ export default function EditMedicineDialog({
         selling_price: parseFloat(medicineData.selling_price),
         stock_quantity: parseInt(medicineData.stock_quantity),
         minimum_stock_level: parseInt(medicineData.minimum_stock_level),
+        stripes_per_pack: medicineData.stripes_per_pack ? parseInt(medicineData.stripes_per_pack) : null,
         expiry_date: medicineData.expiry_date || null,
         expiry_alert_enabled: medicineData.expiry_alert_enabled
       };
@@ -315,6 +318,18 @@ export default function EditMedicineDialog({
                 required
               />
             </div>
+          </div>
+
+          <div className="space-y-2">
+            <Label htmlFor="stripes_per_pack">Stripes Per Pack</Label>
+            <Input
+              id="stripes_per_pack"
+              type="number"
+              min="1"
+              value={medicineData.stripes_per_pack}
+              onChange={(e) => setMedicineData({ ...medicineData, stripes_per_pack: e.target.value })}
+              placeholder="Leave empty if not sold by stripe"
+            />
           </div>
 
           <div className="space-y-2">

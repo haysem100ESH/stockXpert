@@ -156,9 +156,11 @@ export type Database = {
           manufacturer: string | null
           minimum_stock_level: number
           name: string
+          open_pack_stripes: number | null
           purchase_price: number
           selling_price: number
           stock_quantity: number
+          stripes_per_pack: number | null
           supplier_id: string | null
           updated_at: string | null
         }
@@ -176,9 +178,11 @@ export type Database = {
           manufacturer?: string | null
           minimum_stock_level?: number
           name: string
+          open_pack_stripes?: number | null
           purchase_price: number
           selling_price: number
           stock_quantity?: number
+          stripes_per_pack?: number | null
           supplier_id?: string | null
           updated_at?: string | null
         }
@@ -196,9 +200,11 @@ export type Database = {
           manufacturer?: string | null
           minimum_stock_level?: number
           name?: string
+          open_pack_stripes?: number | null
           purchase_price?: number
           selling_price?: number
           stock_quantity?: number
+          stripes_per_pack?: number | null
           supplier_id?: string | null
           updated_at?: string | null
         }
@@ -390,6 +396,8 @@ export type Database = {
           medicine_id: string | null
           quantity: number
           sale_id: string | null
+          sale_type: string | null
+          stripes_sold: number | null
           total_price: number
           unit_price: number
         }
@@ -398,6 +406,8 @@ export type Database = {
           medicine_id?: string | null
           quantity: number
           sale_id?: string | null
+          sale_type?: string | null
+          stripes_sold?: number | null
           total_price: number
           unit_price: number
         }
@@ -406,6 +416,8 @@ export type Database = {
           medicine_id?: string | null
           quantity?: number
           sale_id?: string | null
+          sale_type?: string | null
+          stripes_sold?: number | null
           total_price?: number
           unit_price?: number
         }
