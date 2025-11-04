@@ -157,15 +157,38 @@ export default function StaffManagement() {
   return (
     <div className="space-y-6">
       <div className="flex items-center justify-between">
-        <h2 className="text-2xl font-bold">Staff Management</h2>
+        <div>
+          <h2 className="text-2xl font-bold">Staff Management</h2>
+          {planLimits && (
+            <p className="text-sm text-muted-foreground mt-1">
+              {planLimits.staffLimit === null 
+                ? `Unlimited staff on ${planLimits.planName} plan`
+                : `${planLimits.currentStaff} / ${planLimits.staffLimit} staff used on ${planLimits.planName} plan`
+              }
+            </p>
+          )}
+        </div>
         
         {profile?.role === 'owner' && (
-          <Button onClick={() => setShowCreateDialog(true)}>
+          <Button 
+            onClick={() => setShowCreateDialog(true)}
+            disabled={planLimits && !planLimits.canAddStaff}
+          >
             <Plus className="h-4 w-4 mr-2" />
             Create Staff Account
           </Button>
         )}
       </div>
+      
+      {planLimits && !planLimits.canAddStaff && profile?.role === 'owner' && (
+        <Card className="border-orange-200 bg-orange-50">
+          <CardContent className="pt-6">
+            <p className="text-sm text-orange-800">
+              You have reached your plan limit. Upgrade to add more staff members.
+            </p>
+          </CardContent>
+        </Card>
+      )}
 
       <div className="flex items-center space-x-4">
         <div className="relative flex-1">

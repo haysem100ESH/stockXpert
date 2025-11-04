@@ -13,6 +13,7 @@ import { Users, Building, CreditCard, AlertTriangle, Edit, UserX, UserCheck, Dol
 import CreateOwnerDialog from './CreateOwnerDialog';
 import EditOwnerDialog from './EditOwnerDialog';
 import CreditSetupSection from './CreditSetupSection';
+import SubscriptionPlanStats from './SubscriptionPlanStats';
 
 interface PharmacyOwner {
   id: string;
@@ -493,6 +494,9 @@ export default function DeveloperDashboard() {
 
       {/* Universal Credit Setup Section */}
       <CreditSetupSection />
+
+      {/* Subscription Plan Statistics */}
+      <SubscriptionPlanStats />
 
       {/* Summary Cards */}
       <div className="grid grid-cols-1 md:grid-cols-6 gap-4">
