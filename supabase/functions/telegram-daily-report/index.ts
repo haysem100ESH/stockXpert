@@ -132,10 +132,10 @@ Deno.serve(async (req) => {
           continue;
         }
 
-        // Get today's sales
+        // Get today's sales with sale items
         const { data: sales, error: salesError } = await supabase
           .from('sales')
-          .select('id, total_amount, payment_method, medicines:sale_items(quantity, medicine_id)')
+          .select('id, total_amount, sale_items(quantity)')
           .in('branch_id', branchIds)
           .gte('created_at', todayStr)
           .lt('created_at', tomorrowStr);
@@ -145,89 +145,41 @@ Deno.serve(async (req) => {
           continue;
         }
 
-        // Calculate statistics
-        const totalSales = sales?.length || 0;
+        // Get today's expenses
+        const { data: expenses, error: expensesError } = await supabase
+          .from('expenses')
+          .select('amount')
+          .in('branch_id', branchIds)
+          .gte('created_at', todayStr)
+          .lt('created_at', tomorrowStr);
+
+        if (expensesError) {
+          console.error(`Error fetching expenses for ${profile.full_name}:`, expensesError);
+          continue;
+        }
+
+        // Calculate daily metrics
         const totalIncome = sales?.reduce((sum, sale) => sum + (sale.total_amount || 0), 0) || 0;
-
-        // Payment methods breakdown
-        const paymentBreakdown = sales?.reduce((acc, sale) => {
-          const method = sale.payment_method || 'unknown';
-          acc[method] = (acc[method] || 0) + (sale.total_amount || 0);
-          return acc;
-        }, {} as Record<string, number>) || {};
-
-        // Get medicine details for top sellers
-        const medicineQuantities = new Map<string, number>();
+        const totalExpense = expenses?.reduce((sum, expense) => sum + (expense.amount || 0), 0) || 0;
         
+        // Calculate total items sold
+        let itemsSoldNumber = 0;
         for (const sale of sales || []) {
-          if (sale.medicines) {
-            for (const item of sale.medicines) {
-              const current = medicineQuantities.get(item.medicine_id) || 0;
-              medicineQuantities.set(item.medicine_id, current + (item.quantity || 0));
+          if (sale.sale_items) {
+            for (const item of sale.sale_items) {
+              itemsSoldNumber += item.quantity || 0;
             }
           }
         }
 
-        // Get top 3 medicines
-        const topMedicineIds = Array.from(medicineQuantities.entries())
-          .sort((a, b) => b[1] - a[1])
-          .slice(0, 3)
-          .map(([id]) => id);
+        // Format the report as JSON
+        const reportData = {
+          items_sold_number: itemsSoldNumber,
+          total_income: parseFloat(totalIncome.toFixed(2)),
+          total_expense: parseFloat(totalExpense.toFixed(2))
+        };
 
-        let topMedicinesText = '';
-        if (topMedicineIds.length > 0) {
-          const { data: medicines } = await supabase
-            .from('medicines')
-            .select('name')
-            .in('id', topMedicineIds);
-
-          if (medicines && medicines.length > 0) {
-            topMedicinesText = medicines
-              .map((med, idx) => `${idx + 1}. ${med.name} (${medicineQuantities.get(topMedicineIds[idx])} units)`)
-              .join('\n');
-          }
-        }
-
-        // Get low stock alerts
-        const { data: lowStock, error: lowStockError } = await supabase
-          .from('medicines')
-          .select('id')
-          .in('branch_id', branchIds)
-          .lt('quantity', 10);
-
-        const lowStockCount = lowStock?.length || 0;
-
-        // Format the report
-        const dateFormatted = today.toLocaleDateString('en-US', { 
-          weekday: 'long', 
-          year: 'numeric', 
-          month: 'long', 
-          day: 'numeric' 
-        });
-
-        let report = `📊 *Daily Pharmacy Report*\n`;
-        report += `📅 ${dateFormatted}\n\n`;
-
-        if (totalSales === 0) {
-          report += `📦 No sales were recorded today.`;
-        } else {
-          report += `💰 *Total Income:* ${totalIncome.toFixed(2)} ETB\n`;
-          report += `🧾 *Transactions:* ${totalSales}\n\n`;
-
-          if (topMedicinesText) {
-            report += `💊 *Top Medicines:*\n${topMedicinesText}\n\n`;
-          }
-
-          report += `💳 *Payment Breakdown:*\n`;
-          Object.entries(paymentBreakdown).forEach(([method, amount]) => {
-            const icon = method === 'cash' ? '💵' : method === 'card' ? '💳' : '📝';
-            report += `${icon} ${method.charAt(0).toUpperCase() + method.slice(1)}: ${amount.toFixed(2)} ETB\n`;
-          });
-        }
-
-        if (lowStockCount > 0) {
-          report += `\n⚠️ *Stock Alerts:* ${lowStockCount} items running low`;
-        }
+        const report = JSON.stringify(reportData, null, 2);
 
         // Send the report
         await sendTelegramMessage(profile.telegram_chat_id, report);
@@ -236,8 +188,7 @@ Deno.serve(async (req) => {
           profile: profile.full_name,
           chatId: profile.telegram_chat_id,
           status: 'sent',
-          totalSales,
-          totalIncome
+          ...reportData
         });
 
         console.log(`Report sent to ${profile.full_name}`);
