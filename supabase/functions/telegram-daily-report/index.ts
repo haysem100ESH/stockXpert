@@ -116,9 +116,9 @@ Deno.serve(async (req) => {
       try {
         // Get branches for this owner
         const { data: branches, error: branchesError } = await supabase
-          .from('branches')
+          .from('pharmacy_branches')
           .select('id')
-          .eq('owner_id', profile.id);
+          .eq('pharmacy_owner_id', profile.id);
 
         if (branchesError) {
           console.error(`Error fetching branches for ${profile.full_name}:`, branchesError);
