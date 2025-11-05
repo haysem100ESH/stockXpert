@@ -200,7 +200,7 @@ Deno.serve(async (req) => {
           sales: salesDetails
         };
 
-        const report = JSON.stringify(reportData, null, 2);
+        const report = `\`\`\`json\n${JSON.stringify(reportData, null, 2)}\n\`\`\``;
 
         // Send the report
         await sendTelegramMessage(profile.telegram_chat_id, report);
