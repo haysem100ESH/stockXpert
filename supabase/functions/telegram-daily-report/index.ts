@@ -33,6 +33,14 @@ async function sendTelegramMessage(chatId: string, text: string) {
   return await response.json();
 }
 
+function escapeMarkdown(text: string): string {
+  return text.replace(/[_*[\]()~`>#+\-=|{}.!]/g, '\\$&');
+}
+
+function formatNumber(num: number): string {
+  return new Intl.NumberFormat('en-US', { maximumFractionDigits: 2 }).format(num);
+}
+
 Deno.serve(async (req) => {
   // Handle CORS preflight
   if (req.method === 'OPTIONS') {
@@ -117,7 +125,7 @@ Deno.serve(async (req) => {
         // Get branches for this owner
         const { data: branches, error: branchesError } = await supabase
           .from('pharmacy_branches')
-          .select('id')
+          .select('id, name')
           .eq('pharmacy_owner_id', profile.id);
 
         if (branchesError) {
@@ -125,98 +133,138 @@ Deno.serve(async (req) => {
           continue;
         }
 
-        const branchIds = branches?.map(b => b.id) || [];
-
-        if (branchIds.length === 0) {
+        if (!branches || branches.length === 0) {
           console.log(`No branches found for ${profile.full_name}`);
           continue;
         }
 
-        // Get today's sales with sale items and medicine details
-        const { data: sales, error: salesError } = await supabase
-          .from('sales')
-          .select(`
-            id, 
-            total_amount, 
-            created_at,
-            sale_items(
-              quantity, 
-              total_price,
-              medicines(name)
-            )
-          `)
-          .in('branch_id', branchIds)
-          .gte('created_at', todayStr)
-          .lt('created_at', tomorrowStr);
+        // Process each branch separately
+        for (const branch of branches) {
+          try {
+            // Get today's sales with sale items and medicine details
+            const { data: sales, error: salesError } = await supabase
+              .from('sales')
+              .select(`
+                id, 
+                total_amount, 
+                created_at,
+                sale_items(
+                  quantity, 
+                  total_price,
+                  medicines(name)
+                )
+              `)
+              .eq('branch_id', branch.id)
+              .gte('created_at', todayStr)
+              .lt('created_at', tomorrowStr);
 
-        if (salesError) {
-          console.error(`Error fetching sales for ${profile.full_name}:`, salesError);
-          continue;
-        }
-
-        // Get today's expenses
-        const { data: expenses, error: expensesError } = await supabase
-          .from('expenses')
-          .select('amount')
-          .in('branch_id', branchIds)
-          .gte('created_at', todayStr)
-          .lt('created_at', tomorrowStr);
-
-        if (expensesError) {
-          console.error(`Error fetching expenses for ${profile.full_name}:`, expensesError);
-          continue;
-        }
-
-        // Calculate daily metrics
-        const totalIncome = sales?.reduce((sum, sale) => sum + (sale.total_amount || 0), 0) || 0;
-        const totalExpense = expenses?.reduce((sum, expense) => sum + (expense.amount || 0), 0) || 0;
-        
-        // Calculate total items sold and format sales data
-        let itemsSoldNumber = 0;
-        const salesDetails: any[] = [];
-        
-        for (const sale of sales || []) {
-          if (sale.sale_items) {
-            for (const item of sale.sale_items) {
-              itemsSoldNumber += item.quantity || 0;
-              
-              // Add detailed sale item
-              salesDetails.push({
-                medicine: item.medicines?.name || 'Unknown',
-                quantity: item.quantity || 0,
-                total: parseFloat((item.total_price || 0).toFixed(2)),
-                date: new Date(sale.created_at).toISOString().split('T')[0]
-              });
+            if (salesError) {
+              console.error(`Error fetching sales for branch ${branch.name}:`, salesError);
+              continue;
             }
+
+            // Get today's expenses
+            const { data: expenses, error: expensesError } = await supabase
+              .from('expenses')
+              .select('amount')
+              .eq('branch_id', branch.id)
+              .gte('created_at', todayStr)
+              .lt('created_at', tomorrowStr);
+
+            if (expensesError) {
+              console.error(`Error fetching expenses for branch ${branch.name}:`, expensesError);
+              continue;
+            }
+
+            // Calculate daily metrics
+            const totalIncome = sales?.reduce((sum, sale) => sum + (sale.total_amount || 0), 0) || 0;
+            const totalExpense = expenses?.reduce((sum, expense) => sum + (expense.amount || 0), 0) || 0;
+            
+            // Calculate total items sold and track medicine sales
+            let itemsSoldNumber = 0;
+            const medicineSales: { [key: string]: { quantity: number, total: number } } = {};
+            const salesSummary: string[] = [];
+            
+            for (const sale of sales || []) {
+              if (sale.sale_items) {
+                for (const item of sale.sale_items) {
+                  const quantity = item.quantity || 0;
+                  const total = item.total_price || 0;
+                  const medicineName = item.medicines?.name || 'Unknown';
+                  
+                  itemsSoldNumber += quantity;
+                  
+                  if (!medicineSales[medicineName]) {
+                    medicineSales[medicineName] = { quantity: 0, total: 0 };
+                  }
+                  medicineSales[medicineName].quantity += quantity;
+                  medicineSales[medicineName].total += total;
+                }
+              }
+            }
+
+            // Find top-selling medicine
+            let topMedicine = 'N/A';
+            let maxQuantity = 0;
+            for (const [name, data] of Object.entries(medicineSales)) {
+              if (data.quantity > maxQuantity) {
+                maxQuantity = data.quantity;
+                topMedicine = name;
+              }
+            }
+
+            // Build sales summary
+            for (const [name, data] of Object.entries(medicineSales)) {
+              salesSummary.push(`• ${name} — ${data.quantity} unit${data.quantity > 1 ? 's' : ''} — ${formatNumber(data.total)} ETB`);
+            }
+
+            // Format the readable report
+            const dateStr = today.toLocaleDateString('en-US', { 
+              year: 'numeric', 
+              month: 'long', 
+              day: 'numeric' 
+            });
+
+            let report = `📊 *Daily Pharmacy Report* 🧾\n\n`;
+            report += `🏪 *Branch:* ${branch.name}\n`;
+            report += `📅 *Date:* ${dateStr}\n\n`;
+            report += `💊 *Items Sold:* ${itemsSoldNumber}\n`;
+            report += `💰 *Total Income:* ${formatNumber(totalIncome)} ETB\n`;
+            report += `💸 *Total Expense:* ${formatNumber(totalExpense)} ETB\n`;
+            report += `🔥 *Top-Selling Medicine:* ${topMedicine}\n\n`;
+            
+            if (salesSummary.length > 0) {
+              report += `🧾 *Sales Summary:*\n${salesSummary.join('\n')}\n\n`;
+            }
+            
+            report += `✅ _Report generated automatically by PharmaXpert Bot_ 🤖`;
+
+            // Send the report
+            await sendTelegramMessage(profile.telegram_chat_id, report);
+            
+            results.push({
+              profile: profile.full_name,
+              branch: branch.name,
+              chatId: profile.telegram_chat_id,
+              status: 'sent',
+              items_sold_number: itemsSoldNumber,
+              total_income: parseFloat(totalIncome.toFixed(2)),
+              total_expense: parseFloat(totalExpense.toFixed(2)),
+              sales_count: salesSummary.length
+            });
+
+            console.log(`Readable daily report sent successfully for branch: ${branch.name}`);
+          } catch (error: any) {
+            console.error(`Error processing daily report for branch ${branch.name}:`, error);
+            results.push({
+              profile: profile.full_name,
+              branch: branch.name,
+              chatId: profile.telegram_chat_id,
+              status: 'failed',
+              error: error.message
+            });
           }
         }
-
-        // Format the report as JSON with detailed sales data
-        const reportData = {
-          owner_id: profile.id,
-          items_sold_number: itemsSoldNumber,
-          total_income: parseFloat(totalIncome.toFixed(2)),
-          total_expense: parseFloat(totalExpense.toFixed(2)),
-          sales: salesDetails
-        };
-
-        const report = `\`\`\`json\n${JSON.stringify(reportData, null, 2)}\n\`\`\``;
-
-        // Send the report
-        await sendTelegramMessage(profile.telegram_chat_id, report);
-        
-        results.push({
-          profile: profile.full_name,
-          chatId: profile.telegram_chat_id,
-          status: 'sent',
-          owner_id: profile.id,
-          items_sold_number: itemsSoldNumber,
-          total_income: parseFloat(totalIncome.toFixed(2)),
-          total_expense: parseFloat(totalExpense.toFixed(2)),
-          sales_count: salesDetails.length
-        });
-
-        console.log(`Sales data sent successfully to Telegram for owner_id: ${profile.id}`);
       } catch (error: any) {
         console.error(`Error processing report for ${profile.full_name}:`, error);
         results.push({
