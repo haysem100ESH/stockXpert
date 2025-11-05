@@ -99,7 +99,11 @@ Deno.serve(async (req) => {
     if (!profiles || profiles.length === 0) {
       console.log('No profiles with Telegram linked found');
       return new Response(
-        JSON.stringify({ message: 'No profiles to send reports to' }),
+        JSON.stringify({ 
+          success: true,
+          message: 'No profiles to send reports to',
+          reports_delivered: 0 
+        }),
         { status: 200, headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
       );
     }
@@ -248,9 +252,13 @@ Deno.serve(async (req) => {
       }
     }
 
+    const successCount = results.filter(r => r.status === 'sent').length;
+    
     return new Response(
       JSON.stringify({ 
-        message: 'Daily reports sent',
+        success: true,
+        message: `Reports sent successfully: ${successCount} reports delivered`,
+        reports_delivered: successCount,
         results 
       }),
       { 
