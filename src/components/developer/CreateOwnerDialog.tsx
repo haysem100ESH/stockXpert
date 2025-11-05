@@ -226,14 +226,17 @@ export default function CreateOwnerDialog({ onOwnerCreated }: CreateOwnerDialogP
           </div>
 
           <div>
-            <Label htmlFor="phone">Phone Number</Label>
+            <Label htmlFor="phone">Phone Number (for Telegram Reports)</Label>
             <Input
               id="phone"
               type="tel"
               value={formData.phone}
               onChange={(e) => handleInputChange('phone', e.target.value)}
-              placeholder="+1 (555) 123-4567"
+              placeholder="+251912345678"
             />
+            <p className="text-xs text-muted-foreground mt-1">
+              Enter the phone number to receive daily reports via Telegram
+            </p>
           </div>
 
           <div>

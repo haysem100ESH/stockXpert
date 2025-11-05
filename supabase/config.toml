@@ -67,3 +67,12 @@ verify_jwt = false
 
 [functions.create-pharmacy-owner]
 verify_jwt = true
+
+[functions.telegram-bot-webhook]
+verify_jwt = false
+
+[functions.telegram-daily-report]
+verify_jwt = false
+
+[functions.setup-telegram-webhook]
+verify_jwt = false

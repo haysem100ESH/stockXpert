@@ -85,6 +85,7 @@ const handler = async (req: Request): Promise<Response> => {
       .update({
         full_name,
         phone,
+        phone_number: phone, // Add for Telegram integration
         pharmacy_name,
         pharmacy_address,
         role: 'owner',

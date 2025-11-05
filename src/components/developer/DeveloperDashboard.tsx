@@ -9,7 +9,7 @@ import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
 import { useToast } from '@/hooks/use-toast';
-import { Users, Building, CreditCard, AlertTriangle, Edit, UserX, UserCheck, DollarSign, Calendar, TrendingUp } from 'lucide-react';
+import { Users, Building, CreditCard, AlertTriangle, Edit, UserX, UserCheck, DollarSign, Calendar, TrendingUp, Send } from 'lucide-react';
 import CreateOwnerDialog from './CreateOwnerDialog';
 import EditOwnerDialog from './EditOwnerDialog';
 import CreditSetupSection from './CreditSetupSection';
@@ -63,6 +63,9 @@ export default function DeveloperDashboard() {
   const [filterPharmacyName, setFilterPharmacyName] = useState('');
   const [filterMonth, setFilterMonth] = useState('');
   const [filterCreditAdded, setFilterCreditAdded] = useState('');
+  const [sendingReport, setSendingReport] = useState(false);
+  const [selectedOwnersForReport, setSelectedOwnersForReport] = useState<string[]>([]);
+  const [showReportDialog, setShowReportDialog] = useState(false);
   const { toast } = useToast();
 
   useEffect(() => {
@@ -304,6 +307,54 @@ export default function DeveloperDashboard() {
     }
   };
 
+  const triggerTelegramReport = async (selectedOwnerIds?: string[]) => {
+    try {
+      setSendingReport(true);
+      
+      const description = selectedOwnerIds && selectedOwnerIds.length > 0
+        ? `Sending reports to ${selectedOwnerIds.length} selected owner(s)...`
+        : "Sending reports to all owners with Telegram linked...";
+      
+      toast({
+        title: "Sending Reports",
+        description
+      });
+
+      const { data, error } = await supabase.functions.invoke('telegram-daily-report', {
+        body: selectedOwnerIds && selectedOwnerIds.length > 0 
+          ? { ownerIds: selectedOwnerIds } 
+          : {}
+      });
+
+      if (error) throw error;
+
+      toast({
+        title: "Success",
+        description: `Reports sent successfully: ${data.results?.length || 0} reports delivered`
+      });
+      
+      setShowReportDialog(false);
+      setSelectedOwnersForReport([]);
+    } catch (error: any) {
+      console.error('Telegram report error:', error);
+      toast({
+        title: "Error",
+        description: error.message,
+        variant: "destructive"
+      });
+    } finally {
+      setSendingReport(false);
+    }
+  };
+
+  const toggleOwnerSelection = (ownerId: string) => {
+    setSelectedOwnersForReport(prev => 
+      prev.includes(ownerId) 
+        ? prev.filter(id => id !== ownerId)
+        : [...prev, ownerId]
+    );
+  };
+
   const handleAccountStatusChange = async (ownerId: string, status: string) => {
     const newStatus = status === "active";
     
@@ -487,6 +538,112 @@ export default function DeveloperDashboard() {
           <p className="text-muted-foreground">Manage pharmacy owners and subscriptions</p>
         </div>
         <div className="flex gap-2">
+          <Dialog open={showReportDialog} onOpenChange={setShowReportDialog}>
+            <DialogTrigger asChild>
+              <Button variant="outline">
+                <Send className="mr-2 h-4 w-4" />
+                Send Telegram Reports
+              </Button>
+            </DialogTrigger>
+            <DialogContent className="max-w-2xl max-h-[80vh] overflow-y-auto">
+              <DialogHeader>
+                <DialogTitle>Send Telegram Reports</DialogTitle>
+                <DialogDescription>
+                  Select owners to send reports to, or send to all owners with Telegram linked
+                </DialogDescription>
+              </DialogHeader>
+              
+              <div className="space-y-4">
+                <div className="flex justify-between items-center">
+                  <p className="text-sm text-muted-foreground">
+                    {selectedOwnersForReport.length > 0 
+                      ? `${selectedOwnersForReport.length} owner(s) selected`
+                      : 'No owners selected (will send to all)'}
+                  </p>
+                  <div className="flex gap-2">
+                    <Button 
+                      variant="outline" 
+                      size="sm"
+                      onClick={() => setSelectedOwnersForReport(owners.map(o => o.id))}
+                    >
+                      Select All
+                    </Button>
+                    <Button 
+                      variant="outline" 
+                      size="sm"
+                      onClick={() => setSelectedOwnersForReport([])}
+                    >
+                      Clear
+                    </Button>
+                  </div>
+                </div>
+
+                <div className="border rounded-md">
+                  <Table>
+                    <TableHeader>
+                      <TableRow>
+                        <TableHead className="w-12">Select</TableHead>
+                        <TableHead>Owner</TableHead>
+                        <TableHead>Pharmacy</TableHead>
+                        <TableHead>Telegram Status</TableHead>
+                      </TableRow>
+                    </TableHeader>
+                    <TableBody>
+                      {owners.map((owner) => (
+                        <TableRow key={owner.id}>
+                          <TableCell>
+                            <input
+                              type="checkbox"
+                              checked={selectedOwnersForReport.includes(owner.id)}
+                              onChange={() => toggleOwnerSelection(owner.id)}
+                              className="h-4 w-4 rounded border-gray-300"
+                            />
+                          </TableCell>
+                          <TableCell>
+                            <div>
+                              <p className="font-medium">{owner.full_name}</p>
+                              <p className="text-sm text-muted-foreground">{owner.email}</p>
+                            </div>
+                          </TableCell>
+                          <TableCell>{owner.pharmacy_name || 'N/A'}</TableCell>
+                          <TableCell>
+                            {owner.phone ? (
+                              <Badge variant="outline" className="bg-green-50">
+                                <UserCheck className="mr-1 h-3 w-3" />
+                                Ready
+                              </Badge>
+                            ) : (
+                              <Badge variant="outline" className="bg-gray-50">
+                                <UserX className="mr-1 h-3 w-3" />
+                                No Phone
+                              </Badge>
+                            )}
+                          </TableCell>
+                        </TableRow>
+                      ))}
+                    </TableBody>
+                  </Table>
+                </div>
+
+                <div className="flex justify-end gap-2">
+                  <Button 
+                    variant="outline" 
+                    onClick={() => setShowReportDialog(false)}
+                    disabled={sendingReport}
+                  >
+                    Cancel
+                  </Button>
+                  <Button 
+                    onClick={() => triggerTelegramReport(selectedOwnersForReport.length > 0 ? selectedOwnersForReport : undefined)}
+                    disabled={sendingReport}
+                  >
+                    <Send className="mr-2 h-4 w-4" />
+                    {sendingReport ? "Sending..." : "Send Reports"}
+                  </Button>
+                </div>
+              </div>
+            </DialogContent>
+          </Dialog>
           <CreateOwnerDialog onOwnerCreated={fetchPharmacyOwners} />
           <Button variant="outline" onClick={fetchPharmacyOwners}>Refresh Data</Button>
         </div>
