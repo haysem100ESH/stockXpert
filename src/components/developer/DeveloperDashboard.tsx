@@ -20,6 +20,7 @@ interface PharmacyOwner {
   full_name: string;
   email: string;
   phone?: string;
+  telegram_chat_id?: string;
   pharmacy_name?: string;
   pharmacy_address?: string;
   active: boolean;
@@ -156,6 +157,7 @@ export default function DeveloperDashboard() {
             full_name: profile.full_name,
             email: profile.email,
             phone: profile.phone,
+            telegram_chat_id: profile.telegram_chat_id,
             pharmacy_name: profile.pharmacy_name,
             pharmacy_address: profile.pharmacy_address,
             active: profile.active,
@@ -549,7 +551,8 @@ export default function DeveloperDashboard() {
               <DialogHeader>
                 <DialogTitle>Send Telegram Reports</DialogTitle>
                 <DialogDescription>
-                  Select owners to send reports to, or send to all owners with Telegram linked
+                  Select owners to send reports to, or send to all owners with Telegram linked.
+                  Note: Only owners with "Linked" status will receive reports.
                 </DialogDescription>
               </DialogHeader>
               
@@ -607,15 +610,20 @@ export default function DeveloperDashboard() {
                           </TableCell>
                           <TableCell>{owner.pharmacy_name || 'N/A'}</TableCell>
                           <TableCell>
-                            {owner.phone ? (
+                            {owner.telegram_chat_id ? (
                               <Badge variant="outline" className="bg-green-50">
                                 <UserCheck className="mr-1 h-3 w-3" />
-                                Ready
+                                Linked
+                              </Badge>
+                            ) : owner.phone ? (
+                              <Badge variant="outline" className="bg-yellow-50">
+                                <AlertTriangle className="mr-1 h-3 w-3" />
+                                Phone Added
                               </Badge>
                             ) : (
                               <Badge variant="outline" className="bg-gray-50">
                                 <UserX className="mr-1 h-3 w-3" />
-                                No Phone
+                                Not Setup
                               </Badge>
                             )}
                           </TableCell>
