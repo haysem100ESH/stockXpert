@@ -132,10 +132,19 @@ Deno.serve(async (req) => {
           continue;
         }
 
-        // Get today's sales with sale items
+        // Get today's sales with sale items and medicine details
         const { data: sales, error: salesError } = await supabase
           .from('sales')
-          .select('id, total_amount, sale_items(quantity)')
+          .select(`
+            id, 
+            total_amount, 
+            created_at,
+            sale_items(
+              quantity, 
+              total_price,
+              medicines(name)
+            )
+          `)
           .in('branch_id', branchIds)
           .gte('created_at', todayStr)
           .lt('created_at', tomorrowStr);
@@ -162,21 +171,33 @@ Deno.serve(async (req) => {
         const totalIncome = sales?.reduce((sum, sale) => sum + (sale.total_amount || 0), 0) || 0;
         const totalExpense = expenses?.reduce((sum, expense) => sum + (expense.amount || 0), 0) || 0;
         
-        // Calculate total items sold
+        // Calculate total items sold and format sales data
         let itemsSoldNumber = 0;
+        const salesDetails: any[] = [];
+        
         for (const sale of sales || []) {
           if (sale.sale_items) {
             for (const item of sale.sale_items) {
               itemsSoldNumber += item.quantity || 0;
+              
+              // Add detailed sale item
+              salesDetails.push({
+                medicine: item.medicines?.name || 'Unknown',
+                quantity: item.quantity || 0,
+                total: parseFloat((item.total_price || 0).toFixed(2)),
+                date: new Date(sale.created_at).toISOString().split('T')[0]
+              });
             }
           }
         }
 
-        // Format the report as JSON
+        // Format the report as JSON with detailed sales data
         const reportData = {
+          owner_id: profile.id,
           items_sold_number: itemsSoldNumber,
           total_income: parseFloat(totalIncome.toFixed(2)),
-          total_expense: parseFloat(totalExpense.toFixed(2))
+          total_expense: parseFloat(totalExpense.toFixed(2)),
+          sales: salesDetails
         };
 
         const report = JSON.stringify(reportData, null, 2);
@@ -188,10 +209,14 @@ Deno.serve(async (req) => {
           profile: profile.full_name,
           chatId: profile.telegram_chat_id,
           status: 'sent',
-          ...reportData
+          owner_id: profile.id,
+          items_sold_number: itemsSoldNumber,
+          total_income: parseFloat(totalIncome.toFixed(2)),
+          total_expense: parseFloat(totalExpense.toFixed(2)),
+          sales_count: salesDetails.length
         });
 
-        console.log(`Report sent to ${profile.full_name}`);
+        console.log(`Sales data sent successfully to Telegram for owner_id: ${profile.id}`);
       } catch (error: any) {
         console.error(`Error processing report for ${profile.full_name}:`, error);
         results.push({
