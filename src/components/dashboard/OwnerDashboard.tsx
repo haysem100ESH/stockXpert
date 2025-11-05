@@ -28,6 +28,7 @@ import ExpiredMedicinesTable from './ExpiredMedicinesTable';
 import LowStockItemsTable from './LowStockItemsTable';
 
 import SubscriptionPlanCard from '@/components/subscription/SubscriptionPlanCard';
+import { TelegramConnectionDialog } from '@/components/telegram/TelegramConnectionDialog';
 
 interface DashboardStats {
   totalRevenue: number;
@@ -247,6 +248,7 @@ export default function OwnerDashboard() {
 
   return (
     <div className="space-y-6">
+      <TelegramConnectionDialog />
       <div className="flex items-center justify-between">
         <h1 className="text-3xl font-bold">Owner Dashboard</h1>
       </div>

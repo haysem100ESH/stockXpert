@@ -13,6 +13,7 @@ interface Profile {
   security_answer_hash?: string;
   active?: boolean;
   manually_deactivated?: boolean;
+  telegram_chat_id?: string | null;
 }
 
 interface AuthContextType {
