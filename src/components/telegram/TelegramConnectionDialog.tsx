@@ -50,7 +50,8 @@ export function TelegramConnectionDialog() {
   }, [isOpen, profile?.id]);
 
   const handleOpenTelegram = () => {
-    window.open('https://t.me/haysem_bot', '_blank');
+    const botUrl = `https://t.me/haysem_bot?start=${profile?.id}`;
+    window.open(botUrl, '_blank');
   };
 
   const handleDismiss = () => {
@@ -87,7 +88,7 @@ export function TelegramConnectionDialog() {
               <ol className="space-y-1 pl-4">
                 <li>1. Click "Open Telegram Bot" below</li>
                 <li>2. Press "Start" in the chat</li>
-                <li>3. Share your registered phone number</li>
+                <li>3. Your account will be connected automatically!</li>
               </ol>
             </div>
           </DialogDescription>

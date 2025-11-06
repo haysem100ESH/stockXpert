@@ -444,10 +444,11 @@ export default function Dashboard() {
   };
 
   const handleConnectTelegram = () => {
-    window.open('https://t.me/haysem_bot', '_blank');
+    const botUrl = `https://t.me/haysem_bot?start=${profile?.id}`;
+    window.open(botUrl, '_blank');
     toast({
       title: "Connect to Telegram Bot",
-      description: "Please open the bot in your Telegram app and click Start to complete your connection.",
+      description: "Please open the bot and click Start to complete your connection.",
       duration: 6000,
     });
   };
