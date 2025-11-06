@@ -170,8 +170,8 @@ export default function DeveloperDashboard() {
             email: profile.email,
             phone: profile.phone,
             telegram_chat_id: profile.telegram_chat_id,
-            pharmacy_name: profile.pharmacy_name,
-            pharmacy_address: profile.pharmacy_address,
+            pharmacy_name: profile.pharmacy_name || 'N/A',
+            pharmacy_address: profile.pharmacy_address || 'N/A',
             active: profile.active,
             manually_deactivated: profile.manually_deactivated,
             subscription: subscription ? {
