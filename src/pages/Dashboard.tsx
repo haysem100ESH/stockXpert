@@ -8,11 +8,13 @@ import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@
 import { Calendar } from '@/components/ui/calendar';
 import { Popover, PopoverContent, PopoverTrigger } from '@/components/ui/popover';
 import { ChartContainer, ChartTooltip, ChartTooltipContent } from '@/components/ui/chart';
-import { DollarSign, Package, ShoppingCart, AlertTriangle, Download, CalendarIcon, Calendar as CalendarDaysIcon } from 'lucide-react';
+import { DollarSign, Package, ShoppingCart, AlertTriangle, Download, CalendarIcon, Calendar as CalendarDaysIcon, MessageCircle, ExternalLink, Send } from 'lucide-react';
 import { BarChart, Bar, XAxis, YAxis, CartesianGrid, ResponsiveContainer, PieChart, Pie, Cell, LineChart, Line } from 'recharts';
 import { format, subDays, subWeeks, subMonths, subYears, startOfDay, endOfDay } from 'date-fns';
 import { supabase } from '@/integrations/supabase/client';
 import { useBranchContext } from '@/hooks/useBranchContext';
+import { useToast } from '@/hooks/use-toast';
+import { TelegramConnectionDialog } from '@/components/telegram/TelegramConnectionDialog';
 interface DashboardStats {
   totalRevenue: number;
   totalProducts: number;
@@ -77,6 +79,7 @@ interface IncomeExpenseData {
 export default function Dashboard() {
   const { profile } = useAuth();
   const { selectedBranch, userBranch } = useBranchContext();
+  const { toast } = useToast();
   const [stats, setStats] = useState<DashboardStats>({
     totalRevenue: 0,
     totalProducts: 0,
@@ -96,6 +99,7 @@ export default function Dashboard() {
   const [loading, setLoading] = useState(true);
   const [reportPeriod, setReportPeriod] = useState('monthly');
   const [customDate, setCustomDate] = useState<Date>();
+  const [sendingTestMessage, setSendingTestMessage] = useState(false);
 
   useEffect(() => {
     fetchDashboardData();
@@ -439,15 +443,50 @@ export default function Dashboard() {
     window.URL.revokeObjectURL(url);
   };
 
+  const handleConnectTelegram = () => {
+    window.open('https://t.me/pharmaXpertbot', '_blank');
+    toast({
+      title: "Connect to Telegram Bot",
+      description: "Please open the bot in your Telegram app and click Start to complete your connection.",
+      duration: 6000,
+    });
+  };
+
+  const handleTestMessage = async () => {
+    setSendingTestMessage(true);
+    try {
+      const { data, error } = await supabase.functions.invoke('telegram-test-message', {
+        body: { userId: profile?.id }
+      });
+
+      if (error) throw error;
+
+      toast({
+        title: "Test Message Sent! 🎉",
+        description: "Check your Telegram for the confirmation message.",
+      });
+    } catch (error) {
+      console.error('Error sending test message:', error);
+      toast({
+        title: "Error",
+        description: "Failed to send test message. Please try again.",
+        variant: "destructive"
+      });
+    } finally {
+      setSendingTestMessage(false);
+    }
+  };
+
   if (!profile) {
     return <div>Loading...</div>;
   }
 
   if (loading) {
-    return (
-      <div className="space-y-6">
-        <div className="flex items-center justify-between">
-          <div>
+  return (
+    <div className="space-y-6">
+      {profile?.role === 'owner' && <TelegramConnectionDialog />}
+      <div className="flex items-center justify-between">
+        <div>
             <Skeleton className="h-9 w-48 mb-2" />
             <Skeleton className="h-5 w-96" />
           </div>
@@ -483,7 +522,7 @@ export default function Dashboard() {
 
   return (
     <div className="space-y-6">
-      
+      {profile?.role === 'owner' && <TelegramConnectionDialog />}
       <div className="flex items-center justify-between">
         <div>
           <h2 className="text-3xl font-bold tracking-tight">Dashboard</h2>
@@ -492,7 +531,40 @@ export default function Dashboard() {
           </p>
         </div>
         
-        <div className="flex items-center space-x-4">
+        <div className="flex items-center gap-2">
+          {profile?.role === 'owner' && (
+            <>
+              {!profile?.telegram_chat_id ? (
+                <Button 
+                  onClick={handleConnectTelegram}
+                  variant="outline"
+                  className="gap-2"
+                >
+                  <MessageCircle className="h-4 w-4" />
+                  Connect Telegram
+                  <ExternalLink className="h-3 w-3" />
+                </Button>
+              ) : (
+                <>
+                  <Badge variant="default" className="gap-1 py-1.5 px-3">
+                    <MessageCircle className="h-3 w-3" />
+                    Connected ✅
+                  </Badge>
+                  <Button 
+                    onClick={handleTestMessage}
+                    disabled={sendingTestMessage}
+                    variant="ghost"
+                    size="sm"
+                    className="gap-1"
+                  >
+                    <Send className="h-3 w-3" />
+                    {sendingTestMessage ? 'Sending...' : 'Test Message'}
+                  </Button>
+                </>
+              )}
+            </>
+          )}
+          <div className="flex items-center space-x-4">
           <Select value={reportPeriod} onValueChange={setReportPeriod}>
             <SelectTrigger className="w-32">
               <SelectValue />
@@ -527,6 +599,7 @@ export default function Dashboard() {
             <Download className="h-4 w-4 mr-2" />
             CSV
           </Button>
+          </div>
         </div>
       </div>
 
