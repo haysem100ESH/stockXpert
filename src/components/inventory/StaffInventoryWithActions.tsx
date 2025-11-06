@@ -55,12 +55,28 @@ export default function StaffInventoryWithActions() {
     medicineId: '',
     medicineName: ''
   });
+  const [hasBranches, setHasBranches] = useState(true);
   const { toast } = useToast();
   const { selectedBranch } = useBranchContext();
 
   useEffect(() => {
     fetchMedicines();
+    checkBranches();
   }, [selectedBranch]);
+
+  const checkBranches = async () => {
+    try {
+      const { data, error } = await supabase
+        .from('pharmacy_branches')
+        .select('id')
+        .limit(1);
+      
+      if (error) throw error;
+      setHasBranches(data && data.length > 0);
+    } catch (error) {
+      console.error('Error checking branches:', error);
+    }
+  };
 
   useEffect(() => {
     const filtered = medicines.filter(medicine => {
@@ -241,12 +257,24 @@ export default function StaffInventoryWithActions() {
 
   return (
     <div className="space-y-6">
-      <div className="flex items-center justify-between">
-        <h2 className="text-2xl font-bold">Inventory Management</h2>
-        <Button onClick={() => setShowAddDialog(true)}>
-          <Plus className="h-4 w-4 mr-2" />
-          Add Medicine
-        </Button>
+      <div className="flex flex-col space-y-4">
+        <div className="flex items-center justify-between">
+          <h2 className="text-2xl font-bold">Inventory Management</h2>
+          <Button 
+            onClick={() => setShowAddDialog(true)}
+            disabled={!hasBranches}
+          >
+            <Plus className="h-4 w-4 mr-2" />
+            Add Medicine
+          </Button>
+        </div>
+        {!hasBranches && (
+          <div className="bg-yellow-50 border border-yellow-200 rounded-lg p-4">
+            <p className="text-sm text-yellow-800">
+              ⚠️ Please create a branch first before adding medicines.
+            </p>
+          </div>
+        )}
       </div>
 
       <Tabs defaultValue="medicines" className="space-y-4">

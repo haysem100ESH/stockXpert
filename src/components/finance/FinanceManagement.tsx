@@ -16,6 +16,7 @@ import { useToast } from '@/hooks/use-toast';
 import { useAuth } from '@/hooks/useAuth';
 import { useBranchContext } from '@/hooks/useBranchContext';
 import MedicineTransfer from '@/components/inventory/MedicineTransfer';
+import { BarChart, Bar, XAxis, YAxis, CartesianGrid, Tooltip, Legend, ResponsiveContainer } from 'recharts';
 
 interface FinanceStats {
   totalIncome: number;
@@ -52,6 +53,13 @@ interface Sale {
   }[];
 }
 
+interface BranchData {
+  branchId: string;
+  branchName: string;
+  income: number;
+  expenses: number;
+}
+
 export default function FinanceManagement() {
   const [stats, setStats] = useState<FinanceStats>({
     totalIncome: 0,
@@ -70,6 +78,7 @@ export default function FinanceManagement() {
   const [period, setPeriod] = useState('monthly');
   const [startDate, setStartDate] = useState<Date>();
   const [endDate, setEndDate] = useState<Date>();
+  const [branchData, setBranchData] = useState<BranchData[]>([]);
   const { profile } = useAuth();
   const { toast } = useToast();
   const { selectedBranch } = useBranchContext();
@@ -207,6 +216,31 @@ export default function FinanceManagement() {
         netProfit,
         profitMargin
       });
+
+      // Calculate branch-wise data for the chart
+      if (profile?.role === 'owner' && !selectedBranch) {
+        // Fetch all branches for the owner
+        const { data: branchesData } = await supabase
+          .from('pharmacy_branches')
+          .select('id, name')
+          .eq('pharmacy_owner_id', profile.id);
+
+        const branchStats: BranchData[] = (branchesData || []).map(branch => {
+          const branchSales = salesData?.filter((s: any) => s.branch_id === branch.id) || [];
+          const branchExpenses = expensesData?.filter((e: any) => e.branch_id === branch.id) || [];
+          
+          return {
+            branchId: branch.id,
+            branchName: branch.name,
+            income: branchSales.reduce((sum, sale) => sum + Number(sale.total_amount), 0),
+            expenses: branchExpenses.reduce((sum, expense) => sum + Number(expense.amount), 0)
+          };
+        });
+
+        setBranchData(branchStats);
+      } else {
+        setBranchData([]);
+      }
       
       // Reset pagination when data changes
       setSalesPage(1);
@@ -435,32 +469,58 @@ export default function FinanceManagement() {
         </TabsList>
 
         <TabsContent value="overview">
-          <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
-            <Card>
-              <CardHeader>
-                <CardTitle>Income vs Expenses</CardTitle>
-              </CardHeader>
-              <CardContent>
-                <div className="space-y-4">
-                  <div className="flex justify-between items-center">
-                    <span>Income</span>
-                    <span className="text-success font-medium">${stats.totalIncome.toFixed(2)}</span>
-                  </div>
-                  <div className="flex justify-between items-center">
-                    <span>Expenses</span>
-                    <span className="text-destructive font-medium">${stats.totalExpenses.toFixed(2)}</span>
-                  </div>
-                  <div className="border-t pt-2">
-                    <div className="flex justify-between items-center font-bold">
-                      <span>Net Result</span>
-                      <span className={stats.netProfit >= 0 ? 'text-success' : 'text-destructive'}>
-                        ${stats.netProfit.toFixed(2)}
-                      </span>
+          <div className="space-y-6">
+            {branchData.length > 0 && (
+              <Card>
+                <CardHeader>
+                  <CardTitle>Income vs Expenses by Branch</CardTitle>
+                  <CardDescription>Comparison across all branches</CardDescription>
+                </CardHeader>
+                <CardContent>
+                  <ResponsiveContainer width="100%" height={350}>
+                    <BarChart data={branchData}>
+                      <CartesianGrid strokeDasharray="3 3" />
+                      <XAxis dataKey="branchName" />
+                      <YAxis />
+                      <Tooltip 
+                        formatter={(value: number) => `ETB ${value.toFixed(2)}`}
+                      />
+                      <Legend />
+                      <Bar dataKey="income" fill="hsl(var(--success))" name="Income" />
+                      <Bar dataKey="expenses" fill="hsl(var(--destructive))" name="Expenses" />
+                    </BarChart>
+                  </ResponsiveContainer>
+                </CardContent>
+              </Card>
+            )}
+            
+            <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
+              <Card>
+                <CardHeader>
+                  <CardTitle>Income vs Expenses Summary</CardTitle>
+                </CardHeader>
+                <CardContent>
+                  <div className="space-y-4">
+                    <div className="flex justify-between items-center">
+                      <span>Income</span>
+                      <span className="text-success font-medium">ETB {stats.totalIncome.toFixed(2)}</span>
+                    </div>
+                    <div className="flex justify-between items-center">
+                      <span>Expenses</span>
+                      <span className="text-destructive font-medium">ETB {stats.totalExpenses.toFixed(2)}</span>
+                    </div>
+                    <div className="border-t pt-2">
+                      <div className="flex justify-between items-center font-bold">
+                        <span>Net Result</span>
+                        <span className={stats.netProfit >= 0 ? 'text-success' : 'text-destructive'}>
+                          ETB {stats.netProfit.toFixed(2)}
+                        </span>
+                      </div>
                     </div>
                   </div>
-                </div>
-              </CardContent>
-            </Card>
+                </CardContent>
+              </Card>
+            </div>
           </div>
         </TabsContent>
 
