@@ -67,6 +67,7 @@ export default function DeveloperDashboard() {
   const [sendingReport, setSendingReport] = useState(false);
   const [selectedOwnersForReport, setSelectedOwnersForReport] = useState<string[]>([]);
   const [showReportDialog, setShowReportDialog] = useState(false);
+  const [reportType, setReportType] = useState<'daily' | 'weekly' | 'monthly'>('daily');
   const { toast } = useToast();
 
   useEffect(() => {
@@ -309,20 +310,22 @@ export default function DeveloperDashboard() {
     }
   };
 
-  const triggerTelegramReport = async (selectedOwnerIds?: string[]) => {
+  const triggerTelegramReport = async (type: 'daily' | 'weekly' | 'monthly', selectedOwnerIds?: string[]) => {
     try {
       setSendingReport(true);
       
+      const reportTypeLabel = type.charAt(0).toUpperCase() + type.slice(1);
       const description = selectedOwnerIds && selectedOwnerIds.length > 0
-        ? `Sending reports to ${selectedOwnerIds.length} selected owner(s)...`
-        : "Sending reports to all owners with Telegram linked...";
+        ? `Sending ${reportTypeLabel} reports to ${selectedOwnerIds.length} selected owner(s)...`
+        : `Sending ${reportTypeLabel} reports to all owners with Telegram linked...`;
       
       toast({
         title: "Sending Reports",
         description
       });
 
-      const { data, error } = await supabase.functions.invoke('telegram-daily-report', {
+      const functionName = `telegram-${type}-report`;
+      const { data, error } = await supabase.functions.invoke(functionName, {
         body: selectedOwnerIds && selectedOwnerIds.length > 0 
           ? { ownerIds: selectedOwnerIds } 
           : {}
@@ -332,11 +335,44 @@ export default function DeveloperDashboard() {
 
       toast({
         title: "Success",
-        description: `Reports sent successfully: ${data.results?.length || 0} reports delivered`
+        description: `${reportTypeLabel} reports sent successfully: ${data.results?.length || 0} reports delivered`
       });
       
       setShowReportDialog(false);
       setSelectedOwnersForReport([]);
+    } catch (error: any) {
+      console.error('Telegram report error:', error);
+      toast({
+        title: "Error",
+        description: error.message,
+        variant: "destructive"
+      });
+    } finally {
+      setSendingReport(false);
+    }
+  };
+
+  const triggerQuickReport = async (type: 'daily' | 'weekly' | 'monthly') => {
+    try {
+      setSendingReport(true);
+      const reportTypeLabel = type.charAt(0).toUpperCase() + type.slice(1);
+      
+      toast({
+        title: "Sending Reports",
+        description: `Sending ${reportTypeLabel} reports to all owners with Telegram linked...`
+      });
+
+      const functionName = `telegram-${type}-report`;
+      const { data, error } = await supabase.functions.invoke(functionName, {
+        body: {}
+      });
+
+      if (error) throw error;
+
+      toast({
+        title: "Success",
+        description: `${reportTypeLabel} reports sent successfully: ${data.results?.length || 0} reports delivered`
+      });
     } catch (error: any) {
       console.error('Telegram report error:', error);
       toast({
@@ -551,12 +587,26 @@ export default function DeveloperDashboard() {
               <DialogHeader>
                 <DialogTitle>Send Telegram Reports</DialogTitle>
                 <DialogDescription>
-                  Select owners to send reports to, or send to all owners with Telegram linked.
+                  Select report type and owners to send reports to, or send to all owners with Telegram linked.
                   Note: Only owners with "Linked" status will receive reports.
                 </DialogDescription>
               </DialogHeader>
               
               <div className="space-y-4">
+                <div>
+                  <Label htmlFor="report-type">Report Type</Label>
+                  <Select value={reportType} onValueChange={(value: 'daily' | 'weekly' | 'monthly') => setReportType(value)}>
+                    <SelectTrigger id="report-type">
+                      <SelectValue />
+                    </SelectTrigger>
+                    <SelectContent>
+                      <SelectItem value="daily">Daily Report</SelectItem>
+                      <SelectItem value="weekly">Weekly Report</SelectItem>
+                      <SelectItem value="monthly">Monthly Report</SelectItem>
+                    </SelectContent>
+                  </Select>
+                </div>
+
                 <div className="flex justify-between items-center">
                   <p className="text-sm text-muted-foreground">
                     {selectedOwnersForReport.length > 0 
@@ -642,11 +692,11 @@ export default function DeveloperDashboard() {
                     Cancel
                   </Button>
                   <Button 
-                    onClick={() => triggerTelegramReport(selectedOwnersForReport.length > 0 ? selectedOwnersForReport : undefined)}
+                    onClick={() => triggerTelegramReport(reportType, selectedOwnersForReport.length > 0 ? selectedOwnersForReport : undefined)}
                     disabled={sendingReport}
                   >
                     <Send className="mr-2 h-4 w-4" />
-                    {sendingReport ? "Sending..." : "Send Reports"}
+                    {sendingReport ? "Sending..." : `Send ${reportType.charAt(0).toUpperCase() + reportType.slice(1)} Reports`}
                   </Button>
                 </div>
               </div>
@@ -831,15 +881,58 @@ export default function DeveloperDashboard() {
           <CardTitle>System Actions</CardTitle>
           <CardDescription>Developer tools and system maintenance</CardDescription>
         </CardHeader>
-        <CardContent className="flex gap-2">
-          <Button onClick={triggerDailyDeduction} variant="outline">
-            <AlertTriangle className="h-4 w-4 mr-2" />
-            Trigger Daily Credit Deduction
-          </Button>
-          <Button onClick={() => setShowTransactions(!showTransactions)} variant="outline">
-            <TrendingUp className="h-4 w-4 mr-2" />
-            {showTransactions ? 'Hide' : 'Show'} Transaction Logs
-          </Button>
+        <CardContent>
+          <div className="space-y-4">
+            <div>
+              <h3 className="text-sm font-medium mb-2">Credit Management</h3>
+              <div className="flex gap-2">
+                <Button onClick={triggerDailyDeduction} variant="outline">
+                  <AlertTriangle className="h-4 w-4 mr-2" />
+                  Trigger Daily Credit Deduction
+                </Button>
+                <Button onClick={() => setShowTransactions(!showTransactions)} variant="outline">
+                  <TrendingUp className="h-4 w-4 mr-2" />
+                  {showTransactions ? 'Hide' : 'Show'} Transaction Logs
+                </Button>
+              </div>
+            </div>
+            
+            <div>
+              <h3 className="text-sm font-medium mb-2">Telegram Report Testing</h3>
+              <p className="text-sm text-muted-foreground mb-2">
+                Send test reports to all owners with linked Telegram accounts
+              </p>
+              <div className="flex gap-2 flex-wrap">
+                <Button 
+                  onClick={() => triggerQuickReport('daily')} 
+                  variant="outline"
+                  disabled={sendingReport}
+                  className="bg-blue-50 hover:bg-blue-100"
+                >
+                  <Send className="h-4 w-4 mr-2" />
+                  Test Daily Report
+                </Button>
+                <Button 
+                  onClick={() => triggerQuickReport('weekly')} 
+                  variant="outline"
+                  disabled={sendingReport}
+                  className="bg-green-50 hover:bg-green-100"
+                >
+                  <Send className="h-4 w-4 mr-2" />
+                  Test Weekly Report
+                </Button>
+                <Button 
+                  onClick={() => triggerQuickReport('monthly')} 
+                  variant="outline"
+                  disabled={sendingReport}
+                  className="bg-purple-50 hover:bg-purple-100"
+                >
+                  <Send className="h-4 w-4 mr-2" />
+                  Test Monthly Report
+                </Button>
+              </div>
+            </div>
+          </div>
         </CardContent>
       </Card>
 
