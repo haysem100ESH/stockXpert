@@ -49,12 +49,12 @@ export default function SubscriptionPlanStats() {
         }
       });
 
-      // Define colors for each plan
+      // Define distinct, colorful colors for each plan
       const colors: { [key: string]: string } = {
-        'Basic': 'hsl(var(--chart-1))',
-        'Advanced': 'hsl(var(--chart-2))',
-        'Premium': 'hsl(var(--chart-3))',
-        'Premium Plus': 'hsl(var(--chart-4))'
+        'Basic': '#3b82f6',      // Bright Blue
+        'Advanced': '#10b981',   // Emerald Green
+        'Premium': '#f59e0b',    // Amber Orange
+        'Premium Plus': '#8b5cf6' // Purple
       };
 
       const stats: PlanStats[] = Object.entries(planCounts).map(([name, count]) => ({

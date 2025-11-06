@@ -30,6 +30,7 @@ interface PharmacyOwner {
     status: string;
     deposit_amount: number;
     last_credit_deduction: string;
+    plan_name?: string;
   } | null;
   branch_count: number;
 }
@@ -64,6 +65,8 @@ export default function DeveloperDashboard() {
   const [filterPharmacyName, setFilterPharmacyName] = useState('');
   const [filterMonth, setFilterMonth] = useState('');
   const [filterCreditAdded, setFilterCreditAdded] = useState('');
+  const [searchOwnerName, setSearchOwnerName] = useState('');
+  const [searchPharmacyName, setSearchPharmacyName] = useState('');
   const [sendingReport, setSendingReport] = useState(false);
   const [selectedOwnersForReport, setSelectedOwnersForReport] = useState<string[]>([]);
   const [showReportDialog, setShowReportDialog] = useState(false);
@@ -140,10 +143,18 @@ export default function DeveloperDashboard() {
       // Get additional data for each owner
       const ownersWithData = await Promise.all(
         profilesWithEmail.map(async (profile: any) => {
-          // Get subscription data - use maybeSingle to handle cases where no subscription exists
+          // Get subscription data with plan name - use maybeSingle to handle cases where no subscription exists
           const { data: subscription } = await supabase
             .from('pharmacy_subscriptions')
-            .select('subscription_credit, status, deposit_amount, last_credit_deduction')
+            .select(`
+              subscription_credit, 
+              status, 
+              deposit_amount, 
+              last_credit_deduction,
+              subscription_plans (
+                name
+              )
+            `)
             .eq('pharmacy_owner_id', profile.id)
             .maybeSingle();
 
@@ -163,11 +174,18 @@ export default function DeveloperDashboard() {
             pharmacy_address: profile.pharmacy_address,
             active: profile.active,
             manually_deactivated: profile.manually_deactivated,
-            subscription: subscription || {
+            subscription: subscription ? {
+              subscription_credit: subscription.subscription_credit,
+              status: subscription.status,
+              deposit_amount: subscription.deposit_amount,
+              last_credit_deduction: subscription.last_credit_deduction,
+              plan_name: subscription.subscription_plans?.name || 'N/A'
+            } : {
               subscription_credit: 0,
               status: 'expired',
               deposit_amount: 0,
-              last_credit_deduction: new Date().toISOString()
+              last_credit_deduction: new Date().toISOString(),
+              plan_name: 'N/A'
             },
             branch_count: branchCount || 0
           };
@@ -793,12 +811,36 @@ export default function DeveloperDashboard() {
           <CardDescription>Manage owner accounts, subscriptions, and activation status</CardDescription>
         </CardHeader>
         <CardContent>
+          {/* Search Filters */}
+          <div className="grid grid-cols-1 md:grid-cols-2 gap-4 mb-4">
+            <div>
+              <Label htmlFor="search-owner">Search by Owner Name</Label>
+              <Input
+                id="search-owner"
+                placeholder="Search owner name..."
+                value={searchOwnerName}
+                onChange={(e) => setSearchOwnerName(e.target.value)}
+              />
+            </div>
+            <div>
+              <Label htmlFor="search-pharmacy">Search by Pharmacy Name</Label>
+              <Input
+                id="search-pharmacy"
+                placeholder="Search pharmacy name..."
+                value={searchPharmacyName}
+                onChange={(e) => setSearchPharmacyName(e.target.value)}
+              />
+            </div>
+          </div>
+
           <Table>
             <TableHeader>
               <TableRow>
                 <TableHead>Owner Name</TableHead>
+                <TableHead>Pharmacy Name</TableHead>
                 <TableHead>Account Status</TableHead>
                 <TableHead>Subscription</TableHead>
+                <TableHead>Subscription Plan</TableHead>
                 <TableHead>Credit (Days)</TableHead>
                 <TableHead>Branches</TableHead>
                 <TableHead>Deposit</TableHead>
@@ -806,13 +848,27 @@ export default function DeveloperDashboard() {
               </TableRow>
             </TableHeader>
             <TableBody>
-              {owners.map((owner) => (
+              {owners
+                .filter((owner) => {
+                  const matchesOwnerName = !searchOwnerName || 
+                    owner.full_name.toLowerCase().includes(searchOwnerName.toLowerCase()) ||
+                    owner.email.toLowerCase().includes(searchOwnerName.toLowerCase());
+                  
+                  const matchesPharmacyName = !searchPharmacyName || 
+                    owner.pharmacy_name?.toLowerCase().includes(searchPharmacyName.toLowerCase());
+                  
+                  return matchesOwnerName && matchesPharmacyName;
+                })
+                .map((owner) => (
                 <TableRow key={owner.id}>
                   <TableCell>
                     <div>
                       <div className="font-medium">{owner.full_name}</div>
                       <div className="text-sm text-muted-foreground">{owner.email}</div>
                     </div>
+                  </TableCell>
+                  <TableCell>
+                    <div className="font-medium">{owner.pharmacy_name || 'N/A'}</div>
                   </TableCell>
                   <TableCell>
                     <Select 
@@ -842,6 +898,11 @@ export default function DeveloperDashboard() {
                         <SelectItem value="expired">Expired</SelectItem>
                       </SelectContent>
                     </Select>
+                  </TableCell>
+                  <TableCell>
+                    <Badge variant="outline" className="font-medium">
+                      {owner.subscription?.plan_name || 'N/A'}
+                    </Badge>
                   </TableCell>
                   <TableCell>{owner.subscription?.subscription_credit || 0}</TableCell>
                   <TableCell>{owner.branch_count}</TableCell>
