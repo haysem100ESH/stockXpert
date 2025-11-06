@@ -12,7 +12,10 @@ import {
   Plus,
   Users,
   FileText,
-  ShoppingCart
+  ShoppingCart,
+  MessageCircle,
+  ExternalLink,
+  Send
 } from 'lucide-react';
 import { BarChart, Bar, XAxis, YAxis, CartesianGrid, ResponsiveContainer, PieChart, Pie, Cell } from 'recharts';
 import { supabase } from '@/integrations/supabase/client';
@@ -69,6 +72,7 @@ export default function OwnerDashboard() {
   const [productPerformance, setProductPerformance] = useState<ProductPerformanceData[]>([]);
   const [paymentMethodData, setPaymentMethodData] = useState<PaymentMethodData[]>([]);
   const [loading, setLoading] = useState(true);
+  const [sendingTestMessage, setSendingTestMessage] = useState(false);
   const { toast } = useToast();
   const { selectedBranch } = useBranchContext();
   const { profile } = useAuth();
@@ -222,6 +226,40 @@ export default function OwnerDashboard() {
     }
   };
 
+  const handleConnectTelegram = () => {
+    window.open('https://t.me/pharmaXpertbot', '_blank');
+    toast({
+      title: "Connect to Telegram Bot",
+      description: "Please open the bot in your Telegram app and click Start to complete your connection.",
+      duration: 6000,
+    });
+  };
+
+  const handleTestMessage = async () => {
+    setSendingTestMessage(true);
+    try {
+      const { data, error } = await supabase.functions.invoke('telegram-test-message', {
+        body: { userId: profile?.id }
+      });
+
+      if (error) throw error;
+
+      toast({
+        title: "Test Message Sent! 🎉",
+        description: "Check your Telegram for the confirmation message.",
+      });
+    } catch (error) {
+      console.error('Error sending test message:', error);
+      toast({
+        title: "Error",
+        description: "Failed to send test message. Please try again.",
+        variant: "destructive"
+      });
+    } finally {
+      setSendingTestMessage(false);
+    }
+  };
+
   if (loading) {
     return (
       <div className="space-y-6">
@@ -249,8 +287,40 @@ export default function OwnerDashboard() {
   return (
     <div className="space-y-6">
       <TelegramConnectionDialog />
-      <div className="flex items-center justify-between">
+      <div className="flex items-center justify-between flex-wrap gap-4">
         <h1 className="text-3xl font-bold">Owner Dashboard</h1>
+        
+        {/* Telegram Connection Status */}
+        <div className="flex items-center gap-2">
+          {!profile?.telegram_chat_id ? (
+            <Button 
+              onClick={handleConnectTelegram}
+              variant="outline"
+              className="gap-2"
+            >
+              <MessageCircle className="h-4 w-4" />
+              Connect Telegram
+              <ExternalLink className="h-3 w-3" />
+            </Button>
+          ) : (
+            <div className="flex items-center gap-2">
+              <Badge variant="default" className="gap-1 py-1.5 px-3">
+                <MessageCircle className="h-3 w-3" />
+                Connected ✅
+              </Badge>
+              <Button 
+                onClick={handleTestMessage}
+                disabled={sendingTestMessage}
+                variant="ghost"
+                size="sm"
+                className="gap-1"
+              >
+                <Send className="h-3 w-3" />
+                {sendingTestMessage ? 'Sending...' : 'Test Message'}
+              </Button>
+            </div>
+          )}
+        </div>
       </div>
 
       {/* Stats Cards */}
