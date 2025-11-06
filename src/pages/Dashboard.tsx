@@ -444,7 +444,7 @@ export default function Dashboard() {
   };
 
   const handleConnectTelegram = () => {
-    window.open('https://t.me/pharmaXpertbot', '_blank');
+    window.open('https://t.me/haysem_bot', '_blank');
     toast({
       title: "Connect to Telegram Bot",
       description: "Please open the bot in your Telegram app and click Start to complete your connection.",

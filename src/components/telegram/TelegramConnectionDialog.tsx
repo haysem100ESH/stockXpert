@@ -50,7 +50,7 @@ export function TelegramConnectionDialog() {
   }, [isOpen, profile?.id]);
 
   const handleOpenTelegram = () => {
-    window.open('https://t.me/pharmaXpertbot', '_blank');
+    window.open('https://t.me/haysem_bot', '_blank');
   };
 
   const handleDismiss = () => {
