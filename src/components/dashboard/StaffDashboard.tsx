@@ -8,10 +8,13 @@ import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@
 import { Package, ShoppingCart, AlertTriangle, Download, Calendar as CalendarDaysIcon } from 'lucide-react';
 import { format, startOfDay, endOfDay, subWeeks, subMonths, subYears } from 'date-fns';
 import { supabase } from '@/integrations/supabase/client';
+import { BarChart, Bar, XAxis, YAxis, CartesianGrid, ResponsiveContainer, PieChart, Pie, Cell } from 'recharts';
 
 // Use explicit types with type assertions to avoid complex inference
 type SimpleStats = {
   totalProducts: number;
+  totalMedicines: number;
+  totalItems: number;
   todaySales: number;
   lowStockItems: number;
   outOfStockItems: number;
@@ -28,12 +31,26 @@ type SimpleItem = {
   expiry_date?: string;
 };
 
+type CategorySalesData = {
+  category: string;
+  sales: number;
+  revenue: number;
+};
+
+type ProductData = {
+  name: string;
+  sales: number;
+  revenue: number;
+};
+
 export default function StaffDashboard() {
   const { profile } = useAuth();
   const { userBranch } = useBranchContext();
   
   const [stats, setStats] = useState<SimpleStats>({
     totalProducts: 0,
+    totalMedicines: 0,
+    totalItems: 0,
     todaySales: 0,
     lowStockItems: 0,
     outOfStockItems: 0,
@@ -45,6 +62,10 @@ export default function StaffDashboard() {
   const [lowStockItems, setLowStockItems] = useState<SimpleItem[]>([]);
   const [expiringItems, setExpiringItems] = useState<SimpleItem[]>([]);
   const [expiredItems, setExpiredItems] = useState<SimpleItem[]>([]);
+  const [medicinesCategorySales, setMedicinesCategorySales] = useState<CategorySalesData[]>([]);
+  const [itemsCategorySales, setItemsCategorySales] = useState<CategorySalesData[]>([]);
+  const [topMedicines, setTopMedicines] = useState<ProductData[]>([]);
+  const [topItems, setTopItems] = useState<ProductData[]>([]);
   const [loading, setLoading] = useState(true);
   const [reportPeriod, setReportPeriod] = useState('monthly');
   const [customDate, setCustomDate] = useState<Date>();
@@ -74,11 +95,12 @@ export default function StaffDashboard() {
   const fetchDashboardData = async () => {
     try {
       const { start, end } = getDateRange();
+      const medicineCategories = ['tablet', 'capsule', 'syrup', 'injection', 'cream', 'ointment', 'drops', 'inhaler'];
       
       // Use explicit any types to bypass complex inference
       let medicinesQuery = supabase
         .from('medicines')
-        .select('stock_quantity, minimum_stock_level');
+        .select('stock_quantity, minimum_stock_level, category');
       
       if (userBranch) {
         medicinesQuery = medicinesQuery.eq('branch_id', userBranch);
@@ -99,6 +121,96 @@ export default function StaffDashboard() {
       
       const salesResult = await salesQuery;
       const salesData = salesResult.data as any[] || [];
+
+      // Fetch sales with items for charts
+      let salesWithItemsQuery = supabase
+        .from('sales')
+        .select(`
+          *,
+          sale_items (
+            quantity,
+            medicine_id,
+            medicines (name, category)
+          )
+        `)
+        .gte('created_at', start.toISOString())
+        .lte('created_at', end.toISOString());
+      
+      if (userBranch) {
+        salesWithItemsQuery = salesWithItemsQuery.eq('branch_id', userBranch);
+      }
+      
+      const { data: salesWithItems } = await salesWithItemsQuery;
+
+      // Process category sales data
+      const medicineCategoryMap = new Map<string, { sales: number; revenue: number }>();
+      const itemCategoryMap = new Map<string, { sales: number; revenue: number }>();
+      
+      salesWithItems?.forEach((sale: any) => {
+        sale.sale_items?.forEach((item: any) => {
+          if (item.medicines) {
+            const category = item.medicines.category;
+            const isMedicine = medicineCategories.includes(category);
+            const itemRevenue = (Number(sale.total_amount) * item.quantity) / 
+              (sale.sale_items?.reduce((sum: number, si: any) => sum + si.quantity, 0) || 1);
+
+            if (isMedicine) {
+              const medExisting = medicineCategoryMap.get(category) || { sales: 0, revenue: 0 };
+              medicineCategoryMap.set(category, {
+                sales: medExisting.sales + item.quantity,
+                revenue: medExisting.revenue + itemRevenue
+              });
+            } else {
+              const itemExisting = itemCategoryMap.get(category) || { sales: 0, revenue: 0 };
+              itemCategoryMap.set(category, {
+                sales: itemExisting.sales + item.quantity,
+                revenue: itemExisting.revenue + itemRevenue
+              });
+            }
+          }
+        });
+      });
+
+      const medicinesCategorySalesArray = Array.from(medicineCategoryMap.entries()).map(([category, data]) => ({
+        category,
+        ...data
+      }));
+
+      const itemsCategorySalesArray = Array.from(itemCategoryMap.entries()).map(([category, data]) => ({
+        category,
+        ...data
+      }));
+
+      // Process product performance
+      const productMap = new Map<string, { sales: number; revenue: number; category: string }>();
+      salesWithItems?.forEach((sale: any) => {
+        sale.sale_items?.forEach((item: any) => {
+          if (item.medicines) {
+            const name = item.medicines.name;
+            const category = item.medicines.category;
+            const existing = productMap.get(name) || { sales: 0, revenue: 0, category };
+            const itemRevenue = (Number(sale.total_amount) * item.quantity) / 
+              (sale.sale_items?.reduce((sum: number, si: any) => sum + si.quantity, 0) || 1);
+            productMap.set(name, {
+              sales: existing.sales + item.quantity,
+              revenue: existing.revenue + itemRevenue,
+              category
+            });
+          }
+        });
+      });
+
+      const topMedicinesArray = Array.from(productMap.entries())
+        .filter(([_, data]) => medicineCategories.includes(data.category))
+        .map(([name, data]) => ({ name, sales: data.sales, revenue: data.revenue }))
+        .sort((a, b) => b.sales - a.sales)
+        .slice(0, 10);
+
+      const topItemsArray = Array.from(productMap.entries())
+        .filter(([_, data]) => !medicineCategories.includes(data.category))
+        .map(([name, data]) => ({ name, sales: data.sales, revenue: data.revenue }))
+        .sort((a, b) => b.sales - a.sales)
+        .slice(0, 10);
 
       let outOfStockQuery = supabase
         .from('medicines')
@@ -164,6 +276,8 @@ export default function StaffDashboard() {
       const expiredData = expiredResult.data as SimpleItem[] || [];
 
       const totalProducts = medicinesData.length;
+      const totalMedicines = medicinesData.filter((med: any) => medicineCategories.includes(med.category)).length;
+      const totalItems = medicinesData.filter((med: any) => !medicineCategories.includes(med.category)).length;
       const lowStockItemsCount = medicinesData.filter((med: any) => 
         med.stock_quantity <= med.minimum_stock_level && med.stock_quantity > 0
       ).length;
@@ -172,6 +286,8 @@ export default function StaffDashboard() {
 
       setStats({
         totalProducts,
+        totalMedicines,
+        totalItems,
         todaySales: salesData.length,
         lowStockItems: lowStockItemsCount,
         outOfStockItems: outOfStockItemsCount,
@@ -183,6 +299,10 @@ export default function StaffDashboard() {
       setLowStockItems(lowStockData);
       setExpiringItems(expiringData);
       setExpiredItems(expiredData);
+      setMedicinesCategorySales(medicinesCategorySalesArray);
+      setItemsCategorySales(itemsCategorySalesArray);
+      setTopMedicines(topMedicinesArray);
+      setTopItems(topItemsArray);
       
     } catch (error) {
       console.error('Error fetching dashboard data:', error);
@@ -263,15 +383,26 @@ export default function StaffDashboard() {
         </div>
       </div>
 
-      <div className="grid gap-4 md:grid-cols-2 lg:grid-cols-6">
+      <div className="grid gap-4 md:grid-cols-2 lg:grid-cols-4">
         <Card>
           <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
-            <CardTitle className="text-sm font-medium">Total Products</CardTitle>
+            <CardTitle className="text-sm font-medium">Total Medicines</CardTitle>
             <Package className="h-4 w-4 text-muted-foreground" />
           </CardHeader>
           <CardContent>
-            <div className="text-2xl font-bold">{stats.totalProducts}</div>
-            <p className="text-xs text-muted-foreground">Products in inventory</p>
+            <div className="text-2xl font-bold">{stats.totalMedicines}</div>
+            <p className="text-xs text-muted-foreground">Medicines in stock</p>
+          </CardContent>
+        </Card>
+        
+        <Card>
+          <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
+            <CardTitle className="text-sm font-medium">Total Items</CardTitle>
+            <Package className="h-4 w-4 text-muted-foreground" />
+          </CardHeader>
+          <CardContent>
+            <div className="text-2xl font-bold">{stats.totalItems}</div>
+            <p className="text-xs text-muted-foreground">Non-medicine items</p>
           </CardContent>
         </Card>
         
@@ -432,6 +563,99 @@ export default function StaffDashboard() {
           </CardContent>
         </Card>
       )}
+
+      {/* Analytics Charts */}
+      <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
+        {/* Medicines Sold by Category */}
+        <Card>
+          <CardHeader>
+            <CardTitle>Medicines Sold by Category</CardTitle>
+            <CardDescription>Medicine sales performance</CardDescription>
+          </CardHeader>
+          <CardContent>
+            <ResponsiveContainer width="100%" height={300}>
+              <BarChart data={medicinesCategorySales}>
+                <CartesianGrid strokeDasharray="3 3" />
+                <XAxis dataKey="category" />
+                <YAxis />
+                <Bar dataKey="sales" fill="hsl(var(--primary))" />
+              </BarChart>
+            </ResponsiveContainer>
+          </CardContent>
+        </Card>
+
+        {/* Items Sold by Category */}
+        <Card>
+          <CardHeader>
+            <CardTitle>Items Sold by Category</CardTitle>
+            <CardDescription>Non-medicine items sales</CardDescription>
+          </CardHeader>
+          <CardContent>
+            <ResponsiveContainer width="100%" height={300}>
+              <BarChart data={itemsCategorySales}>
+                <CartesianGrid strokeDasharray="3 3" />
+                <XAxis dataKey="category" />
+                <YAxis />
+                <Bar dataKey="sales" fill="hsl(var(--secondary))" />
+              </BarChart>
+            </ResponsiveContainer>
+          </CardContent>
+        </Card>
+
+        {/* Top-Selling Medicines */}
+        <Card>
+          <CardHeader>
+            <CardTitle>Top-Selling Medicines</CardTitle>
+            <CardDescription>Best performing medicines</CardDescription>
+          </CardHeader>
+          <CardContent>
+            <ResponsiveContainer width="100%" height={300}>
+              <PieChart>
+                <Pie
+                  data={topMedicines.slice(0, 5)}
+                  cx="50%"
+                  cy="50%"
+                  outerRadius={80}
+                  fill="hsl(var(--primary))"
+                  dataKey="sales"
+                  label={(entry: any) => entry.name}
+                >
+                  {topMedicines.slice(0, 5).map((entry, index) => (
+                    <Cell key={`cell-${index}`} fill={`hsl(${(index * 72) % 360}, 70%, 50%)`} />
+                  ))}
+                </Pie>
+              </PieChart>
+            </ResponsiveContainer>
+          </CardContent>
+        </Card>
+
+        {/* Top-Selling Items */}
+        <Card>
+          <CardHeader>
+            <CardTitle>Top-Selling Items</CardTitle>
+            <CardDescription>Best performing items</CardDescription>
+          </CardHeader>
+          <CardContent>
+            <ResponsiveContainer width="100%" height={300}>
+              <PieChart>
+                <Pie
+                  data={topItems.slice(0, 5)}
+                  cx="50%"
+                  cy="50%"
+                  outerRadius={80}
+                  fill="hsl(var(--accent))"
+                  dataKey="sales"
+                  label={(entry: any) => entry.name}
+                >
+                  {topItems.slice(0, 5).map((entry, index) => (
+                    <Cell key={`cell-${index}`} fill={`hsl(${(index * 90) % 360}, 65%, 55%)`} />
+                  ))}
+                </Pie>
+              </PieChart>
+            </ResponsiveContainer>
+          </CardContent>
+        </Card>
+      </div>
     </div>
   );
 }
