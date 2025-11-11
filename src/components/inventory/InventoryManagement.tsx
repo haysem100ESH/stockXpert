@@ -14,6 +14,7 @@ import { useToast } from '@/hooks/use-toast';
 import { useAuth } from '@/hooks/useAuth';
 import { useBranchContext } from '@/hooks/useBranchContext';
 import AddMedicineDialog from './AddMedicineDialog';
+import AddItemDialog from './AddItemDialog';
 import EditMedicineDialog from './EditMedicineDialog';
 import { ConfirmationDialog } from '@/components/ui/confirmation-dialog';
 
@@ -49,6 +50,7 @@ export default function InventoryManagement() {
   const [categoryCounts, setCategoryCounts] = useState<Record<string, number>>({});
   const [loading, setLoading] = useState(true);
   const [showAddDialog, setShowAddDialog] = useState(false);
+  const [showAddItemDialog, setShowAddItemDialog] = useState(false);
   const [showEditDialog, setShowEditDialog] = useState(false);
   const [showDeleteConfirm, setShowDeleteConfirm] = useState(false);
   const [showReplicateDialog, setShowReplicateDialog] = useState(false);
@@ -66,11 +68,18 @@ export default function InventoryManagement() {
   }, [selectedBranch]);
 
   useEffect(() => {
+    const medicineCategories = ['tablet', 'capsule', 'syrup', 'injection', 'cream', 'ointment', 'drops', 'inhaler'];
+    
     let filtered = medicines.filter(medicine => {
       const matchesSearch = medicine.name.toLowerCase().includes(searchTerm.toLowerCase()) ||
         medicine.generic_name?.toLowerCase().includes(searchTerm.toLowerCase());
       
-      const matchesCategory = categoryFilter === 'all' || medicine.category === categoryFilter;
+      let matchesCategory = true;
+      if (categoryFilter === 'medicines_only') {
+        matchesCategory = medicineCategories.includes(medicine.category);
+      } else if (categoryFilter !== 'all') {
+        matchesCategory = medicine.category === categoryFilter;
+      }
       
       let matchesDate = true;
       if (dateFilter) {
@@ -252,10 +261,16 @@ export default function InventoryManagement() {
     <div className="space-y-6">
       <div className="flex items-center justify-between">
         <h2 className="text-2xl font-bold">Inventory Management</h2>
-        <Button onClick={() => setShowAddDialog(true)}>
-          <Plus className="h-4 w-4 mr-2" />
-          Add Medicine
-        </Button>
+        <div className="flex gap-2">
+          <Button onClick={() => setShowAddDialog(true)}>
+            <Plus className="h-4 w-4 mr-2" />
+            Add Medicine
+          </Button>
+          <Button onClick={() => setShowAddItemDialog(true)} variant="outline">
+            <Plus className="h-4 w-4 mr-2" />
+            Add Item
+          </Button>
+        </div>
       </div>
 
         <div className="flex items-center space-x-4">
@@ -277,6 +292,7 @@ export default function InventoryManagement() {
               </SelectTrigger>
               <SelectContent>
                 <SelectItem value="all">All Categories</SelectItem>
+                <SelectItem value="medicines_only">Medicines Only</SelectItem>
                 {getUniqueCategories().map((category) => (
                   <SelectItem key={category} value={category}>
                     {category} ({categoryCounts[category] || 0})
@@ -499,6 +515,12 @@ export default function InventoryManagement() {
         open={showAddDialog}
         onOpenChange={setShowAddDialog}
         onMedicineAdded={handleMedicineAdded}
+      />
+
+      <AddItemDialog
+        open={showAddItemDialog}
+        onOpenChange={setShowAddItemDialog}
+        onItemAdded={handleMedicineAdded}
       />
 
       <EditMedicineDialog

@@ -4,6 +4,7 @@ import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
 import { Badge } from '@/components/ui/badge';
 import { Button } from '@/components/ui/button';
 import { Skeleton } from '@/components/ui/skeleton';
+import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
 import {
   DollarSign, 
   Package, 
@@ -36,6 +37,8 @@ import { TelegramConnectionDialog } from '@/components/telegram/TelegramConnecti
 interface DashboardStats {
   totalRevenue: number;
   totalProducts: number;
+  totalMedicines: number;
+  totalItems: number;
   totalSoldItems: number;
   lowStockItems: number;
   outOfStockItems: number;
@@ -63,34 +66,58 @@ export default function OwnerDashboard() {
   const [stats, setStats] = useState<DashboardStats>({
     totalRevenue: 0,
     totalProducts: 0,
+    totalMedicines: 0,
+    totalItems: 0,
     totalSoldItems: 0,
     lowStockItems: 0,
     outOfStockItems: 0,
     expiredItems: 0
   });
   const [categorySales, setCategorySales] = useState<CategorySalesData[]>([]);
+  const [medicinesCategorySales, setMedicinesCategorySales] = useState<CategorySalesData[]>([]);
+  const [itemsCategorySales, setItemsCategorySales] = useState<CategorySalesData[]>([]);
   const [productPerformance, setProductPerformance] = useState<ProductPerformanceData[]>([]);
+  const [topMedicines, setTopMedicines] = useState<ProductPerformanceData[]>([]);
+  const [topItems, setTopItems] = useState<ProductPerformanceData[]>([]);
   const [paymentMethodData, setPaymentMethodData] = useState<PaymentMethodData[]>([]);
   const [loading, setLoading] = useState(true);
   const [sendingTestMessage, setSendingTestMessage] = useState(false);
+  const [dateFilter, setDateFilter] = useState('monthly');
   const { toast } = useToast();
   const { selectedBranch } = useBranchContext();
   const { profile } = useAuth();
 
   useEffect(() => {
     fetchDashboardStats();
-  }, [selectedBranch, profile]);
+  }, [selectedBranch, profile, dateFilter]);
 
   const fetchDashboardStats = async () => {
     try {
+      // Get date range based on filter
+      const now = new Date();
+      let startDate = new Date();
+      if (dateFilter === 'daily') {
+        startDate.setHours(0, 0, 0, 0);
+      } else if (dateFilter === 'weekly') {
+        startDate.setDate(now.getDate() - 7);
+      } else if (dateFilter === 'monthly') {
+        startDate.setMonth(now.getMonth() - 1);
+      } else if (dateFilter === 'yearly') {
+        startDate.setFullYear(now.getFullYear() - 1);
+      }
+
+      const medicineCategories = ['tablet', 'capsule', 'syrup', 'injection', 'cream', 'ointment', 'drops', 'inhaler'];
+      
       // Build queries - RLS policies handle ownership filtering automatically
-      let salesQuery = supabase.from('sales').select('total_amount, payment_method, discount_amount, branch_id');
-      let medicinesQuery = supabase.from('medicines').select('stock_quantity, minimum_stock_level, expiry_date, branch_id');
+      let salesQuery = supabase.from('sales').select('total_amount, payment_method, discount_amount, branch_id, created_at')
+        .gte('created_at', startDate.toISOString())
+        .lte('created_at', now.toISOString());
+      let medicinesQuery = supabase.from('medicines').select('stock_quantity, minimum_stock_level, expiry_date, branch_id, category');
       let saleItemsQuery = supabase
         .from('sale_items')
         .select(`
           quantity,
-          sales!inner(branch_id)
+          sales!inner(branch_id, created_at)
         `);
 
       // Filter by specific branch if selected
@@ -107,6 +134,8 @@ export default function OwnerDashboard() {
       
       const totalRevenue = salesData?.reduce((sum, sale) => sum + Number(sale.total_amount), 0) || 0;
       const totalProducts = medicinesData?.length || 0;
+      const totalMedicines = medicinesData?.filter(m => medicineCategories.includes(m.category)).length || 0;
+      const totalItems = medicinesData?.filter(m => !medicineCategories.includes(m.category)).length || 0;
       const lowStockItems = medicinesData?.filter(
         medicine => medicine.stock_quantity <= medicine.minimum_stock_level && medicine.stock_quantity > 0
       ).length || 0;
@@ -137,7 +166,9 @@ export default function OwnerDashboard() {
             medicine_id,
             medicines (name, category)
           )
-        `);
+        `)
+        .gte('created_at', startDate.toISOString())
+        .lte('created_at', now.toISOString());
       
       if (selectedBranch) {
         salesWithItemsQuery = salesWithItemsQuery.eq('branch_id', selectedBranch);
@@ -145,20 +176,39 @@ export default function OwnerDashboard() {
 
       const { data: salesWithItems } = await salesWithItemsQuery;
 
-      // Process category sales data
+      // Process category sales data (all)
       const categoryMap = new Map<string, { sales: number; revenue: number }>();
+      const medicineCategoryMap = new Map<string, { sales: number; revenue: number }>();
+      const itemCategoryMap = new Map<string, { sales: number; revenue: number }>();
+      
       salesWithItems?.forEach(sale => {
         sale.sale_items?.forEach((item: any) => {
           if (item.medicines) {
             const category = item.medicines.category;
+            const isMedicine = medicineCategories.includes(category);
             const existing = categoryMap.get(category) || { sales: 0, revenue: 0 };
-            // Calculate item-specific revenue (assuming equal distribution for simplicity)
             const itemRevenue = (Number(sale.total_amount) * item.quantity) / 
               (sale.sale_items?.reduce((sum: number, si: any) => sum + si.quantity, 0) || 1);
+            
             categoryMap.set(category, {
               sales: existing.sales + item.quantity,
               revenue: existing.revenue + itemRevenue
             });
+
+            // Separate into medicine and item categories
+            if (isMedicine) {
+              const medExisting = medicineCategoryMap.get(category) || { sales: 0, revenue: 0 };
+              medicineCategoryMap.set(category, {
+                sales: medExisting.sales + item.quantity,
+                revenue: medExisting.revenue + itemRevenue
+              });
+            } else {
+              const itemExisting = itemCategoryMap.get(category) || { sales: 0, revenue: 0 };
+              itemCategoryMap.set(category, {
+                sales: itemExisting.sales + item.quantity,
+                revenue: itemExisting.revenue + itemRevenue
+              });
+            }
           }
         });
       });
@@ -168,19 +218,30 @@ export default function OwnerDashboard() {
         ...data
       }));
 
+      const medicinesCategorySalesArray = Array.from(medicineCategoryMap.entries()).map(([category, data]) => ({
+        category,
+        ...data
+      }));
+
+      const itemsCategorySalesArray = Array.from(itemCategoryMap.entries()).map(([category, data]) => ({
+        category,
+        ...data
+      }));
+
       // Process product performance data
-      const productMap = new Map<string, { sales: number; revenue: number }>();
+      const productMap = new Map<string, { sales: number; revenue: number; category: string }>();
       salesWithItems?.forEach(sale => {
         sale.sale_items?.forEach((item: any) => {
           if (item.medicines) {
             const name = item.medicines.name;
-            const existing = productMap.get(name) || { sales: 0, revenue: 0 };
-            // Calculate item-specific revenue (assuming equal distribution for simplicity)
+            const category = item.medicines.category;
+            const existing = productMap.get(name) || { sales: 0, revenue: 0, category };
             const itemRevenue = (Number(sale.total_amount) * item.quantity) / 
               (sale.sale_items?.reduce((sum: number, si: any) => sum + si.quantity, 0) || 1);
             productMap.set(name, {
               sales: existing.sales + item.quantity,
-              revenue: existing.revenue + itemRevenue
+              revenue: existing.revenue + itemRevenue,
+              category
             });
           }
         });
@@ -188,6 +249,18 @@ export default function OwnerDashboard() {
 
       const productPerformanceArray = Array.from(productMap.entries())
         .map(([name, data]) => ({ name, ...data }))
+        .sort((a, b) => b.sales - a.sales)
+        .slice(0, 10);
+
+      const topMedicinesArray = Array.from(productMap.entries())
+        .filter(([_, data]) => medicineCategories.includes(data.category))
+        .map(([name, data]) => ({ name, sales: data.sales, revenue: data.revenue }))
+        .sort((a, b) => b.sales - a.sales)
+        .slice(0, 10);
+
+      const topItemsArray = Array.from(productMap.entries())
+        .filter(([_, data]) => !medicineCategories.includes(data.category))
+        .map(([name, data]) => ({ name, sales: data.sales, revenue: data.revenue }))
         .sort((a, b) => b.sales - a.sales)
         .slice(0, 10);
 
@@ -207,13 +280,19 @@ export default function OwnerDashboard() {
       setStats({
         totalRevenue,
         totalProducts,
+        totalMedicines,
+        totalItems,
         totalSoldItems,
         lowStockItems,
         outOfStockItems,
         expiredItems
       });
       setCategorySales(categorySalesArray);
+      setMedicinesCategorySales(medicinesCategorySalesArray);
+      setItemsCategorySales(itemsCategorySalesArray);
       setProductPerformance(productPerformanceArray);
+      setTopMedicines(topMedicinesArray);
+      setTopItems(topItemsArray);
       setPaymentMethodData(paymentMethodArray);
     } catch (error) {
       toast({
@@ -290,24 +369,23 @@ export default function OwnerDashboard() {
       <div className="flex items-center justify-between flex-wrap gap-4">
         <h1 className="text-3xl font-bold">Owner Dashboard</h1>
         
-        {/* Telegram Connection Status */}
-        <div className="flex items-center gap-2">
-          {!profile?.telegram_chat_id && (
-            <Button 
-              onClick={handleConnectTelegram}
-              variant="outline"
-              className="gap-2"
-            >
-              <MessageCircle className="h-4 w-4" />
-              Connect Telegram
-              <ExternalLink className="h-3 w-3" />
-            </Button>
-          )}
+        <div className="flex items-center gap-4">
+          <Select value={dateFilter} onValueChange={setDateFilter}>
+            <SelectTrigger className="w-32">
+              <SelectValue />
+            </SelectTrigger>
+            <SelectContent>
+              <SelectItem value="daily">Daily</SelectItem>
+              <SelectItem value="weekly">Weekly</SelectItem>
+              <SelectItem value="monthly">Monthly</SelectItem>
+              <SelectItem value="yearly">Yearly</SelectItem>
+            </SelectContent>
+          </Select>
         </div>
       </div>
 
       {/* Stats Cards */}
-      <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-6 gap-6">
+      <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-6">
         <Card>
           <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
             <CardTitle className="text-sm font-medium">Total Revenue</CardTitle>
@@ -323,13 +401,26 @@ export default function OwnerDashboard() {
 
         <Card>
           <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
-            <CardTitle className="text-sm font-medium">Total Products</CardTitle>
+            <CardTitle className="text-sm font-medium">Total Medicines</CardTitle>
             <Package className="h-4 w-4 text-muted-foreground" />
           </CardHeader>
           <CardContent>
-            <div className="text-2xl font-bold">{stats.totalProducts}</div>
+            <div className="text-2xl font-bold">{stats.totalMedicines}</div>
             <p className="text-xs text-muted-foreground">
-              Products in inventory
+              Medicines in stock
+            </p>
+          </CardContent>
+        </Card>
+
+        <Card>
+          <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
+            <CardTitle className="text-sm font-medium">Total Items</CardTitle>
+            <Package className="h-4 w-4 text-muted-foreground" />
+          </CardHeader>
+          <CardContent>
+            <div className="text-2xl font-bold">{stats.totalItems}</div>
+            <p className="text-xs text-muted-foreground">
+              Non-medicine items
             </p>
           </CardContent>
         </Card>
@@ -400,15 +491,15 @@ export default function OwnerDashboard() {
 
         <TabsContent value="overview" className="space-y-4">          
           <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
-            {/* Items Sold per Day (by category) */}
+            {/* Medicines Sold by Category */}
             <Card>
               <CardHeader>
-                <CardTitle>Items Sold by Category</CardTitle>
-                <CardDescription>Sales performance by medicine category</CardDescription>
+                <CardTitle>Medicines Sold by Category</CardTitle>
+                <CardDescription>Medicine sales performance</CardDescription>
               </CardHeader>
               <CardContent>
                 <ResponsiveContainer width="100%" height={300}>
-                  <BarChart data={categorySales}>
+                  <BarChart data={medicinesCategorySales}>
                     <CartesianGrid strokeDasharray="3 3" />
                     <XAxis dataKey="category" />
                     <YAxis />
@@ -418,26 +509,71 @@ export default function OwnerDashboard() {
               </CardContent>
             </Card>
 
-            {/* Top-Selling Products */}
+            {/* Items Sold by Category */}
             <Card>
               <CardHeader>
-                <CardTitle>Top-Selling Products</CardTitle>
+                <CardTitle>Items Sold by Category</CardTitle>
+                <CardDescription>Non-medicine items sales</CardDescription>
+              </CardHeader>
+              <CardContent>
+                <ResponsiveContainer width="100%" height={300}>
+                  <BarChart data={itemsCategorySales}>
+                    <CartesianGrid strokeDasharray="3 3" />
+                    <XAxis dataKey="category" />
+                    <YAxis />
+                    <Bar dataKey="sales" fill="hsl(var(--secondary))" />
+                  </BarChart>
+                </ResponsiveContainer>
+              </CardContent>
+            </Card>
+
+            {/* Top-Selling Medicines */}
+            <Card>
+              <CardHeader>
+                <CardTitle>Top-Selling Medicines</CardTitle>
                 <CardDescription>Best performing medicines</CardDescription>
               </CardHeader>
               <CardContent>
                 <ResponsiveContainer width="100%" height={300}>
                   <PieChart>
                     <Pie
-                      data={productPerformance.slice(0, 5)}
+                      data={topMedicines.slice(0, 5)}
                       cx="50%"
                       cy="50%"
                       outerRadius={80}
-                      fill="hsl(var(--secondary))"
+                      fill="hsl(var(--primary))"
                       dataKey="sales"
                       label={(entry: any) => entry.name}
                     >
-                      {productPerformance.slice(0, 5).map((entry, index) => (
+                      {topMedicines.slice(0, 5).map((entry, index) => (
                         <Cell key={`cell-${index}`} fill={`hsl(${(index * 72) % 360}, 70%, 50%)`} />
+                      ))}
+                    </Pie>
+                  </PieChart>
+                </ResponsiveContainer>
+              </CardContent>
+            </Card>
+
+            {/* Top-Selling Items */}
+            <Card>
+              <CardHeader>
+                <CardTitle>Top-Selling Items</CardTitle>
+                <CardDescription>Best performing items</CardDescription>
+              </CardHeader>
+              <CardContent>
+                <ResponsiveContainer width="100%" height={300}>
+                  <PieChart>
+                    <Pie
+                      data={topItems.slice(0, 5)}
+                      cx="50%"
+                      cy="50%"
+                      outerRadius={80}
+                      fill="hsl(var(--accent))"
+                      dataKey="sales"
+                      label={(entry: any) => entry.name}
+                    >
+                      {topItems.slice(0, 5).map((entry, index) => (
+                        <Cell key={`cell-${index}`} fill={`hsl(${(index * 90) % 360}, 65%, 55%)`} />
                       ))}
                     </Pie>
                   </PieChart>

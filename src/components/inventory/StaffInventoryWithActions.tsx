@@ -10,6 +10,7 @@ import { supabase } from '@/integrations/supabase/client';
 import { useToast } from '@/hooks/use-toast';
 import { useBranchContext } from '@/hooks/useBranchContext';
 import AddMedicineDialog from './AddMedicineDialog';
+import AddItemDialog from './AddItemDialog';
 import EditMedicineDialog from './EditMedicineDialog';
 import { ConfirmationDialog } from '@/components/ui/confirmation-dialog';
 import InventoryDashboard from './InventoryDashboard';
@@ -43,6 +44,7 @@ export default function StaffInventoryWithActions() {
   const [tempStock, setTempStock] = useState<number>(0);
   const [loading, setLoading] = useState(true);
   const [showAddDialog, setShowAddDialog] = useState(false);
+  const [showAddItemDialog, setShowAddItemDialog] = useState(false);
   const [showReplicateDialog, setShowReplicateDialog] = useState(false);
   const [editingMedicine, setEditingMedicine] = useState<Medicine | null>(null);
   const [medicineToReplicate, setMedicineToReplicate] = useState<Medicine | null>(null);
@@ -79,10 +81,19 @@ export default function StaffInventoryWithActions() {
   };
 
   useEffect(() => {
+    const medicineCategories = ['tablet', 'capsule', 'syrup', 'injection', 'cream', 'ointment', 'drops', 'inhaler'];
+    
     const filtered = medicines.filter(medicine => {
       const matchesSearch = medicine.name.toLowerCase().includes(searchTerm.toLowerCase()) ||
         medicine.generic_name?.toLowerCase().includes(searchTerm.toLowerCase());
-      const matchesCategory = categoryFilter === 'all' || medicine.category === categoryFilter;
+      
+      let matchesCategory = true;
+      if (categoryFilter === 'medicines_only') {
+        matchesCategory = medicineCategories.includes(medicine.category);
+      } else if (categoryFilter !== 'all') {
+        matchesCategory = medicine.category === categoryFilter;
+      }
+      
       return matchesSearch && matchesCategory;
     });
     setFilteredMedicines(filtered);
@@ -260,13 +271,23 @@ export default function StaffInventoryWithActions() {
       <div className="flex flex-col space-y-4">
         <div className="flex items-center justify-between">
           <h2 className="text-2xl font-bold">Inventory Management</h2>
-          <Button 
-            onClick={() => setShowAddDialog(true)}
-            disabled={!hasBranches}
-          >
-            <Plus className="h-4 w-4 mr-2" />
-            Add Medicine
-          </Button>
+          <div className="flex gap-2">
+            <Button 
+              onClick={() => setShowAddDialog(true)}
+              disabled={!hasBranches}
+            >
+              <Plus className="h-4 w-4 mr-2" />
+              Add Medicine
+            </Button>
+            <Button 
+              onClick={() => setShowAddItemDialog(true)}
+              disabled={!hasBranches}
+              variant="outline"
+            >
+              <Plus className="h-4 w-4 mr-2" />
+              Add Item
+            </Button>
+          </div>
         </div>
         {!hasBranches && (
           <div className="bg-yellow-50 border border-yellow-200 rounded-lg p-4">
@@ -304,6 +325,7 @@ export default function StaffInventoryWithActions() {
                 </SelectTrigger>
                 <SelectContent>
                   <SelectItem value="all">All Categories</SelectItem>
+                  <SelectItem value="medicines_only">Medicines Only</SelectItem>
                   {getUniqueCategories().map((category) => (
                     <SelectItem key={category} value={category}>
                       {category}
@@ -483,6 +505,12 @@ export default function StaffInventoryWithActions() {
         open={showAddDialog}
         onOpenChange={setShowAddDialog}
         onMedicineAdded={handleMedicineAdded}
+      />
+
+      <AddItemDialog
+        open={showAddItemDialog}
+        onOpenChange={setShowAddItemDialog}
+        onItemAdded={handleMedicineAdded}
       />
 
       <AddMedicineDialog
