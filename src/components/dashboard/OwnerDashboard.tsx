@@ -292,7 +292,7 @@ export default function OwnerDashboard() {
         
         {/* Telegram Connection Status */}
         <div className="flex items-center gap-2">
-          {!profile?.telegram_chat_id ? (
+          {!profile?.telegram_chat_id && (
             <Button 
               onClick={handleConnectTelegram}
               variant="outline"
@@ -302,23 +302,6 @@ export default function OwnerDashboard() {
               Connect Telegram
               <ExternalLink className="h-3 w-3" />
             </Button>
-          ) : (
-            <div className="flex items-center gap-2">
-              <Badge variant="default" className="gap-1 py-1.5 px-3">
-                <MessageCircle className="h-3 w-3" />
-                Connected ✅
-              </Badge>
-              <Button 
-                onClick={handleTestMessage}
-                disabled={sendingTestMessage}
-                variant="ghost"
-                size="sm"
-                className="gap-1"
-              >
-                <Send className="h-3 w-3" />
-                {sendingTestMessage ? 'Sending...' : 'Test Message'}
-              </Button>
-            </div>
           )}
         </div>
       </div>

@@ -60,6 +60,11 @@ interface BranchData {
   expenses: number;
 }
 
+interface Branch {
+  id: string;
+  name: string;
+}
+
 export default function FinanceManagement() {
   const [stats, setStats] = useState<FinanceStats>({
     totalIncome: 0,
@@ -79,6 +84,8 @@ export default function FinanceManagement() {
   const [startDate, setStartDate] = useState<Date>();
   const [endDate, setEndDate] = useState<Date>();
   const [branchData, setBranchData] = useState<BranchData[]>([]);
+  const [branches, setBranches] = useState<Branch[]>([]);
+  const [expenseBranchId, setExpenseBranchId] = useState<string>('');
   const { profile } = useAuth();
   const { toast } = useToast();
   const { selectedBranch } = useBranchContext();
@@ -87,6 +94,7 @@ export default function FinanceManagement() {
 
   useEffect(() => {
     fetchFinanceData();
+    fetchBranches();
 
     // Set up real-time subscription for expenses
     const expenseSubscription = supabase
@@ -268,16 +276,51 @@ export default function FinanceManagement() {
     setPaginatedExpenses(expenses.slice(startIndex, endIndex));
   }, [expenses, expensesPage]);
 
+  const fetchBranches = async () => {
+    try {
+      let query = supabase
+        .from('pharmacy_branches')
+        .select('id, name');
+
+      if (profile?.role === 'owner') {
+        query = query.eq('pharmacy_owner_id', profile.id);
+      } else if (profile?.branch_id) {
+        query = query.eq('id', profile.branch_id);
+      }
+
+      const { data, error } = await query;
+
+      if (error) throw error;
+      setBranches(data || []);
+      
+      // Set default branch for the expense form
+      if (data && data.length > 0) {
+        setExpenseBranchId(selectedBranch || profile?.branch_id || data[0].id);
+      }
+    } catch (error) {
+      console.error('Error fetching branches:', error);
+    }
+  };
+
   const handleAddExpense = async (e: React.FormEvent<HTMLFormElement>) => {
     e.preventDefault();
     
+    if (!expenseBranchId) {
+      toast({
+        title: "Error",
+        description: "Please select a pharmacy branch",
+        variant: "destructive"
+      });
+      return;
+    }
+
     const formData = new FormData(e.currentTarget);
     const expenseData = {
       description: formData.get('description') as string,
       amount: parseFloat(formData.get('amount') as string),
       category: formData.get('category') as string,
       created_by: profile?.id,
-      branch_id: selectedBranch || profile?.branch_id
+      branch_id: expenseBranchId
     };
 
     try {
@@ -375,6 +418,21 @@ export default function FinanceManagement() {
                 </DialogDescription>
               </DialogHeader>
               <form onSubmit={handleAddExpense} className="space-y-4">
+                <div className="space-y-2">
+                  <Label htmlFor="branch">Pharmacy Branch</Label>
+                  <Select value={expenseBranchId} onValueChange={setExpenseBranchId} required>
+                    <SelectTrigger>
+                      <SelectValue placeholder="Select a branch" />
+                    </SelectTrigger>
+                    <SelectContent>
+                      {branches.map((branch) => (
+                        <SelectItem key={branch.id} value={branch.id}>
+                          {branch.name}
+                        </SelectItem>
+                      ))}
+                    </SelectContent>
+                  </Select>
+                </div>
                 <div className="space-y-2">
                   <Label htmlFor="description">Description</Label>
                   <Input id="description" name="description" required />
