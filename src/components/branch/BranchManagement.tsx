@@ -216,6 +216,7 @@ export default function BranchManagement() {
     setBranchName(branch.name);
     setBranchAddress(branch.address || '');
     setBranchPhone(branch.phone || '');
+    setBranchType(branch.branch_type || 'pharmacy');
     setManagerId(branch.manager_staff_id || 'unassigned');
     setIsMainBranch(branch.is_main_branch);
   };
