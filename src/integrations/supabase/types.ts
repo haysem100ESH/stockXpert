@@ -156,12 +156,13 @@ export type Database = {
           manufacturer: string | null
           minimum_stock_level: number
           name: string
-          open_pack_stripes: number | null
+          open_pack_units: number | null
           purchase_price: number
           selling_price: number
           stock_quantity: number
-          stripes_per_pack: number | null
           supplier_id: string | null
+          unit_label: string
+          units_per_pack: number | null
           updated_at: string | null
         }
         Insert: {
@@ -178,12 +179,13 @@ export type Database = {
           manufacturer?: string | null
           minimum_stock_level?: number
           name: string
-          open_pack_stripes?: number | null
+          open_pack_units?: number | null
           purchase_price: number
           selling_price: number
           stock_quantity?: number
-          stripes_per_pack?: number | null
           supplier_id?: string | null
+          unit_label?: string
+          units_per_pack?: number | null
           updated_at?: string | null
         }
         Update: {
@@ -200,12 +202,13 @@ export type Database = {
           manufacturer?: string | null
           minimum_stock_level?: number
           name?: string
-          open_pack_stripes?: number | null
+          open_pack_units?: number | null
           purchase_price?: number
           selling_price?: number
           stock_quantity?: number
-          stripes_per_pack?: number | null
           supplier_id?: string | null
+          unit_label?: string
+          units_per_pack?: number | null
           updated_at?: string | null
         }
         Relationships: [
@@ -260,6 +263,7 @@ export type Database = {
       pharmacy_branches: {
         Row: {
           address: string | null
+          branch_type: string
           created_at: string
           id: string
           is_main_branch: boolean | null
@@ -271,6 +275,7 @@ export type Database = {
         }
         Insert: {
           address?: string | null
+          branch_type?: string
           created_at?: string
           id?: string
           is_main_branch?: boolean | null
@@ -282,6 +287,7 @@ export type Database = {
         }
         Update: {
           address?: string | null
+          branch_type?: string
           created_at?: string
           id?: string
           is_main_branch?: boolean | null
