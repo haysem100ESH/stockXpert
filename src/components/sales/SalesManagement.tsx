@@ -324,7 +324,7 @@ export default function SalesManagement() {
             .from('medicines')
             .update({ 
               stock_quantity: newStockQuantity,
-              open_pack_stripes: newOpenPackStripes
+              open_pack_units: newOpenPackStripes
             })
             .eq('id', item.id);
 
