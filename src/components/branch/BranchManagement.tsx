@@ -365,11 +365,14 @@ export default function BranchManagement() {
                       )}
                     </TableCell>
                     <TableCell>
-                      {branch.is_main_branch ? (
-                        <Badge className="bg-blue-100 text-blue-800">Main Branch</Badge>
-                      ) : (
-                        <Badge variant="outline">Branch</Badge>
-                      )}
+                      <div className="flex gap-1">
+                        {branch.is_main_branch && (
+                          <Badge variant="default">Main</Badge>
+                        )}
+                        <Badge variant={branch.branch_type === 'pharmacy' ? 'secondary' : 'outline'}>
+                          {branch.branch_type === 'pharmacy' ? '💊 Pharmacy' : '📦 General'}
+                        </Badge>
+                      </div>
                     </TableCell>
                     <TableCell>
                       <Dialog>
