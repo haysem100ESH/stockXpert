@@ -100,7 +100,7 @@ export default function EditMedicineDialog({
 
   useEffect(() => {
     if (medicine && open) {
-      const medicineWithBranch = medicine as MedicineWithBranch & { stripes_per_pack?: number };
+      const medicineWithBranch = medicine as MedicineWithBranch & { units_per_pack?: number; unit_label?: string };
       setMedicineData({
         name: medicine.name,
         generic_name: medicine.generic_name || '',
@@ -112,7 +112,8 @@ export default function EditMedicineDialog({
         selling_price: medicine.selling_price.toString(),
         stock_quantity: medicine.stock_quantity.toString(),
         minimum_stock_level: medicine.minimum_stock_level.toString(),
-        stripes_per_pack: medicineWithBranch.stripes_per_pack ? medicineWithBranch.stripes_per_pack.toString() : '',
+        units_per_pack: medicineWithBranch.units_per_pack ? medicineWithBranch.units_per_pack.toString() : '',
+        unit_label: medicineWithBranch.unit_label || 'strip',
         expiry_date: medicine.expiry_date || '',
         expiry_alert_enabled: medicine.expiry_alert_enabled ?? true,
         branch_id: medicineWithBranch.branch_id || ''
