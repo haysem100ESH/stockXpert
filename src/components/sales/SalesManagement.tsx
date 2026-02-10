@@ -173,7 +173,7 @@ export default function SalesManagement() {
       ));
     } else if (existingItem && saleType === 'by_stripe') {
       const newStripesCount = (existingItem.stripesCount || 0) + stripesCount;
-      const pricePerStripe = medicine.selling_price / (medicine.stripes_per_pack || 1);
+      const pricePerStripe = medicine.selling_price / (medicine.units_per_pack || 1);
       setCart(cart.map(item =>
         item.id === medicine.id && item.saleType === saleType
           ? { ...item, stripesCount: newStripesCount, total: newStripesCount * pricePerStripe }
