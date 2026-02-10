@@ -71,24 +71,24 @@ export default function AddToCartDialog({ open, onOpenChange, medicine, onAddToC
               <span>Available Stock:</span>
               <Badge variant="secondary">{medicine.stock_quantity} packs</Badge>
             </div>
-            {medicine.stripes_per_pack && (
+            {medicine.units_per_pack && (
               <>
                 <div className="flex justify-between text-sm">
-                  <span>Stripes Per Pack:</span>
-                  <Badge variant="outline">{medicine.stripes_per_pack}</Badge>
+                  <span>{unitLabel.charAt(0).toUpperCase() + unitLabel.slice(1)}s Per Pack:</span>
+                  <Badge variant="outline">{medicine.units_per_pack}</Badge>
                 </div>
                 <div className="flex justify-between text-sm">
-                  <span>Price Per Stripe:</span>
+                  <span>Price Per {unitLabel.charAt(0).toUpperCase() + unitLabel.slice(1)}:</span>
                   <span className="font-medium">ETB {pricePerStripe}</span>
                 </div>
                 <div className="flex justify-between text-sm">
-                  <span>Total Available Stripes:</span>
+                  <span>Total Available {unitLabel.charAt(0).toUpperCase() + unitLabel.slice(1)}s:</span>
                   <Badge variant="secondary">{totalAvailableStripes}</Badge>
                 </div>
-                {medicine.open_pack_stripes > 0 && (
+                {medicine.open_pack_units > 0 && (
                   <div className="flex justify-between text-sm">
-                    <span>Open Pack Stripes:</span>
-                    <Badge variant="outline">{medicine.open_pack_stripes}</Badge>
+                    <span>Open Pack {unitLabel.charAt(0).toUpperCase() + unitLabel.slice(1)}s:</span>
+                    <Badge variant="outline">{medicine.open_pack_units}</Badge>
                   </div>
                 )}
               </>
