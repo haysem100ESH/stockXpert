@@ -47,6 +47,7 @@ export default function BranchManagement() {
   const [branchName, setBranchName] = useState('');
   const [branchAddress, setBranchAddress] = useState('');
   const [branchPhone, setBranchPhone] = useState('');
+  const [branchType, setBranchType] = useState<'pharmacy' | 'general'>('pharmacy');
   const [managerId, setManagerId] = useState('unassigned');
   const [isMainBranch, setIsMainBranch] = useState(false);
 
