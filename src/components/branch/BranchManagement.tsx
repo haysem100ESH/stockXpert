@@ -402,6 +402,19 @@ export default function BranchManagement() {
                             </div>
 
                             <div>
+                              <Label>Branch Type *</Label>
+                              <Select value={branchType} onValueChange={(v: 'pharmacy' | 'general') => setBranchType(v)}>
+                                <SelectTrigger className="mt-2">
+                                  <SelectValue />
+                                </SelectTrigger>
+                                <SelectContent>
+                                  <SelectItem value="pharmacy">Pharmacy Branch</SelectItem>
+                                  <SelectItem value="general">General Inventory Branch</SelectItem>
+                                </SelectContent>
+                              </Select>
+                            </div>
+
+                            <div>
                               <Label>Address</Label>
                               <Input
                                 value={branchAddress}
