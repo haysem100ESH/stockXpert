@@ -29,7 +29,7 @@ export default function BranchSelector({ selectedBranch, onBranchChange, showAll
     try {
       let query = supabase
         .from('pharmacy_branches')
-        .select('id, name, is_main_branch')
+        .select('id, name, is_main_branch, branch_type')
         .order('is_main_branch', { ascending: false })
         .order('created_at', { ascending: true });
 
