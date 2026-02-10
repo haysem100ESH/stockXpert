@@ -52,7 +52,8 @@ export default function EditMedicineDialog({
     selling_price: '',
     stock_quantity: '',
     minimum_stock_level: '',
-    stripes_per_pack: '',
+    units_per_pack: '',
+    unit_label: 'strip',
     expiry_date: '',
     expiry_alert_enabled: true,
     branch_id: ''
