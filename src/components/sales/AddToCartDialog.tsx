@@ -12,8 +12,9 @@ interface Medicine {
   generic_name?: string;
   selling_price: number;
   stock_quantity: number;
-  stripes_per_pack?: number;
-  open_pack_stripes?: number;
+  units_per_pack?: number;
+  open_pack_units?: number;
+  unit_label?: string;
 }
 
 interface AddToCartDialogProps {
@@ -29,12 +30,13 @@ export default function AddToCartDialog({ open, onOpenChange, medicine, onAddToC
 
   if (!medicine) return null;
 
-  const pricePerStripe = medicine.stripes_per_pack 
-    ? (medicine.selling_price / medicine.stripes_per_pack).toFixed(2)
+  const unitLabel = medicine.unit_label || 'unit';
+  const pricePerStripe = medicine.units_per_pack 
+    ? (medicine.selling_price / medicine.units_per_pack).toFixed(2)
     : '0';
   
-  const totalAvailableStripes = medicine.stripes_per_pack
-    ? (medicine.stock_quantity * medicine.stripes_per_pack) + (medicine.open_pack_stripes || 0)
+  const totalAvailableStripes = medicine.units_per_pack
+    ? (medicine.stock_quantity * medicine.units_per_pack) + (medicine.open_pack_units || 0)
     : 0;
 
   const handleAdd = () => {
@@ -69,24 +71,24 @@ export default function AddToCartDialog({ open, onOpenChange, medicine, onAddToC
               <span>Available Stock:</span>
               <Badge variant="secondary">{medicine.stock_quantity} packs</Badge>
             </div>
-            {medicine.stripes_per_pack && (
+            {medicine.units_per_pack && (
               <>
                 <div className="flex justify-between text-sm">
-                  <span>Stripes Per Pack:</span>
-                  <Badge variant="outline">{medicine.stripes_per_pack}</Badge>
+                  <span>{unitLabel.charAt(0).toUpperCase() + unitLabel.slice(1)}s Per Pack:</span>
+                  <Badge variant="outline">{medicine.units_per_pack}</Badge>
                 </div>
                 <div className="flex justify-between text-sm">
-                  <span>Price Per Stripe:</span>
+                  <span>Price Per {unitLabel.charAt(0).toUpperCase() + unitLabel.slice(1)}:</span>
                   <span className="font-medium">ETB {pricePerStripe}</span>
                 </div>
                 <div className="flex justify-between text-sm">
-                  <span>Total Available Stripes:</span>
+                  <span>Total Available {unitLabel.charAt(0).toUpperCase() + unitLabel.slice(1)}s:</span>
                   <Badge variant="secondary">{totalAvailableStripes}</Badge>
                 </div>
-                {medicine.open_pack_stripes > 0 && (
+                {medicine.open_pack_units > 0 && (
                   <div className="flex justify-between text-sm">
-                    <span>Open Pack Stripes:</span>
-                    <Badge variant="outline">{medicine.open_pack_stripes}</Badge>
+                    <span>Open Pack {unitLabel.charAt(0).toUpperCase() + unitLabel.slice(1)}s:</span>
+                    <Badge variant="outline">{medicine.open_pack_units}</Badge>
                   </div>
                 )}
               </>
@@ -101,16 +103,16 @@ export default function AddToCartDialog({ open, onOpenChange, medicine, onAddToC
               </SelectTrigger>
               <SelectContent>
                 <SelectItem value="full_pack">Full Pack</SelectItem>
-                {medicine.stripes_per_pack && (
-                  <SelectItem value="by_stripe">By Stripe</SelectItem>
+                {medicine.units_per_pack && (
+                  <SelectItem value="by_stripe">By {unitLabel.charAt(0).toUpperCase() + unitLabel.slice(1)}</SelectItem>
                 )}
               </SelectContent>
             </Select>
           </div>
 
-          {saleType === 'by_stripe' && medicine.stripes_per_pack && (
+          {saleType === 'by_stripe' && medicine.units_per_pack && (
             <div className="space-y-2">
-              <Label htmlFor="stripes-count">Number of Stripes</Label>
+              <Label htmlFor="stripes-count">Number of {unitLabel.charAt(0).toUpperCase() + unitLabel.slice(1)}s</Label>
               <Input
                 id="stripes-count"
                 type="number"

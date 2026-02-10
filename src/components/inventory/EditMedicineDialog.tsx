@@ -52,7 +52,8 @@ export default function EditMedicineDialog({
     selling_price: '',
     stock_quantity: '',
     minimum_stock_level: '',
-    stripes_per_pack: '',
+    units_per_pack: '',
+    unit_label: 'strip',
     expiry_date: '',
     expiry_alert_enabled: true,
     branch_id: ''
@@ -99,7 +100,7 @@ export default function EditMedicineDialog({
 
   useEffect(() => {
     if (medicine && open) {
-      const medicineWithBranch = medicine as MedicineWithBranch & { stripes_per_pack?: number };
+      const medicineWithBranch = medicine as MedicineWithBranch & { units_per_pack?: number; unit_label?: string };
       setMedicineData({
         name: medicine.name,
         generic_name: medicine.generic_name || '',
@@ -111,7 +112,8 @@ export default function EditMedicineDialog({
         selling_price: medicine.selling_price.toString(),
         stock_quantity: medicine.stock_quantity.toString(),
         minimum_stock_level: medicine.minimum_stock_level.toString(),
-        stripes_per_pack: medicineWithBranch.stripes_per_pack ? medicineWithBranch.stripes_per_pack.toString() : '',
+        units_per_pack: medicineWithBranch.units_per_pack ? medicineWithBranch.units_per_pack.toString() : '',
+        unit_label: medicineWithBranch.unit_label || 'strip',
         expiry_date: medicine.expiry_date || '',
         expiry_alert_enabled: medicine.expiry_alert_enabled ?? true,
         branch_id: medicineWithBranch.branch_id || ''
@@ -137,7 +139,8 @@ export default function EditMedicineDialog({
         selling_price: parseFloat(medicineData.selling_price),
         stock_quantity: parseInt(medicineData.stock_quantity),
         minimum_stock_level: parseInt(medicineData.minimum_stock_level),
-        stripes_per_pack: medicineData.stripes_per_pack ? parseInt(medicineData.stripes_per_pack) : null,
+        units_per_pack: medicineData.units_per_pack ? parseInt(medicineData.units_per_pack) : null,
+        unit_label: medicineData.unit_label || 'strip',
         expiry_date: medicineData.expiry_date || null,
         expiry_alert_enabled: medicineData.expiry_alert_enabled
       };
@@ -321,14 +324,24 @@ export default function EditMedicineDialog({
           </div>
 
           <div className="space-y-2">
-            <Label htmlFor="stripes_per_pack">Stripes Per Pack</Label>
+            <Label htmlFor="unit_label">Unit Label</Label>
             <Input
-              id="stripes_per_pack"
+              id="unit_label"
+              value={medicineData.unit_label}
+              onChange={(e) => setMedicineData({ ...medicineData, unit_label: e.target.value })}
+              placeholder="e.g. strip, piece, bottle, kg"
+            />
+          </div>
+
+          <div className="space-y-2">
+            <Label htmlFor="units_per_pack">Units Per Pack</Label>
+            <Input
+              id="units_per_pack"
               type="number"
               min="1"
-              value={medicineData.stripes_per_pack}
-              onChange={(e) => setMedicineData({ ...medicineData, stripes_per_pack: e.target.value })}
-              placeholder="Leave empty if not sold by stripe"
+              value={medicineData.units_per_pack}
+              onChange={(e) => setMedicineData({ ...medicineData, units_per_pack: e.target.value })}
+              placeholder="Leave empty if not sold by unit"
             />
           </div>
 

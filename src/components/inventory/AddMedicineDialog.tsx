@@ -98,8 +98,8 @@ export default function AddMedicineDialog({ open, onOpenChange, onMedicineAdded,
     // Get current user ID
     const { data: { user } } = await supabase.auth.getUser();
     
-    const stripesPerPackValue = formData.get('stripes_per_pack') as string;
-    const stripesPerPack = stripesPerPackValue ? parseInt(stripesPerPackValue) : null;
+    const unitsPerPackValue = formData.get('units_per_pack') as string;
+    const unitsPerPack = unitsPerPackValue ? parseInt(unitsPerPackValue) : null;
     
     const medicineData = {
       name: formData.get('name') as string,
@@ -112,8 +112,9 @@ export default function AddMedicineDialog({ open, onOpenChange, onMedicineAdded,
       selling_price: parseFloat(formData.get('selling_price') as string),
       stock_quantity: parseInt(formData.get('stock_quantity') as string),
       minimum_stock_level: parseInt(formData.get('minimum_stock_level') as string),
-      stripes_per_pack: stripesPerPack,
-      open_pack_stripes: 0,
+      units_per_pack: unitsPerPack,
+      unit_label: formData.get('unit_label') as string || 'strip',
+      open_pack_units: 0,
       expiry_date: formData.get('expiry_date') as string || null,
       expiry_alert_enabled: formData.get('expiry_alert_enabled') === 'on',
       branch_id: selectedBranchId || userBranch || selectedBranch || null,
@@ -266,13 +267,23 @@ export default function AddMedicineDialog({ open, onOpenChange, onMedicineAdded,
             </div>
 
             <div className="space-y-2">
-              <Label htmlFor="stripes_per_pack">Stripes Per Pack</Label>
+              <Label htmlFor="unit_label">Unit Label</Label>
               <Input
-                id="stripes_per_pack"
-                name="stripes_per_pack"
+                id="unit_label"
+                name="unit_label"
+                placeholder="e.g. strip, piece, bottle, kg"
+                defaultValue="strip"
+              />
+            </div>
+
+            <div className="space-y-2">
+              <Label htmlFor="units_per_pack">Units Per Pack</Label>
+              <Input
+                id="units_per_pack"
+                name="units_per_pack"
                 type="number"
                 min="1"
-                placeholder="Leave empty if not sold by stripe"
+                placeholder="Leave empty if not sold by unit"
               />
             </div>
 

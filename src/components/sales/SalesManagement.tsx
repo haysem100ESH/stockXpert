@@ -23,8 +23,9 @@ interface Medicine {
   stock_quantity: number;
   category?: string;
   expiry_date?: string;
-  stripes_per_pack?: number;
-  open_pack_stripes?: number;
+  units_per_pack?: number;
+  open_pack_units?: number;
+  unit_label?: string;
 }
 
 interface CartItem extends Medicine {
@@ -83,7 +84,7 @@ export default function SalesManagement() {
       // RLS policies handle ownership filtering automatically
       let query = supabase
         .from('medicines')
-        .select('id, name, generic_name, selling_price, stock_quantity, category, expiry_date, stripes_per_pack, open_pack_stripes')
+        .select('id, name, generic_name, selling_price, stock_quantity, category, expiry_date, units_per_pack, open_pack_units, unit_label')
         .gt('stock_quantity', 0)
         .order('name');
 
@@ -129,16 +130,16 @@ export default function SalesManagement() {
   const addToCart = (medicine: Medicine, saleType: 'full_pack' | 'by_stripe' = 'full_pack', stripesCount: number = 1) => {
     // Validation for stripe sales
     if (saleType === 'by_stripe') {
-      if (!medicine.stripes_per_pack) {
+      if (!medicine.units_per_pack) {
         toast({
           title: "Error",
-          description: "This medicine is not configured for stripe sales",
+          description: "This item is not configured for unit sales",
           variant: "destructive"
         });
         return;
       }
       
-      const totalAvailableStripes = (medicine.stock_quantity * medicine.stripes_per_pack) + (medicine.open_pack_stripes || 0);
+      const totalAvailableStripes = (medicine.stock_quantity * medicine.units_per_pack) + (medicine.open_pack_units || 0);
       const stripesInCart = cart
         .filter(item => item.id === medicine.id && item.saleType === 'by_stripe')
         .reduce((sum, item) => sum + (item.stripesCount || 0), 0);
@@ -172,15 +173,15 @@ export default function SalesManagement() {
       ));
     } else if (existingItem && saleType === 'by_stripe') {
       const newStripesCount = (existingItem.stripesCount || 0) + stripesCount;
-      const pricePerStripe = medicine.selling_price / (medicine.stripes_per_pack || 1);
+      const pricePerStripe = medicine.selling_price / (medicine.units_per_pack || 1);
       setCart(cart.map(item =>
         item.id === medicine.id && item.saleType === saleType
           ? { ...item, stripesCount: newStripesCount, total: newStripesCount * pricePerStripe }
           : item
       ));
     } else {
-      const pricePerStripe = saleType === 'by_stripe' && medicine.stripes_per_pack 
-        ? medicine.selling_price / medicine.stripes_per_pack 
+      const pricePerStripe = saleType === 'by_stripe' && medicine.units_per_pack 
+        ? medicine.selling_price / medicine.units_per_pack 
         : medicine.selling_price;
       
       setCart([...cart, {
@@ -297,10 +298,10 @@ export default function SalesManagement() {
         } else if (item.saleType === 'by_stripe' && item.stripesCount) {
           // Handle stripe deduction
           const medicine = medicines.find(m => m.id === item.id);
-          if (!medicine || !medicine.stripes_per_pack) continue;
+          if (!medicine || !medicine.units_per_pack) continue;
           
           let stripesToDeduct = item.stripesCount;
-          let newOpenPackStripes = medicine.open_pack_stripes || 0;
+          let newOpenPackStripes = medicine.open_pack_units || 0;
           let newStockQuantity = medicine.stock_quantity;
           
           // First, deduct from open pack
@@ -313,7 +314,7 @@ export default function SalesManagement() {
           // If more stripes needed, open new packs
           while (stripesToDeduct > 0 && newStockQuantity > 0) {
             newStockQuantity--;
-            newOpenPackStripes = medicine.stripes_per_pack;
+            newOpenPackStripes = medicine.units_per_pack;
             const deductFromNewPack = Math.min(stripesToDeduct, newOpenPackStripes);
             newOpenPackStripes -= deductFromNewPack;
             stripesToDeduct -= deductFromNewPack;
@@ -323,7 +324,7 @@ export default function SalesManagement() {
             .from('medicines')
             .update({ 
               stock_quantity: newStockQuantity,
-              open_pack_stripes: newOpenPackStripes
+              open_pack_units: newOpenPackStripes
             })
             .eq('id', item.id);
 
@@ -552,7 +553,7 @@ export default function SalesManagement() {
                             </p>
                           ) : (
                             <p className="text-xs text-muted-foreground">
-                              {item.stripesCount} stripes @ ETB {(item.selling_price / (item.stripes_per_pack || 1)).toFixed(2)} = ETB {item.total.toFixed(2)}
+                              {item.stripesCount} {item.unit_label || 'units'} @ ETB {(item.selling_price / (item.units_per_pack || 1)).toFixed(2)} = ETB {item.total.toFixed(2)}
                             </p>
                           )}
                         </div>
