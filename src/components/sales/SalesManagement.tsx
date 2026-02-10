@@ -180,8 +180,8 @@ export default function SalesManagement() {
           : item
       ));
     } else {
-      const pricePerStripe = saleType === 'by_stripe' && medicine.stripes_per_pack 
-        ? medicine.selling_price / medicine.stripes_per_pack 
+      const pricePerStripe = saleType === 'by_stripe' && medicine.units_per_pack 
+        ? medicine.selling_price / medicine.units_per_pack 
         : medicine.selling_price;
       
       setCart([...cart, {
