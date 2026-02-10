@@ -314,7 +314,7 @@ export default function SalesManagement() {
           // If more stripes needed, open new packs
           while (stripesToDeduct > 0 && newStockQuantity > 0) {
             newStockQuantity--;
-            newOpenPackStripes = medicine.stripes_per_pack;
+            newOpenPackStripes = medicine.units_per_pack;
             const deductFromNewPack = Math.min(stripesToDeduct, newOpenPackStripes);
             newOpenPackStripes -= deductFromNewPack;
             stripesToDeduct -= deductFromNewPack;
