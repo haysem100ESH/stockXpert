@@ -7,6 +7,7 @@ interface Branch {
   id: string;
   name: string;
   is_main_branch: boolean;
+  branch_type: string;
 }
 
 interface BranchSelectorProps {
