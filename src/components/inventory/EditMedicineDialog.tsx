@@ -139,7 +139,8 @@ export default function EditMedicineDialog({
         selling_price: parseFloat(medicineData.selling_price),
         stock_quantity: parseInt(medicineData.stock_quantity),
         minimum_stock_level: parseInt(medicineData.minimum_stock_level),
-        stripes_per_pack: medicineData.stripes_per_pack ? parseInt(medicineData.stripes_per_pack) : null,
+        units_per_pack: medicineData.units_per_pack ? parseInt(medicineData.units_per_pack) : null,
+        unit_label: medicineData.unit_label || 'strip',
         expiry_date: medicineData.expiry_date || null,
         expiry_alert_enabled: medicineData.expiry_alert_enabled
       };
