@@ -126,6 +126,7 @@ export default function BranchManagement() {
     setBranchName('');
     setBranchAddress('');
     setBranchPhone('');
+    setBranchType('pharmacy');
     setManagerId('unassigned');
     setIsMainBranch(false);
     setEditingBranch(null);
