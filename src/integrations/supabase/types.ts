@@ -359,6 +359,7 @@ export type Database = {
           role: Database["public"]["Enums"]["user_role"]
           security_answer_hash: string | null
           security_question: string | null
+          telegram_chat_id: string | null
           updated_at: string | null
         }
         Insert: {
@@ -374,6 +375,7 @@ export type Database = {
           role?: Database["public"]["Enums"]["user_role"]
           security_answer_hash?: string | null
           security_question?: string | null
+          telegram_chat_id?: string | null
           updated_at?: string | null
         }
         Update: {
@@ -389,6 +391,7 @@ export type Database = {
           role?: Database["public"]["Enums"]["user_role"]
           security_answer_hash?: string | null
           security_question?: string | null
+          telegram_chat_id?: string | null
           updated_at?: string | null
         }
         Relationships: [
