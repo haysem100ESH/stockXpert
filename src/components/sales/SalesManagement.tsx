@@ -553,7 +553,7 @@ export default function SalesManagement() {
                             </p>
                           ) : (
                             <p className="text-xs text-muted-foreground">
-                              {item.stripesCount} stripes @ ETB {(item.selling_price / (item.stripes_per_pack || 1)).toFixed(2)} = ETB {item.total.toFixed(2)}
+                              {item.stripesCount} {item.unit_label || 'units'} @ ETB {(item.selling_price / (item.units_per_pack || 1)).toFixed(2)} = ETB {item.total.toFixed(2)}
                             </p>
                           )}
                         </div>
