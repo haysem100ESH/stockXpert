@@ -30,12 +30,13 @@ export default function AddToCartDialog({ open, onOpenChange, medicine, onAddToC
 
   if (!medicine) return null;
 
-  const pricePerStripe = medicine.stripes_per_pack 
-    ? (medicine.selling_price / medicine.stripes_per_pack).toFixed(2)
+  const unitLabel = medicine.unit_label || 'unit';
+  const pricePerStripe = medicine.units_per_pack 
+    ? (medicine.selling_price / medicine.units_per_pack).toFixed(2)
     : '0';
   
-  const totalAvailableStripes = medicine.stripes_per_pack
-    ? (medicine.stock_quantity * medicine.stripes_per_pack) + (medicine.open_pack_stripes || 0)
+  const totalAvailableStripes = medicine.units_per_pack
+    ? (medicine.stock_quantity * medicine.units_per_pack) + (medicine.open_pack_units || 0)
     : 0;
 
   const handleAdd = () => {
