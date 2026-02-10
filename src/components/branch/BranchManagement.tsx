@@ -19,6 +19,7 @@ interface Branch {
   phone?: string;
   manager_staff_id?: string;
   is_main_branch: boolean;
+  branch_type: 'pharmacy' | 'general';
   created_at: string;
   manager_name?: string;
 }
@@ -46,6 +47,7 @@ export default function BranchManagement() {
   const [branchName, setBranchName] = useState('');
   const [branchAddress, setBranchAddress] = useState('');
   const [branchPhone, setBranchPhone] = useState('');
+  const [branchType, setBranchType] = useState<'pharmacy' | 'general'>('pharmacy');
   const [managerId, setManagerId] = useState('unassigned');
   const [isMainBranch, setIsMainBranch] = useState(false);
 
@@ -89,6 +91,7 @@ export default function BranchManagement() {
           
           return {
             ...branch,
+            branch_type: branch.branch_type as 'pharmacy' | 'general',
             manager_name: managerName
           };
         })
@@ -124,6 +127,7 @@ export default function BranchManagement() {
     setBranchName('');
     setBranchAddress('');
     setBranchPhone('');
+    setBranchType('pharmacy');
     setManagerId('unassigned');
     setIsMainBranch(false);
     setEditingBranch(null);
@@ -148,6 +152,7 @@ export default function BranchManagement() {
           name: branchName,
           address: branchAddress || null,
           phone: branchPhone || null,
+          branch_type: branchType,
           manager_staff_id: managerId === 'unassigned' ? null : managerId,
           is_main_branch: isMainBranch
         });
@@ -182,6 +187,7 @@ export default function BranchManagement() {
           name: branchName,
           address: branchAddress || null,
           phone: branchPhone || null,
+          branch_type: branchType,
           manager_staff_id: managerId === 'unassigned' ? null : managerId,
           is_main_branch: isMainBranch
         })
@@ -211,6 +217,7 @@ export default function BranchManagement() {
     setBranchName(branch.name);
     setBranchAddress(branch.address || '');
     setBranchPhone(branch.phone || '');
+    setBranchType(branch.branch_type || 'pharmacy');
     setManagerId(branch.manager_staff_id || 'unassigned');
     setIsMainBranch(branch.is_main_branch);
   };
@@ -260,6 +267,19 @@ export default function BranchManagement() {
                   placeholder="Enter branch name"
                   className="mt-2"
                 />
+              </div>
+
+              <div>
+                <Label>Branch Type *</Label>
+                <Select value={branchType} onValueChange={(v: 'pharmacy' | 'general') => setBranchType(v)}>
+                  <SelectTrigger className="mt-2">
+                    <SelectValue />
+                  </SelectTrigger>
+                  <SelectContent>
+                    <SelectItem value="pharmacy">Pharmacy Branch</SelectItem>
+                    <SelectItem value="general">General Inventory Branch</SelectItem>
+                  </SelectContent>
+                </Select>
               </div>
 
               <div>
@@ -345,11 +365,14 @@ export default function BranchManagement() {
                       )}
                     </TableCell>
                     <TableCell>
-                      {branch.is_main_branch ? (
-                        <Badge className="bg-blue-100 text-blue-800">Main Branch</Badge>
-                      ) : (
-                        <Badge variant="outline">Branch</Badge>
-                      )}
+                      <div className="flex gap-1">
+                        {branch.is_main_branch && (
+                          <Badge variant="default">Main</Badge>
+                        )}
+                        <Badge variant={branch.branch_type === 'pharmacy' ? 'secondary' : 'outline'}>
+                          {branch.branch_type === 'pharmacy' ? '💊 Pharmacy' : '📦 General'}
+                        </Badge>
+                      </div>
                     </TableCell>
                     <TableCell>
                       <Dialog>
@@ -376,6 +399,19 @@ export default function BranchManagement() {
                                 placeholder="Enter branch name"
                                 className="mt-2"
                               />
+                            </div>
+
+                            <div>
+                              <Label>Branch Type *</Label>
+                              <Select value={branchType} onValueChange={(v: 'pharmacy' | 'general') => setBranchType(v)}>
+                                <SelectTrigger className="mt-2">
+                                  <SelectValue />
+                                </SelectTrigger>
+                                <SelectContent>
+                                  <SelectItem value="pharmacy">Pharmacy Branch</SelectItem>
+                                  <SelectItem value="general">General Inventory Branch</SelectItem>
+                                </SelectContent>
+                              </Select>
                             </div>
 
                             <div>

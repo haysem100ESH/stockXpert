@@ -7,6 +7,7 @@ interface Branch {
   id: string;
   name: string;
   is_main_branch: boolean;
+  branch_type: string;
 }
 
 interface BranchSelectorProps {
@@ -28,7 +29,7 @@ export default function BranchSelector({ selectedBranch, onBranchChange, showAll
     try {
       let query = supabase
         .from('pharmacy_branches')
-        .select('id, name, is_main_branch')
+        .select('id, name, is_main_branch, branch_type')
         .order('is_main_branch', { ascending: false })
         .order('created_at', { ascending: true });
 
@@ -69,7 +70,7 @@ export default function BranchSelector({ selectedBranch, onBranchChange, showAll
         )}
         {branches.map((branch) => (
           <SelectItem key={branch.id} value={branch.id}>
-            {branch.name} {branch.is_main_branch && '(Main)'}
+            {branch.branch_type === 'pharmacy' ? '💊' : '📦'} {branch.name} {branch.is_main_branch && '(Main)'}
           </SelectItem>
         ))}
       </SelectContent>
