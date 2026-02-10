@@ -84,7 +84,7 @@ export default function SalesManagement() {
       // RLS policies handle ownership filtering automatically
       let query = supabase
         .from('medicines')
-        .select('id, name, generic_name, selling_price, stock_quantity, category, expiry_date, stripes_per_pack, open_pack_stripes')
+        .select('id, name, generic_name, selling_price, stock_quantity, category, expiry_date, units_per_pack, open_pack_units, unit_label')
         .gt('stock_quantity', 0)
         .order('name');
 
