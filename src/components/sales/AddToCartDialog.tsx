@@ -110,9 +110,9 @@ export default function AddToCartDialog({ open, onOpenChange, medicine, onAddToC
             </Select>
           </div>
 
-          {saleType === 'by_stripe' && medicine.stripes_per_pack && (
+          {saleType === 'by_stripe' && medicine.units_per_pack && (
             <div className="space-y-2">
-              <Label htmlFor="stripes-count">Number of Stripes</Label>
+              <Label htmlFor="stripes-count">Number of {unitLabel.charAt(0).toUpperCase() + unitLabel.slice(1)}s</Label>
               <Input
                 id="stripes-count"
                 type="number"

@@ -324,14 +324,24 @@ export default function EditMedicineDialog({
           </div>
 
           <div className="space-y-2">
-            <Label htmlFor="stripes_per_pack">Stripes Per Pack</Label>
+            <Label htmlFor="unit_label">Unit Label</Label>
             <Input
-              id="stripes_per_pack"
+              id="unit_label"
+              value={medicineData.unit_label}
+              onChange={(e) => setMedicineData({ ...medicineData, unit_label: e.target.value })}
+              placeholder="e.g. strip, piece, bottle, kg"
+            />
+          </div>
+
+          <div className="space-y-2">
+            <Label htmlFor="units_per_pack">Units Per Pack</Label>
+            <Input
+              id="units_per_pack"
               type="number"
               min="1"
-              value={medicineData.stripes_per_pack}
-              onChange={(e) => setMedicineData({ ...medicineData, stripes_per_pack: e.target.value })}
-              placeholder="Leave empty if not sold by stripe"
+              value={medicineData.units_per_pack}
+              onChange={(e) => setMedicineData({ ...medicineData, units_per_pack: e.target.value })}
+              placeholder="Leave empty if not sold by unit"
             />
           </div>
 
