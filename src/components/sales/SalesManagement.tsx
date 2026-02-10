@@ -139,7 +139,7 @@ export default function SalesManagement() {
         return;
       }
       
-      const totalAvailableStripes = (medicine.stock_quantity * medicine.stripes_per_pack) + (medicine.open_pack_stripes || 0);
+      const totalAvailableStripes = (medicine.stock_quantity * medicine.units_per_pack) + (medicine.open_pack_units || 0);
       const stripesInCart = cart
         .filter(item => item.id === medicine.id && item.saleType === 'by_stripe')
         .reduce((sum, item) => sum + (item.stripesCount || 0), 0);
