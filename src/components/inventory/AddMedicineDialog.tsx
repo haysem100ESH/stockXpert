@@ -267,13 +267,23 @@ export default function AddMedicineDialog({ open, onOpenChange, onMedicineAdded,
             </div>
 
             <div className="space-y-2">
-              <Label htmlFor="stripes_per_pack">Stripes Per Pack</Label>
+              <Label htmlFor="unit_label">Unit Label</Label>
               <Input
-                id="stripes_per_pack"
-                name="stripes_per_pack"
+                id="unit_label"
+                name="unit_label"
+                placeholder="e.g. strip, piece, bottle, kg"
+                defaultValue="strip"
+              />
+            </div>
+
+            <div className="space-y-2">
+              <Label htmlFor="units_per_pack">Units Per Pack</Label>
+              <Input
+                id="units_per_pack"
+                name="units_per_pack"
                 type="number"
                 min="1"
-                placeholder="Leave empty if not sold by stripe"
+                placeholder="Leave empty if not sold by unit"
               />
             </div>
 
