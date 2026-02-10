@@ -91,6 +91,7 @@ export default function BranchManagement() {
           
           return {
             ...branch,
+            branch_type: branch.branch_type as 'pharmacy' | 'general',
             manager_name: managerName
           };
         })
