@@ -70,7 +70,7 @@ export default function BranchSelector({ selectedBranch, onBranchChange, showAll
         )}
         {branches.map((branch) => (
           <SelectItem key={branch.id} value={branch.id}>
-            {branch.name} {branch.is_main_branch && '(Main)'}
+            {branch.branch_type === 'pharmacy' ? '💊' : '📦'} {branch.name} {branch.is_main_branch && '(Main)'}
           </SelectItem>
         ))}
       </SelectContent>
