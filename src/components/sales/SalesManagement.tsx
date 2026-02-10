@@ -23,8 +23,9 @@ interface Medicine {
   stock_quantity: number;
   category?: string;
   expiry_date?: string;
-  stripes_per_pack?: number;
-  open_pack_stripes?: number;
+  units_per_pack?: number;
+  open_pack_units?: number;
+  unit_label?: string;
 }
 
 interface CartItem extends Medicine {
