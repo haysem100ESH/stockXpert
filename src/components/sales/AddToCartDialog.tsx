@@ -103,8 +103,8 @@ export default function AddToCartDialog({ open, onOpenChange, medicine, onAddToC
               </SelectTrigger>
               <SelectContent>
                 <SelectItem value="full_pack">Full Pack</SelectItem>
-                {medicine.stripes_per_pack && (
-                  <SelectItem value="by_stripe">By Stripe</SelectItem>
+                {medicine.units_per_pack && (
+                  <SelectItem value="by_stripe">By {unitLabel.charAt(0).toUpperCase() + unitLabel.slice(1)}</SelectItem>
                 )}
               </SelectContent>
             </Select>
