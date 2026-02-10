@@ -130,10 +130,10 @@ export default function SalesManagement() {
   const addToCart = (medicine: Medicine, saleType: 'full_pack' | 'by_stripe' = 'full_pack', stripesCount: number = 1) => {
     // Validation for stripe sales
     if (saleType === 'by_stripe') {
-      if (!medicine.stripes_per_pack) {
+      if (!medicine.units_per_pack) {
         toast({
           title: "Error",
-          description: "This medicine is not configured for stripe sales",
+          description: "This item is not configured for unit sales",
           variant: "destructive"
         });
         return;
