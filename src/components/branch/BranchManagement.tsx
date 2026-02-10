@@ -151,6 +151,7 @@ export default function BranchManagement() {
           name: branchName,
           address: branchAddress || null,
           phone: branchPhone || null,
+          branch_type: branchType,
           manager_staff_id: managerId === 'unassigned' ? null : managerId,
           is_main_branch: isMainBranch
         });
