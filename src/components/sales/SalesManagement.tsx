@@ -298,10 +298,10 @@ export default function SalesManagement() {
         } else if (item.saleType === 'by_stripe' && item.stripesCount) {
           // Handle stripe deduction
           const medicine = medicines.find(m => m.id === item.id);
-          if (!medicine || !medicine.stripes_per_pack) continue;
+          if (!medicine || !medicine.units_per_pack) continue;
           
           let stripesToDeduct = item.stripesCount;
-          let newOpenPackStripes = medicine.open_pack_stripes || 0;
+          let newOpenPackStripes = medicine.open_pack_units || 0;
           let newStockQuantity = medicine.stock_quantity;
           
           // First, deduct from open pack
