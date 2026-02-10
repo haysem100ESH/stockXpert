@@ -12,8 +12,9 @@ interface Medicine {
   generic_name?: string;
   selling_price: number;
   stock_quantity: number;
-  stripes_per_pack?: number;
-  open_pack_stripes?: number;
+  units_per_pack?: number;
+  open_pack_units?: number;
+  unit_label?: string;
 }
 
 interface AddToCartDialogProps {
