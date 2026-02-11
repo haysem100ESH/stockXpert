@@ -283,21 +283,15 @@ export default function Auth() {
         {/* Header */}
         <CardHeader className="text-center space-y-2 pb-6">
           <div className="flex flex-col items-center">
-            {/* <img
-              src="/lovable-uploads/2f79a84c-a540-4f7f-bbe7-0bb88136976a.png"
-              alt="PharmaXpert Logo"
-              className="w-20 h-20 object-cover rounded-full shadow-md mb-3 transition-transform duration-300 hover:scale-105"
-            /> */}
-
             <img
                 src="/lovable-uploads/2f79a84c-a540-4f7f-bbe7-0bb88136976a.png"
-                alt="PharmaXpert Logo"
+                alt="System Logo"
                 className="w-28 h-28 object-cover rounded-full shadow-md mb-3 transition-transform duration-300 hover:scale-105"
                 />
 
-            <CardTitle className="text-3xl font-extrabold text-gray-800">PharmaXpert</CardTitle>
-            <CardDescription className="text-gray-500">
-              Sign in to your pharmacy management account
+            <CardTitle className="text-3xl font-extrabold text-foreground">Welcome</CardTitle>
+            <CardDescription className="text-muted-foreground">
+              Sign in to your management account
             </CardDescription>
           </div>
         </CardHeader>

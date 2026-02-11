@@ -26,6 +26,7 @@ import {
 } from "@/components/ui/sidebar";
 import { useAuth } from "@/hooks/useAuth";
 import { useBranchContext } from "@/hooks/useBranchContext";
+import { useBranding } from "@/hooks/useBranding";
 import { Badge } from "@/components/ui/badge";
 
 export function AppSidebar() {
@@ -33,10 +34,10 @@ export function AppSidebar() {
   const location = useLocation();
   const { profile } = useAuth();
   const { branchType } = useBranchContext();
+  const branding = useBranding();
   const currentPath = location.pathname;
 
   const isPharmacy = branchType === 'pharmacy';
-  const systemName = isPharmacy ? 'PharmaXpert' : 'StockXpert';
 
   const ownerNavItems = [
     { title: "Overview", url: "/", icon: LayoutDashboard },
@@ -87,16 +88,16 @@ export function AppSidebar() {
       className={isCollapsed ? "w-14" : "w-64"}
       collapsible="icon"
     >
-      <SidebarHeader className="border-b p-4 bg-[#4b9eab]">
+      <SidebarHeader className={`border-b p-4 ${branding.sidebarColor}`}>
         <div className="flex items-center space-x-2">
           <div className="flex items-center justify-center w-15 h-15 rounded-md overflow-hidden">
-            <img src="/lovable-uploads/2f79a84c-a540-4f7f-bbe7-0bb88136976a.png" alt={`${systemName} Logo`} className="w-15 h-15 object-cover" />
+            <img src="/lovable-uploads/2f79a84c-a540-4f7f-bbe7-0bb88136976a.png" alt={branding.logoAlt} className="w-15 h-15 object-cover" />
           </div>
           {!isCollapsed && (
             <div>
-              <h1 className="text-lg font-bold">{systemName}</h1>
+              <h1 className="text-lg font-bold text-white">{branding.systemName}</h1>
               {profile && (
-                <Badge 
+                <Badge
                   variant={profile.role === 'owner' ? 'default' : profile.role === 'developer' ? 'destructive' : 'secondary'}
                   className="text-xs"
                 >
