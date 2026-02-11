@@ -25,36 +25,41 @@ import {
   useSidebar,
 } from "@/components/ui/sidebar";
 import { useAuth } from "@/hooks/useAuth";
+import { useBranchContext } from "@/hooks/useBranchContext";
 import { Badge } from "@/components/ui/badge";
-
-const ownerNavItems = [
-  { title: "Overview", url: "/", icon: LayoutDashboard },
-  { title: "Inventory", url: "/inventory", icon: Package },
-  { title: "Sales", url: "/sales", icon: ShoppingCart },
-  { title: "Finance", url: "/finance", icon: DollarSign },
-  { title: "Suppliers", url: "/suppliers", icon: Truck },
-  { title: "Staff", url: "/staff", icon: Users },
-  { title: "Branches", url: "/branches", icon: Building2 },
-  { title: "Account", url: "/account", icon: Settings },
-];
-
-const staffNavItems = [
-  { title: "Overview", url: "/", icon: LayoutDashboard },
-  { title: "Sales", url: "/sales", icon: ShoppingCart },
-  { title: "Inventory", url: "/inventory", icon: Package },
-  { title: "Account", url: "/account", icon: Settings },
-];
-
-const developerNavItems = [
-  { title: "Developer Portal", url: "/developer", icon: Shield },
-  { title: "Account", url: "/account", icon: Settings },
-];
 
 export function AppSidebar() {
   const { state } = useSidebar();
   const location = useLocation();
   const { profile } = useAuth();
+  const { branchType } = useBranchContext();
   const currentPath = location.pathname;
+
+  const isPharmacy = branchType === 'pharmacy';
+  const systemName = isPharmacy ? 'PharmaXpert' : 'StockXpert';
+
+  const ownerNavItems = [
+    { title: "Overview", url: "/", icon: LayoutDashboard },
+    { title: isPharmacy ? "Inventory" : "Stock", url: "/inventory", icon: Package },
+    { title: "Sales", url: "/sales", icon: ShoppingCart },
+    { title: "Finance", url: "/finance", icon: DollarSign },
+    { title: "Suppliers", url: "/suppliers", icon: Truck },
+    { title: "Staff", url: "/staff", icon: Users },
+    { title: "Branches", url: "/branches", icon: Building2 },
+    { title: "Account", url: "/account", icon: Settings },
+  ];
+
+  const staffNavItems = [
+    { title: "Overview", url: "/", icon: LayoutDashboard },
+    { title: "Sales", url: "/sales", icon: ShoppingCart },
+    { title: isPharmacy ? "Inventory" : "Stock", url: "/inventory", icon: Package },
+    { title: "Account", url: "/account", icon: Settings },
+  ];
+
+  const developerNavItems = [
+    { title: "Developer Portal", url: "/developer", icon: Shield },
+    { title: "Account", url: "/account", icon: Settings },
+  ];
 
   const getNavItems = () => {
     if (profile?.role === 'developer') return developerNavItems;
@@ -85,11 +90,11 @@ export function AppSidebar() {
       <SidebarHeader className="border-b p-4 bg-[#4b9eab]">
         <div className="flex items-center space-x-2">
           <div className="flex items-center justify-center w-15 h-15 rounded-md overflow-hidden">
-            <img src="/lovable-uploads/2f79a84c-a540-4f7f-bbe7-0bb88136976a.png" alt="PharmaXpert Logo" className="w-15 h-15 object-cover" />
+            <img src="/lovable-uploads/2f79a84c-a540-4f7f-bbe7-0bb88136976a.png" alt={`${systemName} Logo`} className="w-15 h-15 object-cover" />
           </div>
           {!isCollapsed && (
             <div>
-              <h1 className="text-lg font-bold">PharmaXpert</h1>
+              <h1 className="text-lg font-bold">{systemName}</h1>
               {profile && (
                 <Badge 
                   variant={profile.role === 'owner' ? 'default' : profile.role === 'developer' ? 'destructive' : 'secondary'}

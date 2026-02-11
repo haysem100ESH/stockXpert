@@ -60,6 +60,8 @@ export default function InventoryManagement() {
   const { toast } = useToast();
   const { profile } = useAuth();
   const { selectedBranch } = useBranchContext();
+  const { branchType } = useBranchContext();
+  const isPharmacy = branchType === 'pharmacy';
   
   const itemsPerPage = 15;
 
@@ -260,13 +262,15 @@ export default function InventoryManagement() {
   return (
     <div className="space-y-6">
       <div className="flex items-center justify-between">
-        <h2 className="text-2xl font-bold">Inventory Management</h2>
+        <h2 className="text-2xl font-bold">{isPharmacy ? 'Inventory Management' : 'Stock Management'}</h2>
         <div className="flex gap-2">
-          <Button onClick={() => setShowAddDialog(true)}>
-            <Plus className="h-4 w-4 mr-2" />
-            Add Medicine
-          </Button>
-          <Button onClick={() => setShowAddItemDialog(true)} variant="outline">
+          {isPharmacy && (
+            <Button onClick={() => setShowAddDialog(true)}>
+              <Plus className="h-4 w-4 mr-2" />
+              Add Medicine
+            </Button>
+          )}
+          <Button onClick={() => setShowAddItemDialog(true)} variant={isPharmacy ? "outline" : "default"}>
             <Plus className="h-4 w-4 mr-2" />
             Add Item
           </Button>
@@ -277,7 +281,7 @@ export default function InventoryManagement() {
           <div className="relative flex-1">
             <Search className="absolute left-2 top-2.5 h-4 w-4 text-muted-foreground" />
             <Input
-              placeholder="Search medicines by name or generic name..."
+              placeholder={isPharmacy ? "Search medicines by name or generic name..." : "Search items by name or description..."}
               value={searchTerm}
               onChange={(e) => setSearchTerm(e.target.value)}
               className="pl-8"
@@ -292,7 +296,7 @@ export default function InventoryManagement() {
               </SelectTrigger>
               <SelectContent>
                 <SelectItem value="all">All Categories</SelectItem>
-                <SelectItem value="medicines_only">Medicines Only</SelectItem>
+                {isPharmacy && <SelectItem value="medicines_only">Medicines Only</SelectItem>}
                 {getUniqueCategories().map((category) => (
                   <SelectItem key={category} value={category}>
                     {category} ({categoryCounts[category] || 0})
@@ -457,7 +461,7 @@ export default function InventoryManagement() {
 
       {filteredMedicines.length === 0 && (
         <div className="text-center py-8">
-          <p className="text-muted-foreground">No medicines found.</p>
+          <p className="text-muted-foreground">{isPharmacy ? 'No medicines found.' : 'No items found.'}</p>
         </div>
       )}
 
@@ -508,7 +512,7 @@ export default function InventoryManagement() {
       )}
 
       <div className="text-center text-sm text-muted-foreground">
-        Showing {paginatedMedicines.length} of {filteredMedicines.length} medicines
+        Showing {paginatedMedicines.length} of {filteredMedicines.length} {isPharmacy ? 'medicines' : 'items'}
       </div>
 
       <AddMedicineDialog
@@ -540,8 +544,8 @@ export default function InventoryManagement() {
       <ConfirmationDialog
         open={showDeleteConfirm}
         onOpenChange={setShowDeleteConfirm}
-        title="Delete Medicine"
-        description="Are you sure you want to delete this medicine? This action cannot be undone."
+        title={isPharmacy ? "Delete Medicine" : "Delete Item"}
+        description={isPharmacy ? "Are you sure you want to delete this medicine? This action cannot be undone." : "Are you sure you want to delete this item? This action cannot be undone."}
         onConfirm={confirmDeleteMedicine}
         confirmText="Delete"
       />
