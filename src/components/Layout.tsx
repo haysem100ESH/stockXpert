@@ -1,4 +1,4 @@
-import { ReactNode, useState } from 'react';
+import { ReactNode, useState, useEffect } from 'react';
 import { Navigate } from 'react-router-dom';
 import { useAuth } from '@/hooks/useAuth';
 import { Button } from '@/components/ui/button';
@@ -13,6 +13,7 @@ import ExpiringMedicinesAlert from '@/components/inventory/ExpiringMedicinesAler
 import { BranchProvider } from '@/hooks/useBranchContext';
 import BranchSelector from '@/components/branch/BranchSelector';
 import { useBranchContext } from '@/hooks/useBranchContext';
+import { useBranding } from '@/hooks/useBranding';
 
 interface LayoutProps {
   children: ReactNode;
@@ -79,6 +80,11 @@ export default function Layout({ children }: LayoutProps) {
 
 function LayoutHeader({ profile, user, onSignOut }: { profile: any, user: any, onSignOut: () => void }) {
   const { selectedBranch, setSelectedBranch } = useBranchContext();
+  const branding = useBranding();
+
+  useEffect(() => {
+    document.title = branding.systemName;
+  }, [branding.systemName]);
   
   return (
     <header className="border-b bg-card h-14 flex items-center justify-between px-4">
