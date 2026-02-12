@@ -59,8 +59,7 @@ export default function InventoryManagement() {
   const [medicineToDelete, setMedicineToDelete] = useState<string | null>(null);
   const { toast } = useToast();
   const { profile } = useAuth();
-  const { selectedBranch } = useBranchContext();
-  const { branchType } = useBranchContext();
+  const { selectedBranch, branchType } = useBranchContext();
   const isPharmacy = branchType === 'pharmacy';
   
   const itemsPerPage = 15;
@@ -96,7 +95,7 @@ export default function InventoryManagement() {
     });
     
     setFilteredMedicines(filtered);
-    setCurrentPage(1); // Reset to first page when filters change
+    setCurrentPage(1);
   }, [medicines, searchTerm, categoryFilter, dateFilter]);
 
   useEffect(() => {
@@ -106,7 +105,6 @@ export default function InventoryManagement() {
   }, [filteredMedicines, currentPage]);
 
   useEffect(() => {
-    // Calculate category counts
     const counts: Record<string, number> = {};
     medicines.forEach(medicine => {
       counts[medicine.category] = (counts[medicine.category] || 0) + 1;
@@ -116,13 +114,11 @@ export default function InventoryManagement() {
 
   const fetchMedicines = async () => {
     try {
-      // RLS policies handle ownership filtering automatically
       let query = supabase
         .from('medicines')
         .select('*')
         .order('name');
 
-      // Filter by specific branch if selected
       if (selectedBranch) {
         query = query.eq('branch_id', selectedBranch);
       }
@@ -131,7 +127,6 @@ export default function InventoryManagement() {
 
       if (error) throw error;
       
-      // Fetch creator information for each medicine
       const medicinesWithCreator = await Promise.all(
         (data || []).map(async (medicine: any) => {
           if (medicine.created_by) {
@@ -141,10 +136,7 @@ export default function InventoryManagement() {
               .eq('id', medicine.created_by)
               .maybeSingle();
             
-            return {
-              ...medicine,
-              creator: creatorData
-            };
+            return { ...medicine, creator: creatorData };
           }
           return medicine;
         })
@@ -154,7 +146,7 @@ export default function InventoryManagement() {
     } catch (error) {
       toast({
         title: "Error",
-        description: "Failed to fetch medicines",
+        description: `Failed to fetch ${isPharmacy ? 'medicines' : 'items'}`,
         variant: "destructive"
       });
     } finally {
@@ -168,19 +160,9 @@ export default function InventoryManagement() {
   };
 
   const totalPages = Math.ceil(filteredMedicines.length / itemsPerPage);
-  
-  const getUniqueCategories = () => {
-    const categories = [...new Set(medicines.map(m => m.category))];
-    return categories.sort();
-  };
-
-  const isOutOfStock = (medicine: Medicine) => {
-    return medicine.stock_quantity === 0;
-  };
-
-  const isLowStock = (medicine: Medicine) => {
-    return medicine.stock_quantity > 0 && medicine.stock_quantity <= medicine.minimum_stock_level;
-  };
+  const getUniqueCategories = () => [...new Set(medicines.map(m => m.category))].sort();
+  const isOutOfStock = (medicine: Medicine) => medicine.stock_quantity === 0;
+  const isLowStock = (medicine: Medicine) => medicine.stock_quantity > 0 && medicine.stock_quantity <= medicine.minimum_stock_level;
 
   const isExpired = (expiryDate?: string) => {
     if (!expiryDate) return false;
@@ -193,7 +175,7 @@ export default function InventoryManagement() {
 
   const isExpiringSoon = (expiryDate?: string) => {
     if (!expiryDate) return false;
-    if (isExpired(expiryDate)) return false; // Don't mark as expiring soon if already expired
+    if (isExpired(expiryDate)) return false;
     const expiry = new Date(expiryDate);
     const now = new Date();
     const thirtyDaysFromNow = new Date();
@@ -215,48 +197,32 @@ export default function InventoryManagement() {
     if (!profile || profile.role !== 'owner') {
       toast({
         title: "Error",
-        description: "Only owners can delete medicines",
+        description: `Only owners can delete ${isPharmacy ? 'medicines' : 'items'}`,
         variant: "destructive"
       });
       return;
     }
-
     setMedicineToDelete(medicineId);
     setShowDeleteConfirm(true);
   };
 
   const confirmDeleteMedicine = async () => {
     if (!medicineToDelete) return;
-
     setShowDeleteConfirm(false);
-
     try {
-      const { error } = await supabase
-        .from('medicines')
-        .delete()
-        .eq('id', medicineToDelete);
-
+      const { error } = await supabase.from('medicines').delete().eq('id', medicineToDelete);
       if (error) throw error;
-
-      toast({
-        title: "Success",
-        description: "Medicine deleted successfully"
-      });
-
+      toast({ title: "Success", description: `${isPharmacy ? 'Medicine' : 'Item'} deleted successfully` });
       fetchMedicines();
     } catch (error) {
-      toast({
-        title: "Error",
-        description: "Failed to delete medicine",
-        variant: "destructive"
-      });
+      toast({ title: "Error", description: `Failed to delete ${isPharmacy ? 'medicine' : 'item'}`, variant: "destructive" });
     } finally {
       setMedicineToDelete(null);
     }
   };
 
   if (loading) {
-    return <div>Loading medicines...</div>;
+    return <div>Loading {isPharmacy ? 'medicines' : 'items'}...</div>;
   }
 
   return (
@@ -314,21 +280,9 @@ export default function InventoryManagement() {
               </Button>
             </PopoverTrigger>
             <PopoverContent className="w-auto p-0">
-              <Calendar
-                mode="single"
-                selected={dateFilter}
-                onSelect={setDateFilter}
-                initialFocus
-                className="p-3 pointer-events-auto"
-              />
+              <Calendar mode="single" selected={dateFilter} onSelect={setDateFilter} initialFocus className="p-3 pointer-events-auto" />
               <div className="p-3 border-t">
-                <Button 
-                  variant="ghost" 
-                  className="w-full text-sm"
-                  onClick={() => setDateFilter(undefined)}
-                >
-                  Clear filter
-                </Button>
+                <Button variant="ghost" className="w-full text-sm" onClick={() => setDateFilter(undefined)}>Clear filter</Button>
               </div>
             </PopoverContent>
           </Popover>
@@ -341,36 +295,13 @@ export default function InventoryManagement() {
               <div className="flex items-start justify-between">
                 <div>
                   <CardTitle className="text-lg">{medicine.name}</CardTitle>
-                  {medicine.generic_name && (
-                    <CardDescription>{medicine.generic_name}</CardDescription>
-                  )}
+                  {medicine.generic_name && <CardDescription>{medicine.generic_name}</CardDescription>}
                 </div>
                 <div className="flex space-x-1">
-                  <Button 
-                    variant="ghost" 
-                    size="sm"
-                    onClick={() => handleEditMedicine(medicine)}
-                    title="Edit"
-                  >
-                    <Edit className="h-4 w-4" />
-                  </Button>
-                  <Button 
-                    variant="ghost" 
-                    size="sm"
-                    onClick={() => handleReplicateMedicine(medicine)}
-                    title="Replicate"
-                  >
-                    <Plus className="h-4 w-4" />
-                  </Button>
+                  <Button variant="ghost" size="sm" onClick={() => handleEditMedicine(medicine)} title="Edit"><Edit className="h-4 w-4" /></Button>
+                  <Button variant="ghost" size="sm" onClick={() => handleReplicateMedicine(medicine)} title="Replicate"><Plus className="h-4 w-4" /></Button>
                   {profile?.role === 'owner' && (
-                    <Button 
-                      variant="ghost" 
-                      size="sm"
-                      onClick={() => handleDeleteMedicine(medicine.id)}
-                      title="Delete"
-                    >
-                      <Trash2 className="h-4 w-4" />
-                    </Button>
+                    <Button variant="ghost" size="sm" onClick={() => handleDeleteMedicine(medicine.id)} title="Delete"><Trash2 className="h-4 w-4" /></Button>
                   )}
                 </div>
               </div>
@@ -381,7 +312,7 @@ export default function InventoryManagement() {
                   <span>Category:</span>
                   <Badge variant="outline">{medicine.category}</Badge>
                 </div>
-                {medicine.batch_number && (
+                {isPharmacy && medicine.batch_number && (
                   <div className="flex justify-between text-sm">
                     <span>Batch:</span>
                     <span>{medicine.batch_number}</span>
@@ -395,7 +326,7 @@ export default function InventoryManagement() {
                 )}
                 {medicine.manufacturer && (
                   <div className="flex justify-between text-sm">
-                    <span>Manufacturer:</span>
+                    <span>{isPharmacy ? 'Manufacturer' : 'Brand'}:</span>
                     <span>{medicine.manufacturer}</span>
                   </div>
                 )}
@@ -415,40 +346,23 @@ export default function InventoryManagement() {
                      <span className={(isLowStock(medicine) || isOutOfStock(medicine)) ? 'text-warning font-medium' : ''}>
                        {medicine.stock_quantity}
                      </span>
-                     {isOutOfStock(medicine) && (
-                       <Badge variant="destructive" className="text-xs">
-                         Out of Stock
-                       </Badge>
-                     )}
-                     {isLowStock(medicine) && (
-                       <Badge variant="destructive" className="text-xs">
-                         Low Stock
-                       </Badge>
-                     )}
+                     {isOutOfStock(medicine) && <Badge variant="destructive" className="text-xs">Out of Stock</Badge>}
+                     {isLowStock(medicine) && <Badge variant="destructive" className="text-xs">Low Stock</Badge>}
                    </div>
                  </div>
-                {medicine.expiry_date && (
+                {isPharmacy && medicine.expiry_date && (
                   <div className="flex justify-between text-sm">
                     <span>Expires:</span>
                     <div className="flex items-center space-x-2">
                       <span className={
-                        isExpired(medicine.expiry_date) 
-                          ? 'text-destructive font-medium' 
-                          : isExpiringSoon(medicine.expiry_date) 
-                            ? 'text-warning' 
-                            : ''
+                        isExpired(medicine.expiry_date) ? 'text-destructive font-medium' 
+                          : isExpiringSoon(medicine.expiry_date) ? 'text-warning' : ''
                       }>
                         {new Date(medicine.expiry_date).toLocaleDateString()}
                       </span>
-                      {isExpired(medicine.expiry_date) && (
-                        <Badge variant="destructive" className="text-xs">
-                          Expired
-                        </Badge>
-                      )}
+                      {isExpired(medicine.expiry_date) && <Badge variant="destructive" className="text-xs">Expired</Badge>}
                       {!isExpired(medicine.expiry_date) && isExpiringSoon(medicine.expiry_date) && (
-                        <Badge variant="destructive" className="text-xs">
-                          Expiring Soon
-                        </Badge>
+                        <Badge variant="destructive" className="text-xs">Expiring Soon</Badge>
                       )}
                     </div>
                   </div>
@@ -461,50 +375,24 @@ export default function InventoryManagement() {
 
       {filteredMedicines.length === 0 && (
         <div className="text-center py-8">
-          <p className="text-muted-foreground">{isPharmacy ? 'No medicines found.' : 'No items found.'}</p>
+          <p className="text-muted-foreground">No {isPharmacy ? 'medicines' : 'items'} found.</p>
         </div>
       )}
 
-      {/* Pagination */}
       {totalPages > 1 && (
         <div className="flex justify-center">
           <Pagination>
             <PaginationContent>
               <PaginationItem>
-                <PaginationPrevious 
-                  href="#"
-                  onClick={(e) => {
-                    e.preventDefault();
-                    if (currentPage > 1) setCurrentPage(currentPage - 1);
-                  }}
-                  className={currentPage === 1 ? "pointer-events-none opacity-50" : ""}
-                />
+                <PaginationPrevious href="#" onClick={(e) => { e.preventDefault(); if (currentPage > 1) setCurrentPage(currentPage - 1); }} className={currentPage === 1 ? "pointer-events-none opacity-50" : ""} />
               </PaginationItem>
-              
               {Array.from({ length: totalPages }, (_, i) => i + 1).map((page) => (
                 <PaginationItem key={page}>
-                  <PaginationLink
-                    href="#"
-                    onClick={(e) => {
-                      e.preventDefault();
-                      setCurrentPage(page);
-                    }}
-                    isActive={currentPage === page}
-                  >
-                    {page}
-                  </PaginationLink>
+                  <PaginationLink href="#" onClick={(e) => { e.preventDefault(); setCurrentPage(page); }} isActive={currentPage === page}>{page}</PaginationLink>
                 </PaginationItem>
               ))}
-              
               <PaginationItem>
-                <PaginationNext 
-                  href="#"
-                  onClick={(e) => {
-                    e.preventDefault();
-                    if (currentPage < totalPages) setCurrentPage(currentPage + 1);
-                  }}
-                  className={currentPage === totalPages ? "pointer-events-none opacity-50" : ""}
-                />
+                <PaginationNext href="#" onClick={(e) => { e.preventDefault(); if (currentPage < totalPages) setCurrentPage(currentPage + 1); }} className={currentPage === totalPages ? "pointer-events-none opacity-50" : ""} />
               </PaginationItem>
             </PaginationContent>
           </Pagination>
@@ -515,31 +403,17 @@ export default function InventoryManagement() {
         Showing {paginatedMedicines.length} of {filteredMedicines.length} {isPharmacy ? 'medicines' : 'items'}
       </div>
 
-      <AddMedicineDialog
-        open={showAddDialog}
-        onOpenChange={setShowAddDialog}
-        onMedicineAdded={handleMedicineAdded}
-      />
+      {isPharmacy && (
+        <AddMedicineDialog open={showAddDialog} onOpenChange={setShowAddDialog} onMedicineAdded={handleMedicineAdded} />
+      )}
 
-      <AddItemDialog
-        open={showAddItemDialog}
-        onOpenChange={setShowAddItemDialog}
-        onItemAdded={handleMedicineAdded}
-      />
+      <AddItemDialog open={showAddItemDialog} onOpenChange={setShowAddItemDialog} onItemAdded={handleMedicineAdded} />
 
-      <EditMedicineDialog
-        open={showEditDialog}
-        onOpenChange={setShowEditDialog}
-        medicine={selectedMedicine}
-        onMedicineUpdated={handleMedicineAdded}
-      />
+      <EditMedicineDialog open={showEditDialog} onOpenChange={setShowEditDialog} medicine={selectedMedicine} onMedicineUpdated={handleMedicineAdded} />
 
-      <AddMedicineDialog
-        open={showReplicateDialog}
-        onOpenChange={setShowReplicateDialog}
-        onMedicineAdded={handleMedicineAdded}
-        replicateData={medicineToReplicate}
-      />
+      {isPharmacy && (
+        <AddMedicineDialog open={showReplicateDialog} onOpenChange={setShowReplicateDialog} onMedicineAdded={handleMedicineAdded} replicateData={medicineToReplicate} />
+      )}
 
       <ConfirmationDialog
         open={showDeleteConfirm}

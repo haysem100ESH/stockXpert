@@ -8,6 +8,7 @@ import { Textarea } from '@/components/ui/textarea';
 import { supabase } from '@/integrations/supabase/client';
 import { useToast } from '@/hooks/use-toast';
 import { useAuth } from '@/hooks/useAuth';
+import { useBranchContext } from '@/hooks/useBranchContext';
 import { ArrowRight, Package } from 'lucide-react';
 
 interface Branch {
@@ -62,6 +63,10 @@ export default function MedicineTransfer() {
   const [loading, setLoading] = useState(false);
   const { profile, user } = useAuth();
   const { toast } = useToast();
+  const { branchType } = useBranchContext();
+  const isPharmacy = branchType === 'pharmacy';
+  const itemLabel = isPharmacy ? 'medicine' : 'item';
+  const itemLabelPlural = isPharmacy ? 'medicines' : 'items';
 
   useEffect(() => {
     fetchBranches();
@@ -141,7 +146,7 @@ export default function MedicineTransfer() {
     } catch (error) {
       toast({
         title: 'Error',
-        description: 'Failed to fetch medicines',
+        description: `Failed to fetch ${itemLabelPlural}`,
         variant: 'destructive',
       });
     }
@@ -215,7 +220,7 @@ export default function MedicineTransfer() {
     if (!selectedMed) {
       toast({
         title: 'Error',
-        description: 'Selected medicine not found',
+        description: `Selected ${itemLabel} not found`,
         variant: 'destructive',
       });
       return;
@@ -265,7 +270,7 @@ export default function MedicineTransfer() {
         .single();
 
       if (sourceError) throw sourceError;
-      if (!sourceMedDetails) throw new Error('Source medicine not found');
+      if (!sourceMedDetails) throw new Error(`Source ${itemLabel} not found`);
 
       // 4. Check if medicine exists in destination branch using composite key
       // Match by: name, batch_number, expiry_date, and manufacturer
@@ -309,7 +314,7 @@ export default function MedicineTransfer() {
         
         toast({
           title: 'Success',
-          description: 'Medicine transferred successfully (matched existing record)',
+          description: `${isPharmacy ? 'Medicine' : 'Item'} transferred successfully (matched existing record)`,
         });
       } else {
         // No match found - create new medicine record in destination branch
@@ -337,7 +342,7 @@ export default function MedicineTransfer() {
         
         toast({
           title: 'Success',
-          description: 'Medicine transferred successfully (new record created in destination)',
+          description: `${isPharmacy ? 'Medicine' : 'Item'} transferred successfully (new record created in destination)`,
         });
       }
 
@@ -354,7 +359,7 @@ export default function MedicineTransfer() {
     } catch (error: any) {
       toast({
         title: 'Error',
-        description: error.message || 'Failed to transfer medicine',
+        description: error.message || `Failed to transfer ${itemLabel}`,
         variant: 'destructive',
       });
     } finally {
@@ -366,8 +371,8 @@ export default function MedicineTransfer() {
     <div className="space-y-6">
       <Card>
         <CardHeader>
-          <CardTitle>Transfer Medicine Between Branches</CardTitle>
-          <CardDescription>Move medicine inventory from one branch to another</CardDescription>
+          <CardTitle>Transfer {isPharmacy ? 'Medicine' : 'Items'} Between Branches</CardTitle>
+          <CardDescription>Move {itemLabel} inventory from one branch to another</CardDescription>
         </CardHeader>
         <CardContent>
           <form onSubmit={handleTransfer} className="space-y-4">
@@ -407,19 +412,19 @@ export default function MedicineTransfer() {
             </div>
 
             <div className="space-y-2">
-              <Label htmlFor="medicine">Medicine *</Label>
+              <Label htmlFor="medicine">{isPharmacy ? 'Medicine' : 'Item'} *</Label>
               <Select
                 value={selectedMedicine}
                 onValueChange={setSelectedMedicine}
                 disabled={!fromBranch}
               >
                 <SelectTrigger id="medicine">
-                  <SelectValue placeholder="Search and select medicine to transfer" />
+                  <SelectValue placeholder={`Search and select ${itemLabel} to transfer`} />
                 </SelectTrigger>
                 <SelectContent>
                   {medicines.length === 0 ? (
                     <div className="p-2 text-sm text-muted-foreground">
-                      No medicines available in selected branch
+                      No {itemLabelPlural} available in selected branch
                     </div>
                   ) : (
                     medicines.map((medicine) => (
@@ -462,7 +467,7 @@ export default function MedicineTransfer() {
 
             <Button type="submit" disabled={loading} className="w-full">
               <ArrowRight className="mr-2 h-4 w-4" />
-              {loading ? 'Transferring...' : 'Transfer Medicine'}
+              {loading ? 'Transferring...' : `Transfer ${isPharmacy ? 'Medicine' : 'Item'}`}
             </Button>
           </form>
         </CardContent>
@@ -471,7 +476,7 @@ export default function MedicineTransfer() {
       <Card>
         <CardHeader>
           <CardTitle>Recent Transfers</CardTitle>
-          <CardDescription>Latest medicine transfer history</CardDescription>
+          <CardDescription>Latest {itemLabel} transfer history</CardDescription>
         </CardHeader>
         <CardContent>
           <div className="space-y-4">

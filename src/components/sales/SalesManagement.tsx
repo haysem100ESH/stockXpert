@@ -32,7 +32,7 @@ interface CartItem extends Medicine {
   quantity: number;
   total: number;
   saleType: 'full_pack' | 'by_stripe';
-  stripesCount?: number; // Number of stripes when selling by stripe
+  stripesCount?: number;
 }
 
 export default function SalesManagement() {
@@ -52,25 +52,22 @@ export default function SalesManagement() {
   const [showAddToCartDialog, setShowAddToCartDialog] = useState(false);
   const { profile } = useAuth();
   const { toast } = useToast();
-  const { selectedBranch } = useBranchContext();
+  const { selectedBranch, branchType } = useBranchContext();
+  const isPharmacy = branchType === 'pharmacy';
   
   const itemsPerPage = 16;
 
-  useEffect(() => {
-    fetchMedicines();
-  }, [selectedBranch]);
+  useEffect(() => { fetchMedicines(); }, [selectedBranch]);
 
   useEffect(() => {
     const filtered = medicines.filter(medicine => {
       const matchesSearch = medicine.name.toLowerCase().includes(searchTerm.toLowerCase()) ||
         medicine.generic_name?.toLowerCase().includes(searchTerm.toLowerCase());
-      
       const matchesCategory = categoryFilter === 'all' || medicine.category === categoryFilter;
-      
       return matchesSearch && matchesCategory;
     });
     setFilteredMedicines(filtered);
-    setCurrentPage(1); // Reset to first page when filters change
+    setCurrentPage(1);
   }, [medicines, searchTerm, categoryFilter]);
 
   useEffect(() => {
@@ -81,28 +78,21 @@ export default function SalesManagement() {
 
   const fetchMedicines = async () => {
     try {
-      // RLS policies handle ownership filtering automatically
       let query = supabase
         .from('medicines')
         .select('id, name, generic_name, selling_price, stock_quantity, category, expiry_date, units_per_pack, open_pack_units, unit_label')
         .gt('stock_quantity', 0)
         .order('name');
 
-      // Filter by specific branch if selected
       if (selectedBranch) {
         query = query.eq('branch_id', selectedBranch);
       }
 
       const { data, error } = await query;
-
       if (error) throw error;
       setMedicines(data || []);
     } catch (error) {
-      toast({
-        title: "Error",
-        description: "Failed to fetch medicines",
-        variant: "destructive"
-      });
+      toast({ title: "Error", description: `Failed to fetch ${isPharmacy ? 'medicines' : 'items'}`, variant: "destructive" });
     } finally {
       setLoading(false);
     }
@@ -128,28 +118,15 @@ export default function SalesManagement() {
   };
 
   const addToCart = (medicine: Medicine, saleType: 'full_pack' | 'by_stripe' = 'full_pack', stripesCount: number = 1) => {
-    // Validation for stripe sales
     if (saleType === 'by_stripe') {
       if (!medicine.units_per_pack) {
-        toast({
-          title: "Error",
-          description: "This item is not configured for unit sales",
-          variant: "destructive"
-        });
+        toast({ title: "Error", description: "This item is not configured for unit sales", variant: "destructive" });
         return;
       }
-      
       const totalAvailableStripes = (medicine.stock_quantity * medicine.units_per_pack) + (medicine.open_pack_units || 0);
-      const stripesInCart = cart
-        .filter(item => item.id === medicine.id && item.saleType === 'by_stripe')
-        .reduce((sum, item) => sum + (item.stripesCount || 0), 0);
-      
+      const stripesInCart = cart.filter(item => item.id === medicine.id && item.saleType === 'by_stripe').reduce((sum, item) => sum + (item.stripesCount || 0), 0);
       if (stripesCount > totalAvailableStripes - stripesInCart) {
-        toast({
-          title: "Error",
-          description: "Not enough stripes available",
-          variant: "destructive"
-        });
+        toast({ title: "Error", description: "Not enough units available", variant: "destructive" });
         return;
       }
     }
@@ -158,237 +135,94 @@ export default function SalesManagement() {
     
     if (existingItem && saleType === 'full_pack') {
       if (existingItem.quantity >= medicine.stock_quantity) {
-        toast({
-          title: "Error",
-          description: "Cannot add more than available stock",
-          variant: "destructive"
-        });
+        toast({ title: "Error", description: "Cannot add more than available stock", variant: "destructive" });
         return;
       }
-      
-      setCart(cart.map(item =>
-        item.id === medicine.id && item.saleType === saleType
-          ? { ...item, quantity: item.quantity + 1, total: (item.quantity + 1) * item.selling_price }
-          : item
-      ));
+      setCart(cart.map(item => item.id === medicine.id && item.saleType === saleType ? { ...item, quantity: item.quantity + 1, total: (item.quantity + 1) * item.selling_price } : item));
     } else if (existingItem && saleType === 'by_stripe') {
       const newStripesCount = (existingItem.stripesCount || 0) + stripesCount;
       const pricePerStripe = medicine.selling_price / (medicine.units_per_pack || 1);
-      setCart(cart.map(item =>
-        item.id === medicine.id && item.saleType === saleType
-          ? { ...item, stripesCount: newStripesCount, total: newStripesCount * pricePerStripe }
-          : item
-      ));
+      setCart(cart.map(item => item.id === medicine.id && item.saleType === saleType ? { ...item, stripesCount: newStripesCount, total: newStripesCount * pricePerStripe } : item));
     } else {
-      const pricePerStripe = saleType === 'by_stripe' && medicine.units_per_pack 
-        ? medicine.selling_price / medicine.units_per_pack 
-        : medicine.selling_price;
-      
-      setCart([...cart, {
-        ...medicine,
-        quantity: saleType === 'full_pack' ? 1 : 0,
-        saleType,
-        stripesCount: saleType === 'by_stripe' ? stripesCount : undefined,
-        total: saleType === 'by_stripe' ? stripesCount * pricePerStripe : medicine.selling_price
-      }]);
+      const pricePerStripe = saleType === 'by_stripe' && medicine.units_per_pack ? medicine.selling_price / medicine.units_per_pack : medicine.selling_price;
+      setCart([...cart, { ...medicine, quantity: saleType === 'full_pack' ? 1 : 0, saleType, stripesCount: saleType === 'by_stripe' ? stripesCount : undefined, total: saleType === 'by_stripe' ? stripesCount * pricePerStripe : medicine.selling_price }]);
     }
   };
 
   const updateCartItemQuantity = (id: string, newQuantity: number) => {
-    if (newQuantity === 0) {
-      setCart(cart.filter(item => item.id !== id));
-      return;
-    }
-
+    if (newQuantity === 0) { setCart(cart.filter(item => item.id !== id)); return; }
     const medicine = medicines.find(m => m.id === id);
     if (medicine && newQuantity > medicine.stock_quantity) {
-      toast({
-        title: "Error",
-        description: "Cannot add more than available stock",
-        variant: "destructive"
-      });
+      toast({ title: "Error", description: "Cannot add more than available stock", variant: "destructive" });
       return;
     }
-
-    setCart(cart.map(item =>
-      item.id === id
-        ? { ...item, quantity: newQuantity, total: newQuantity * item.selling_price }
-        : item
-    ));
+    setCart(cart.map(item => item.id === id ? { ...item, quantity: newQuantity, total: newQuantity * item.selling_price } : item));
   };
 
-  const removeFromCart = (id: string) => {
-    setCart(cart.filter(item => item.id !== id));
-  };
-
-  const calculateSubtotal = () => {
-    return cart.reduce((sum, item) => sum + item.total, 0);
-  };
-
-  const calculateDiscount = () => {
-    return (calculateSubtotal() * discountPercent) / 100;
-  };
-
-  const calculateTotal = () => {
-    return calculateSubtotal() - calculateDiscount();
-  };
+  const removeFromCart = (id: string) => { setCart(cart.filter(item => item.id !== id)); };
+  const calculateSubtotal = () => cart.reduce((sum, item) => sum + item.total, 0);
+  const calculateDiscount = () => (calculateSubtotal() * discountPercent) / 100;
+  const calculateTotal = () => calculateSubtotal() - calculateDiscount();
 
   const handleCheckout = async () => {
-    if (cart.length === 0) {
-      toast({
-        title: "Error",
-        description: "Cart is empty",
-        variant: "destructive"
-      });
-      return;
-    }
-
+    if (cart.length === 0) { toast({ title: "Error", description: "Cart is empty", variant: "destructive" }); return; }
     setShowCheckoutConfirm(true);
   };
 
   const confirmCheckout = async () => {
     setShowCheckoutConfirm(false);
     setProcessing(true);
-
     try {
-      // Create sale record
-      const { data: saleData, error: saleError } = await supabase
-        .from('sales')
-        .insert([{
-          total_amount: calculateTotal(),
-          payment_method: paymentMethod,
-          discount_amount: calculateDiscount(),
-          sold_by: profile?.id,
-          branch_id: selectedBranch || profile?.branch_id
-        }])
-        .select()
-        .single();
-
+      const { data: saleData, error: saleError } = await supabase.from('sales').insert([{ total_amount: calculateTotal(), payment_method: paymentMethod, discount_amount: calculateDiscount(), sold_by: profile?.id, branch_id: selectedBranch || profile?.branch_id }]).select().single();
       if (saleError) throw saleError;
 
-      // Create sale items
-      const saleItems = cart.map(item => ({
-        sale_id: saleData.id,
-        medicine_id: item.id,
-        quantity: item.saleType === 'full_pack' ? item.quantity : 0,
-        unit_price: item.selling_price,
-        total_price: item.total,
-        sale_type: item.saleType,
-        stripes_sold: item.saleType === 'by_stripe' ? item.stripesCount : null
-      }));
-
-      const { error: itemsError } = await supabase
-        .from('sale_items')
-        .insert(saleItems);
-
+      const saleItems = cart.map(item => ({ sale_id: saleData.id, medicine_id: item.id, quantity: item.saleType === 'full_pack' ? item.quantity : 0, unit_price: item.selling_price, total_price: item.total, sale_type: item.saleType, stripes_sold: item.saleType === 'by_stripe' ? item.stripesCount : null }));
+      const { error: itemsError } = await supabase.from('sale_items').insert(saleItems);
       if (itemsError) throw itemsError;
 
-      // Update stock quantities
       for (const item of cart) {
         if (item.saleType === 'full_pack') {
-          // Deduct full packs
-          const { error: stockError } = await supabase
-            .from('medicines')
-            .update({ 
-              stock_quantity: item.stock_quantity - item.quantity 
-            })
-            .eq('id', item.id);
-
+          const { error: stockError } = await supabase.from('medicines').update({ stock_quantity: item.stock_quantity - item.quantity }).eq('id', item.id);
           if (stockError) throw stockError;
         } else if (item.saleType === 'by_stripe' && item.stripesCount) {
-          // Handle stripe deduction
           const medicine = medicines.find(m => m.id === item.id);
           if (!medicine || !medicine.units_per_pack) continue;
-          
           let stripesToDeduct = item.stripesCount;
           let newOpenPackStripes = medicine.open_pack_units || 0;
           let newStockQuantity = medicine.stock_quantity;
-          
-          // First, deduct from open pack
-          if (newOpenPackStripes > 0) {
-            const deductFromOpen = Math.min(stripesToDeduct, newOpenPackStripes);
-            newOpenPackStripes -= deductFromOpen;
-            stripesToDeduct -= deductFromOpen;
-          }
-          
-          // If more stripes needed, open new packs
-          while (stripesToDeduct > 0 && newStockQuantity > 0) {
-            newStockQuantity--;
-            newOpenPackStripes = medicine.units_per_pack;
-            const deductFromNewPack = Math.min(stripesToDeduct, newOpenPackStripes);
-            newOpenPackStripes -= deductFromNewPack;
-            stripesToDeduct -= deductFromNewPack;
-          }
-          
-          const { error: stockError } = await supabase
-            .from('medicines')
-            .update({ 
-              stock_quantity: newStockQuantity,
-              open_pack_units: newOpenPackStripes
-            })
-            .eq('id', item.id);
-
+          if (newOpenPackStripes > 0) { const deductFromOpen = Math.min(stripesToDeduct, newOpenPackStripes); newOpenPackStripes -= deductFromOpen; stripesToDeduct -= deductFromOpen; }
+          while (stripesToDeduct > 0 && newStockQuantity > 0) { newStockQuantity--; newOpenPackStripes = medicine.units_per_pack; const deductFromNewPack = Math.min(stripesToDeduct, newOpenPackStripes); newOpenPackStripes -= deductFromNewPack; stripesToDeduct -= deductFromNewPack; }
+          const { error: stockError } = await supabase.from('medicines').update({ stock_quantity: newStockQuantity, open_pack_units: newOpenPackStripes }).eq('id', item.id);
           if (stockError) throw stockError;
         }
       }
 
-      toast({
-        title: "Success",
-        description: `Sale completed successfully! Payment: ${paymentMethod}. Total: ETB ${calculateTotal().toFixed(2)}`
-      });
-
-      setCart([]);
-      setPaymentMethod('Cash');
-      setDiscountPercent(0);
-      fetchMedicines(); // Refresh to get updated stock
+      toast({ title: "Success", description: `Sale completed successfully! Payment: ${paymentMethod}. Total: ETB ${calculateTotal().toFixed(2)}` });
+      setCart([]); setPaymentMethod('Cash'); setDiscountPercent(0); fetchMedicines();
     } catch (error) {
-      toast({
-        title: "Error",
-        description: "Failed to process sale",
-        variant: "destructive"
-      });
-    } finally {
-      setProcessing(false);
-    }
+      toast({ title: "Error", description: "Failed to process sale", variant: "destructive" });
+    } finally { setProcessing(false); }
   };
 
-  const getUniqueCategories = () => {
-    const categories = [...new Set(medicines.map(m => m.category).filter(Boolean))];
-    return categories.sort();
-  };
+  const getUniqueCategories = () => [...new Set(medicines.map(m => m.category).filter(Boolean))].sort();
 
-  if (loading) {
-    return <div>Loading medicines...</div>;
-  }
+  if (loading) { return <div>Loading {isPharmacy ? 'medicines' : 'items'}...</div>; }
 
   return (
     <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
-      {/* Medicine Selection */}
       <div className="lg:col-span-2 space-y-4">
         <div className="flex items-center space-x-4">
           <div className="relative flex-1">
             <Search className="absolute left-2 top-2.5 h-4 w-4 text-muted-foreground" />
-            <Input
-              placeholder="Search medicines..."
-              value={searchTerm}
-              onChange={(e) => setSearchTerm(e.target.value)}
-              className="pl-8"
-            />
+            <Input placeholder={isPharmacy ? "Search medicines..." : "Search items..."} value={searchTerm} onChange={(e) => setSearchTerm(e.target.value)} className="pl-8" />
           </div>
-          
           <div className="flex items-center space-x-2">
             <Filter className="h-4 w-4 text-muted-foreground" />
             <Select value={categoryFilter} onValueChange={setCategoryFilter}>
-              <SelectTrigger className="w-48">
-                <SelectValue placeholder="Filter by category" />
-              </SelectTrigger>
+              <SelectTrigger className="w-48"><SelectValue placeholder="Filter by category" /></SelectTrigger>
               <SelectContent>
                 <SelectItem value="all">All Categories</SelectItem>
-                {getUniqueCategories().map((category) => (
-                  <SelectItem key={category} value={category}>
-                    {category}
-                  </SelectItem>
-                ))}
+                {getUniqueCategories().map((category) => (<SelectItem key={category} value={category}>{category}</SelectItem>))}
               </SelectContent>
             </Select>
           </div>
@@ -401,13 +235,9 @@ export default function SalesManagement() {
                 <div className="flex items-start justify-between">
                   <div>
                     <CardTitle className="text-lg">{medicine.name}</CardTitle>
-                    {medicine.generic_name && (
-                      <CardDescription>{medicine.generic_name}</CardDescription>
-                    )}
+                    {medicine.generic_name && <CardDescription>{medicine.generic_name}</CardDescription>}
                   </div>
-                  {medicine.category && (
-                    <Badge variant="outline">{medicine.category}</Badge>
-                  )}
+                  {medicine.category && <Badge variant="outline">{medicine.category}</Badge>}
                 </div>
               </CardHeader>
               <CardContent>
@@ -418,46 +248,27 @@ export default function SalesManagement() {
                   </div>
                   <div className="flex justify-between text-sm">
                     <span>Stock:</span>
-                    <Badge variant={medicine.stock_quantity <= 10 ? "destructive" : "secondary"}>
-                      {medicine.stock_quantity}
-                    </Badge>
+                    <Badge variant={medicine.stock_quantity <= 10 ? "destructive" : "secondary"}>{medicine.stock_quantity}</Badge>
                   </div>
-                  {medicine.expiry_date && (
+                  {isPharmacy && medicine.expiry_date && (
                     <div className="flex justify-between text-sm">
                       <span>Expires:</span>
                       <div className="flex items-center space-x-1">
-                        <span className={
-                          isExpired(medicine.expiry_date) 
-                            ? 'text-destructive font-medium' 
-                            : isExpiringSoon(medicine.expiry_date) 
-                              ? 'text-warning' 
-                              : ''
-                        }>
+                        <span className={isExpired(medicine.expiry_date) ? 'text-destructive font-medium' : isExpiringSoon(medicine.expiry_date) ? 'text-warning' : ''}>
                           {new Date(medicine.expiry_date).toLocaleDateString()}
                         </span>
-                        {isExpired(medicine.expiry_date) && (
-                          <Badge variant="destructive" className="text-xs">
-                            Expired
-                          </Badge>
-                        )}
-                        {!isExpired(medicine.expiry_date) && isExpiringSoon(medicine.expiry_date) && (
-                          <Badge variant="destructive" className="text-xs">
-                            Soon
-                          </Badge>
-                        )}
+                        {isExpired(medicine.expiry_date) && <Badge variant="destructive" className="text-xs">Expired</Badge>}
+                        {!isExpired(medicine.expiry_date) && isExpiringSoon(medicine.expiry_date) && <Badge variant="destructive" className="text-xs">Soon</Badge>}
                       </div>
                     </div>
                   )}
                   <Button 
-                    onClick={() => {
-                      setSelectedMedicine(medicine);
-                      setShowAddToCartDialog(true);
-                    }}
+                    onClick={() => { setSelectedMedicine(medicine); setShowAddToCartDialog(true); }}
                     className="w-full"
-                    disabled={medicine.stock_quantity === 0 || isExpired(medicine.expiry_date)}
+                    disabled={medicine.stock_quantity === 0 || (isPharmacy && isExpired(medicine.expiry_date))}
                   >
                     <Plus className="h-4 w-4 mr-2" />
-                    {isExpired(medicine.expiry_date) ? 'Expired' : 'Add to Cart'}
+                    {isPharmacy && isExpired(medicine.expiry_date) ? 'Expired' : 'Add to Cart'}
                   </Button>
                 </div>
               </CardContent>
@@ -467,50 +278,22 @@ export default function SalesManagement() {
 
         {filteredMedicines.length === 0 && (
           <div className="text-center py-8">
-            <p className="text-muted-foreground">No medicines found.</p>
+            <p className="text-muted-foreground">No {isPharmacy ? 'medicines' : 'items'} found.</p>
           </div>
         )}
 
-        {/* Pagination for medicines */}
         {Math.ceil(filteredMedicines.length / itemsPerPage) > 1 && (
           <div className="flex justify-center col-span-full">
             <Pagination>
               <PaginationContent>
                 <PaginationItem>
-                  <PaginationPrevious 
-                    href="#"
-                    onClick={(e) => {
-                      e.preventDefault();
-                      if (currentPage > 1) setCurrentPage(currentPage - 1);
-                    }}
-                    className={currentPage === 1 ? "pointer-events-none opacity-50" : ""}
-                  />
+                  <PaginationPrevious href="#" onClick={(e) => { e.preventDefault(); if (currentPage > 1) setCurrentPage(currentPage - 1); }} className={currentPage === 1 ? "pointer-events-none opacity-50" : ""} />
                 </PaginationItem>
-                
                 {Array.from({ length: Math.ceil(filteredMedicines.length / itemsPerPage) }, (_, i) => i + 1).map((page) => (
-                  <PaginationItem key={page}>
-                    <PaginationLink
-                      href="#"
-                      onClick={(e) => {
-                        e.preventDefault();
-                        setCurrentPage(page);
-                      }}
-                      isActive={currentPage === page}
-                    >
-                      {page}
-                    </PaginationLink>
-                  </PaginationItem>
+                  <PaginationItem key={page}><PaginationLink href="#" onClick={(e) => { e.preventDefault(); setCurrentPage(page); }} isActive={currentPage === page}>{page}</PaginationLink></PaginationItem>
                 ))}
-                
                 <PaginationItem>
-                  <PaginationNext 
-                    href="#"
-                    onClick={(e) => {
-                      e.preventDefault();
-                      if (currentPage < Math.ceil(filteredMedicines.length / itemsPerPage)) setCurrentPage(currentPage + 1);
-                    }}
-                    className={currentPage === Math.ceil(filteredMedicines.length / itemsPerPage) ? "pointer-events-none opacity-50" : ""}
-                  />
+                  <PaginationNext href="#" onClick={(e) => { e.preventDefault(); if (currentPage < Math.ceil(filteredMedicines.length / itemsPerPage)) setCurrentPage(currentPage + 1); }} className={currentPage === Math.ceil(filteredMedicines.length / itemsPerPage) ? "pointer-events-none opacity-50" : ""} />
                 </PaginationItem>
               </PaginationContent>
             </Pagination>
@@ -518,7 +301,7 @@ export default function SalesManagement() {
         )}
 
         <div className="text-center text-sm text-muted-foreground col-span-full">
-          Showing {paginatedMedicines.length} of {filteredMedicines.length} medicines
+          Showing {paginatedMedicines.length} of {filteredMedicines.length} {isPharmacy ? 'medicines' : 'items'}
         </div>
       </div>
 
@@ -526,10 +309,7 @@ export default function SalesManagement() {
       <div className="space-y-4">
         <Card>
           <CardHeader>
-            <CardTitle className="flex items-center">
-              <ShoppingCart className="h-5 w-5 mr-2" />
-              Shopping Cart
-            </CardTitle>
+            <CardTitle className="flex items-center"><ShoppingCart className="h-5 w-5 mr-2" />Shopping Cart</CardTitle>
           </CardHeader>
           <CardContent>
             {cart.length === 0 ? (
@@ -543,28 +323,16 @@ export default function SalesManagement() {
                         <h4 className="font-medium text-sm">{item.name}</h4>
                         <div className="space-y-1 mt-1">
                           <p className="text-xs text-muted-foreground">
-                            Type: <Badge variant="outline" className="text-xs">
-                              {item.saleType === 'full_pack' ? 'Full Pack' : 'By Stripe'}
-                            </Badge>
+                            Type: <Badge variant="outline" className="text-xs">{item.saleType === 'full_pack' ? 'Full Pack' : `By ${(item.unit_label || 'unit').charAt(0).toUpperCase() + (item.unit_label || 'unit').slice(1)}`}</Badge>
                           </p>
                           {item.saleType === 'full_pack' ? (
-                            <p className="text-xs text-muted-foreground">
-                              ETB {item.selling_price} × {item.quantity} = ETB {item.total.toFixed(2)}
-                            </p>
+                            <p className="text-xs text-muted-foreground">ETB {item.selling_price} × {item.quantity} = ETB {item.total.toFixed(2)}</p>
                           ) : (
-                            <p className="text-xs text-muted-foreground">
-                              {item.stripesCount} {item.unit_label || 'units'} @ ETB {(item.selling_price / (item.units_per_pack || 1)).toFixed(2)} = ETB {item.total.toFixed(2)}
-                            </p>
+                            <p className="text-xs text-muted-foreground">{item.stripesCount} {item.unit_label || 'units'} @ ETB {(item.selling_price / (item.units_per_pack || 1)).toFixed(2)} = ETB {item.total.toFixed(2)}</p>
                           )}
                         </div>
                       </div>
-                      <Button
-                        size="sm"
-                        variant="ghost"
-                        onClick={() => removeFromCart(item.id)}
-                      >
-                        <Trash2 className="h-3 w-3" />
-                      </Button>
+                      <Button size="sm" variant="ghost" onClick={() => removeFromCart(item.id)}><Trash2 className="h-3 w-3" /></Button>
                     </div>
                   </div>
                 ))}
@@ -573,9 +341,7 @@ export default function SalesManagement() {
                   <div className="space-y-2">
                     <Label htmlFor="payment-method">Payment Method</Label>
                     <Select value={paymentMethod} onValueChange={setPaymentMethod}>
-                      <SelectTrigger>
-                        <SelectValue placeholder="Select payment method" />
-                      </SelectTrigger>
+                      <SelectTrigger><SelectValue placeholder="Select payment method" /></SelectTrigger>
                       <SelectContent>
                         <SelectItem value="Cash">Cash</SelectItem>
                         <SelectItem value="Commercial Bank of Ethiopia">Commercial Bank of Ethiopia</SelectItem>
@@ -588,52 +354,24 @@ export default function SalesManagement() {
                     </Select>
                   </div>
 
-                  {/* Discount Section */}
                   <div className="space-y-2">
                     <Label htmlFor="discount">Discount (%)</Label>
                     <div className="flex items-center space-x-2">
                       <Percent className="h-4 w-4 text-muted-foreground" />
-                      <Input
-                        id="discount"
-                        type="number"
-                        min="0"
-                        max="100"
-                        value={discountPercent}
-                        onChange={(e) => setDiscountPercent(Math.max(0, Math.min(100, Number(e.target.value))))}
-                        placeholder="0"
-                        className="flex-1"
-                      />
+                      <Input id="discount" type="number" min="0" max="100" value={discountPercent} onChange={(e) => setDiscountPercent(Math.max(0, Math.min(100, Number(e.target.value))))} placeholder="0" className="flex-1" />
                     </div>
                   </div>
                   
                   <Separator />
 
-                  {/* Pricing Summary */}
                   <div className="space-y-2">
-                     <div className="flex justify-between text-sm">
-                       <span>Subtotal:</span>
-                       <span>ETB {calculateSubtotal().toFixed(2)}</span>
-                     </div>
-                     {discountPercent > 0 && (
-                       <div className="flex justify-between text-sm text-success">
-                         <span>Discount ({discountPercent}%):</span>
-                         <span>-ETB {calculateDiscount().toFixed(2)}</span>
-                       </div>
-                     )}
+                     <div className="flex justify-between text-sm"><span>Subtotal:</span><span>ETB {calculateSubtotal().toFixed(2)}</span></div>
+                     {discountPercent > 0 && (<div className="flex justify-between text-sm text-success"><span>Discount ({discountPercent}%):</span><span>-ETB {calculateDiscount().toFixed(2)}</span></div>)}
                    </div>
-                   
                    <Separator />
-                   
-                   <div className="flex justify-between font-medium">
-                     <span>Total:</span>
-                     <span>ETB {calculateTotal().toFixed(2)}</span>
-                   </div>
+                   <div className="flex justify-between font-medium"><span>Total:</span><span>ETB {calculateTotal().toFixed(2)}</span></div>
                   
-                  <Button 
-                    onClick={handleCheckout}
-                    className="w-full"
-                    disabled={processing}
-                  >
+                  <Button onClick={handleCheckout} className="w-full" disabled={processing}>
                     <CreditCard className="h-4 w-4 mr-2" />
                     {processing ? "Processing..." : `Checkout (${paymentMethod})`}
                   </Button>
@@ -643,21 +381,8 @@ export default function SalesManagement() {
           </CardContent>
         </Card>
         
-        <ConfirmationDialog
-          open={showCheckoutConfirm}
-          onOpenChange={setShowCheckoutConfirm}
-          title="Confirm Checkout"
-          description={`Are you sure you want to complete this sale? Total: ETB ${calculateTotal().toFixed(2)} via ${paymentMethod}`}
-          onConfirm={confirmCheckout}
-          confirmText="Complete Sale"
-        />
-        
-        <AddToCartDialog
-          open={showAddToCartDialog}
-          onOpenChange={setShowAddToCartDialog}
-          medicine={selectedMedicine}
-          onAddToCart={addToCart}
-        />
+        <ConfirmationDialog open={showCheckoutConfirm} onOpenChange={setShowCheckoutConfirm} title="Confirm Checkout" description={`Are you sure you want to complete this sale? Total: ETB ${calculateTotal().toFixed(2)} via ${paymentMethod}`} onConfirm={confirmCheckout} confirmText="Complete Sale" />
+        <AddToCartDialog open={showAddToCartDialog} onOpenChange={setShowAddToCartDialog} medicine={selectedMedicine} onAddToCart={addToCart} />
       </div>
     </div>
   );

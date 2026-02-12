@@ -59,7 +59,8 @@ export default function StaffInventoryWithActions() {
   });
   const [hasBranches, setHasBranches] = useState(true);
   const { toast } = useToast();
-  const { selectedBranch } = useBranchContext();
+  const { selectedBranch, branchType } = useBranchContext();
+  const isPharmacy = branchType === 'pharmacy';
 
   useEffect(() => {
     fetchMedicines();
@@ -101,13 +102,11 @@ export default function StaffInventoryWithActions() {
 
   const fetchMedicines = async () => {
     try {
-      // RLS policies handle ownership filtering automatically
       let query = supabase
         .from('medicines')
         .select('*')
         .order('name');
 
-      // Filter by specific branch if selected
       if (selectedBranch) {
         query = query.eq('branch_id', selectedBranch);
       }
@@ -116,7 +115,6 @@ export default function StaffInventoryWithActions() {
 
       if (error) throw error;
       
-      // Fetch creator information for each medicine
       const medicinesWithCreator = await Promise.all(
         (data || []).map(async (medicine: any) => {
           if (medicine.created_by) {
@@ -139,7 +137,7 @@ export default function StaffInventoryWithActions() {
     } catch (error) {
       toast({
         title: "Error",
-        description: "Failed to fetch medicines",
+        description: `Failed to fetch ${isPharmacy ? 'medicines' : 'items'}`,
         variant: "destructive"
       });
     } finally {
@@ -220,31 +218,22 @@ export default function StaffInventoryWithActions() {
       
       toast({
         title: "Success",
-        description: "Medicine deleted successfully"
+        description: `${isPharmacy ? 'Medicine' : 'Item'} deleted successfully`
       });
 
       setDeleteConfirmation({ open: false, medicineId: '', medicineName: '' });
     } catch (error) {
       toast({
         title: "Error",
-        description: "Failed to delete medicine",
+        description: `Failed to delete ${isPharmacy ? 'medicine' : 'item'}`,
         variant: "destructive"
       });
     }
   };
 
-  const isOutOfStock = (medicine: Medicine) => {
-    return medicine.stock_quantity === 0;
-  };
-
-  const isLowStock = (medicine: Medicine) => {
-    return medicine.stock_quantity > 0 && medicine.stock_quantity <= medicine.minimum_stock_level;
-  };
-
-  const getUniqueCategories = () => {
-    const categories = [...new Set(medicines.map(m => m.category))];
-    return categories.sort();
-  };
+  const isOutOfStock = (medicine: Medicine) => medicine.stock_quantity === 0;
+  const isLowStock = (medicine: Medicine) => medicine.stock_quantity > 0 && medicine.stock_quantity <= medicine.minimum_stock_level;
+  const getUniqueCategories = () => [...new Set(medicines.map(m => m.category))].sort();
 
   const isExpired = (medicine: Medicine) => {
     if (!medicine.expiry_date) return false;
@@ -263,26 +252,28 @@ export default function StaffInventoryWithActions() {
   };
 
   if (loading) {
-    return <div>Loading medicines...</div>;
+    return <div>Loading {isPharmacy ? 'medicines' : 'items'}...</div>;
   }
 
   return (
     <div className="space-y-6">
       <div className="flex flex-col space-y-4">
         <div className="flex items-center justify-between">
-          <h2 className="text-2xl font-bold">Inventory Management</h2>
+          <h2 className="text-2xl font-bold">{isPharmacy ? 'Inventory Management' : 'Stock Management'}</h2>
           <div className="flex gap-2">
-            <Button 
-              onClick={() => setShowAddDialog(true)}
-              disabled={!hasBranches}
-            >
-              <Plus className="h-4 w-4 mr-2" />
-              Add Medicine
-            </Button>
+            {isPharmacy && (
+              <Button 
+                onClick={() => setShowAddDialog(true)}
+                disabled={!hasBranches}
+              >
+                <Plus className="h-4 w-4 mr-2" />
+                Add Medicine
+              </Button>
+            )}
             <Button 
               onClick={() => setShowAddItemDialog(true)}
               disabled={!hasBranches}
-              variant="outline"
+              variant={isPharmacy ? "outline" : "default"}
             >
               <Plus className="h-4 w-4 mr-2" />
               Add Item
@@ -292,25 +283,25 @@ export default function StaffInventoryWithActions() {
         {!hasBranches && (
           <div className="bg-yellow-50 border border-yellow-200 rounded-lg p-4">
             <p className="text-sm text-yellow-800">
-              ⚠️ Please create a branch first before adding medicines.
+              ⚠️ Please create a branch first before adding {isPharmacy ? 'medicines' : 'items'}.
             </p>
           </div>
         )}
       </div>
 
-      <Tabs defaultValue="medicines" className="space-y-4">
-        <TabsList className="grid w-full grid-cols-3">
-          <TabsTrigger value="medicines">Medicines</TabsTrigger>
-          <TabsTrigger value="alerts">Inventory Alerts</TabsTrigger>
-          <TabsTrigger value="transfer">Transfer Medicine</TabsTrigger>
+      <Tabs defaultValue="inventory" className="space-y-4">
+        <TabsList className={`grid w-full ${isPharmacy ? 'grid-cols-3' : 'grid-cols-2'}`}>
+          <TabsTrigger value="inventory">{isPharmacy ? 'Medicines & Items' : 'Items'}</TabsTrigger>
+          <TabsTrigger value="alerts">{isPharmacy ? 'Inventory Alerts' : 'Stock Alerts'}</TabsTrigger>
+          {isPharmacy && <TabsTrigger value="transfer">Transfer Medicine</TabsTrigger>}
         </TabsList>
 
-        <TabsContent value="medicines" className="space-y-4">
+        <TabsContent value="inventory" className="space-y-4">
           <div className="flex items-center space-x-4">
             <div className="relative flex-1">
               <Search className="absolute left-2 top-2.5 h-4 w-4 text-muted-foreground" />
               <Input
-                placeholder="Search medicines by name or generic name..."
+                placeholder={isPharmacy ? "Search medicines by name or generic name..." : "Search items by name or description..."}
                 value={searchTerm}
                 onChange={(e) => setSearchTerm(e.target.value)}
                 className="pl-8"
@@ -325,7 +316,7 @@ export default function StaffInventoryWithActions() {
                 </SelectTrigger>
                 <SelectContent>
                   <SelectItem value="all">All Categories</SelectItem>
-                  <SelectItem value="medicines_only">Medicines Only</SelectItem>
+                  {isPharmacy && <SelectItem value="medicines_only">Medicines Only</SelectItem>}
                   {getUniqueCategories().map((category) => (
                     <SelectItem key={category} value={category}>
                       {category}
@@ -348,28 +339,13 @@ export default function StaffInventoryWithActions() {
                       )}
                     </div>
                     <div className="flex space-x-1">
-                      <Button
-                        size="sm"
-                        variant="ghost"
-                        onClick={() => handleEditMedicine(medicine)}
-                        title="Edit"
-                      >
+                      <Button size="sm" variant="ghost" onClick={() => handleEditMedicine(medicine)} title="Edit">
                         <Edit2 className="h-4 w-4" />
                       </Button>
-                      <Button
-                        size="sm"
-                        variant="ghost"
-                        onClick={() => handleReplicateMedicine(medicine)}
-                        title="Replicate"
-                      >
+                      <Button size="sm" variant="ghost" onClick={() => handleReplicateMedicine(medicine)} title="Replicate">
                         <Plus className="h-4 w-4" />
                       </Button>
-                      <Button
-                        size="sm"
-                        variant="ghost"
-                        onClick={() => handleDeleteMedicine(medicine.id, medicine.name)}
-                        title="Delete"
-                      >
+                      <Button size="sm" variant="ghost" onClick={() => handleDeleteMedicine(medicine.id, medicine.name)} title="Delete">
                         <Trash2 className="h-4 w-4" />
                       </Button>
                     </div>
@@ -381,7 +357,7 @@ export default function StaffInventoryWithActions() {
                       <span>Category:</span>
                       <Badge variant="outline">{medicine.category}</Badge>
                     </div>
-                    {medicine.batch_number && (
+                    {isPharmacy && medicine.batch_number && (
                       <div className="flex justify-between text-sm">
                         <span>Batch:</span>
                         <span>{medicine.batch_number}</span>
@@ -395,7 +371,7 @@ export default function StaffInventoryWithActions() {
                     )}
                     {medicine.manufacturer && (
                       <div className="flex justify-between text-sm">
-                        <span>Manufacturer:</span>
+                        <span>{isPharmacy ? 'Manufacturer' : 'Brand'}:</span>
                         <span>{medicine.manufacturer}</span>
                       </div>
                     )}
@@ -420,59 +396,31 @@ export default function StaffInventoryWithActions() {
                               onChange={(e) => setTempStock(parseInt(e.target.value) || 0)}
                               className="w-20 h-8"
                             />
-                            <Button
-                              size="sm"
-                              onClick={() => handleStockUpdate(medicine.id)}
-                              className="h-8"
-                            >
-                              Save
-                            </Button>
-                            <Button
-                              size="sm"
-                              variant="outline"
-                              onClick={() => setEditingStock(null)}
-                              className="h-8"
-                            >
-                              Cancel
-                            </Button>
+                            <Button size="sm" onClick={() => handleStockUpdate(medicine.id)} className="h-8">Save</Button>
+                            <Button size="sm" variant="outline" onClick={() => setEditingStock(null)} className="h-8">Cancel</Button>
                           </div>
                         ) : (
                           <div className="flex items-center space-x-2">
                             <span className={(isLowStock(medicine) || isOutOfStock(medicine)) ? 'text-warning font-medium' : ''}>
                               {medicine.stock_quantity}
                             </span>
-                            <Button
-                              size="sm"
-                              variant="ghost"
-                              onClick={() => handleStockEdit(medicine.id, medicine.stock_quantity)}
-                              className="h-6 w-6 p-0"
-                            >
+                            <Button size="sm" variant="ghost" onClick={() => handleStockEdit(medicine.id, medicine.stock_quantity)} className="h-6 w-6 p-0">
                               <Edit2 className="h-3 w-3" />
                             </Button>
-                            {isOutOfStock(medicine) && (
-                              <Badge variant="destructive" className="text-xs">
-                                Out of Stock
-                              </Badge>
-                            )}
-                            {isLowStock(medicine) && (
-                              <Badge variant="destructive" className="text-xs">
-                                Low Stock
-                              </Badge>
-                            )}
+                            {isOutOfStock(medicine) && <Badge variant="destructive" className="text-xs">Out of Stock</Badge>}
+                            {isLowStock(medicine) && <Badge variant="destructive" className="text-xs">Low Stock</Badge>}
                           </div>
                         )}
                       </div>
                     </div>
-                    {medicine.expiry_date && (
+                    {isPharmacy && medicine.expiry_date && (
                       <div className="flex justify-between text-sm">
                         <span>Expiry:</span>
                         <div className="flex items-center space-x-2">
                           <span className={isExpired(medicine) ? 'text-red-600 font-medium' : isExpiringSoon(medicine) ? 'text-orange-600' : ''}>
                             {new Date(medicine.expiry_date).toLocaleDateString()}
                           </span>
-                          {isExpired(medicine) && (
-                            <Badge variant="destructive" className="text-xs">Expired</Badge>
-                          )}
+                          {isExpired(medicine) && <Badge variant="destructive" className="text-xs">Expired</Badge>}
                           {!isExpired(medicine) && isExpiringSoon(medicine) && (
                             <Badge variant="secondary" className="text-xs bg-orange-100 text-orange-800">Expiring Soon</Badge>
                           )}
@@ -487,7 +435,7 @@ export default function StaffInventoryWithActions() {
 
           {filteredMedicines.length === 0 && (
             <div className="text-center py-8">
-              <p className="text-muted-foreground">No medicines found.</p>
+              <p className="text-muted-foreground">No {isPharmacy ? 'medicines' : 'items'} found.</p>
             </div>
           )}
         </TabsContent>
@@ -496,16 +444,20 @@ export default function StaffInventoryWithActions() {
           <InventoryDashboard />
         </TabsContent>
 
-        <TabsContent value="transfer">
-          <MedicineTransfer />
-        </TabsContent>
+        {isPharmacy && (
+          <TabsContent value="transfer">
+            <MedicineTransfer />
+          </TabsContent>
+        )}
       </Tabs>
 
-      <AddMedicineDialog
-        open={showAddDialog}
-        onOpenChange={setShowAddDialog}
-        onMedicineAdded={handleMedicineAdded}
-      />
+      {isPharmacy && (
+        <AddMedicineDialog
+          open={showAddDialog}
+          onOpenChange={setShowAddDialog}
+          onMedicineAdded={handleMedicineAdded}
+        />
+      )}
 
       <AddItemDialog
         open={showAddItemDialog}
@@ -513,12 +465,14 @@ export default function StaffInventoryWithActions() {
         onItemAdded={handleMedicineAdded}
       />
 
-      <AddMedicineDialog
-        open={showReplicateDialog}
-        onOpenChange={setShowReplicateDialog}
-        onMedicineAdded={handleMedicineAdded}
-        replicateData={medicineToReplicate}
-      />
+      {isPharmacy && (
+        <AddMedicineDialog
+          open={showReplicateDialog}
+          onOpenChange={setShowReplicateDialog}
+          onMedicineAdded={handleMedicineAdded}
+          replicateData={medicineToReplicate}
+        />
+      )}
 
       {editingMedicine && (
         <EditMedicineDialog
@@ -532,7 +486,7 @@ export default function StaffInventoryWithActions() {
       <ConfirmationDialog
         open={deleteConfirmation.open}
         onOpenChange={(open) => setDeleteConfirmation(prev => ({ ...prev, open }))}
-        title="Delete Medicine"
+        title={isPharmacy ? "Delete Medicine" : "Delete Item"}
         description={`Are you sure you want to delete "${deleteConfirmation.medicineName}"? This action cannot be undone.`}
         onConfirm={confirmDeleteMedicine}
         confirmText="Delete"

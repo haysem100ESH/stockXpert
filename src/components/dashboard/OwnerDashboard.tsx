@@ -84,8 +84,9 @@ export default function OwnerDashboard() {
   const [sendingTestMessage, setSendingTestMessage] = useState(false);
   const [dateFilter, setDateFilter] = useState('monthly');
   const { toast } = useToast();
-  const { selectedBranch } = useBranchContext();
+  const { selectedBranch, branchType } = useBranchContext();
   const { profile } = useAuth();
+  const isPharmacy = branchType === 'pharmacy';
 
   useEffect(() => {
     fetchDashboardStats();
@@ -399,29 +400,27 @@ export default function OwnerDashboard() {
           </CardContent>
         </Card>
 
-        <Card>
-          <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
-            <CardTitle className="text-sm font-medium">Total Medicines</CardTitle>
-            <Package className="h-4 w-4 text-muted-foreground" />
-          </CardHeader>
-          <CardContent>
-            <div className="text-2xl font-bold">{stats.totalMedicines}</div>
-            <p className="text-xs text-muted-foreground">
-              Medicines in stock
-            </p>
-          </CardContent>
-        </Card>
+        {isPharmacy && (
+          <Card>
+            <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
+              <CardTitle className="text-sm font-medium">Total Medicines</CardTitle>
+              <Package className="h-4 w-4 text-muted-foreground" />
+            </CardHeader>
+            <CardContent>
+              <div className="text-2xl font-bold">{stats.totalMedicines}</div>
+              <p className="text-xs text-muted-foreground">Medicines in stock</p>
+            </CardContent>
+          </Card>
+        )}
 
         <Card>
           <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
-            <CardTitle className="text-sm font-medium">Total Items</CardTitle>
+            <CardTitle className="text-sm font-medium">{isPharmacy ? 'Total Items' : 'Total Products'}</CardTitle>
             <Package className="h-4 w-4 text-muted-foreground" />
           </CardHeader>
           <CardContent>
-            <div className="text-2xl font-bold">{stats.totalItems}</div>
-            <p className="text-xs text-muted-foreground">
-              Non-medicine items
-            </p>
+            <div className="text-2xl font-bold">{isPharmacy ? stats.totalItems : stats.totalProducts}</div>
+            <p className="text-xs text-muted-foreground">{isPharmacy ? 'Non-medicine items' : 'Products in stock'}</p>
           </CardContent>
         </Card>
 
@@ -464,18 +463,18 @@ export default function OwnerDashboard() {
           </CardContent>
         </Card>
 
-        <Card>
-          <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
-            <CardTitle className="text-sm font-medium">Expired Medicines</CardTitle>
-            <AlertTriangle className="h-4 w-4 text-destructive" />
-          </CardHeader>
-          <CardContent>
-            <div className="text-2xl font-bold text-destructive">{stats.expiredItems}</div>
-            <p className="text-xs text-muted-foreground">
-              Medicines expired
-            </p>
-          </CardContent>
-        </Card>
+        {isPharmacy && (
+          <Card>
+            <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
+              <CardTitle className="text-sm font-medium">Expired Medicines</CardTitle>
+              <AlertTriangle className="h-4 w-4 text-destructive" />
+            </CardHeader>
+            <CardContent>
+              <div className="text-2xl font-bold text-destructive">{stats.expiredItems}</div>
+              <p className="text-xs text-muted-foreground">Medicines expired</p>
+            </CardContent>
+          </Card>
+        )}
       </div>
 
       {/* Main Tabs */}
@@ -491,33 +490,35 @@ export default function OwnerDashboard() {
 
         <TabsContent value="overview" className="space-y-4">          
           <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
-            {/* Medicines Sold by Category */}
-            <Card>
-              <CardHeader>
-                <CardTitle>Medicines Sold by Category</CardTitle>
-                <CardDescription>Medicine sales performance</CardDescription>
-              </CardHeader>
-              <CardContent>
-                <ResponsiveContainer width="100%" height={300}>
-                  <BarChart data={medicinesCategorySales}>
-                    <CartesianGrid strokeDasharray="3 3" />
-                    <XAxis dataKey="category" />
-                    <YAxis />
-                    <Bar dataKey="sales" fill="hsl(var(--primary))" />
-                  </BarChart>
-                </ResponsiveContainer>
-              </CardContent>
-            </Card>
+            {/* Medicines Sold by Category - pharmacy only */}
+            {isPharmacy && (
+              <Card>
+                <CardHeader>
+                  <CardTitle>Medicines Sold by Category</CardTitle>
+                  <CardDescription>Medicine sales performance</CardDescription>
+                </CardHeader>
+                <CardContent>
+                  <ResponsiveContainer width="100%" height={300}>
+                    <BarChart data={medicinesCategorySales}>
+                      <CartesianGrid strokeDasharray="3 3" />
+                      <XAxis dataKey="category" />
+                      <YAxis />
+                      <Bar dataKey="sales" fill="hsl(var(--primary))" />
+                    </BarChart>
+                  </ResponsiveContainer>
+                </CardContent>
+              </Card>
+            )}
 
             {/* Items Sold by Category */}
             <Card>
               <CardHeader>
-                <CardTitle>Items Sold by Category</CardTitle>
-                <CardDescription>Non-medicine items sales</CardDescription>
+                <CardTitle>{isPharmacy ? 'Items Sold by Category' : 'Products Sold by Category'}</CardTitle>
+                <CardDescription>{isPharmacy ? 'Non-medicine items sales' : 'Sales by category'}</CardDescription>
               </CardHeader>
               <CardContent>
                 <ResponsiveContainer width="100%" height={300}>
-                  <BarChart data={itemsCategorySales}>
+                  <BarChart data={isPharmacy ? itemsCategorySales : categorySales}>
                     <CartesianGrid strokeDasharray="3 3" />
                     <XAxis dataKey="category" />
                     <YAxis />
@@ -527,52 +528,38 @@ export default function OwnerDashboard() {
               </CardContent>
             </Card>
 
-            {/* Top-Selling Medicines */}
-            <Card>
-              <CardHeader>
-                <CardTitle>Top-Selling Medicines</CardTitle>
-                <CardDescription>Best performing medicines</CardDescription>
-              </CardHeader>
-              <CardContent>
-                <ResponsiveContainer width="100%" height={300}>
-                  <PieChart>
-                    <Pie
-                      data={topMedicines.slice(0, 5)}
-                      cx="50%"
-                      cy="50%"
-                      outerRadius={80}
-                      fill="hsl(var(--primary))"
-                      dataKey="sales"
-                      label={(entry: any) => entry.name}
-                    >
-                      {topMedicines.slice(0, 5).map((entry, index) => (
-                        <Cell key={`cell-${index}`} fill={`hsl(${(index * 72) % 360}, 70%, 50%)`} />
-                      ))}
-                    </Pie>
-                  </PieChart>
-                </ResponsiveContainer>
-              </CardContent>
-            </Card>
+            {/* Top-Selling Medicines - pharmacy only */}
+            {isPharmacy && (
+              <Card>
+                <CardHeader>
+                  <CardTitle>Top-Selling Medicines</CardTitle>
+                  <CardDescription>Best performing medicines</CardDescription>
+                </CardHeader>
+                <CardContent>
+                  <ResponsiveContainer width="100%" height={300}>
+                    <PieChart>
+                      <Pie data={topMedicines.slice(0, 5)} cx="50%" cy="50%" outerRadius={80} fill="hsl(var(--primary))" dataKey="sales" label={(entry: any) => entry.name}>
+                        {topMedicines.slice(0, 5).map((entry, index) => (
+                          <Cell key={`cell-${index}`} fill={`hsl(${(index * 72) % 360}, 70%, 50%)`} />
+                        ))}
+                      </Pie>
+                    </PieChart>
+                  </ResponsiveContainer>
+                </CardContent>
+              </Card>
+            )}
 
             {/* Top-Selling Items */}
             <Card>
               <CardHeader>
-                <CardTitle>Top-Selling Items</CardTitle>
-                <CardDescription>Best performing items</CardDescription>
+                <CardTitle>{isPharmacy ? 'Top-Selling Items' : 'Top-Selling Products'}</CardTitle>
+                <CardDescription>{isPharmacy ? 'Best performing items' : 'Best performing products'}</CardDescription>
               </CardHeader>
               <CardContent>
                 <ResponsiveContainer width="100%" height={300}>
                   <PieChart>
-                    <Pie
-                      data={topItems.slice(0, 5)}
-                      cx="50%"
-                      cy="50%"
-                      outerRadius={80}
-                      fill="hsl(var(--accent))"
-                      dataKey="sales"
-                      label={(entry: any) => entry.name}
-                    >
-                      {topItems.slice(0, 5).map((entry, index) => (
+                    <Pie data={(isPharmacy ? topItems : productPerformance).slice(0, 5)} cx="50%" cy="50%" outerRadius={80} fill="hsl(var(--accent))" dataKey="sales" label={(entry: any) => entry.name}>
+                      {(isPharmacy ? topItems : productPerformance).slice(0, 5).map((entry, index) => (
                         <Cell key={`cell-${index}`} fill={`hsl(${(index * 90) % 360}, 65%, 55%)`} />
                       ))}
                     </Pie>
@@ -617,7 +604,7 @@ export default function OwnerDashboard() {
                 <div className="grid grid-cols-2 gap-4">
                   <Button variant="outline" className="h-20 flex flex-col">
                     <Plus className="h-6 w-6 mb-2" />
-                    Add Medicine
+                    {isPharmacy ? 'Add Medicine' : 'Add Item'}
                   </Button>
                   <Button variant="outline" className="h-20 flex flex-col">
                     <ShoppingCart className="h-6 w-6 mb-2" />

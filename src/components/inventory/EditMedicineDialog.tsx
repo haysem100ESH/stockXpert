@@ -7,6 +7,7 @@ import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@
 import { Checkbox } from '@/components/ui/checkbox';
 import { supabase } from '@/integrations/supabase/client';
 import { useToast } from '@/hooks/use-toast';
+import { useBranchContext } from '@/hooks/useBranchContext';
 
 interface Medicine {
   id: string;
@@ -41,6 +42,9 @@ export default function EditMedicineDialog({
   medicine,
   onMedicineUpdated
 }: EditMedicineDialogProps) {
+  const { branchType } = useBranchContext();
+  const isPharmacy = branchType === 'pharmacy';
+
   const [medicineData, setMedicineData] = useState({
     name: '',
     generic_name: '',
@@ -76,8 +80,6 @@ export default function EditMedicineDialog({
       
       if (profile) {
         setUserRole(profile.role as 'owner' | 'staff');
-        
-        // If owner, fetch their branches
         if (profile.role === 'owner') {
           const { data: branchesData } = await supabase
             .from('pharmacy_branches')
@@ -85,17 +87,11 @@ export default function EditMedicineDialog({
             .eq('pharmacy_owner_id', user.id)
             .order('is_main_branch', { ascending: false })
             .order('name');
-          
-          if (branchesData) {
-            setBranches(branchesData);
-          }
+          if (branchesData) setBranches(branchesData);
         }
       }
     };
-    
-    if (open) {
-      fetchUserRoleAndBranches();
-    }
+    if (open) fetchUserRoleAndBranches();
   }, [open]);
 
   useEffect(() => {
@@ -124,7 +120,6 @@ export default function EditMedicineDialog({
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
     if (!medicine) return;
-    
     setLoading(true);
 
     try {
@@ -133,7 +128,7 @@ export default function EditMedicineDialog({
         generic_name: medicineData.generic_name || null,
         category: medicineData.category,
         manufacturer: medicineData.manufacturer || null,
-        batch_number: medicineData.batch_number || null,
+        batch_number: isPharmacy ? (medicineData.batch_number || null) : null,
         country_name: medicineData.country_name || null,
         purchase_price: parseFloat(medicineData.purchase_price),
         selling_price: parseFloat(medicineData.selling_price),
@@ -141,34 +136,21 @@ export default function EditMedicineDialog({
         minimum_stock_level: parseInt(medicineData.minimum_stock_level),
         units_per_pack: medicineData.units_per_pack ? parseInt(medicineData.units_per_pack) : null,
         unit_label: medicineData.unit_label || 'strip',
-        expiry_date: medicineData.expiry_date || null,
-        expiry_alert_enabled: medicineData.expiry_alert_enabled
+        expiry_date: isPharmacy ? (medicineData.expiry_date || null) : null,
+        expiry_alert_enabled: isPharmacy ? medicineData.expiry_alert_enabled : false
       };
       
-      // Only update branch_id if user is owner and a branch is selected
       if (userRole === 'owner' && medicineData.branch_id) {
         updateData.branch_id = medicineData.branch_id;
       }
       
-      const { error } = await supabase
-        .from('medicines')
-        .update(updateData)
-        .eq('id', medicine.id);
-
+      const { error } = await supabase.from('medicines').update(updateData).eq('id', medicine.id);
       if (error) throw error;
 
-      toast({
-        title: "Success",
-        description: "Medicine updated successfully"
-      });
-
+      toast({ title: "Success", description: `${isPharmacy ? 'Medicine' : 'Item'} updated successfully` });
       onMedicineUpdated();
     } catch (error) {
-      toast({
-        title: "Error",
-        description: "Failed to update medicine",
-        variant: "destructive"
-      });
+      toast({ title: "Error", description: `Failed to update ${isPharmacy ? 'medicine' : 'item'}`, variant: "destructive" });
     } finally {
       setLoading(false);
     }
@@ -178,97 +160,72 @@ export default function EditMedicineDialog({
     <Dialog open={open} onOpenChange={onOpenChange}>
       <DialogContent className="sm:max-w-[425px] max-h-[90vh] overflow-y-auto">
         <DialogHeader>
-          <DialogTitle>Edit Medicine</DialogTitle>
+          <DialogTitle>{isPharmacy ? 'Edit Medicine' : 'Edit Item'}</DialogTitle>
           <DialogDescription>
-            Update the medicine information below.
+            Update the {isPharmacy ? 'medicine' : 'item'} information below.
           </DialogDescription>
         </DialogHeader>
         
         <form onSubmit={handleSubmit} className="space-y-4">
           <div className="space-y-2">
-            <Label htmlFor="name">Medicine Name *</Label>
-            <Input
-              id="name"
-              value={medicineData.name}
-              onChange={(e) => setMedicineData({ ...medicineData, name: e.target.value })}
-              required
-            />
+            <Label htmlFor="name">{isPharmacy ? 'Medicine Name' : 'Item Name'} *</Label>
+            <Input id="name" value={medicineData.name} onChange={(e) => setMedicineData({ ...medicineData, name: e.target.value })} required />
           </div>
 
           <div className="space-y-2">
-            <Label htmlFor="generic_name">Generic Name</Label>
-            <Input
-              id="generic_name"
-              value={medicineData.generic_name}
-              onChange={(e) => setMedicineData({ ...medicineData, generic_name: e.target.value })}
-            />
+            <Label htmlFor="generic_name">{isPharmacy ? 'Generic Name' : 'Description'}</Label>
+            <Input id="generic_name" value={medicineData.generic_name} onChange={(e) => setMedicineData({ ...medicineData, generic_name: e.target.value })} />
           </div>
 
           <div className="space-y-2">
             <Label htmlFor="category">Category *</Label>
-            <Select
-              value={medicineData.category}
-              onValueChange={(value: any) => setMedicineData({ ...medicineData, category: value })}
-            >
-              <SelectTrigger>
-                <SelectValue placeholder="Select category" />
-              </SelectTrigger>
+            <Select value={medicineData.category} onValueChange={(value: any) => setMedicineData({ ...medicineData, category: value })}>
+              <SelectTrigger><SelectValue placeholder="Select category" /></SelectTrigger>
               <SelectContent>
-                <SelectItem value="tablet">Tablet</SelectItem>
-                <SelectItem value="capsule">Capsule</SelectItem>
-                <SelectItem value="syrup">Syrup</SelectItem>
-                <SelectItem value="injection">Injection</SelectItem>
-                <SelectItem value="cream">Cream</SelectItem>
-                <SelectItem value="ointment">Ointment</SelectItem>
-                <SelectItem value="drops">Drops</SelectItem>
-                <SelectItem value="inhaler">Inhaler</SelectItem>
-                <SelectItem value="other">Other</SelectItem>
+                {isPharmacy ? (
+                  <>
+                    <SelectItem value="tablet">Tablet</SelectItem>
+                    <SelectItem value="capsule">Capsule</SelectItem>
+                    <SelectItem value="syrup">Syrup</SelectItem>
+                    <SelectItem value="injection">Injection</SelectItem>
+                    <SelectItem value="cream">Cream</SelectItem>
+                    <SelectItem value="ointment">Ointment</SelectItem>
+                    <SelectItem value="drops">Drops</SelectItem>
+                    <SelectItem value="inhaler">Inhaler</SelectItem>
+                    <SelectItem value="other">Other</SelectItem>
+                  </>
+                ) : (
+                  <SelectItem value="other">Other</SelectItem>
+                )}
               </SelectContent>
             </Select>
           </div>
 
           <div className="space-y-2">
-            <Label htmlFor="manufacturer">Manufacturer</Label>
-            <Input
-              id="manufacturer"
-              value={medicineData.manufacturer}
-              onChange={(e) => setMedicineData({ ...medicineData, manufacturer: e.target.value })}
-            />
+            <Label htmlFor="manufacturer">{isPharmacy ? 'Manufacturer' : 'Brand'}</Label>
+            <Input id="manufacturer" value={medicineData.manufacturer} onChange={(e) => setMedicineData({ ...medicineData, manufacturer: e.target.value })} />
           </div>
 
-          <div className="space-y-2">
-            <Label htmlFor="batch_number">Batch Number</Label>
-            <Input
-              id="batch_number"
-              value={medicineData.batch_number}
-              onChange={(e) => setMedicineData({ ...medicineData, batch_number: e.target.value })}
-            />
-          </div>
+          {isPharmacy && (
+            <div className="space-y-2">
+              <Label htmlFor="batch_number">Batch Number</Label>
+              <Input id="batch_number" value={medicineData.batch_number} onChange={(e) => setMedicineData({ ...medicineData, batch_number: e.target.value })} />
+            </div>
+          )}
 
           <div className="space-y-2">
             <Label htmlFor="country_name">Country Name</Label>
-            <Input
-              id="country_name"
-              value={medicineData.country_name}
-              onChange={(e) => setMedicineData({ ...medicineData, country_name: e.target.value })}
-            />
+            <Input id="country_name" value={medicineData.country_name} onChange={(e) => setMedicineData({ ...medicineData, country_name: e.target.value })} />
           </div>
 
           {userRole === 'owner' && branches.length > 0 && (
             <div className="space-y-2">
               <Label htmlFor="branch_id">Assign to Branch *</Label>
-              <Select 
-                value={medicineData.branch_id} 
-                onValueChange={(value) => setMedicineData({ ...medicineData, branch_id: value })}
-              >
-                <SelectTrigger>
-                  <SelectValue placeholder="Select branch" />
-                </SelectTrigger>
+              <Select value={medicineData.branch_id} onValueChange={(value) => setMedicineData({ ...medicineData, branch_id: value })}>
+                <SelectTrigger><SelectValue placeholder="Select branch" /></SelectTrigger>
                 <SelectContent>
                   {branches.map((branch) => (
-                    <SelectItem key={branch.id} value={branch.id}>
-                      {branch.name}
-                    </SelectItem>
+                    <SelectItem key={branch.id} value={branch.id}>{branch.name}</SelectItem>
                   ))}
                 </SelectContent>
               </Select>
@@ -278,111 +235,65 @@ export default function EditMedicineDialog({
           <div className="grid grid-cols-2 gap-4">
             <div className="space-y-2">
               <Label htmlFor="purchase_price">Purchase Price *</Label>
-              <Input
-                id="purchase_price"
-                type="number"
-                step="0.01"
-                value={medicineData.purchase_price}
-                onChange={(e) => setMedicineData({ ...medicineData, purchase_price: e.target.value })}
-                required
-              />
+              <Input id="purchase_price" type="number" step="0.01" value={medicineData.purchase_price} onChange={(e) => setMedicineData({ ...medicineData, purchase_price: e.target.value })} required />
             </div>
             <div className="space-y-2">
               <Label htmlFor="selling_price">Selling Price *</Label>
-              <Input
-                id="selling_price"
-                type="number"
-                step="0.01"
-                value={medicineData.selling_price}
-                onChange={(e) => setMedicineData({ ...medicineData, selling_price: e.target.value })}
-                required
-              />
+              <Input id="selling_price" type="number" step="0.01" value={medicineData.selling_price} onChange={(e) => setMedicineData({ ...medicineData, selling_price: e.target.value })} required />
             </div>
           </div>
 
           <div className="grid grid-cols-2 gap-4">
             <div className="space-y-2">
               <Label htmlFor="stock_quantity">Stock Quantity *</Label>
-              <Input
-                id="stock_quantity"
-                type="number"
-                value={medicineData.stock_quantity}
-                onChange={(e) => setMedicineData({ ...medicineData, stock_quantity: e.target.value })}
-                required
-              />
+              <Input id="stock_quantity" type="number" value={medicineData.stock_quantity} onChange={(e) => setMedicineData({ ...medicineData, stock_quantity: e.target.value })} required />
             </div>
             <div className="space-y-2">
               <Label htmlFor="minimum_stock_level">Minimum Stock Level *</Label>
-              <Input
-                id="minimum_stock_level"
-                type="number"
-                value={medicineData.minimum_stock_level}
-                onChange={(e) => setMedicineData({ ...medicineData, minimum_stock_level: e.target.value })}
-                required
-              />
+              <Input id="minimum_stock_level" type="number" value={medicineData.minimum_stock_level} onChange={(e) => setMedicineData({ ...medicineData, minimum_stock_level: e.target.value })} required />
             </div>
           </div>
 
           <div className="space-y-2">
             <Label htmlFor="unit_label">Unit Label</Label>
-            <Input
-              id="unit_label"
-              value={medicineData.unit_label}
-              onChange={(e) => setMedicineData({ ...medicineData, unit_label: e.target.value })}
-              placeholder="e.g. strip, piece, bottle, kg"
-            />
+            <Input id="unit_label" value={medicineData.unit_label} onChange={(e) => setMedicineData({ ...medicineData, unit_label: e.target.value })} placeholder="e.g. strip, piece, bottle, kg" />
           </div>
 
           <div className="space-y-2">
             <Label htmlFor="units_per_pack">Units Per Pack</Label>
-            <Input
-              id="units_per_pack"
-              type="number"
-              min="1"
-              value={medicineData.units_per_pack}
-              onChange={(e) => setMedicineData({ ...medicineData, units_per_pack: e.target.value })}
-              placeholder="Leave empty if not sold by unit"
-            />
+            <Input id="units_per_pack" type="number" min="1" value={medicineData.units_per_pack} onChange={(e) => setMedicineData({ ...medicineData, units_per_pack: e.target.value })} placeholder="Leave empty if not sold by unit" />
           </div>
 
-          <div className="space-y-2">
-            <Label htmlFor="expiry_date">Expiry Date</Label>
-            <Input
-              id="expiry_date"
-              type="date"
-              value={medicineData.expiry_date}
-              onChange={(e) => setMedicineData({ ...medicineData, expiry_date: e.target.value })}
-            />
-          </div>
+          {isPharmacy && (
+            <>
+              <div className="space-y-2">
+                <Label htmlFor="expiry_date">Expiry Date</Label>
+                <Input id="expiry_date" type="date" value={medicineData.expiry_date} onChange={(e) => setMedicineData({ ...medicineData, expiry_date: e.target.value })} />
+              </div>
 
-          <div className="space-y-2">
-            <Label htmlFor="expiry_alert_enabled">Alert me before expiry</Label>
-            <Select 
-              value={medicineData.expiry_alert_enabled ? "1" : "0"} 
-              onValueChange={(value) => setMedicineData({ ...medicineData, expiry_alert_enabled: value !== "0" })}
-            >
-              <SelectTrigger>
-                <SelectValue placeholder="Select alert period" />
-              </SelectTrigger>
-              <SelectContent>
-                <SelectItem value="0">No Alert</SelectItem>
-                <SelectItem value="1">1 Month</SelectItem>
-                <SelectItem value="2">2 Months</SelectItem>
-                <SelectItem value="3">3 Months</SelectItem>
-                <SelectItem value="4">4 Months</SelectItem>
-                <SelectItem value="5">5 Months</SelectItem>
-                <SelectItem value="6">6 Months</SelectItem>
-              </SelectContent>
-            </Select>
-          </div>
+              <div className="space-y-2">
+                <Label htmlFor="expiry_alert_enabled">Alert me before expiry</Label>
+                <Select value={medicineData.expiry_alert_enabled ? "1" : "0"} onValueChange={(value) => setMedicineData({ ...medicineData, expiry_alert_enabled: value !== "0" })}>
+                  <SelectTrigger><SelectValue placeholder="Select alert period" /></SelectTrigger>
+                  <SelectContent>
+                    <SelectItem value="0">No Alert</SelectItem>
+                    <SelectItem value="1">1 Month</SelectItem>
+                    <SelectItem value="2">2 Months</SelectItem>
+                    <SelectItem value="3">3 Months</SelectItem>
+                    <SelectItem value="4">4 Months</SelectItem>
+                    <SelectItem value="5">5 Months</SelectItem>
+                    <SelectItem value="6">6 Months</SelectItem>
+                  </SelectContent>
+                </Select>
+              </div>
+            </>
+          )}
 
           <div className="flex gap-2 pt-4">
             <Button type="submit" disabled={loading} className="flex-1">
-              {loading ? "Updating..." : "Update Medicine"}
+              {loading ? "Updating..." : `Update ${isPharmacy ? 'Medicine' : 'Item'}`}
             </Button>
-            <Button type="button" variant="outline" onClick={() => onOpenChange(false)}>
-              Cancel
-            </Button>
+            <Button type="button" variant="outline" onClick={() => onOpenChange(false)}>Cancel</Button>
           </div>
         </form>
       </DialogContent>
