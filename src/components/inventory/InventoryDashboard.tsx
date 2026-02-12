@@ -55,7 +55,8 @@ export default function InventoryDashboard() {
     medicineName: ''
   });
   const { toast } = useToast();
-  const { selectedBranch } = useBranchContext();
+  const { selectedBranch, branchType } = useBranchContext();
+  const isPharmacy = branchType === 'pharmacy';
 
   useEffect(() => {
     fetchInventoryData();
@@ -100,11 +101,6 @@ export default function InventoryDashboard() {
       const { data: outOfStockDetails } = await outOfStockQuery;
 
       // Fetch low stock items
-      let lowStockQuery = supabase
-        .from('low_stock_medicines')
-        .select('id, name, category, stock_quantity, minimum_stock_level');
-
-      // Note: The low_stock_medicines view doesn't have branch_id, so we'll use direct query
       let lowStockDirectQuery = supabase
         .from('medicines')
         .select('id, name, category, stock_quantity, minimum_stock_level')
@@ -121,43 +117,49 @@ export default function InventoryDashboard() {
         med.stock_quantity <= med.minimum_stock_level
       ) || [];
 
-      // Fetch expiring items (within 30 days, excluding today)
-      const thirtyDaysFromNow = new Date();
-      thirtyDaysFromNow.setDate(thirtyDaysFromNow.getDate() + 30);
-      const tomorrow = new Date();
-      tomorrow.setDate(tomorrow.getDate() + 1);
+      // Only fetch expiry data for pharmacy branches
+      let expiringDetails: ExpiringItem[] = [];
+      let expiredDetails: ExpiredItem[] = [];
       
-      let expiringQuery = supabase
-        .from('medicines')
-        .select('id, name, category, expiry_date, stock_quantity')
-        .not('expiry_date', 'is', null)
-        .lte('expiry_date', thirtyDaysFromNow.toISOString().split('T')[0])
-        .gte('expiry_date', tomorrow.toISOString().split('T')[0])
-        .gt('stock_quantity', 0);
-      
-      if (selectedBranch) {
-        expiringQuery = expiringQuery.eq('branch_id', selectedBranch);
+      if (isPharmacy) {
+        const thirtyDaysFromNow = new Date();
+        thirtyDaysFromNow.setDate(thirtyDaysFromNow.getDate() + 30);
+        const tomorrow = new Date();
+        tomorrow.setDate(tomorrow.getDate() + 1);
+        
+        let expiringQuery = supabase
+          .from('medicines')
+          .select('id, name, category, expiry_date, stock_quantity')
+          .not('expiry_date', 'is', null)
+          .lte('expiry_date', thirtyDaysFromNow.toISOString().split('T')[0])
+          .gte('expiry_date', tomorrow.toISOString().split('T')[0])
+          .gt('stock_quantity', 0);
+        
+        if (selectedBranch) {
+          expiringQuery = expiringQuery.eq('branch_id', selectedBranch);
+        }
+
+        const { data: expiringData } = await expiringQuery;
+        expiringDetails = expiringData || [];
+
+        let expiredQuery = supabase
+          .from('medicines')
+          .select('id, name, category, expiry_date, stock_quantity')
+          .not('expiry_date', 'is', null)
+          .lte('expiry_date', new Date().toISOString().split('T')[0])
+          .gt('stock_quantity', 0);
+        
+        if (selectedBranch) {
+          expiredQuery = expiredQuery.eq('branch_id', selectedBranch);
+        }
+
+        const { data: expiredData } = await expiredQuery;
+        expiredDetails = expiredData || [];
       }
-
-      const { data: expiringDetails } = await expiringQuery;
-
-      // Fetch expired items
-      let expiredQuery = supabase
-        .from('medicines')
-        .select('id, name, category, expiry_date, stock_quantity')
-        .not('expiry_date', 'is', null)
-        .lte('expiry_date', new Date().toISOString().split('T')[0])
-        .gt('stock_quantity', 0);
-      
-      if (selectedBranch) {
-        expiredQuery = expiredQuery.eq('branch_id', selectedBranch);
-      }
-
-      const { data: expiredDetails } = await expiredQuery;
 
       setOutOfStockItems(outOfStockDetails || []);
       setLowStockItems(lowStockDetails || []);
-      setExpiringItems(expiringDetails || []);
+      setExpiringItems(expiringDetails);
       setExpiredItems(expiredDetails || []);
     } catch (error) {
       console.error('Error fetching inventory data:', error);
@@ -197,7 +199,7 @@ export default function InventoryDashboard() {
       
       toast({
         title: "Success",
-        description: "Expired medicine stock set to 0 and expiry date cleared",
+        description: "Expired item stock set to 0 and expiry date cleared",
       });
 
       setDeleteConfirm({ open: false, medicineId: '', medicineName: '' });
@@ -205,7 +207,7 @@ export default function InventoryDashboard() {
       console.error('Error updating expired item:', error);
       toast({
         title: "Error",
-        description: "Failed to update expired medicine",
+        description: "Failed to update expired item",
         variant: "destructive"
       });
     }
@@ -277,7 +279,7 @@ export default function InventoryDashboard() {
       )}
 
       {/* Items Expiring Soon */}
-      {expiringItems.length > 0 && (
+      {isPharmacy && expiringItems.length > 0 && (
         <Card>
           <CardHeader>
             <CardTitle className="flex items-center space-x-2">
@@ -310,7 +312,7 @@ export default function InventoryDashboard() {
       )}
 
       {/* Expired Medicines */}
-      {expiredItems.length > 0 && (
+      {isPharmacy && expiredItems.length > 0 && (
         <Card>
           <CardHeader>
             <CardTitle className="flex items-center space-x-2">
@@ -358,7 +360,7 @@ export default function InventoryDashboard() {
             <Package className="h-12 w-12 text-muted-foreground mx-auto mb-4" />
             <h3 className="text-lg font-semibold mb-2">All Good!</h3>
             <p className="text-muted-foreground">
-              No inventory issues detected. All products are well-stocked and within expiry dates.
+              No inventory issues detected. All products are well-stocked{isPharmacy ? ' and within expiry dates' : ''}.
             </p>
           </CardContent>
         </Card>
