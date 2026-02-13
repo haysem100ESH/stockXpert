@@ -1,6 +1,7 @@
 import { useState, useEffect } from 'react';
 import { useAuth } from '@/hooks/useAuth';
 import { useBranchContext } from '@/hooks/useBranchContext';
+import { useBranding } from '@/hooks/useBranding';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
 import { Badge } from '@/components/ui/badge';
 import { Button } from '@/components/ui/button';
@@ -45,7 +46,9 @@ type ProductData = {
 
 export default function StaffDashboard() {
   const { profile } = useAuth();
-  const { userBranch } = useBranchContext();
+  const { userBranch, branchType } = useBranchContext();
+  const branding = useBranding();
+  const isPharmacy = branchType === 'pharmacy';
   
   const [stats, setStats] = useState<SimpleStats>({
     totalProducts: 0,
@@ -384,16 +387,18 @@ export default function StaffDashboard() {
       </div>
 
       <div className="grid gap-4 md:grid-cols-2 lg:grid-cols-4">
-        <Card>
-          <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
-            <CardTitle className="text-sm font-medium">Total Medicines</CardTitle>
-            <Package className="h-4 w-4 text-muted-foreground" />
-          </CardHeader>
-          <CardContent>
-            <div className="text-2xl font-bold">{stats.totalMedicines}</div>
-            <p className="text-xs text-muted-foreground">Medicines in stock</p>
-          </CardContent>
-        </Card>
+        {isPharmacy && (
+          <Card>
+            <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
+              <CardTitle className="text-sm font-medium">Total Medicines</CardTitle>
+              <Package className="h-4 w-4 text-muted-foreground" />
+            </CardHeader>
+            <CardContent>
+              <div className="text-2xl font-bold">{stats.totalMedicines}</div>
+              <p className="text-xs text-muted-foreground">Medicines in stock</p>
+            </CardContent>
+          </Card>
+        )}
         
         <Card>
           <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
@@ -401,8 +406,8 @@ export default function StaffDashboard() {
             <Package className="h-4 w-4 text-muted-foreground" />
           </CardHeader>
           <CardContent>
-            <div className="text-2xl font-bold">{stats.totalItems}</div>
-            <p className="text-xs text-muted-foreground">Non-medicine items</p>
+            <div className="text-2xl font-bold">{isPharmacy ? stats.totalItems : stats.totalProducts}</div>
+            <p className="text-xs text-muted-foreground">{isPharmacy ? 'Non-medicine items' : 'Items in stock'}</p>
           </CardContent>
         </Card>
         
@@ -439,27 +444,31 @@ export default function StaffDashboard() {
           </CardContent>
         </Card>
         
-        <Card>
-          <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
-            <CardTitle className="text-sm font-medium">Expiring Soon</CardTitle>
-            <CalendarDaysIcon className="h-4 w-4 text-muted-foreground" />
-          </CardHeader>
-          <CardContent>
-            <div className="text-2xl font-bold text-warning">{expiringItems.length}</div>
-            <p className="text-xs text-muted-foreground">Items expiring in 30 days</p>
-          </CardContent>
-        </Card>
+        {isPharmacy && (
+          <Card>
+            <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
+              <CardTitle className="text-sm font-medium">Expiring Soon</CardTitle>
+              <CalendarDaysIcon className="h-4 w-4 text-muted-foreground" />
+            </CardHeader>
+            <CardContent>
+              <div className="text-2xl font-bold text-warning">{expiringItems.length}</div>
+              <p className="text-xs text-muted-foreground">Items expiring in 30 days</p>
+            </CardContent>
+          </Card>
+        )}
         
-        <Card>
-          <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
-            <CardTitle className="text-sm font-medium">Expired Medicines</CardTitle>
-            <AlertTriangle className="h-4 w-4 text-destructive" />
-          </CardHeader>
-          <CardContent>
-            <div className="text-2xl font-bold text-destructive">{stats.expiredItems}</div>
-            <p className="text-xs text-muted-foreground">Medicines expired</p>
-          </CardContent>
-        </Card>
+        {isPharmacy && (
+          <Card>
+            <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
+              <CardTitle className="text-sm font-medium">Expired Medicines</CardTitle>
+              <AlertTriangle className="h-4 w-4 text-destructive" />
+            </CardHeader>
+            <CardContent>
+              <div className="text-2xl font-bold text-destructive">{stats.expiredItems}</div>
+              <p className="text-xs text-muted-foreground">Medicines expired</p>
+            </CardContent>
+          </Card>
+        )}
       </div>
 
       {stats.outOfStockItems > 0 && (
@@ -526,7 +535,7 @@ export default function StaffDashboard() {
         </Card>
       )}
 
-      {expiredItems.length > 0 && (
+      {isPharmacy && expiredItems.length > 0 && (
         <Card>
           <CardHeader>
             <CardTitle className="flex items-center space-x-2">
@@ -566,95 +575,146 @@ export default function StaffDashboard() {
 
       {/* Analytics Charts */}
       <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
-        {/* Medicines Sold by Category */}
-        <Card>
-          <CardHeader>
-            <CardTitle>Medicines Sold by Category</CardTitle>
-            <CardDescription>Medicine sales performance</CardDescription>
-          </CardHeader>
-          <CardContent>
-            <ResponsiveContainer width="100%" height={300}>
-              <BarChart data={medicinesCategorySales}>
-                <CartesianGrid strokeDasharray="3 3" />
-                <XAxis dataKey="category" />
-                <YAxis />
-                <Bar dataKey="sales" fill="hsl(var(--primary))" />
-              </BarChart>
-            </ResponsiveContainer>
-          </CardContent>
-        </Card>
+        {isPharmacy ? (
+          <>
+            {/* Medicines Sold by Category - pharmacy only */}
+            <Card>
+              <CardHeader>
+                <CardTitle>Medicines Sold by Category</CardTitle>
+                <CardDescription>Medicine sales performance</CardDescription>
+              </CardHeader>
+              <CardContent>
+                <ResponsiveContainer width="100%" height={300}>
+                  <BarChart data={medicinesCategorySales}>
+                    <CartesianGrid strokeDasharray="3 3" />
+                    <XAxis dataKey="category" />
+                    <YAxis />
+                    <Bar dataKey="sales" fill="hsl(var(--primary))" />
+                  </BarChart>
+                </ResponsiveContainer>
+              </CardContent>
+            </Card>
 
-        {/* Items Sold by Category */}
-        <Card>
-          <CardHeader>
-            <CardTitle>Items Sold by Category</CardTitle>
-            <CardDescription>Non-medicine items sales</CardDescription>
-          </CardHeader>
-          <CardContent>
-            <ResponsiveContainer width="100%" height={300}>
-              <BarChart data={itemsCategorySales}>
-                <CartesianGrid strokeDasharray="3 3" />
-                <XAxis dataKey="category" />
-                <YAxis />
-                <Bar dataKey="sales" fill="hsl(var(--secondary))" />
-              </BarChart>
-            </ResponsiveContainer>
-          </CardContent>
-        </Card>
+            {/* Items Sold by Category */}
+            <Card>
+              <CardHeader>
+                <CardTitle>Items Sold by Category</CardTitle>
+                <CardDescription>Non-medicine items sales</CardDescription>
+              </CardHeader>
+              <CardContent>
+                <ResponsiveContainer width="100%" height={300}>
+                  <BarChart data={itemsCategorySales}>
+                    <CartesianGrid strokeDasharray="3 3" />
+                    <XAxis dataKey="category" />
+                    <YAxis />
+                    <Bar dataKey="sales" fill="hsl(var(--secondary))" />
+                  </BarChart>
+                </ResponsiveContainer>
+              </CardContent>
+            </Card>
 
-        {/* Top-Selling Medicines */}
-        <Card>
-          <CardHeader>
-            <CardTitle>Top-Selling Medicines</CardTitle>
-            <CardDescription>Best performing medicines</CardDescription>
-          </CardHeader>
-          <CardContent>
-            <ResponsiveContainer width="100%" height={300}>
-              <PieChart>
-                <Pie
-                  data={topMedicines.slice(0, 5)}
-                  cx="50%"
-                  cy="50%"
-                  outerRadius={80}
-                  fill="hsl(var(--primary))"
-                  dataKey="sales"
-                  label={(entry: any) => entry.name}
-                >
-                  {topMedicines.slice(0, 5).map((entry, index) => (
-                    <Cell key={`cell-${index}`} fill={`hsl(${(index * 72) % 360}, 70%, 50%)`} />
-                  ))}
-                </Pie>
-              </PieChart>
-            </ResponsiveContainer>
-          </CardContent>
-        </Card>
+            {/* Top-Selling Medicines - pharmacy only */}
+            <Card>
+              <CardHeader>
+                <CardTitle>Top-Selling Medicines</CardTitle>
+                <CardDescription>Best performing medicines</CardDescription>
+              </CardHeader>
+              <CardContent>
+                <ResponsiveContainer width="100%" height={300}>
+                  <PieChart>
+                    <Pie
+                      data={topMedicines.slice(0, 5)}
+                      cx="50%"
+                      cy="50%"
+                      outerRadius={80}
+                      fill="hsl(var(--primary))"
+                      dataKey="sales"
+                      label={(entry: any) => entry.name}
+                    >
+                      {topMedicines.slice(0, 5).map((entry, index) => (
+                        <Cell key={`cell-${index}`} fill={`hsl(${(index * 72) % 360}, 70%, 50%)`} />
+                      ))}
+                    </Pie>
+                  </PieChart>
+                </ResponsiveContainer>
+              </CardContent>
+            </Card>
 
-        {/* Top-Selling Items */}
-        <Card>
-          <CardHeader>
-            <CardTitle>Top-Selling Items</CardTitle>
-            <CardDescription>Best performing items</CardDescription>
-          </CardHeader>
-          <CardContent>
-            <ResponsiveContainer width="100%" height={300}>
-              <PieChart>
-                <Pie
-                  data={topItems.slice(0, 5)}
-                  cx="50%"
-                  cy="50%"
-                  outerRadius={80}
-                  fill="hsl(var(--accent))"
-                  dataKey="sales"
-                  label={(entry: any) => entry.name}
-                >
-                  {topItems.slice(0, 5).map((entry, index) => (
-                    <Cell key={`cell-${index}`} fill={`hsl(${(index * 90) % 360}, 65%, 55%)`} />
-                  ))}
-                </Pie>
-              </PieChart>
-            </ResponsiveContainer>
-          </CardContent>
-        </Card>
+            {/* Top-Selling Items */}
+            <Card>
+              <CardHeader>
+                <CardTitle>Top-Selling Items</CardTitle>
+                <CardDescription>Best performing items</CardDescription>
+              </CardHeader>
+              <CardContent>
+                <ResponsiveContainer width="100%" height={300}>
+                  <PieChart>
+                    <Pie
+                      data={topItems.slice(0, 5)}
+                      cx="50%"
+                      cy="50%"
+                      outerRadius={80}
+                      fill="hsl(var(--accent))"
+                      dataKey="sales"
+                      label={(entry: any) => entry.name}
+                    >
+                      {topItems.slice(0, 5).map((entry, index) => (
+                        <Cell key={`cell-${index}`} fill={`hsl(${(index * 90) % 360}, 65%, 55%)`} />
+                      ))}
+                    </Pie>
+                  </PieChart>
+                </ResponsiveContainer>
+              </CardContent>
+            </Card>
+          </>
+        ) : (
+          <>
+            {/* Items Sold by Category - general */}
+            <Card>
+              <CardHeader>
+                <CardTitle>Items Sold by Category</CardTitle>
+                <CardDescription>Sales by category</CardDescription>
+              </CardHeader>
+              <CardContent>
+                <ResponsiveContainer width="100%" height={300}>
+                  <BarChart data={[...medicinesCategorySales, ...itemsCategorySales]}>
+                    <CartesianGrid strokeDasharray="3 3" />
+                    <XAxis dataKey="category" />
+                    <YAxis />
+                    <Bar dataKey="sales" fill="hsl(var(--primary))" />
+                  </BarChart>
+                </ResponsiveContainer>
+              </CardContent>
+            </Card>
+
+            {/* Top-Selling Items - general */}
+            <Card>
+              <CardHeader>
+                <CardTitle>Top-Selling Items</CardTitle>
+                <CardDescription>Best performing items</CardDescription>
+              </CardHeader>
+              <CardContent>
+                <ResponsiveContainer width="100%" height={300}>
+                  <PieChart>
+                    <Pie
+                      data={[...topMedicines, ...topItems].sort((a, b) => b.sales - a.sales).slice(0, 5)}
+                      cx="50%"
+                      cy="50%"
+                      outerRadius={80}
+                      fill="hsl(var(--primary))"
+                      dataKey="sales"
+                      label={(entry: any) => entry.name}
+                    >
+                      {[...topMedicines, ...topItems].sort((a, b) => b.sales - a.sales).slice(0, 5).map((entry, index) => (
+                        <Cell key={`cell-${index}`} fill={`hsl(${(index * 72) % 360}, 70%, 50%)`} />
+                      ))}
+                    </Pie>
+                  </PieChart>
+                </ResponsiveContainer>
+              </CardContent>
+            </Card>
+          </>
+        )}
       </div>
     </div>
   );

@@ -91,7 +91,7 @@ export function AppSidebar() {
       <SidebarHeader className={`border-b p-4 ${branding.sidebarColor}`}>
         <div className="flex items-center space-x-2">
           <div className="flex items-center justify-center w-15 h-15 rounded-md overflow-hidden">
-            <img src="/lovable-uploads/2f79a84c-a540-4f7f-bbe7-0bb88136976a.png" alt={branding.logoAlt} className="w-15 h-15 object-cover" />
+            <img src={branding.logoSrc} alt={branding.logoAlt} className="w-15 h-15 object-cover" />
           </div>
           {!isCollapsed && (
             <div>

@@ -125,7 +125,7 @@ Deno.serve(async (req) => {
         // Get branches for this owner
         const { data: branches, error: branchesError } = await supabase
           .from('pharmacy_branches')
-          .select('id, name')
+          .select('id, name, branch_type')
           .eq('pharmacy_owner_id', profile.id);
 
         if (branchesError) {
@@ -141,7 +141,8 @@ Deno.serve(async (req) => {
         // Process each branch separately
         for (const branch of branches) {
           try {
-            // Get today's sales with sale items and medicine details
+            const isPharmacy = branch.branch_type === 'pharmacy';
+            const itemLabel = isPharmacy ? 'Medicine' : 'Item';
             const { data: sales, error: salesError } = await supabase
               .from('sales')
               .select(`
@@ -225,19 +226,23 @@ Deno.serve(async (req) => {
               day: 'numeric' 
             });
 
-            let report = `📊 *Daily Pharmacy Report* 🧾\n\n`;
+            const reportTitle = isPharmacy ? '📊 *Daily Pharmacy Report* 🧾' : '📊 *Daily Inventory Report* 🧾';
+            const topLabel = isPharmacy ? 'Top-Selling Medicine' : 'Top-Selling Item';
+            const botName = isPharmacy ? 'PharmaXpert Bot' : 'StockXpert Bot';
+
+            let report = `${reportTitle}\n\n`;
             report += `🏪 *Branch:* ${branch.name}\n`;
             report += `📅 *Date:* ${dateStr}\n\n`;
             report += `💊 *Items Sold:* ${itemsSoldNumber}\n`;
             report += `💰 *Total Income:* ${formatNumber(totalIncome)} ETB\n`;
             report += `💸 *Total Expense:* ${formatNumber(totalExpense)} ETB\n`;
-            report += `🔥 *Top-Selling Medicine:* ${topMedicine}\n\n`;
+            report += `🔥 *${topLabel}:* ${topMedicine}\n\n`;
             
             if (salesSummary.length > 0) {
               report += `🧾 *Sales Summary:*\n${salesSummary.join('\n')}\n\n`;
             }
             
-            report += `✅ _Report generated automatically by PharmaXpert Bot_ 🤖`;
+            report += `✅ _Report generated automatically by ${botName}_ 🤖`;
 
             // Send the report
             await sendTelegramMessage(profile.telegram_chat_id, report);

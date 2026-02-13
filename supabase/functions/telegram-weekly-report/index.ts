@@ -169,7 +169,7 @@ Deno.serve(async (req) => {
         // Get branches for this owner
         const { data: branches, error: branchesError } = await supabase
           .from('pharmacy_branches')
-          .select('id, name')
+          .select('id, name, branch_type')
           .eq('pharmacy_owner_id', profile.id);
 
         if (branchesError || !branches || branches.length === 0) {
@@ -180,7 +180,10 @@ Deno.serve(async (req) => {
         // Process each branch
         for (const branch of branches) {
           try {
-            // Get weekly sales
+            const isPharmacy = branch.branch_type === 'pharmacy';
+            const topLabel = isPharmacy ? 'Top 3 Medicines' : 'Top 3 Items';
+            const botName = isPharmacy ? 'PharmaXpert Bot' : 'StockXpert Bot';
+            const reportTitle = isPharmacy ? '📅 *Weekly Pharmacy Summary* 📈' : '📅 *Weekly Inventory Summary* 📈';
             const { data: sales, error: salesError } = await supabase
               .from('sales')
               .select(`
@@ -259,7 +262,7 @@ Deno.serve(async (req) => {
             // Format report
             const weekRangeStr = `${weekStart.toLocaleDateString('en-US', { month: 'short', day: 'numeric' })} – ${weekEnd.toLocaleDateString('en-US', { month: 'short', day: 'numeric' })}`;
 
-            let report = `📅 *Weekly Pharmacy Summary* 📈\n\n`;
+            let report = `${reportTitle}\n\n`;
             report += `🏪 *Branch:* ${branch.name}\n`;
             report += `📆 *Week:* ${weekRangeStr}\n\n`;
             report += `💊 *Total Items Sold:* ${itemsSoldNumber}\n`;
@@ -267,13 +270,13 @@ Deno.serve(async (req) => {
             report += `💸 *Total Expense:* ${formatNumber(totalExpense)} ETB\n`;
             
             if (topMedicines.length > 0) {
-              report += `🔥 *Top 3 Medicines:*\n`;
+              report += `🔥 *${topLabel}:*\n`;
               topMedicines.forEach(([name, qty], idx) => {
                 report += `${idx + 1}️⃣ ${name} — ${qty} units\n`;
               });
             }
             
-            report += `\n✅ _Weekly summary generated automatically by PharmaXpert Bot_ 🤖`;
+            report += `\n✅ _Weekly summary generated automatically by ${botName}_ 🤖`;
 
             // Send text report
             await sendTelegramMessage(profile.telegram_chat_id, report);
