@@ -1,0 +1,99 @@
+import { useState } from 'react';
+import { Dialog, DialogContent, DialogDescription, DialogHeader, DialogTitle } from '@/components/ui/dialog';
+import { Button } from '@/components/ui/button';
+import { Input } from '@/components/ui/input';
+import { Label } from '@/components/ui/label';
+import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
+import { Textarea } from '@/components/ui/textarea';
+import { supabase } from '@/integrations/supabase/client';
+import { useToast } from '@/hooks/use-toast';
+import { useAuth } from '@/hooks/useAuth';
+import { useBranchContext } from '@/hooks/useBranchContext';
+
+interface RecordPaymentDialogProps {
+  open: boolean;
+  onOpenChange: (open: boolean) => void;
+  customerId: string;
+  customerName: string;
+  outstandingAmount: number;
+  onPaymentRecorded: () => void;
+}
+
+export default function RecordPaymentDialog({ open, onOpenChange, customerId, customerName, outstandingAmount, onPaymentRecorded }: RecordPaymentDialogProps) {
+  const [amount, setAmount] = useState('');
+  const [paymentMethod, setPaymentMethod] = useState('Cash');
+  const [notes, setNotes] = useState('');
+  const [loading, setLoading] = useState(false);
+  const { profile } = useAuth();
+  const { selectedBranch } = useBranchContext();
+  const { toast } = useToast();
+
+  const handleSubmit = async (e: React.FormEvent) => {
+    e.preventDefault();
+    const parsedAmount = parseFloat(amount);
+    if (!parsedAmount || parsedAmount <= 0) return;
+
+    setLoading(true);
+    try {
+      const { error } = await supabase.from('customer_payments').insert({
+        customer_id: customerId,
+        amount: parsedAmount,
+        payment_method: paymentMethod,
+        notes: notes.trim() || null,
+        created_by: profile?.id,
+        branch_id: selectedBranch || profile?.branch_id,
+      });
+      if (error) throw error;
+      toast({ title: "Success", description: `Payment of ETB ${parsedAmount.toFixed(2)} recorded for ${customerName}` });
+      setAmount(''); setNotes(''); setPaymentMethod('Cash');
+      onOpenChange(false);
+      onPaymentRecorded();
+    } catch (error) {
+      toast({ title: "Error", description: "Failed to record payment", variant: "destructive" });
+    } finally {
+      setLoading(false);
+    }
+  };
+
+  return (
+    <Dialog open={open} onOpenChange={onOpenChange}>
+      <DialogContent className="sm:max-w-[425px]">
+        <DialogHeader>
+          <DialogTitle>Record Debt Payment</DialogTitle>
+          <DialogDescription>
+            Record a payment from <strong>{customerName}</strong>. Outstanding: <strong>ETB {outstandingAmount.toFixed(2)}</strong>
+          </DialogDescription>
+        </DialogHeader>
+        <form onSubmit={handleSubmit} className="space-y-4">
+          <div className="space-y-2">
+            <Label htmlFor="pay-amount">Amount (ETB) *</Label>
+            <Input id="pay-amount" type="number" step="0.01" min="0.01" max={outstandingAmount} value={amount} onChange={e => setAmount(e.target.value)} required />
+          </div>
+          <div className="space-y-2">
+            <Label>Payment Method</Label>
+            <Select value={paymentMethod} onValueChange={setPaymentMethod}>
+              <SelectTrigger><SelectValue /></SelectTrigger>
+              <SelectContent>
+                <SelectItem value="Cash">Cash</SelectItem>
+                <SelectItem value="Commercial Bank of Ethiopia">Commercial Bank of Ethiopia</SelectItem>
+                <SelectItem value="Awash International Bank">Awash International Bank</SelectItem>
+                <SelectItem value="Bank of Abyssinia">Bank of Abyssinia</SelectItem>
+                <SelectItem value="Dashen Bank">Dashen Bank</SelectItem>
+                <SelectItem value="Telebirr">Telebirr</SelectItem>
+                <SelectItem value="M-PESA | Safaricom">M-PESA | Safaricom</SelectItem>
+              </SelectContent>
+            </Select>
+          </div>
+          <div className="space-y-2">
+            <Label htmlFor="pay-notes">Notes</Label>
+            <Textarea id="pay-notes" value={notes} onChange={e => setNotes(e.target.value)} placeholder="Optional payment notes" />
+          </div>
+          <div className="flex justify-end gap-2">
+            <Button type="button" variant="outline" onClick={() => onOpenChange(false)}>Cancel</Button>
+            <Button type="submit" disabled={loading}>{loading ? 'Recording...' : 'Record Payment'}</Button>
+          </div>
+        </form>
+      </DialogContent>
+    </Dialog>
+  );
+}

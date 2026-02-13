@@ -7,7 +7,7 @@ import { Label } from '@/components/ui/label';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
 import { Separator } from '@/components/ui/separator';
 import { Pagination, PaginationContent, PaginationItem, PaginationLink, PaginationNext, PaginationPrevious } from '@/components/ui/pagination';
-import { Search, Plus, Minus, ShoppingCart, Trash2, CreditCard, Percent, Filter } from 'lucide-react';
+import { Search, Plus, Minus, ShoppingCart, Trash2, CreditCard, Percent, Filter, UserCheck } from 'lucide-react';
 import { supabase } from '@/integrations/supabase/client';
 import { useToast } from '@/hooks/use-toast';
 import { useAuth } from '@/hooks/useAuth';
@@ -50,6 +50,9 @@ export default function SalesManagement() {
   const [showCheckoutConfirm, setShowCheckoutConfirm] = useState(false);
   const [selectedMedicine, setSelectedMedicine] = useState<Medicine | null>(null);
   const [showAddToCartDialog, setShowAddToCartDialog] = useState(false);
+  const [customers, setCustomers] = useState<{id: string; name: string}[]>([]);
+  const [selectedCustomerId, setSelectedCustomerId] = useState<string>('none');
+  const [amountReceived, setAmountReceived] = useState<string>('');
   const { profile } = useAuth();
   const { toast } = useToast();
   const { selectedBranch, branchType } = useBranchContext();
@@ -57,7 +60,7 @@ export default function SalesManagement() {
   
   const itemsPerPage = 16;
 
-  useEffect(() => { fetchMedicines(); }, [selectedBranch]);
+  useEffect(() => { fetchMedicines(); fetchCustomers(); }, [selectedBranch]);
 
   useEffect(() => {
     const filtered = medicines.filter(medicine => {
@@ -95,6 +98,17 @@ export default function SalesManagement() {
       toast({ title: "Error", description: `Failed to fetch ${isPharmacy ? 'medicines' : 'items'}`, variant: "destructive" });
     } finally {
       setLoading(false);
+    }
+  };
+
+  const fetchCustomers = async () => {
+    try {
+      let query = supabase.from('customers').select('id, name').order('name');
+      if (selectedBranch) query = query.eq('branch_id', selectedBranch);
+      const { data } = await query;
+      setCustomers(data || []);
+    } catch (error) {
+      console.error('Error fetching customers:', error);
     }
   };
 
@@ -173,7 +187,23 @@ export default function SalesManagement() {
     setShowCheckoutConfirm(false);
     setProcessing(true);
     try {
-      const { data: saleData, error: saleError } = await supabase.from('sales').insert([{ total_amount: calculateTotal(), payment_method: paymentMethod, discount_amount: calculateDiscount(), sold_by: profile?.id, branch_id: selectedBranch || profile?.branch_id }]).select().single();
+      const total = calculateTotal();
+      const paid = amountReceived ? parseFloat(amountReceived) : total;
+      const actualPaid = Math.min(paid, total);
+      const paymentStatus = actualPaid >= total ? 'paid' : actualPaid > 0 ? 'partial' : 'unpaid';
+
+      const saleInsert: any = {
+        total_amount: total,
+        payment_method: paymentMethod,
+        discount_amount: calculateDiscount(),
+        sold_by: profile?.id,
+        branch_id: selectedBranch || profile?.branch_id,
+        amount_paid: actualPaid,
+        payment_status: paymentStatus,
+      };
+      if (selectedCustomerId !== 'none') saleInsert.customer_id = selectedCustomerId;
+
+      const { data: saleData, error: saleError } = await supabase.from('sales').insert([saleInsert]).select().single();
       if (saleError) throw saleError;
 
       const saleItems = cart.map(item => ({ sale_id: saleData.id, medicine_id: item.id, quantity: item.saleType === 'full_pack' ? item.quantity : 0, unit_price: item.selling_price, total_price: item.total, sale_type: item.saleType, stripes_sold: item.saleType === 'by_stripe' ? item.stripesCount : null }));
@@ -198,7 +228,7 @@ export default function SalesManagement() {
       }
 
       toast({ title: "Success", description: `Sale completed successfully! Payment: ${paymentMethod}. Total: ETB ${calculateTotal().toFixed(2)}` });
-      setCart([]); setPaymentMethod('Cash'); setDiscountPercent(0); fetchMedicines();
+      setCart([]); setPaymentMethod('Cash'); setDiscountPercent(0); setSelectedCustomerId('none'); setAmountReceived(''); fetchMedicines();
     } catch (error) {
       toast({ title: "Error", description: "Failed to process sale", variant: "destructive" });
     } finally { setProcessing(false); }
@@ -339,6 +369,17 @@ export default function SalesManagement() {
                 
                 <div className="border-t pt-4 space-y-4">
                   <div className="space-y-2">
+                    <Label>Customer (optional)</Label>
+                    <Select value={selectedCustomerId} onValueChange={setSelectedCustomerId}>
+                      <SelectTrigger><SelectValue placeholder="Walk-in customer" /></SelectTrigger>
+                      <SelectContent>
+                        <SelectItem value="none">Walk-in (no customer)</SelectItem>
+                        {customers.map(c => (<SelectItem key={c.id} value={c.id}>{c.name}</SelectItem>))}
+                      </SelectContent>
+                    </Select>
+                  </div>
+
+                  <div className="space-y-2">
                     <Label htmlFor="payment-method">Payment Method</Label>
                     <Select value={paymentMethod} onValueChange={setPaymentMethod}>
                       <SelectTrigger><SelectValue placeholder="Select payment method" /></SelectTrigger>
@@ -370,6 +411,18 @@ export default function SalesManagement() {
                    </div>
                    <Separator />
                    <div className="flex justify-between font-medium"><span>Total:</span><span>ETB {calculateTotal().toFixed(2)}</span></div>
+
+                  {selectedCustomerId !== 'none' && (
+                    <div className="space-y-2">
+                      <Label htmlFor="amount-received">Amount Received (ETB)</Label>
+                      <Input id="amount-received" type="number" step="0.01" min="0" value={amountReceived} onChange={e => setAmountReceived(e.target.value)} placeholder={calculateTotal().toFixed(2)} />
+                      {amountReceived && parseFloat(amountReceived) < calculateTotal() && (
+                        <p className="text-xs text-destructive">
+                          Remaining ETB {(calculateTotal() - parseFloat(amountReceived)).toFixed(2)} will be recorded as debt
+                        </p>
+                      )}
+                    </div>
+                  )}
                   
                   <Button onClick={handleCheckout} className="w-full" disabled={processing}>
                     <CreditCard className="h-4 w-4 mr-2" />

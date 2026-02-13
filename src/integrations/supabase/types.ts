@@ -41,6 +41,119 @@ export type Database = {
         }
         Relationships: []
       }
+      customer_payments: {
+        Row: {
+          amount: number
+          branch_id: string | null
+          created_at: string
+          created_by: string | null
+          customer_id: string
+          id: string
+          notes: string | null
+          payment_method: string | null
+          sale_id: string | null
+        }
+        Insert: {
+          amount: number
+          branch_id?: string | null
+          created_at?: string
+          created_by?: string | null
+          customer_id: string
+          id?: string
+          notes?: string | null
+          payment_method?: string | null
+          sale_id?: string | null
+        }
+        Update: {
+          amount?: number
+          branch_id?: string | null
+          created_at?: string
+          created_by?: string | null
+          customer_id?: string
+          id?: string
+          notes?: string | null
+          payment_method?: string | null
+          sale_id?: string | null
+        }
+        Relationships: [
+          {
+            foreignKeyName: "customer_payments_branch_id_fkey"
+            columns: ["branch_id"]
+            isOneToOne: false
+            referencedRelation: "pharmacy_branches"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "customer_payments_created_by_fkey"
+            columns: ["created_by"]
+            isOneToOne: false
+            referencedRelation: "profiles"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "customer_payments_customer_id_fkey"
+            columns: ["customer_id"]
+            isOneToOne: false
+            referencedRelation: "customers"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "customer_payments_sale_id_fkey"
+            columns: ["sale_id"]
+            isOneToOne: false
+            referencedRelation: "sales"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      customers: {
+        Row: {
+          branch_id: string | null
+          created_at: string
+          created_by: string | null
+          id: string
+          name: string
+          notes: string | null
+          phone: string | null
+          updated_at: string
+        }
+        Insert: {
+          branch_id?: string | null
+          created_at?: string
+          created_by?: string | null
+          id?: string
+          name: string
+          notes?: string | null
+          phone?: string | null
+          updated_at?: string
+        }
+        Update: {
+          branch_id?: string | null
+          created_at?: string
+          created_by?: string | null
+          id?: string
+          name?: string
+          notes?: string | null
+          phone?: string | null
+          updated_at?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "customers_branch_id_fkey"
+            columns: ["branch_id"]
+            isOneToOne: false
+            referencedRelation: "pharmacy_branches"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "customers_created_by_fkey"
+            columns: ["created_by"]
+            isOneToOne: false
+            referencedRelation: "profiles"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
       expenses: {
         Row: {
           amount: number
@@ -467,33 +580,49 @@ export type Database = {
       }
       sales: {
         Row: {
+          amount_paid: number | null
           branch_id: string | null
           created_at: string | null
+          customer_id: string | null
           discount_amount: number | null
           id: string
           payment_method: string | null
+          payment_status: string | null
           sold_by: string | null
           total_amount: number
         }
         Insert: {
+          amount_paid?: number | null
           branch_id?: string | null
           created_at?: string | null
+          customer_id?: string | null
           discount_amount?: number | null
           id?: string
           payment_method?: string | null
+          payment_status?: string | null
           sold_by?: string | null
           total_amount: number
         }
         Update: {
+          amount_paid?: number | null
           branch_id?: string | null
           created_at?: string | null
+          customer_id?: string | null
           discount_amount?: number | null
           id?: string
           payment_method?: string | null
+          payment_status?: string | null
           sold_by?: string | null
           total_amount?: number
         }
         Relationships: [
+          {
+            foreignKeyName: "sales_customer_id_fkey"
+            columns: ["customer_id"]
+            isOneToOne: false
+            referencedRelation: "customers"
+            referencedColumns: ["id"]
+          },
           {
             foreignKeyName: "sales_sold_by_fkey"
             columns: ["sold_by"]

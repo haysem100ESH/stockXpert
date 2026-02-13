@@ -16,6 +16,7 @@ import StaffPage from "./pages/StaffPage";
 import AccountPage from "./pages/AccountPage";
 import DeveloperPage from "./pages/DeveloperPage";
 import BranchPage from "./pages/BranchPage";
+import CustomersPage from "./pages/CustomersPage";
 import Auth from "./pages/Auth";
 import NotFound from "./pages/NotFound";
 
@@ -62,6 +63,7 @@ const App = () => {
               <Route path="/sales" element={<Layout><SubscriptionGuard><SalesPage /></SubscriptionGuard></Layout>} />
               <Route path="/finance" element={<Layout><SubscriptionGuard><FinancePage /></SubscriptionGuard></Layout>} />
               <Route path="/suppliers" element={<Layout><SubscriptionGuard><SuppliersPage /></SubscriptionGuard></Layout>} />
+              <Route path="/customers" element={<Layout><SubscriptionGuard><CustomersPage /></SubscriptionGuard></Layout>} />
               <Route path="/staff" element={<Layout><SubscriptionGuard><StaffPage /></SubscriptionGuard></Layout>} />
               <Route path="/branches" element={<Layout><SubscriptionGuard><BranchPage /></SubscriptionGuard></Layout>} />
               <Route path="/developer" element={<Layout><DeveloperPage /></Layout>} />
