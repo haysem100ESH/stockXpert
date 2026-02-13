@@ -164,7 +164,7 @@ Deno.serve(async (req) => {
         // Get branches for this owner
         const { data: branches, error: branchesError } = await supabase
           .from('pharmacy_branches')
-          .select('id, name')
+          .select('id, name, branch_type')
           .eq('pharmacy_owner_id', profile.id);
 
         if (branchesError || !branches || branches.length === 0) {
@@ -175,7 +175,10 @@ Deno.serve(async (req) => {
         // Process each branch
         for (const branch of branches) {
           try {
-            // Get monthly sales
+            const isPharmacy = branch.branch_type === 'pharmacy';
+            const topLabel = isPharmacy ? 'Top 5 Medicines' : 'Top 5 Items';
+            const botName = isPharmacy ? 'PharmaXpert Bot' : 'StockXpert Bot';
+            const reportTitle = isPharmacy ? '🏆 *Monthly Pharmacy Report* 📅' : '🏆 *Monthly Inventory Report* 📅';
             const { data: sales, error: salesError } = await supabase
               .from('sales')
               .select(`
@@ -266,7 +269,7 @@ Deno.serve(async (req) => {
             // Format report
             const monthStr = monthStart.toLocaleDateString('en-US', { month: 'long', year: 'numeric' });
 
-            let report = `🏆 *Monthly Pharmacy Report* 📅\n\n`;
+            let report = `${reportTitle}\n\n`;
             report += `🏪 *Branch:* ${branch.name}\n`;
             report += `📆 *Month:* ${monthStr}\n\n`;
             report += `💊 *Total Items Sold:* ${itemsSoldNumber}\n`;
@@ -275,13 +278,13 @@ Deno.serve(async (req) => {
             report += `📊 *Average Daily Sales:* ${formatNumber(avgDailySales)} ETB/day\n`;
             
             if (topMedicines.length > 0) {
-              report += `🔥 *Top 5 Medicines:*\n`;
+              report += `🔥 *${topLabel}:*\n`;
               topMedicines.forEach(([name, qty], idx) => {
                 report += `${idx + 1}️⃣ ${name} — ${qty} units\n`;
               });
             }
             
-            report += `\n✅ _Monthly summary generated automatically by PharmaXpert Bot_ 🤖`;
+            report += `\n✅ _Monthly summary generated automatically by ${botName}_ 🤖`;
 
             // Send text report
             await sendTelegramMessage(profile.telegram_chat_id, report);
