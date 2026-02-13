@@ -9,7 +9,8 @@ import {
   Users,
   Settings,
   Building2,
-  Shield
+  Shield,
+  UserCheck
 } from "lucide-react";
 
 import {
@@ -44,6 +45,7 @@ export function AppSidebar() {
     { title: isPharmacy ? "Inventory" : "Stock", url: "/inventory", icon: Package },
     { title: "Sales", url: "/sales", icon: ShoppingCart },
     { title: "Finance", url: "/finance", icon: DollarSign },
+    { title: "Customers", url: "/customers", icon: UserCheck },
     { title: "Suppliers", url: "/suppliers", icon: Truck },
     { title: "Staff", url: "/staff", icon: Users },
     { title: "Branches", url: "/branches", icon: Building2 },
