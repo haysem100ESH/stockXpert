@@ -290,10 +290,10 @@ export default function StaffInventoryWithActions() {
       </div>
 
       <Tabs defaultValue="inventory" className="space-y-4">
-        <TabsList className={`grid w-full ${isPharmacy ? 'grid-cols-3' : 'grid-cols-2'}`}>
+        <TabsList className="grid w-full grid-cols-3">
           <TabsTrigger value="inventory">{isPharmacy ? 'Medicines & Items' : 'Items'}</TabsTrigger>
           <TabsTrigger value="alerts">{isPharmacy ? 'Inventory Alerts' : 'Stock Alerts'}</TabsTrigger>
-          {isPharmacy && <TabsTrigger value="transfer">Transfer Medicine</TabsTrigger>}
+          <TabsTrigger value="transfer">{isPharmacy ? 'Transfer Medicine' : 'Transfer Items'}</TabsTrigger>
         </TabsList>
 
         <TabsContent value="inventory" className="space-y-4">
@@ -444,11 +444,9 @@ export default function StaffInventoryWithActions() {
           <InventoryDashboard />
         </TabsContent>
 
-        {isPharmacy && (
-          <TabsContent value="transfer">
-            <MedicineTransfer />
-          </TabsContent>
-        )}
+        <TabsContent value="transfer">
+          <MedicineTransfer />
+        </TabsContent>
       </Tabs>
 
       {isPharmacy && (
