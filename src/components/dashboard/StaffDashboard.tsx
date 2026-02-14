@@ -362,7 +362,7 @@ export default function StaffDashboard() {
         <div>
           <h2 className="text-3xl font-bold tracking-tight">Staff Dashboard</h2>
           <p className="text-muted-foreground">
-            Welcome back, {profile.full_name}! Here's what's happening today.
+            Welcome back, {profile.full_name}! Here's what's happening {isPharmacy ? 'at your pharmacy' : 'in your inventory'}.
           </p>
         </div>
         
@@ -444,31 +444,27 @@ export default function StaffDashboard() {
           </CardContent>
         </Card>
         
-        {isPharmacy && (
-          <Card>
-            <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
-              <CardTitle className="text-sm font-medium">Expiring Soon</CardTitle>
-              <CalendarDaysIcon className="h-4 w-4 text-muted-foreground" />
-            </CardHeader>
-            <CardContent>
-              <div className="text-2xl font-bold text-warning">{expiringItems.length}</div>
-              <p className="text-xs text-muted-foreground">Items expiring in 30 days</p>
-            </CardContent>
-          </Card>
-        )}
+        <Card>
+          <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
+            <CardTitle className="text-sm font-medium">{isPharmacy ? 'Expiring Soon' : 'Items Near Expiry'}</CardTitle>
+            <CalendarDaysIcon className="h-4 w-4 text-muted-foreground" />
+          </CardHeader>
+          <CardContent>
+            <div className="text-2xl font-bold text-warning">{expiringItems.length}</div>
+            <p className="text-xs text-muted-foreground">Items expiring in 30 days</p>
+          </CardContent>
+        </Card>
         
-        {isPharmacy && (
-          <Card>
-            <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
-              <CardTitle className="text-sm font-medium">Expired Medicines</CardTitle>
-              <AlertTriangle className="h-4 w-4 text-destructive" />
-            </CardHeader>
-            <CardContent>
-              <div className="text-2xl font-bold text-destructive">{stats.expiredItems}</div>
-              <p className="text-xs text-muted-foreground">Medicines expired</p>
-            </CardContent>
-          </Card>
-        )}
+        <Card>
+          <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
+            <CardTitle className="text-sm font-medium">{isPharmacy ? 'Expired Medicines' : 'Expired Items'}</CardTitle>
+            <AlertTriangle className="h-4 w-4 text-destructive" />
+          </CardHeader>
+          <CardContent>
+            <div className="text-2xl font-bold text-destructive">{stats.expiredItems}</div>
+            <p className="text-xs text-muted-foreground">{isPharmacy ? 'Medicines expired' : 'Items expired'}</p>
+          </CardContent>
+        </Card>
       </div>
 
       {stats.outOfStockItems > 0 && (
@@ -535,15 +531,15 @@ export default function StaffDashboard() {
         </Card>
       )}
 
-      {isPharmacy && expiredItems.length > 0 && (
+      {expiredItems.length > 0 && (
         <Card>
           <CardHeader>
             <CardTitle className="flex items-center space-x-2">
               <AlertTriangle className="h-5 w-5 text-destructive" />
-              <span>Expired Medicines</span>
+              <span>{isPharmacy ? 'Expired Medicines' : 'Expired Items'}</span>
             </CardTitle>
             <CardDescription>
-              {expiredItems.length} medicines have expired and need attention
+              {expiredItems.length} {isPharmacy ? 'medicines' : 'items'} have expired and need attention
             </CardDescription>
           </CardHeader>
           <CardContent>
@@ -575,13 +571,13 @@ export default function StaffDashboard() {
 
       {/* Analytics Charts */}
       <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
-        {isPharmacy ? (
+      {isPharmacy ? (
           <>
             {/* Medicines Sold by Category - pharmacy only */}
             <Card>
               <CardHeader>
                 <CardTitle>Medicines Sold by Category</CardTitle>
-                <CardDescription>Medicine sales performance</CardDescription>
+                <CardDescription>Sales breakdown by medicine category</CardDescription>
               </CardHeader>
               <CardContent>
                 <ResponsiveContainer width="100%" height={300}>
@@ -673,7 +669,7 @@ export default function StaffDashboard() {
             <Card>
               <CardHeader>
                 <CardTitle>Items Sold by Category</CardTitle>
-                <CardDescription>Sales by category</CardDescription>
+                <CardDescription>Sales breakdown by item category</CardDescription>
               </CardHeader>
               <CardContent>
                 <ResponsiveContainer width="100%" height={300}>

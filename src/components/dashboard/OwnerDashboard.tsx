@@ -368,7 +368,7 @@ export default function OwnerDashboard() {
     <div className="space-y-6">
       <TelegramConnectionDialog />
       <div className="flex items-center justify-between flex-wrap gap-4">
-        <h1 className="text-3xl font-bold">Owner Dashboard</h1>
+        <h1 className="text-3xl font-bold">{isPharmacy ? 'Pharmacy Dashboard' : 'Inventory Dashboard'}</h1>
         
         <div className="flex items-center gap-4">
           <Select value={dateFilter} onValueChange={setDateFilter}>
@@ -463,18 +463,16 @@ export default function OwnerDashboard() {
           </CardContent>
         </Card>
 
-        {isPharmacy && (
-          <Card>
-            <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
-              <CardTitle className="text-sm font-medium">Expired Medicines</CardTitle>
-              <AlertTriangle className="h-4 w-4 text-destructive" />
-            </CardHeader>
-            <CardContent>
-              <div className="text-2xl font-bold text-destructive">{stats.expiredItems}</div>
-              <p className="text-xs text-muted-foreground">Medicines expired</p>
-            </CardContent>
-          </Card>
-        )}
+        <Card>
+          <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
+            <CardTitle className="text-sm font-medium">{isPharmacy ? 'Expired Medicines' : 'Expired Items'}</CardTitle>
+            <AlertTriangle className="h-4 w-4 text-destructive" />
+          </CardHeader>
+          <CardContent>
+            <div className="text-2xl font-bold text-destructive">{stats.expiredItems}</div>
+            <p className="text-xs text-muted-foreground">{isPharmacy ? 'Medicines expired' : 'Items expired'}</p>
+          </CardContent>
+        </Card>
       </div>
 
       {/* Main Tabs */}
@@ -513,8 +511,8 @@ export default function OwnerDashboard() {
             {/* Items Sold by Category */}
             <Card>
               <CardHeader>
-                <CardTitle>{isPharmacy ? 'Items Sold by Category' : 'Products Sold by Category'}</CardTitle>
-                <CardDescription>{isPharmacy ? 'Non-medicine items sales' : 'Sales by category'}</CardDescription>
+                <CardTitle>{isPharmacy ? 'Items Sold by Category' : 'Items Sold by Category'}</CardTitle>
+                <CardDescription>{isPharmacy ? 'Non-medicine items sales' : 'Sales breakdown by item category'}</CardDescription>
               </CardHeader>
               <CardContent>
                 <ResponsiveContainer width="100%" height={300}>
@@ -552,8 +550,8 @@ export default function OwnerDashboard() {
             {/* Top-Selling Items */}
             <Card>
               <CardHeader>
-                <CardTitle>{isPharmacy ? 'Top-Selling Items' : 'Top-Selling Products'}</CardTitle>
-                <CardDescription>{isPharmacy ? 'Best performing items' : 'Best performing products'}</CardDescription>
+                <CardTitle>{isPharmacy ? 'Top-Selling Items' : 'Top-Selling Items'}</CardTitle>
+                <CardDescription>{isPharmacy ? 'Best performing items' : 'Best performing items'}</CardDescription>
               </CardHeader>
               <CardContent>
                 <ResponsiveContainer width="100%" height={300}>

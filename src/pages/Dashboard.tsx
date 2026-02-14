@@ -78,7 +78,8 @@ interface IncomeExpenseData {
 
 export default function Dashboard() {
   const { profile } = useAuth();
-  const { selectedBranch, userBranch } = useBranchContext();
+  const { selectedBranch, userBranch, branchType } = useBranchContext();
+  const isPharmacy = branchType === 'pharmacy';
   const { toast } = useToast();
   const [stats, setStats] = useState<DashboardStats>({
     totalRevenue: 0,
@@ -438,7 +439,7 @@ export default function Dashboard() {
     const url = window.URL.createObjectURL(blob);
     const a = document.createElement('a');
     a.href = url;
-    a.download = `pharmacy-dashboard-${format(new Date(), 'yyyy-MM-dd')}.csv`;
+    a.download = `${isPharmacy ? 'pharmacy' : 'inventory'}-dashboard-${format(new Date(), 'yyyy-MM-dd')}.csv`;
     a.click();
     window.URL.revokeObjectURL(url);
   };
@@ -528,7 +529,7 @@ export default function Dashboard() {
         <div>
           <h2 className="text-3xl font-bold tracking-tight">Dashboard</h2>
           <p className="text-muted-foreground">
-            Welcome back, {profile.full_name}! Here's what's happening at your pharmacy.
+            Welcome back, {profile.full_name}! Here's what's happening {isPharmacy ? 'at your pharmacy' : 'in your inventory'}.
           </p>
         </div>
         
@@ -643,7 +644,7 @@ export default function Dashboard() {
         
         <Card>
           <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
-            <CardTitle className="text-sm font-medium">Expiring Soon</CardTitle>
+            <CardTitle className="text-sm font-medium">{isPharmacy ? 'Expiring Soon' : 'Items Near Expiry'}</CardTitle>
             <CalendarDaysIcon className="h-4 w-4 text-muted-foreground" />
           </CardHeader>
           <CardContent>
@@ -654,12 +655,12 @@ export default function Dashboard() {
 
         <Card>
           <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
-            <CardTitle className="text-sm font-medium">Expired Medicines</CardTitle>
+            <CardTitle className="text-sm font-medium">{isPharmacy ? 'Expired Medicines' : 'Expired Items'}</CardTitle>
             <AlertTriangle className="h-4 w-4 text-destructive" />
           </CardHeader>
           <CardContent>
             <div className="text-2xl font-bold text-destructive">{stats.expiredItems}</div>
-            <p className="text-xs text-muted-foreground">Medicines expired</p>
+            <p className="text-xs text-muted-foreground">{isPharmacy ? 'Medicines expired' : 'Items expired'}</p>
           </CardContent>
         </Card>
       </div>
@@ -670,7 +671,7 @@ export default function Dashboard() {
         <Card>
           <CardHeader>
             <CardTitle>Items Sold by Category</CardTitle>
-            <CardDescription>Sales breakdown by medicine category</CardDescription>
+            <CardDescription>Sales breakdown by {isPharmacy ? 'medicine' : 'item'} category</CardDescription>
           </CardHeader>
           <CardContent>
             <ChartContainer
@@ -731,8 +732,8 @@ export default function Dashboard() {
       {/* Top Selling Products Chart - Moved Below */}
       <Card>
         <CardHeader>
-          <CardTitle>Top Selling Products</CardTitle>
-          <CardDescription>Most frequently sold products</CardDescription>
+          <CardTitle>Top Selling {isPharmacy ? 'Products' : 'Items'}</CardTitle>
+          <CardDescription>Most frequently sold {isPharmacy ? 'products' : 'items'}</CardDescription>
         </CardHeader>
         <CardContent>
           <ChartContainer
