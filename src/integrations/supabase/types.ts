@@ -41,6 +41,33 @@ export type Database = {
         }
         Relationships: []
       }
+      custom_categories: {
+        Row: {
+          created_at: string
+          id: string
+          name: string
+          owner_id: string
+          system_type: string
+          updated_at: string
+        }
+        Insert: {
+          created_at?: string
+          id?: string
+          name: string
+          owner_id: string
+          system_type: string
+          updated_at?: string
+        }
+        Update: {
+          created_at?: string
+          id?: string
+          name?: string
+          owner_id?: string
+          system_type?: string
+          updated_at?: string
+        }
+        Relationships: []
+      }
       customer_payments: {
         Row: {
           amount: number
