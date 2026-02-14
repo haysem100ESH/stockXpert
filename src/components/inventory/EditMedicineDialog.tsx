@@ -8,6 +8,7 @@ import { Checkbox } from '@/components/ui/checkbox';
 import { supabase } from '@/integrations/supabase/client';
 import { useToast } from '@/hooks/use-toast';
 import { useBranchContext } from '@/hooks/useBranchContext';
+import { useCustomCategories } from '@/hooks/useCustomCategories';
 
 interface Medicine {
   id: string;
@@ -44,6 +45,7 @@ export default function EditMedicineDialog({
 }: EditMedicineDialogProps) {
   const { branchType } = useBranchContext();
   const isPharmacy = branchType === 'pharmacy';
+  const { categories: customCategories } = useCustomCategories(isPharmacy ? 'pharmacy' : 'general');
 
   const [medicineData, setMedicineData] = useState({
     name: '',
@@ -182,21 +184,11 @@ export default function EditMedicineDialog({
             <Select value={medicineData.category} onValueChange={(value: any) => setMedicineData({ ...medicineData, category: value })}>
               <SelectTrigger><SelectValue placeholder="Select category" /></SelectTrigger>
               <SelectContent>
-                {isPharmacy ? (
-                  <>
-                    <SelectItem value="tablet">Tablet</SelectItem>
-                    <SelectItem value="capsule">Capsule</SelectItem>
-                    <SelectItem value="syrup">Syrup</SelectItem>
-                    <SelectItem value="injection">Injection</SelectItem>
-                    <SelectItem value="cream">Cream</SelectItem>
-                    <SelectItem value="ointment">Ointment</SelectItem>
-                    <SelectItem value="drops">Drops</SelectItem>
-                    <SelectItem value="inhaler">Inhaler</SelectItem>
-                    <SelectItem value="other">Other</SelectItem>
-                  </>
-                ) : (
-                  <SelectItem value="other">Other</SelectItem>
-                )}
+                {customCategories.map((cat) => (
+                  <SelectItem key={cat} value={cat}>
+                    {cat.charAt(0).toUpperCase() + cat.slice(1).replace(/_/g, ' ')}
+                  </SelectItem>
+                ))}
               </SelectContent>
             </Select>
           </div>

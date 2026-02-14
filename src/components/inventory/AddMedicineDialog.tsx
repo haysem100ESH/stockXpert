@@ -9,6 +9,7 @@ import { Loader2 } from 'lucide-react';
 import { supabase } from '@/integrations/supabase/client';
 import { useToast } from '@/hooks/use-toast';
 import { useBranchContext } from '@/hooks/useBranchContext';
+import { useCustomCategories } from '@/hooks/useCustomCategories';
 interface Medicine {
   id: string;
   name: string;
@@ -32,9 +33,7 @@ interface AddMedicineDialogProps {
   replicateData?: Medicine | null;
 }
 
-const categories = [
-  'tablet', 'capsule', 'syrup', 'injection', 'cream', 'ointment', 'drops', 'inhaler', 'other'
-];
+// Default categories removed - now using useCustomCategories hook
 
 export default function AddMedicineDialog({ open, onOpenChange, onMedicineAdded, replicateData }: AddMedicineDialogProps) {
   const [loading, setLoading] = useState(false);
@@ -42,6 +41,7 @@ export default function AddMedicineDialog({ open, onOpenChange, onMedicineAdded,
   const [selectedBranchId, setSelectedBranchId] = useState<string>('');
   const { toast } = useToast();
   const { selectedBranch, userBranch } = useBranchContext();
+  const { categories } = useCustomCategories('pharmacy');
   
   // Fetch user profile to check role
   const [userRole, setUserRole] = useState<'owner' | 'staff' | null>(null);
