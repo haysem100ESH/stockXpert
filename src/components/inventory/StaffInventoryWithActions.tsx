@@ -259,13 +259,14 @@ export default function StaffInventoryWithActions() {
   return (
     <div className="space-y-6">
       <div className="flex flex-col space-y-4">
-        <div className="flex items-center justify-between">
-          <h2 className="text-2xl font-bold">{isPharmacy ? 'Inventory Management' : 'Stock Management'}</h2>
-          <div className="flex gap-2">
+        <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3">
+          <h2 className="text-xl sm:text-2xl font-bold">{isPharmacy ? 'Inventory Management' : 'Stock Management'}</h2>
+          <div className="flex gap-2 flex-wrap">
             {isPharmacy && (
               <Button 
                 onClick={() => setShowAddDialog(true)}
                 disabled={!hasBranches}
+                size="sm"
               >
                 <Plus className="h-4 w-4 mr-2" />
                 Add Medicine
@@ -275,6 +276,7 @@ export default function StaffInventoryWithActions() {
               onClick={() => setShowAddItemDialog(true)}
               disabled={!hasBranches}
               variant={isPharmacy ? "outline" : "default"}
+              size="sm"
             >
               <Plus className="h-4 w-4 mr-2" />
               Add Item
@@ -291,19 +293,19 @@ export default function StaffInventoryWithActions() {
       </div>
 
       <Tabs defaultValue="inventory" className="space-y-4">
-        <TabsList className="grid w-full grid-cols-4">
-          <TabsTrigger value="inventory">{isPharmacy ? 'Medicines & Items' : 'Items'}</TabsTrigger>
-          <TabsTrigger value="alerts">{isPharmacy ? 'Inventory Alerts' : 'Stock Alerts'}</TabsTrigger>
-          <TabsTrigger value="transfer">{isPharmacy ? 'Transfer Medicine' : 'Transfer Items'}</TabsTrigger>
-          <TabsTrigger value="categories">Categories</TabsTrigger>
+        <TabsList className="grid w-full grid-cols-2 sm:grid-cols-4 h-auto">
+          <TabsTrigger value="inventory" className="text-xs sm:text-sm">{isPharmacy ? 'Medicines & Items' : 'Items'}</TabsTrigger>
+          <TabsTrigger value="alerts" className="text-xs sm:text-sm">{isPharmacy ? 'Inventory Alerts' : 'Stock Alerts'}</TabsTrigger>
+          <TabsTrigger value="transfer" className="text-xs sm:text-sm">{isPharmacy ? 'Transfer Medicine' : 'Transfer Items'}</TabsTrigger>
+          <TabsTrigger value="categories" className="text-xs sm:text-sm">Categories</TabsTrigger>
         </TabsList>
 
         <TabsContent value="inventory" className="space-y-4">
-          <div className="flex items-center space-x-4">
+          <div className="flex flex-col sm:flex-row sm:items-center gap-3">
             <div className="relative flex-1">
               <Search className="absolute left-2 top-2.5 h-4 w-4 text-muted-foreground" />
               <Input
-                placeholder={isPharmacy ? "Search medicines by name or generic name..." : "Search items by name or description..."}
+                placeholder={isPharmacy ? "Search medicines..." : "Search items..."}
                 value={searchTerm}
                 onChange={(e) => setSearchTerm(e.target.value)}
                 className="pl-8"
@@ -311,9 +313,9 @@ export default function StaffInventoryWithActions() {
             </div>
 
             <div className="flex items-center space-x-2">
-              <Filter className="h-4 w-4 text-muted-foreground" />
+              <Filter className="h-4 w-4 text-muted-foreground flex-shrink-0" />
               <Select value={categoryFilter} onValueChange={setCategoryFilter}>
-                <SelectTrigger className="w-48">
+                <SelectTrigger className="w-full sm:w-48">
                   <SelectValue placeholder="Filter by category" />
                 </SelectTrigger>
                 <SelectContent>
@@ -329,7 +331,7 @@ export default function StaffInventoryWithActions() {
             </div>
           </div>
 
-          <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
+          <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-4">
             {filteredMedicines.map((medicine) => (
               <Card key={medicine.id} className={isExpired(medicine) ? "border-red-200 bg-red-50" : ""}>
                 <CardHeader>
