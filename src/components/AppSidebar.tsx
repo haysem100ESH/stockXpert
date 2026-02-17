@@ -56,6 +56,7 @@ export function AppSidebar() {
     { title: "Overview", url: "/", icon: LayoutDashboard },
     { title: "Sales", url: "/sales", icon: ShoppingCart },
     { title: isPharmacy ? "Inventory" : "Stock", url: "/inventory", icon: Package },
+    { title: "Customers", url: "/customers", icon: UserCheck },
     { title: "Account", url: "/account", icon: Settings },
   ];
 

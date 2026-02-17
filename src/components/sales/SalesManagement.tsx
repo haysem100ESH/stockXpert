@@ -50,7 +50,7 @@ export default function SalesManagement() {
   const [showCheckoutConfirm, setShowCheckoutConfirm] = useState(false);
   const [selectedMedicine, setSelectedMedicine] = useState<Medicine | null>(null);
   const [showAddToCartDialog, setShowAddToCartDialog] = useState(false);
-  const [customers, setCustomers] = useState<{id: string; name: string}[]>([]);
+  const [customers, setCustomers] = useState<{id: string; name: string; phone?: string | null}[]>([]);
   const [selectedCustomerId, setSelectedCustomerId] = useState<string>('none');
   const [amountReceived, setAmountReceived] = useState<string>('');
   const { profile } = useAuth();
@@ -103,7 +103,7 @@ export default function SalesManagement() {
 
   const fetchCustomers = async () => {
     try {
-      let query = supabase.from('customers').select('id, name').order('name');
+      let query = supabase.from('customers').select('id, name, phone').order('name');
       if (selectedBranch) query = query.eq('branch_id', selectedBranch);
       const { data } = await query;
       setCustomers(data || []);
@@ -374,7 +374,7 @@ export default function SalesManagement() {
                       <SelectTrigger><SelectValue placeholder="Walk-in customer" /></SelectTrigger>
                       <SelectContent>
                         <SelectItem value="none">Walk-in (no customer)</SelectItem>
-                        {customers.map(c => (<SelectItem key={c.id} value={c.id}>{c.name}</SelectItem>))}
+                        {customers.map(c => (<SelectItem key={c.id} value={c.id}>{c.name}{c.phone ? ` — ${c.phone}` : ''}</SelectItem>))}
                       </SelectContent>
                     </Select>
                   </div>
