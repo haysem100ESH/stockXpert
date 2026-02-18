@@ -191,7 +191,8 @@ Deno.serve(async (req) => {
                 for (const item of sale.sale_items) {
                   const quantity = item.quantity || 0;
                   const total = item.total_price || 0;
-                  const medicineName = item.medicines?.name || 'Unknown';
+                  const med = item.medicines;
+                  const medicineName = (Array.isArray(med) ? med[0]?.name : med?.name) || 'Unknown';
                   
                   itemsSoldNumber += quantity;
                   

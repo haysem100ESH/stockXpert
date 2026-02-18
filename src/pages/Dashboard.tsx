@@ -11,7 +11,7 @@ import { ChartContainer, ChartTooltip, ChartTooltipContent } from '@/components/
 import { DollarSign, Package, ShoppingCart, AlertTriangle, Download, CalendarIcon, Calendar as CalendarDaysIcon, MessageCircle, ExternalLink, Send } from 'lucide-react';
 import { BarChart, Bar, XAxis, YAxis, CartesianGrid, ResponsiveContainer, PieChart, Pie, Cell, LineChart, Line } from 'recharts';
 import { format, subDays, subWeeks, subMonths, subYears, startOfDay, endOfDay } from 'date-fns';
-import { supabase } from '@/integrations/supabase/client';
+import { supabase } from '@/lib/db';
 import { useBranchContext } from '@/hooks/useBranchContext';
 import { useToast } from '@/hooks/use-toast';
 import { TelegramConnectionDialog } from '@/components/telegram/TelegramConnectionDialog';

@@ -1,6 +1,6 @@
 import { createContext, useContext, useState, useEffect } from 'react';
 import { useAuth } from './useAuth';
-import { supabase } from '@/integrations/supabase/client';
+import { supabase } from '@/lib/db';
 
 export type BranchType = 'pharmacy' | 'general';
 

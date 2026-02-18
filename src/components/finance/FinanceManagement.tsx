@@ -1,4 +1,4 @@
-import { useState, useEffect } from 'react';
+import { useState, useEffect, useMemo } from 'react';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
 import { Button } from '@/components/ui/button';
@@ -9,9 +9,10 @@ import { Dialog, DialogContent, DialogDescription, DialogHeader, DialogTitle, Di
 import { Calendar } from '@/components/ui/calendar';
 import { Popover, PopoverContent, PopoverTrigger } from '@/components/ui/popover';
 import { Pagination, PaginationContent, PaginationItem, PaginationLink, PaginationNext, PaginationPrevious } from '@/components/ui/pagination';
-import { DollarSign, TrendingUp, TrendingDown, BarChart3, Plus, CalendarIcon } from 'lucide-react';
+import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@/components/ui/table';
+import { DollarSign, TrendingUp, TrendingDown, BarChart3, Plus, CalendarIcon, ArrowLeft, ChevronRight, Package, Receipt } from 'lucide-react';
 import { format } from 'date-fns';
-import { supabase } from '@/integrations/supabase/client';
+import { supabase } from '@/lib/db';
 import { useToast } from '@/hooks/use-toast';
 import { useAuth } from '@/hooks/useAuth';
 import { useBranchContext } from '@/hooks/useBranchContext';
@@ -49,6 +50,8 @@ interface Sale {
       name: string;
     };
     quantity: number;
+    unit_price?: number;
+    total_price?: number;
     sale_type?: string;
     stripes_sold?: number;
   }[];
@@ -64,6 +67,23 @@ interface BranchData {
 interface Branch {
   id: string;
   name: string;
+}
+
+interface ItemSummary {
+  name: string;
+  totalQuantity: number;
+  totalStripes: number;
+  totalIncome: number;
+}
+
+interface InventoryExpense {
+  id: string;
+  name: string;
+  stock_quantity: number;
+  purchase_price: number;
+  total_cost: number;
+  branch_name?: string;
+  created_at: string;
 }
 
 export default function FinanceManagement() {
@@ -87,6 +107,12 @@ export default function FinanceManagement() {
   const [branchData, setBranchData] = useState<BranchData[]>([]);
   const [branches, setBranches] = useState<Branch[]>([]);
   const [expenseBranchId, setExpenseBranchId] = useState<string>('');
+  const [inventoryExpenses, setInventoryExpenses] = useState<InventoryExpense[]>([]);
+  const [expenseSubTab, setExpenseSubTab] = useState<'inventory' | 'custom'>('inventory');
+  
+  // Income drill-down state
+  const [selectedItem, setSelectedItem] = useState<string | null>(null);
+  
   const { profile } = useAuth();
   const { toast } = useToast();
   const { selectedBranch } = useBranchContext();
@@ -97,7 +123,6 @@ export default function FinanceManagement() {
     fetchFinanceData();
     fetchBranches();
 
-    // Set up real-time subscription for expenses
     const expenseSubscription = supabase
       .channel('expense-changes')
       .on('postgres_changes', 
@@ -136,13 +161,15 @@ export default function FinanceManagement() {
         }
       }
 
-      // Fetch sales with medicine details - RLS handles ownership filtering
+      // Fetch sales with medicine details
       let salesQuery = supabase
         .from('sales')
         .select(`
           *,
           sale_items (
             quantity,
+            unit_price,
+            total_price,
             sale_type,
             stripes_sold,
             medicines (
@@ -154,16 +181,14 @@ export default function FinanceManagement() {
         .lte('created_at', queryEndDate.toISOString())
         .order('created_at', { ascending: false });
 
-      // Filter by specific branch if selected
       if (selectedBranch) {
         salesQuery = salesQuery.eq('branch_id', selectedBranch);
       }
 
       const { data: salesData, error: salesError } = await salesQuery;
-
       if (salesError) throw salesError;
       
-      // Batch-fetch seller information to avoid N+1 and 400s
+      // Batch-fetch seller information
       const sellerIds = Array.from(new Set((salesData || [])
         .map((s: any) => s.sold_by)
         .filter((id: string | null) => !!id)));
@@ -193,7 +218,7 @@ export default function FinanceManagement() {
         seller: sale.sold_by ? sellersMap.get(sale.sold_by) || null : null,
       }));
 
-      // Fetch expenses - RLS handles ownership filtering
+      // Fetch custom expenses
       let expensesQuery = supabase
         .from('expenses')
         .select('*')
@@ -201,21 +226,52 @@ export default function FinanceManagement() {
         .lte('created_at', queryEndDate.toISOString())
         .order('created_at', { ascending: false });
 
-      // Filter by specific branch if selected
       if (selectedBranch) {
         expensesQuery = expensesQuery.eq('branch_id', selectedBranch);
       }
 
       const { data: expensesData, error: expensesError } = await expensesQuery;
-
       if (expensesError) throw expensesError;
 
+      // Fetch inventory expenses (medicines added in period)
+      let inventoryQuery = supabase
+        .from('medicines')
+        .select('id, name, stock_quantity, purchase_price, branch_id, created_at')
+        .gte('created_at', queryStartDate.toISOString())
+        .lte('created_at', queryEndDate.toISOString())
+        .order('created_at', { ascending: false });
+
+      if (selectedBranch) {
+        inventoryQuery = inventoryQuery.eq('branch_id', selectedBranch);
+      }
+
+      const { data: inventoryData } = await inventoryQuery;
+
+      // Fetch branch names for inventory expenses
+      const { data: branchesForNames } = await supabase
+        .from('pharmacy_branches')
+        .select('id, name');
+      const branchNameMap = new Map((branchesForNames || []).map((b: any) => [b.id, b.name]));
+
+      const invExpenses: InventoryExpense[] = (inventoryData || []).map((med: any) => ({
+        id: med.id,
+        name: med.name,
+        stock_quantity: med.stock_quantity,
+        purchase_price: Number(med.purchase_price),
+        total_cost: Number(med.purchase_price) * Number(med.stock_quantity),
+        branch_name: med.branch_id ? branchNameMap.get(med.branch_id) : undefined,
+        created_at: med.created_at,
+      }));
+
+      setInventoryExpenses(invExpenses);
       setSales(salesWithSeller || []);
       setExpenses(expensesData || []);
 
-      // Calculate stats
+      // Calculate stats - include inventory expenses in total
       const totalIncome = salesData?.reduce((sum, sale) => sum + Number(sale.total_amount), 0) || 0;
-      const totalExpenses = expensesData?.reduce((sum, expense) => sum + Number(expense.amount), 0) || 0;
+      const totalCustomExpenses = expensesData?.reduce((sum, expense) => sum + Number(expense.amount), 0) || 0;
+      const totalInventoryExpenses = invExpenses.reduce((sum, inv) => sum + inv.total_cost, 0);
+      const totalExpenses = totalCustomExpenses + totalInventoryExpenses;
       const netProfit = totalIncome - totalExpenses;
       const profitMargin = totalIncome > 0 ? (netProfit / totalIncome) * 100 : 0;
 
@@ -226,9 +282,8 @@ export default function FinanceManagement() {
         profitMargin
       });
 
-      // Calculate branch-wise data for the chart
+      // Branch-wise data for chart
       if (profile?.role === 'owner' && !selectedBranch) {
-        // Fetch all branches for the owner
         const { data: branchesData } = await supabase
           .from('pharmacy_branches')
           .select('id, name')
@@ -251,7 +306,6 @@ export default function FinanceManagement() {
         setBranchData([]);
       }
       
-      // Reset pagination when data changes
       setSalesPage(1);
       setExpensesPage(1);
     } catch (error) {
@@ -277,6 +331,44 @@ export default function FinanceManagement() {
     setPaginatedExpenses(expenses.slice(startIndex, endIndex));
   }, [expenses, expensesPage]);
 
+  // Group sales by item name for income drill-down
+  const itemSummaries = useMemo<ItemSummary[]>(() => {
+    const mapFixed = new Map<string, { totalQuantity: number; totalStripes: number; totalIncome: number }>();
+    for (const sale of sales) {
+      if (sale.sale_items) {
+        for (const item of sale.sale_items) {
+          const name = item.medicines?.name || 'Unknown';
+          const existing = mapFixed.get(name) || { totalQuantity: 0, totalStripes: 0, totalIncome: 0 };
+          if (item.sale_type === 'by_stripe') {
+            existing.totalStripes += item.stripes_sold || item.quantity || 0;
+          } else {
+            existing.totalQuantity += item.quantity || 0;
+          }
+          existing.totalIncome += Number(item.total_price || 0);
+          mapFixed.set(name, existing);
+        }
+      }
+    }
+    return Array.from(mapFixed.entries())
+      .map(([name, data]) => ({ name, ...data }))
+      .sort((a, b) => b.totalIncome - a.totalIncome);
+  }, [sales]);
+
+  // Get transactions for a specific item
+  const selectedItemTransactions = useMemo(() => {
+    if (!selectedItem) return [];
+    return sales
+      .filter(sale => sale.sale_items?.some(si => si.medicines?.name === selectedItem))
+      .map(sale => {
+        const relevantItems = sale.sale_items?.filter(si => si.medicines?.name === selectedItem) || [];
+        const itemQty = relevantItems.filter(si => si.sale_type !== 'by_stripe').reduce((sum, si) => sum + (si.quantity || 0), 0);
+        const itemStripes = relevantItems.filter(si => si.sale_type === 'by_stripe').reduce((sum, si) => sum + (si.stripes_sold || si.quantity || 0), 0);
+        const itemTotal = relevantItems.reduce((sum, si) => sum + Number(si.total_price || 0), 0);
+        return { ...sale, itemQty, itemStripes, itemTotal };
+      })
+      .sort((a, b) => new Date(b.created_at).getTime() - new Date(a.created_at).getTime());
+  }, [sales, selectedItem]);
+
   const fetchBranches = async () => {
     try {
       let query = supabase
@@ -290,11 +382,9 @@ export default function FinanceManagement() {
       }
 
       const { data, error } = await query;
-
       if (error) throw error;
       setBranches(data || []);
       
-      // Set default branch for the expense form
       if (data && data.length > 0) {
         setExpenseBranchId(selectedBranch || profile?.branch_id || data[0].id);
       }
@@ -345,6 +435,44 @@ export default function FinanceManagement() {
         variant: "destructive"
       });
     }
+  };
+
+  const renderPagination = (currentPage: number, totalItems: number, setPage: (p: number) => void) => {
+    const totalPages = Math.ceil(totalItems / itemsPerPage);
+    if (totalPages <= 1) return null;
+    return (
+      <div className="flex justify-center pt-4">
+        <Pagination>
+          <PaginationContent>
+            <PaginationItem>
+              <PaginationPrevious 
+                href="#"
+                onClick={(e) => { e.preventDefault(); if (currentPage > 1) setPage(currentPage - 1); }}
+                className={currentPage === 1 ? "pointer-events-none opacity-50" : ""}
+              />
+            </PaginationItem>
+            {Array.from({ length: totalPages }, (_, i) => i + 1).map((page) => (
+              <PaginationItem key={page}>
+                <PaginationLink
+                  href="#"
+                  onClick={(e) => { e.preventDefault(); setPage(page); }}
+                  isActive={currentPage === page}
+                >
+                  {page}
+                </PaginationLink>
+              </PaginationItem>
+            ))}
+            <PaginationItem>
+              <PaginationNext 
+                href="#"
+                onClick={(e) => { e.preventDefault(); if (currentPage < totalPages) setPage(currentPage + 1); }}
+                className={currentPage === totalPages ? "pointer-events-none opacity-50" : ""}
+              />
+            </PaginationItem>
+          </PaginationContent>
+        </Pagination>
+      </div>
+    );
   };
 
   if (loading) {
@@ -586,201 +714,214 @@ export default function FinanceManagement() {
           </div>
         </TabsContent>
 
+        {/* ===== INCOME TAB - Grouped by Item ===== */}
         <TabsContent value="income">
           <Card>
             <CardHeader>
-              <CardTitle>Income Details</CardTitle>
-              <CardDescription>Recent sales transactions</CardDescription>
-            </CardHeader>
-            <CardContent>
-              <div className="space-y-4">
-                {paginatedSales.map((sale) => (
-                  <div key={sale.id} className="flex justify-between items-start p-2 border rounded">
-                    <div className="flex-1">
-                      <div className="font-medium">
-                        {sale.sale_items && sale.sale_items.length > 0
-                          ? sale.sale_items.map((item, index) => (
-                              <span key={index}>
-                                {item.medicines?.name} (x{item.quantity})
-                                {item.sale_type === 'by_stripe' && item.stripes_sold && (
-                                  <span className="text-xs text-muted-foreground ml-1">
-                                    [{item.stripes_sold} stripes]
-                                  </span>
-                                )}
-                                {index < sale.sale_items!.length - 1 ? ', ' : ''}
-                              </span>
-                            ))
-                          : `Sale #${sale.id.slice(-8)}`
-                        }
-                      </div>
-                      <div className="text-xs text-muted-foreground">
-                        {new Date(sale.created_at).toLocaleDateString()}
-                      </div>
-                      {sale.discount_amount && sale.discount_amount > 0 && (
-                        <div className="text-xs text-muted-foreground mt-1">
-                          Discount: ETB {Number(sale.discount_amount).toFixed(2)}
-                        </div>
-                      )}
-                      {/* Display stripes sold summary */}
-                      {sale.sale_items && sale.sale_items.some(item => item.sale_type === 'by_stripe') && (
-                        <div className="text-xs text-info mt-1">
-                          Stripes Sold: {sale.sale_items
-                            .filter(item => item.sale_type === 'by_stripe')
-                            .reduce((sum, item) => sum + (item.stripes_sold || 0), 0)}
-                        </div>
-                      )}
-                       <div className="text-xs mt-1 flex gap-2">
-                          <span className="text-muted-foreground">
-                            Sold by:
-                          </span>
-                          {sale.seller ? (
-                            <span className="font-medium text-foreground">
-                              {sale.seller.role === 'owner' ? 'Owner' : 'Staff'} ({sale.seller.full_name || 'N/A'})
-                            </span>
-                          ) : (
-                            <span className="font-medium text-foreground">
-                              N/A
-                            </span>
-                          )}
-                        </div>
-                    </div>
-                    <div className="text-success font-medium">ETB {Number(sale.total_amount).toFixed(2)}</div>
-                  </div>
-                ))}
-                {sales.length === 0 && (
-                  <p className="text-muted-foreground text-center py-4">No sales in selected period</p>
+              <div className="flex items-center gap-3">
+                {selectedItem && (
+                  <Button variant="ghost" size="icon" onClick={() => setSelectedItem(null)}>
+                    <ArrowLeft className="h-4 w-4" />
+                  </Button>
                 )}
-                
-                {/* Pagination for Sales */}
-                {Math.ceil(sales.length / itemsPerPage) > 1 && (
-                  <div className="flex justify-center pt-4">
-                    <Pagination>
-                      <PaginationContent>
-                        <PaginationItem>
-                          <PaginationPrevious 
-                            href="#"
-                            onClick={(e) => {
-                              e.preventDefault();
-                              if (salesPage > 1) setSalesPage(salesPage - 1);
-                            }}
-                            className={salesPage === 1 ? "pointer-events-none opacity-50" : ""}
-                          />
-                        </PaginationItem>
-                        
-                        {Array.from({ length: Math.ceil(sales.length / itemsPerPage) }, (_, i) => i + 1).map((page) => (
-                          <PaginationItem key={page}>
-                            <PaginationLink
-                              href="#"
-                              onClick={(e) => {
-                                e.preventDefault();
-                                setSalesPage(page);
-                              }}
-                              isActive={salesPage === page}
-                            >
-                              {page}
-                            </PaginationLink>
-                          </PaginationItem>
-                        ))}
-                        
-                        <PaginationItem>
-                          <PaginationNext 
-                            href="#"
-                            onClick={(e) => {
-                              e.preventDefault();
-                              if (salesPage < Math.ceil(sales.length / itemsPerPage)) setSalesPage(salesPage + 1);
-                            }}
-                            className={salesPage === Math.ceil(sales.length / itemsPerPage) ? "pointer-events-none opacity-50" : ""}
-                          />
-                        </PaginationItem>
-                      </PaginationContent>
-                    </Pagination>
-                  </div>
-                )}
-                
-                <div className="text-center text-sm text-muted-foreground">
-                  Showing {paginatedSales.length} of {sales.length} sales records
+                <div>
+                  <CardTitle>{selectedItem ? `Transactions: ${selectedItem}` : 'Income by Item'}</CardTitle>
+                  <CardDescription>
+                    {selectedItem 
+                      ? 'All transactions for this item, latest first' 
+                      : 'Click an item to view individual transactions'}
+                  </CardDescription>
                 </div>
               </div>
+            </CardHeader>
+            <CardContent>
+              {!selectedItem ? (
+                /* === Item Summary List === */
+                <div className="space-y-2">
+                  {itemSummaries.length === 0 ? (
+                    <p className="text-muted-foreground text-center py-4">No sales in selected period</p>
+                  ) : (
+                    <Table>
+                      <TableHeader>
+                        <TableRow>
+                          <TableHead>Item Name</TableHead>
+                          <TableHead className="text-right">Packs Sold</TableHead>
+                          <TableHead className="text-right">Strips Sold</TableHead>
+                          <TableHead className="text-right">Total Income</TableHead>
+                          <TableHead className="w-10"></TableHead>
+                        </TableRow>
+                      </TableHeader>
+                      <TableBody>
+                        {itemSummaries.map((item) => (
+                          <TableRow 
+                            key={item.name} 
+                            className="cursor-pointer hover:bg-muted/80"
+                            onClick={() => setSelectedItem(item.name)}
+                          >
+                            <TableCell className="font-medium">{item.name}</TableCell>
+                            <TableCell className="text-right">{item.totalQuantity || 0}</TableCell>
+                            <TableCell className="text-right">{item.totalStripes || 0}</TableCell>
+                            <TableCell className="text-right text-success font-medium">
+                              ETB {item.totalIncome.toFixed(2)}
+                            </TableCell>
+                            <TableCell>
+                              <ChevronRight className="h-4 w-4 text-muted-foreground" />
+                            </TableCell>
+                          </TableRow>
+                        ))}
+                      </TableBody>
+                    </Table>
+                  )}
+                  <div className="text-center text-sm text-muted-foreground pt-2">
+                    {itemSummaries.length} item(s) · Total: ETB {stats.totalIncome.toFixed(2)}
+                  </div>
+                </div>
+              ) : (
+                /* === Item Transaction Drill-Down === */
+                <div className="space-y-4">
+                  {selectedItemTransactions.length === 0 ? (
+                    <p className="text-muted-foreground text-center py-4">No transactions found</p>
+                  ) : (
+                    selectedItemTransactions.map((sale) => (
+                      <div key={sale.id} className="flex justify-between items-start p-3 border rounded-lg">
+                        <div className="flex-1 space-y-1">
+                          <div className="font-medium">
+                            {selectedItem}
+                          </div>
+                          <div className="text-sm text-muted-foreground space-x-3">
+                            {sale.itemQty > 0 && <span>{sale.itemQty} pack{sale.itemQty !== 1 ? 's' : ''}</span>}
+                            {sale.itemStripes > 0 && <span>{sale.itemStripes} strip{sale.itemStripes !== 1 ? 's' : ''}</span>}
+                            {sale.itemQty === 0 && sale.itemStripes === 0 && <span>0 qty</span>}
+                          </div>
+                          <div className="text-xs text-muted-foreground">
+                            {new Date(sale.created_at).toLocaleDateString()} · {new Date(sale.created_at).toLocaleTimeString()}
+                          </div>
+                          {sale.discount_amount && Number(sale.discount_amount) > 0 && (
+                            <div className="text-xs text-muted-foreground">
+                              Discount: ETB {Number(sale.discount_amount).toFixed(2)}
+                            </div>
+                          )}
+                          <div className="text-xs flex gap-2">
+                            <span className="text-muted-foreground">Sold by:</span>
+                            {sale.seller ? (
+                              <span className="font-medium text-foreground">
+                                {sale.seller.role === 'owner' ? 'Owner' : 'Staff'} ({sale.seller.full_name || 'N/A'})
+                              </span>
+                            ) : (
+                              <span className="font-medium text-foreground">N/A</span>
+                            )}
+                          </div>
+                        </div>
+                        <div className="text-success font-medium">ETB {sale.itemTotal.toFixed(2)}</div>
+                      </div>
+                    ))
+                  )}
+                  <div className="text-center text-sm text-muted-foreground">
+                    {selectedItemTransactions.length} transaction(s)
+                  </div>
+                </div>
+              )}
             </CardContent>
           </Card>
         </TabsContent>
 
+        {/* ===== EXPENSES TAB - Split into Inventory & Custom ===== */}
         <TabsContent value="expenses">
           <Card>
             <CardHeader>
-              <CardTitle>Expense Details</CardTitle>
-              <CardDescription>Business expenses breakdown</CardDescription>
-            </CardHeader>
-            <CardContent>
-              <div className="space-y-4">
-                {paginatedExpenses.map((expense) => (
-                  <div key={expense.id} className="flex justify-between items-center p-2 border rounded">
-                    <div>
-                      <div className="font-medium">{expense.description}</div>
-                      <div className="text-xs text-muted-foreground">{expense.category}</div>
-                    </div>
-                    <div className="text-right">
-                      <div className="text-destructive font-medium">-ETB {expense.amount}</div>
-                      <div className="text-xs text-muted-foreground">
-                        {new Date(expense.created_at).toLocaleDateString()}
-                      </div>
-                    </div>
-                  </div>
-                ))}
-                {expenses.length === 0 && (
-                  <p className="text-muted-foreground text-center py-4">No expenses in selected period</p>
-                )}
-                
-                {/* Pagination for Expenses */}
-                {Math.ceil(expenses.length / itemsPerPage) > 1 && (
-                  <div className="flex justify-center pt-4">
-                    <Pagination>
-                      <PaginationContent>
-                        <PaginationItem>
-                          <PaginationPrevious 
-                            href="#"
-                            onClick={(e) => {
-                              e.preventDefault();
-                              if (expensesPage > 1) setExpensesPage(expensesPage - 1);
-                            }}
-                            className={expensesPage === 1 ? "pointer-events-none opacity-50" : ""}
-                          />
-                        </PaginationItem>
-                        
-                        {Array.from({ length: Math.ceil(expenses.length / itemsPerPage) }, (_, i) => i + 1).map((page) => (
-                          <PaginationItem key={page}>
-                            <PaginationLink
-                              href="#"
-                              onClick={(e) => {
-                                e.preventDefault();
-                                setExpensesPage(page);
-                              }}
-                              isActive={expensesPage === page}
-                            >
-                              {page}
-                            </PaginationLink>
-                          </PaginationItem>
-                        ))}
-                        
-                        <PaginationItem>
-                          <PaginationNext 
-                            href="#"
-                            onClick={(e) => {
-                              e.preventDefault();
-                              if (expensesPage < Math.ceil(expenses.length / itemsPerPage)) setExpensesPage(expensesPage + 1);
-                            }}
-                            className={expensesPage === Math.ceil(expenses.length / itemsPerPage) ? "pointer-events-none opacity-50" : ""}
-                          />
-                        </PaginationItem>
-                      </PaginationContent>
-                    </Pagination>
-                  </div>
-                )}
-                
-                <div className="text-center text-sm text-muted-foreground">
-                  Showing {paginatedExpenses.length} of {expenses.length} expense records
+              <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3">
+                <div>
+                  <CardTitle>Expense Details</CardTitle>
+                  <CardDescription>Inventory purchases & custom expenses</CardDescription>
+                </div>
+                <div className="flex gap-2">
+                  <Button
+                    variant={expenseSubTab === 'inventory' ? 'default' : 'outline'}
+                    size="sm"
+                    onClick={() => setExpenseSubTab('inventory')}
+                  >
+                    <Package className="h-4 w-4 mr-1" />
+                    Inventory ({inventoryExpenses.length})
+                  </Button>
+                  <Button
+                    variant={expenseSubTab === 'custom' ? 'default' : 'outline'}
+                    size="sm"
+                    onClick={() => setExpenseSubTab('custom')}
+                  >
+                    <Receipt className="h-4 w-4 mr-1" />
+                    Custom ({expenses.length})
+                  </Button>
                 </div>
               </div>
+            </CardHeader>
+            <CardContent>
+              {expenseSubTab === 'inventory' ? (
+                /* === Inventory Expenses === */
+                <div className="space-y-4">
+                  {inventoryExpenses.length === 0 ? (
+                    <p className="text-muted-foreground text-center py-4">No inventory purchases in selected period</p>
+                  ) : (
+                    <Table>
+                      <TableHeader>
+                        <TableRow>
+                          <TableHead>Item/Medicine</TableHead>
+                          <TableHead className="text-right">Qty</TableHead>
+                          <TableHead className="text-right">Unit Cost</TableHead>
+                          <TableHead className="text-right">Total Cost</TableHead>
+                          <TableHead>Branch</TableHead>
+                          <TableHead>Date</TableHead>
+                        </TableRow>
+                      </TableHeader>
+                      <TableBody>
+                        {inventoryExpenses.map((inv) => (
+                          <TableRow key={inv.id}>
+                            <TableCell className="font-medium">{inv.name}</TableCell>
+                            <TableCell className="text-right">{inv.stock_quantity}</TableCell>
+                            <TableCell className="text-right">ETB {inv.purchase_price.toFixed(2)}</TableCell>
+                            <TableCell className="text-right text-destructive font-medium">
+                              ETB {inv.total_cost.toFixed(2)}
+                            </TableCell>
+                            <TableCell className="text-muted-foreground text-sm">{inv.branch_name || '—'}</TableCell>
+                            <TableCell className="text-muted-foreground text-sm">
+                              {new Date(inv.created_at).toLocaleDateString()}
+                            </TableCell>
+                          </TableRow>
+                        ))}
+                      </TableBody>
+                    </Table>
+                  )}
+                  <div className="text-center text-sm text-muted-foreground">
+                    Total Inventory Cost: ETB {inventoryExpenses.reduce((s, i) => s + i.total_cost, 0).toFixed(2)}
+                  </div>
+                </div>
+              ) : (
+                /* === Custom Expenses === */
+                <div className="space-y-4">
+                  {paginatedExpenses.map((expense) => (
+                    <div key={expense.id} className="flex justify-between items-center p-2 border rounded">
+                      <div>
+                        <div className="font-medium">{expense.description}</div>
+                        <div className="text-xs text-muted-foreground">{expense.category}</div>
+                      </div>
+                      <div className="text-right">
+                        <div className="text-destructive font-medium">-ETB {expense.amount}</div>
+                        <div className="text-xs text-muted-foreground">
+                          {new Date(expense.created_at).toLocaleDateString()}
+                        </div>
+                      </div>
+                    </div>
+                  ))}
+                  {expenses.length === 0 && (
+                    <p className="text-muted-foreground text-center py-4">No custom expenses in selected period</p>
+                  )}
+                  
+                  {renderPagination(expensesPage, expenses.length, setExpensesPage)}
+                  
+                  <div className="text-center text-sm text-muted-foreground">
+                    Showing {paginatedExpenses.length} of {expenses.length} custom expense records
+                  </div>
+                </div>
+              )}
             </CardContent>
           </Card>
         </TabsContent>

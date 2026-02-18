@@ -19,7 +19,7 @@ import {
   Send
 } from 'lucide-react';
 import { BarChart, Bar, XAxis, YAxis, CartesianGrid, ResponsiveContainer, PieChart, Pie, Cell } from 'recharts';
-import { supabase } from '@/integrations/supabase/client';
+import { supabase } from '@/lib/db';
 import { useToast } from '@/hooks/use-toast';
 import { useBranchContext } from '@/hooks/useBranchContext';
 import { useAuth } from '@/hooks/useAuth';
