@@ -617,7 +617,7 @@ export default function FinanceManagement() {
       </div>
 
       {/* Stats Cards */}
-      <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-6">
+      <div className="grid grid-cols-2 md:grid-cols-2 lg:grid-cols-4 gap-3 sm:gap-6">
         <Card>
           <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
             <CardTitle className="text-sm font-medium">Total Income</CardTitle>
@@ -683,10 +683,12 @@ export default function FinanceManagement() {
                   <CardDescription>Comparison across all branches</CardDescription>
                 </CardHeader>
                 <CardContent>
-                  <ResponsiveContainer width="100%" height={350}>
+                  <div className="overflow-x-auto">
+                  <div style={{ minWidth: 300 }}>
+                  <ResponsiveContainer width="100%" height={300}>
                     <BarChart data={branchData}>
                       <CartesianGrid strokeDasharray="3 3" />
-                      <XAxis dataKey="branchName" />
+                      <XAxis dataKey="branchName" tick={{ fontSize: 11 }} />
                       <YAxis />
                       <Tooltip 
                         formatter={(value: number) => `ETB ${value.toFixed(2)}`}
@@ -696,6 +698,8 @@ export default function FinanceManagement() {
                       <Bar dataKey="expenses" fill="hsl(var(--destructive))" name="Expenses" />
                     </BarChart>
                   </ResponsiveContainer>
+                  </div>
+                  </div>
                 </CardContent>
               </Card>
             )}
@@ -757,7 +761,8 @@ export default function FinanceManagement() {
                   {itemSummaries.length === 0 ? (
                     <p className="text-muted-foreground text-center py-4">No sales in selected period</p>
                   ) : (
-                    <Table>
+                    <div className="overflow-x-auto">
+                    <Table className="min-w-[500px]">
                       <TableHeader>
                          <TableRow>
                           <TableHead>Item Name</TableHead>
@@ -804,6 +809,7 @@ export default function FinanceManagement() {
                         ))}
                       </TableBody>
                     </Table>
+                    </div>
                   )}
                   <div className="text-center text-sm text-muted-foreground pt-2">
                     {itemSummaries.length} item(s) · Total: ETB {stats.totalIncome.toFixed(2)}
@@ -903,7 +909,8 @@ export default function FinanceManagement() {
                   {inventoryExpenses.length === 0 ? (
                     <p className="text-muted-foreground text-center py-4">No inventory purchases in selected period</p>
                   ) : (
-                    <Table>
+                    <div className="overflow-x-auto">
+                    <Table className="min-w-[600px]">
                       <TableHeader>
                         <TableRow>
                           <TableHead>Item/Medicine</TableHead>
@@ -931,6 +938,7 @@ export default function FinanceManagement() {
                         ))}
                       </TableBody>
                     </Table>
+                    </div>
                   )}
                   <div className="text-center text-sm text-muted-foreground">
                     Total Inventory Cost: ETB {inventoryExpenses.reduce((s, i) => s + i.total_cost, 0).toFixed(2)}

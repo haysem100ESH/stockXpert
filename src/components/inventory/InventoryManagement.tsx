@@ -14,7 +14,6 @@ import { useToast } from '@/hooks/use-toast';
 import { useAuth } from '@/hooks/useAuth';
 import { useBranchContext } from '@/hooks/useBranchContext';
 import AddMedicineDialog from './AddMedicineDialog';
-import AddItemDialog from './AddItemDialog';
 import EditMedicineDialog from './EditMedicineDialog';
 import { ConfirmationDialog } from '@/components/ui/confirmation-dialog';
 
@@ -407,7 +406,7 @@ export default function InventoryManagement() {
         <AddMedicineDialog open={showAddDialog} onOpenChange={setShowAddDialog} onMedicineAdded={handleMedicineAdded} />
       )}
 
-      <AddItemDialog open={showAddItemDialog} onOpenChange={setShowAddItemDialog} onItemAdded={handleMedicineAdded} />
+      <AddMedicineDialog open={showAddItemDialog} onOpenChange={setShowAddItemDialog} onMedicineAdded={handleMedicineAdded} mode="general" />
 
       <EditMedicineDialog open={showEditDialog} onOpenChange={setShowEditDialog} medicine={selectedMedicine} onMedicineUpdated={handleMedicineAdded} />
 

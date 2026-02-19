@@ -31,17 +31,21 @@ interface AddMedicineDialogProps {
   onOpenChange: (open: boolean) => void;
   onMedicineAdded: () => void;
   replicateData?: Medicine | null;
+  mode?: 'pharmacy' | 'general';
 }
 
-// Default categories removed - now using useCustomCategories hook
-
-export default function AddMedicineDialog({ open, onOpenChange, onMedicineAdded, replicateData }: AddMedicineDialogProps) {
+export default function AddMedicineDialog({ open, onOpenChange, onMedicineAdded, replicateData, mode = 'pharmacy' }: AddMedicineDialogProps) {
+  const isGeneral = mode === 'general';
   const [loading, setLoading] = useState(false);
   const [branches, setBranches] = useState<Array<{ id: string; name: string }>>([]);
   const [selectedBranchId, setSelectedBranchId] = useState<string>('');
   const { toast } = useToast();
   const { selectedBranch, userBranch } = useBranchContext();
-  const { categories } = useCustomCategories('pharmacy');
+  const { categories } = useCustomCategories(isGeneral ? 'general' : 'pharmacy');
+  
+  const label = isGeneral
+    ? { item: 'Item', genericName: 'Description', manufacturer: 'Brand', success: 'Item added successfully', fail: 'Failed to add item' }
+    : { item: 'Medicine', genericName: 'Generic Name', manufacturer: 'Manufacturer', success: 'Medicine added successfully', fail: 'Failed to add medicine' };
   
   // Fetch user profile to check role
   const [userRole, setUserRole] = useState<'owner' | 'staff' | null>(null);
@@ -130,14 +134,14 @@ export default function AddMedicineDialog({ open, onOpenChange, onMedicineAdded,
 
       toast({
         title: "Success",
-        description: "Medicine added successfully"
+        description: label.success
       });
 
       onMedicineAdded();
     } catch (error) {
       toast({
         title: "Error",
-        description: "Failed to add medicine",
+        description: label.fail,
         variant: "destructive"
       });
     } finally {
@@ -149,21 +153,21 @@ export default function AddMedicineDialog({ open, onOpenChange, onMedicineAdded,
     <Dialog open={open} onOpenChange={onOpenChange}>
       <DialogContent className="max-w-2xl max-h-[90vh] overflow-y-auto">
         <DialogHeader>
-          <DialogTitle>{replicateData ? 'Replicate Medicine' : 'Add New Medicine'}</DialogTitle>
+          <DialogTitle>{replicateData ? `Replicate ${label.item}` : `Add New ${label.item}`}</DialogTitle>
           <DialogDescription>
-            {replicateData ? 'Create a new medicine based on existing data' : 'Enter the details for the new medicine'}
+            {replicateData ? `Create a new ${label.item.toLowerCase()} based on existing data` : `Enter the details for the new ${label.item.toLowerCase()}`}
           </DialogDescription>
         </DialogHeader>
 
         <form onSubmit={handleSubmit} className="space-y-4">
           <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
             <div className="space-y-2">
-              <Label htmlFor="name">Medicine Name *</Label>
+              <Label htmlFor="name">{label.item} Name *</Label>
               <Input id="name" name="name" defaultValue={replicateData?.name} required />
             </div>
 
             <div className="space-y-2">
-              <Label htmlFor="generic_name">Generic Name</Label>
+              <Label htmlFor="generic_name">{label.genericName}</Label>
               <Input id="generic_name" name="generic_name" defaultValue={replicateData?.generic_name} />
             </div>
 
@@ -184,7 +188,7 @@ export default function AddMedicineDialog({ open, onOpenChange, onMedicineAdded,
             </div>
 
             <div className="space-y-2">
-              <Label htmlFor="manufacturer">Manufacturer</Label>
+              <Label htmlFor="manufacturer">{label.manufacturer}</Label>
               <Input id="manufacturer" name="manufacturer" defaultValue={replicateData?.manufacturer} />
             </div>
 
@@ -317,7 +321,7 @@ export default function AddMedicineDialog({ open, onOpenChange, onMedicineAdded,
             </Button>
             <Button type="submit" disabled={loading}>
               {loading && <Loader2 className="mr-2 h-4 w-4 animate-spin" />}
-              {replicateData ? 'Create Medicine' : 'Add Medicine'}
+              {replicateData ? `Create ${label.item}` : `Add ${label.item}`}
             </Button>
           </div>
         </form>

@@ -10,7 +10,6 @@ import { supabase } from '@/lib/db';
 import { useToast } from '@/hooks/use-toast';
 import { useBranchContext } from '@/hooks/useBranchContext';
 import AddMedicineDialog from './AddMedicineDialog';
-import AddItemDialog from './AddItemDialog';
 import EditMedicineDialog from './EditMedicineDialog';
 import { ConfirmationDialog } from '@/components/ui/confirmation-dialog';
 import InventoryDashboard from './InventoryDashboard';
@@ -465,10 +464,11 @@ export default function StaffInventoryWithActions() {
         />
       )}
 
-      <AddItemDialog
+      <AddMedicineDialog
         open={showAddItemDialog}
         onOpenChange={setShowAddItemDialog}
-        onItemAdded={handleMedicineAdded}
+        onMedicineAdded={handleMedicineAdded}
+        mode="general"
       />
 
       {isPharmacy && (

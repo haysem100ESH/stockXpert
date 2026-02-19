@@ -71,7 +71,8 @@ export default function LowStockItemsTable() {
         </CardDescription>
       </CardHeader>
       <CardContent>
-        <Table>
+        <div className="overflow-x-auto">
+        <Table className="min-w-[500px]">
           <TableHeader>
             <TableRow>
               <TableHead>Medicine Name</TableHead>
@@ -99,6 +100,7 @@ export default function LowStockItemsTable() {
             ))}
           </TableBody>
         </Table>
+        </div>
       </CardContent>
     </Card>
   );

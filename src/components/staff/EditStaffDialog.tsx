@@ -23,8 +23,9 @@ export default function EditStaffDialog({
   const [formData, setFormData] = useState({
     full_name: '',
     phone: '',
-    role: 'staff' as 'owner' | 'staff'
+    branch_id: ''
   });
+  const [branches, setBranches] = useState<Array<{ id: string; name: string }>>([]);
   const [loading, setLoading] = useState(false);
   const { toast } = useToast();
 
@@ -33,10 +34,25 @@ export default function EditStaffDialog({
       setFormData({
         full_name: staff.full_name,
         phone: staff.phone || '',
-        role: staff.role
+        branch_id: staff.branch_id || ''
       });
+      fetchBranches();
     }
   }, [staff, open]);
+
+  const fetchBranches = async () => {
+    const { data: { user } } = await supabase.auth.getUser();
+    if (!user) return;
+
+    const { data } = await supabase
+      .from('pharmacy_branches')
+      .select('id, name')
+      .eq('pharmacy_owner_id', user.id)
+      .order('is_main_branch', { ascending: false })
+      .order('name');
+
+    if (data) setBranches(data);
+  };
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
@@ -50,7 +66,7 @@ export default function EditStaffDialog({
         .update({
           full_name: formData.full_name,
           phone: formData.phone || null,
-          role: formData.role
+          branch_id: formData.branch_id || null
         })
         .eq('id', staff.id);
 
@@ -103,21 +119,26 @@ export default function EditStaffDialog({
             />
           </div>
 
-          <div className="space-y-2">
-            <Label htmlFor="role">Role *</Label>
-            <Select
-              value={formData.role}
-              onValueChange={(value: 'owner' | 'staff') => setFormData({ ...formData, role: value })}
-            >
-              <SelectTrigger>
-                <SelectValue placeholder="Select role" />
-              </SelectTrigger>
-              <SelectContent>
-                <SelectItem value="owner">Owner</SelectItem>
-                <SelectItem value="staff">Staff</SelectItem>
-              </SelectContent>
-            </Select>
-          </div>
+          {branches.length > 0 && (
+            <div className="space-y-2">
+              <Label htmlFor="branch_id">Assigned Branch</Label>
+              <Select
+                value={formData.branch_id}
+                onValueChange={(value) => setFormData({ ...formData, branch_id: value })}
+              >
+                <SelectTrigger>
+                  <SelectValue placeholder="Select branch" />
+                </SelectTrigger>
+                <SelectContent>
+                  {branches.map((branch) => (
+                    <SelectItem key={branch.id} value={branch.id}>
+                      {branch.name}
+                    </SelectItem>
+                  ))}
+                </SelectContent>
+              </Select>
+            </div>
+          )}
 
           <div className="flex gap-2 pt-4">
             <Button type="submit" disabled={loading} className="flex-1">
