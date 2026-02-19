@@ -48,6 +48,8 @@ interface Sale {
   sale_items?: {
     medicines: {
       name: string;
+      unit_label?: string;
+      units_per_pack?: number;
     };
     quantity: number;
     unit_price?: number;
@@ -74,6 +76,8 @@ interface ItemSummary {
   totalQuantity: number;
   totalStripes: number;
   totalIncome: number;
+  unitLabel?: string;
+  unitsPerPack?: number;
 }
 
 interface InventoryExpense {
@@ -173,7 +177,9 @@ export default function FinanceManagement() {
             sale_type,
             stripes_sold,
             medicines (
-              name
+              name,
+              unit_label,
+              units_per_pack
             )
           )
         `)
@@ -333,12 +339,17 @@ export default function FinanceManagement() {
 
   // Group sales by item name for income drill-down
   const itemSummaries = useMemo<ItemSummary[]>(() => {
-    const mapFixed = new Map<string, { totalQuantity: number; totalStripes: number; totalIncome: number }>();
+    const mapFixed = new Map<string, { totalQuantity: number; totalStripes: number; totalIncome: number; unitLabel?: string; unitsPerPack?: number }>();
     for (const sale of sales) {
       if (sale.sale_items) {
         for (const item of sale.sale_items) {
           const name = item.medicines?.name || 'Unknown';
           const existing = mapFixed.get(name) || { totalQuantity: 0, totalStripes: 0, totalIncome: 0 };
+          // Capture unit info from first occurrence
+          if (!existing.unitLabel && item.medicines?.unit_label) {
+            existing.unitLabel = item.medicines.unit_label;
+            existing.unitsPerPack = item.medicines.units_per_pack;
+          }
           if (item.sale_type === 'by_stripe') {
             existing.totalStripes += item.stripes_sold || item.quantity || 0;
           } else {
@@ -357,6 +368,11 @@ export default function FinanceManagement() {
   // Get transactions for a specific item
   const selectedItemTransactions = useMemo(() => {
     if (!selectedItem) return [];
+    // Get unit info from itemSummaries
+    const itemInfo = itemSummaries.find(i => i.name === selectedItem);
+    const unitLabel = itemInfo?.unitLabel || 'unit';
+    const unitsPerPack = itemInfo?.unitsPerPack || 1;
+    
     return sales
       .filter(sale => sale.sale_items?.some(si => si.medicines?.name === selectedItem))
       .map(sale => {
@@ -364,10 +380,10 @@ export default function FinanceManagement() {
         const itemQty = relevantItems.filter(si => si.sale_type !== 'by_stripe').reduce((sum, si) => sum + (si.quantity || 0), 0);
         const itemStripes = relevantItems.filter(si => si.sale_type === 'by_stripe').reduce((sum, si) => sum + (si.stripes_sold || si.quantity || 0), 0);
         const itemTotal = relevantItems.reduce((sum, si) => sum + Number(si.total_price || 0), 0);
-        return { ...sale, itemQty, itemStripes, itemTotal };
+        return { ...sale, itemQty, itemStripes, itemTotal, unitLabel, unitsPerPack };
       })
       .sort((a, b) => new Date(b.created_at).getTime() - new Date(a.created_at).getTime());
-  }, [sales, selectedItem]);
+  }, [sales, selectedItem, itemSummaries]);
 
   const fetchBranches = async () => {
     try {
@@ -743,10 +759,9 @@ export default function FinanceManagement() {
                   ) : (
                     <Table>
                       <TableHeader>
-                        <TableRow>
+                         <TableRow>
                           <TableHead>Item Name</TableHead>
-                          <TableHead className="text-right">Packs Sold</TableHead>
-                          <TableHead className="text-right">Strips Sold</TableHead>
+                          <TableHead className="text-right">Quantity Sold</TableHead>
                           <TableHead className="text-right">Total Income</TableHead>
                           <TableHead className="w-10"></TableHead>
                         </TableRow>
@@ -759,8 +774,26 @@ export default function FinanceManagement() {
                             onClick={() => setSelectedItem(item.name)}
                           >
                             <TableCell className="font-medium">{item.name}</TableCell>
-                            <TableCell className="text-right">{item.totalQuantity || 0}</TableCell>
-                            <TableCell className="text-right">{item.totalStripes || 0}</TableCell>
+                            <TableCell className="text-right">
+                              <div className="space-y-0.5">
+                                {item.totalQuantity > 0 && (
+                                  <div>
+                                    {item.totalQuantity} pack{item.totalQuantity !== 1 ? 's' : ''}
+                                    {item.unitsPerPack && item.unitLabel && (
+                                      <span className="text-muted-foreground text-xs ml-1">
+                                        ({item.totalQuantity * item.unitsPerPack} {item.unitLabel})
+                                      </span>
+                                    )}
+                                  </div>
+                                )}
+                                {item.totalStripes > 0 && (
+                                  <div>
+                                    {item.totalStripes} {item.unitLabel || 'unit'}{item.totalStripes !== 1 ? 's' : ''}
+                                  </div>
+                                )}
+                                {item.totalQuantity === 0 && item.totalStripes === 0 && <span>0</span>}
+                              </div>
+                            </TableCell>
                             <TableCell className="text-right text-success font-medium">
                               ETB {item.totalIncome.toFixed(2)}
                             </TableCell>
@@ -789,8 +822,17 @@ export default function FinanceManagement() {
                             {selectedItem}
                           </div>
                           <div className="text-sm text-muted-foreground space-x-3">
-                            {sale.itemQty > 0 && <span>{sale.itemQty} pack{sale.itemQty !== 1 ? 's' : ''}</span>}
-                            {sale.itemStripes > 0 && <span>{sale.itemStripes} strip{sale.itemStripes !== 1 ? 's' : ''}</span>}
+                            {sale.itemQty > 0 && (
+                              <span>
+                                {sale.itemQty} pack{sale.itemQty !== 1 ? 's' : ''}
+                                {sale.unitsPerPack > 1 && sale.unitLabel && (
+                                  <span className="text-xs ml-1">({sale.itemQty * sale.unitsPerPack} {sale.unitLabel})</span>
+                                )}
+                              </span>
+                            )}
+                            {sale.itemStripes > 0 && (
+                              <span>{sale.itemStripes} {sale.unitLabel || 'unit'}{sale.itemStripes !== 1 ? 's' : ''}</span>
+                            )}
                             {sale.itemQty === 0 && sale.itemStripes === 0 && <span>0 qty</span>}
                           </div>
                           <div className="text-xs text-muted-foreground">

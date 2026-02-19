@@ -82,12 +82,9 @@ export default function SalesManagement() {
     setPaginatedMedicines(filteredMedicines.slice(startIndex, startIndex + itemsPerPage));
   }, [filteredMedicines, currentPage]);
 
-  // Auto-fill amount received when total changes
+  // Clear amount received when cart changes so placeholder takes effect
   useEffect(() => {
-    const total = calculateTotal();
-    if (!amountReceived || parseFloat(amountReceived) === 0) {
-      setAmountReceived(total > 0 ? total.toFixed(2) : '');
-    }
+    setAmountReceived('');
   }, [cart, discountPercent]);
 
   // Reset change action when amount received changes
@@ -247,7 +244,7 @@ export default function SalesManagement() {
 
   const getChangeAmount = () => {
     const total = calculateTotal();
-    const received = parseFloat(amountReceived) || 0;
+    const received = amountReceived ? parseFloat(amountReceived) : total;
     return received - total;
   };
 

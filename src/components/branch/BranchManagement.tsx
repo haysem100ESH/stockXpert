@@ -1,16 +1,21 @@
 import { useState, useEffect } from 'react';
-import { db, supabase } from '@/lib/db';
+import { ColumnDef } from '@tanstack/react-table';
+import { supabase } from '@/lib/db';
 import { useAuth } from '@/hooks/useAuth';
 import { useToast } from '@/hooks/use-toast';
-import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
+import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
 import { Badge } from '@/components/ui/badge';
 import { Dialog, DialogContent, DialogDescription, DialogHeader, DialogTitle, DialogTrigger } from '@/components/ui/dialog';
-import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@/components/ui/table';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
-import { Building2, Plus, Edit, MapPin, Phone, User } from 'lucide-react';
+import {
+  DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuTrigger,
+} from '@/components/ui/dropdown-menu';
+import { DataTable } from '@/components/ui/data-table';
+import { Building2, Plus, Edit, MapPin, Phone, MoreHorizontal } from 'lucide-react';
+import { usePlanLimits } from '@/hooks/usePlanLimits';
 
 interface Branch {
   id: string;
@@ -24,191 +29,144 @@ interface Branch {
   manager_name?: string;
 }
 
-interface StaffMember {
-  id: string;
-  full_name: string;
-}
+interface StaffMember { id: string; full_name: string; }
 
-import { usePlanLimits } from '@/hooks/usePlanLimits';
-import { AlertCircle } from 'lucide-react';
-import { Alert, AlertDescription } from '@/components/ui/alert';
+function BranchForm({
+  branchName, setBranchName,
+  branchAddress, setBranchAddress,
+  branchPhone, setBranchPhone,
+  branchType, setBranchType,
+  isMainBranch, setIsMainBranch,
+  onSubmit, submitLabel, disabled,
+}: any) {
+  return (
+    <div className="space-y-4">
+      <div>
+        <Label>Branch Name *</Label>
+        <Input value={branchName} onChange={e => setBranchName(e.target.value)} placeholder="Branch name" className="mt-2" />
+      </div>
+      <div>
+        <Label>Branch Type *</Label>
+        <Select value={branchType} onValueChange={(v: 'pharmacy' | 'general') => setBranchType(v)}>
+          <SelectTrigger className="mt-2"><SelectValue /></SelectTrigger>
+          <SelectContent>
+            <SelectItem value="pharmacy">Pharmacy Branch</SelectItem>
+            <SelectItem value="general">General Inventory Branch</SelectItem>
+          </SelectContent>
+        </Select>
+      </div>
+      <div>
+        <Label>Address</Label>
+        <Input value={branchAddress} onChange={e => setBranchAddress(e.target.value)} placeholder="Branch address" className="mt-2" />
+      </div>
+      <div>
+        <Label>Phone</Label>
+        <Input value={branchPhone} onChange={e => setBranchPhone(e.target.value)} placeholder="Branch phone" className="mt-2" />
+      </div>
+      <div className="flex items-center gap-2">
+        <input type="checkbox" id="main-branch" checked={isMainBranch} onChange={e => setIsMainBranch(e.target.checked)} className="rounded" />
+        <Label htmlFor="main-branch">Set as main branch</Label>
+      </div>
+      <Button onClick={onSubmit} disabled={disabled || !branchName} className="w-full">
+        {submitLabel}
+      </Button>
+    </div>
+  );
+}
 
 export default function BranchManagement() {
   const { user, profile } = useAuth();
   const { toast } = useToast();
   const { planLimits, refetch: refetchPlanLimits } = usePlanLimits();
   const [branches, setBranches] = useState<Branch[]>([]);
-  const [staffMembers, setStaffMembers] = useState<StaffMember[]>([]);
   const [loading, setLoading] = useState(true);
   const [showCreateDialog, setShowCreateDialog] = useState(false);
   const [editingBranch, setEditingBranch] = useState<Branch | null>(null);
+  const [showEditDialog, setShowEditDialog] = useState(false);
+  const [saving, setSaving] = useState(false);
 
-  // Form state
   const [branchName, setBranchName] = useState('');
   const [branchAddress, setBranchAddress] = useState('');
   const [branchPhone, setBranchPhone] = useState('');
   const [branchType, setBranchType] = useState<'pharmacy' | 'general'>('pharmacy');
-  const [managerId, setManagerId] = useState('unassigned');
   const [isMainBranch, setIsMainBranch] = useState(false);
 
   useEffect(() => {
-    if (user && profile?.role === 'owner') {
-      fetchBranches();
-      fetchStaffMembers();
-    }
+    if (user && profile?.role === 'owner') { fetchBranches(); }
   }, [user, profile]);
 
   const fetchBranches = async () => {
+    setLoading(true);
     try {
-      setLoading(true);
-      
-      // First get branches
-      const { data: branchesData, error: branchesError } = await supabase
+      const { data, error } = await (supabase as any)
         .from('pharmacy_branches')
         .select('*')
         .eq('pharmacy_owner_id', user!.id)
         .order('is_main_branch', { ascending: false })
         .order('created_at', { ascending: true });
+      if (error) throw error;
 
-      if (branchesError) throw branchesError;
-
-      // Then get manager names for branches that have managers
-      const branchesWithManagers = await Promise.all(
-        (branchesData || []).map(async (branch) => {
-          let managerName = 'Unassigned';
-          
+      const withManagers = await Promise.all(
+        (data || []).map(async (branch: any) => {
+          let manager_name = 'Unassigned';
           if (branch.manager_staff_id) {
-            const { data: managerData } = await supabase
-              .from('profiles')
-              .select('full_name')
-              .eq('id', branch.manager_staff_id)
-              .single();
-            
-            if (managerData) {
-              managerName = managerData.full_name;
-            }
+            const { data: m } = await (supabase as any)
+              .from('profiles').select('full_name').eq('id', branch.manager_staff_id).single();
+            if (m) manager_name = m.full_name;
           }
-          
-          return {
-            ...branch,
-            branch_type: branch.branch_type as 'pharmacy' | 'general',
-            manager_name: managerName
-          };
+          return { ...branch, branch_type: branch.branch_type as 'pharmacy' | 'general', manager_name };
         })
       );
-
-      setBranches(branchesWithManagers);
-    } catch (error: any) {
-      toast({
-        title: "Error",
-        description: error.message,
-        variant: "destructive"
-      });
+      setBranches(withManagers);
+    } catch (e: any) {
+      toast({ title: 'Error', description: e.message, variant: 'destructive' });
     } finally {
       setLoading(false);
     }
   };
 
-  const fetchStaffMembers = async () => {
-    try {
-      const { data, error } = await supabase
-        .from('profiles')
-        .select('id, full_name')
-        .eq('role', 'staff');
-
-      if (error) throw error;
-      setStaffMembers(data || []);
-    } catch (error: any) {
-      console.error('Error fetching staff:', error);
-    }
-  };
-
   const resetForm = () => {
-    setBranchName('');
-    setBranchAddress('');
-    setBranchPhone('');
-    setBranchType('pharmacy');
-    setManagerId('unassigned');
-    setIsMainBranch(false);
-    setEditingBranch(null);
+    setBranchName(''); setBranchAddress(''); setBranchPhone('');
+    setBranchType('pharmacy'); setIsMainBranch(false); setEditingBranch(null);
   };
 
-  const handleCreateBranch = async () => {
-    // Check plan limits
+  const handleCreate = async () => {
     if (planLimits && !planLimits.canAddBranch) {
-      toast({
-        title: "Plan Limit Reached",
-        description: `You have reached your plan limit of ${planLimits.branchesLimit} branches. Please upgrade to add more branches.`,
-        variant: "destructive"
-      });
+      toast({ title: 'Plan Limit Reached', description: `Limit of ${planLimits.branchesLimit} branches reached.`, variant: 'destructive' });
       return;
     }
-
+    setSaving(true);
     try {
-      const { error } = await supabase
-        .from('pharmacy_branches')
-        .insert({
-          pharmacy_owner_id: user!.id,
-          name: branchName,
-          address: branchAddress || null,
-          phone: branchPhone || null,
-          branch_type: branchType,
-          manager_staff_id: managerId === 'unassigned' ? null : managerId,
-          is_main_branch: isMainBranch
-        });
-
+      const { error } = await (supabase as any).from('pharmacy_branches').insert({
+        pharmacy_owner_id: user!.id, name: branchName,
+        address: branchAddress || null, phone: branchPhone || null,
+        branch_type: branchType, is_main_branch: isMainBranch,
+      });
       if (error) throw error;
-
-      toast({
-        title: "Success",
-        description: "Branch created successfully"
-      });
-
-      resetForm();
-      setShowCreateDialog(false);
-      fetchBranches();
-      refetchPlanLimits();
-    } catch (error: any) {
-      toast({
-        title: "Error",
-        description: error.message,
-        variant: "destructive"
-      });
+      toast({ title: 'Success', description: 'Branch created successfully' });
+      resetForm(); setShowCreateDialog(false);
+      fetchBranches(); refetchPlanLimits();
+    } catch (e: any) {
+      toast({ title: 'Error', description: e.message, variant: 'destructive' });
+    } finally {
+      setSaving(false);
     }
   };
 
-  const handleUpdateBranch = async () => {
+  const handleUpdate = async () => {
     if (!editingBranch) return;
-
+    setSaving(true);
     try {
-      const { error } = await supabase
-        .from('pharmacy_branches')
-        .update({
-          name: branchName,
-          address: branchAddress || null,
-          phone: branchPhone || null,
-          branch_type: branchType,
-          manager_staff_id: managerId === 'unassigned' ? null : managerId,
-          is_main_branch: isMainBranch
-        })
+      const { error } = await (supabase as any).from('pharmacy_branches')
+        .update({ name: branchName, address: branchAddress || null, phone: branchPhone || null, branch_type: branchType, is_main_branch: isMainBranch })
         .eq('id', editingBranch.id);
-
       if (error) throw error;
-
-      toast({
-        title: "Success",
-        description: "Branch updated successfully"
-      });
-
-      setEditingBranch(null);
-      resetForm();
-      fetchBranches();
-    } catch (error: any) {
-      toast({
-        title: "Error",
-        description: error.message,
-        variant: "destructive"
-      });
+      toast({ title: 'Success', description: 'Branch updated successfully' });
+      setShowEditDialog(false); resetForm(); fetchBranches();
+    } catch (e: any) {
+      toast({ title: 'Error', description: e.message, variant: 'destructive' });
+    } finally {
+      setSaving(false);
     }
   };
 
@@ -218,109 +176,84 @@ export default function BranchManagement() {
     setBranchAddress(branch.address || '');
     setBranchPhone(branch.phone || '');
     setBranchType(branch.branch_type || 'pharmacy');
-    setManagerId(branch.manager_staff_id || 'unassigned');
     setIsMainBranch(branch.is_main_branch);
+    setShowEditDialog(true);
   };
+
+  const columns: ColumnDef<Branch>[] = [
+    {
+      accessorKey: 'name',
+      header: 'Branch Name',
+      cell: ({ row }) => (
+        <div className="font-medium flex items-center gap-2">
+          {row.original.name}
+          {row.original.is_main_branch && <Badge variant="default" className="text-xs">Main</Badge>}
+        </div>
+      ),
+    },
+    {
+      accessorKey: 'address',
+      header: 'Address',
+      cell: ({ row }) => row.original.address
+        ? <div className="flex items-center gap-1"><MapPin className="h-3 w-3 text-muted-foreground" />{row.original.address}</div>
+        : <span className="text-muted-foreground">—</span>,
+    },
+    {
+      accessorKey: 'phone',
+      header: 'Phone',
+      cell: ({ row }) => row.original.phone
+        ? <div className="flex items-center gap-1"><Phone className="h-3 w-3 text-muted-foreground" />{row.original.phone}</div>
+        : <span className="text-muted-foreground">—</span>,
+    },
+    {
+      accessorKey: 'branch_type',
+      header: 'Type',
+      cell: ({ row }) => (
+        <Badge variant={row.original.branch_type === 'pharmacy' ? 'secondary' : 'outline'}>
+          {row.original.branch_type === 'pharmacy' ? '💊 Pharmacy' : '📦 General'}
+        </Badge>
+      ),
+    },
+    {
+      id: 'actions',
+      header: 'Actions',
+      cell: ({ row }) => (
+        <DropdownMenu>
+          <DropdownMenuTrigger asChild>
+            <Button variant="ghost" size="sm" className="h-8 w-8 p-0">
+              <MoreHorizontal className="h-4 w-4" />
+            </Button>
+          </DropdownMenuTrigger>
+          <DropdownMenuContent align="end">
+            <DropdownMenuItem onClick={() => startEdit(row.original)}>
+              <Edit className="mr-2 h-4 w-4" /> Edit Branch
+            </DropdownMenuItem>
+          </DropdownMenuContent>
+        </DropdownMenu>
+      ),
+    },
+  ];
 
   if (profile?.role !== 'owner') {
     return (
-      <Card>
-        <CardContent className="pt-6">
-          <p className="text-muted-foreground">Branch management is only available for pharmacy owners.</p>
-        </CardContent>
-      </Card>
+      <Card><CardContent className="pt-6">
+        <p className="text-muted-foreground">Branch management is only available for pharmacy owners.</p>
+      </CardContent></Card>
     );
-  }
-
-  if (loading) {
-    return <div className="flex justify-center items-center h-64">Loading branches...</div>;
   }
 
   return (
     <div className="space-y-6">
-      <div className="flex items-center justify-between">
+      <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4">
         <div>
           <h2 className="text-2xl font-bold">Branch Management</h2>
           <p className="text-muted-foreground">Manage your pharmacy branches</p>
         </div>
-        <Dialog open={showCreateDialog} onOpenChange={setShowCreateDialog}>
-          <DialogTrigger asChild>
-            <Button onClick={() => resetForm()}>
-              <Plus className="mr-2 h-4 w-4" />
-              Add Branch
-            </Button>
-          </DialogTrigger>
-          <DialogContent>
-            <DialogHeader>
-              <DialogTitle>Create New Branch</DialogTitle>
-              <DialogDescription>
-                Add a new branch to your pharmacy network
-              </DialogDescription>
-            </DialogHeader>
-            
-            <div className="space-y-4">
-              <div>
-                <Label>Branch Name *</Label>
-                <Input
-                  value={branchName}
-                  onChange={(e) => setBranchName(e.target.value)}
-                  placeholder="Enter branch name"
-                  className="mt-2"
-                />
-              </div>
-
-              <div>
-                <Label>Branch Type *</Label>
-                <Select value={branchType} onValueChange={(v: 'pharmacy' | 'general') => setBranchType(v)}>
-                  <SelectTrigger className="mt-2">
-                    <SelectValue />
-                  </SelectTrigger>
-                  <SelectContent>
-                    <SelectItem value="pharmacy">Pharmacy Branch</SelectItem>
-                    <SelectItem value="general">General Inventory Branch</SelectItem>
-                  </SelectContent>
-                </Select>
-              </div>
-
-              <div>
-                <Label>Address</Label>
-                <Input
-                  value={branchAddress}
-                  onChange={(e) => setBranchAddress(e.target.value)}
-                  placeholder="Enter branch address"
-                  className="mt-2"
-                />
-              </div>
-
-              <div>
-                <Label>Phone</Label>
-                <Input
-                  value={branchPhone}
-                  onChange={(e) => setBranchPhone(e.target.value)}
-                  placeholder="Enter branch phone"
-                  className="mt-2"
-                />
-              </div>
-
-              <div className="flex items-center space-x-2">
-                <input
-                  type="checkbox"
-                  id="main-branch"
-                  checked={isMainBranch}
-                  onChange={(e) => setIsMainBranch(e.target.checked)}
-                />
-                <Label htmlFor="main-branch">Set as main branch</Label>
-              </div>
-
-              <Button onClick={handleCreateBranch} disabled={!branchName} className="w-full">
-                Create Branch
-              </Button>
-            </div>
-          </DialogContent>
-        </Dialog>
+        <Button onClick={() => { resetForm(); setShowCreateDialog(true); }}>
+          <Plus className="mr-2 h-4 w-4" /> Add Branch
+        </Button>
       </div>
 
-      {/* Branches Table */}
       <Card>
         <CardHeader>
           <CardTitle className="flex items-center gap-2">
@@ -329,141 +262,52 @@ export default function BranchManagement() {
           </CardTitle>
         </CardHeader>
         <CardContent>
-          {branches.length > 0 ? (
-            <Table>
-              <TableHeader>
-                <TableRow>
-                  <TableHead>Branch Name</TableHead>
-                  <TableHead>Address</TableHead>
-                  <TableHead>Phone</TableHead>
-                  <TableHead>Type</TableHead>
-                  <TableHead>Actions</TableHead>
-                </TableRow>
-              </TableHeader>
-              <TableBody>
-                {branches.map((branch) => (
-                  <TableRow key={branch.id}>
-                    <TableCell className="font-medium">{branch.name}</TableCell>
-                    <TableCell>
-                      {branch.address ? (
-                        <div className="flex items-center gap-1">
-                          <MapPin className="h-3 w-3 text-muted-foreground" />
-                          {branch.address}
-                        </div>
-                      ) : (
-                        <span className="text-muted-foreground">No address</span>
-                      )}
-                    </TableCell>
-                    <TableCell>
-                      {branch.phone ? (
-                        <div className="flex items-center gap-1">
-                          <Phone className="h-3 w-3 text-muted-foreground" />
-                          {branch.phone}
-                        </div>
-                      ) : (
-                        <span className="text-muted-foreground">No phone</span>
-                      )}
-                    </TableCell>
-                    <TableCell>
-                      <div className="flex gap-1">
-                        {branch.is_main_branch && (
-                          <Badge variant="default">Main</Badge>
-                        )}
-                        <Badge variant={branch.branch_type === 'pharmacy' ? 'secondary' : 'outline'}>
-                          {branch.branch_type === 'pharmacy' ? '💊 Pharmacy' : '📦 General'}
-                        </Badge>
-                      </div>
-                    </TableCell>
-                    <TableCell>
-                      <Dialog>
-                        <DialogTrigger asChild>
-                          <Button variant="outline" size="sm" onClick={() => startEdit(branch)}>
-                            <Edit className="mr-1 h-3 w-3" />
-                            Edit
-                          </Button>
-                        </DialogTrigger>
-                        <DialogContent>
-                          <DialogHeader>
-                            <DialogTitle>Edit Branch</DialogTitle>
-                            <DialogDescription>
-                              Update branch information
-                            </DialogDescription>
-                          </DialogHeader>
-                          
-                          <div className="space-y-4">
-                            <div>
-                              <Label>Branch Name *</Label>
-                              <Input
-                                value={branchName}
-                                onChange={(e) => setBranchName(e.target.value)}
-                                placeholder="Enter branch name"
-                                className="mt-2"
-                              />
-                            </div>
-
-                            <div>
-                              <Label>Branch Type *</Label>
-                              <Select value={branchType} onValueChange={(v: 'pharmacy' | 'general') => setBranchType(v)}>
-                                <SelectTrigger className="mt-2">
-                                  <SelectValue />
-                                </SelectTrigger>
-                                <SelectContent>
-                                  <SelectItem value="pharmacy">Pharmacy Branch</SelectItem>
-                                  <SelectItem value="general">General Inventory Branch</SelectItem>
-                                </SelectContent>
-                              </Select>
-                            </div>
-
-                            <div>
-                              <Label>Address</Label>
-                              <Input
-                                value={branchAddress}
-                                onChange={(e) => setBranchAddress(e.target.value)}
-                                placeholder="Enter branch address"
-                                className="mt-2"
-                              />
-                            </div>
-
-                            <div>
-                              <Label>Phone</Label>
-                              <Input
-                                value={branchPhone}
-                                onChange={(e) => setBranchPhone(e.target.value)}
-                                placeholder="Enter branch phone"
-                                className="mt-2"
-                              />
-                            </div>
-
-                            <div className="flex items-center space-x-2">
-                              <input
-                                type="checkbox"
-                                id="edit-main-branch"
-                                checked={isMainBranch}
-                                onChange={(e) => setIsMainBranch(e.target.checked)}
-                              />
-                              <Label htmlFor="edit-main-branch">Set as main branch</Label>
-                            </div>
-
-                            <Button onClick={handleUpdateBranch} disabled={!branchName} className="w-full">
-                              Update Branch
-                            </Button>
-                          </div>
-                        </DialogContent>
-                      </Dialog>
-                    </TableCell>
-                  </TableRow>
-                ))}
-              </TableBody>
-            </Table>
-          ) : (
-            <div className="text-center py-8">
-              <Building2 className="mx-auto h-12 w-12 text-gray-400" />
-              <h3 className="mt-2 text-sm font-medium text-gray-900">No branches</h3>
-              <p className="mt-1 text-sm text-gray-500">Get started by creating your first branch.</p>
-            </div>
-          )}
+          <DataTable
+            columns={columns}
+            data={branches}
+            searchKey="name"
+            searchPlaceholder="Search branches..."
+            loading={loading}
+            emptyMessage="No branches yet. Create your first branch."
+          />
         </CardContent>
       </Card>
+
+      {/* Create Dialog */}
+      <Dialog open={showCreateDialog} onOpenChange={setShowCreateDialog}>
+        <DialogContent>
+          <DialogHeader>
+            <DialogTitle>Create New Branch</DialogTitle>
+            <DialogDescription>Add a new branch to your network</DialogDescription>
+          </DialogHeader>
+          <BranchForm
+            branchName={branchName} setBranchName={setBranchName}
+            branchAddress={branchAddress} setBranchAddress={setBranchAddress}
+            branchPhone={branchPhone} setBranchPhone={setBranchPhone}
+            branchType={branchType} setBranchType={setBranchType}
+            isMainBranch={isMainBranch} setIsMainBranch={setIsMainBranch}
+            onSubmit={handleCreate} submitLabel="Create Branch" disabled={saving}
+          />
+        </DialogContent>
+      </Dialog>
+
+      {/* Edit Dialog */}
+      <Dialog open={showEditDialog} onOpenChange={setShowEditDialog}>
+        <DialogContent>
+          <DialogHeader>
+            <DialogTitle>Edit Branch</DialogTitle>
+            <DialogDescription>Update branch information</DialogDescription>
+          </DialogHeader>
+          <BranchForm
+            branchName={branchName} setBranchName={setBranchName}
+            branchAddress={branchAddress} setBranchAddress={setBranchAddress}
+            branchPhone={branchPhone} setBranchPhone={setBranchPhone}
+            branchType={branchType} setBranchType={setBranchType}
+            isMainBranch={isMainBranch} setIsMainBranch={setIsMainBranch}
+            onSubmit={handleUpdate} submitLabel="Update Branch" disabled={saving}
+          />
+        </DialogContent>
+      </Dialog>
     </div>
   );
 }

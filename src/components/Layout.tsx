@@ -57,7 +57,7 @@ export default function Layout({ children }: LayoutProps) {
               onSignOut={handleSignOut} 
             />
             
-            <main className="flex-1 overflow-auto p-4">
+            <main className="flex-1 overflow-x-hidden overflow-y-auto p-2 sm:p-4 max-w-full">
               {(profile?.role === 'owner' || profile?.role === 'staff') && <SubscriptionStatus />}
               <ExpiringMedicinesAlert />
               {children}

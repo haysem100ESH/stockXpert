@@ -78,10 +78,10 @@ export default function CartSlider({
     if (e.target === overlayRef.current) onClose();
   };
 
-  const receivedAmount = parseFloat(amountReceived) || 0;
+  const receivedAmount = amountReceived ? parseFloat(amountReceived) : total;
   const changeAmount = receivedAmount - total;
   const hasChange = changeAmount > 0.001;
-  const hasShortfall = receivedAmount > 0 && receivedAmount < total;
+  const hasShortfall = amountReceived !== '' && receivedAmount < total;
 
   const selectedCustomer = customers.find(c => c.id === selectedCustomerId);
   const customerHasDebt = selectedCustomer && (selectedCustomer.current_debt || 0) > 0;
@@ -282,7 +282,7 @@ export default function CartSlider({
                   type="number" step="0.01" min="0"
                   value={amountReceived}
                   onChange={e => onAmountReceivedChange(e.target.value)}
-                  placeholder={total.toFixed(2)}
+                  placeholder={total > 0 ? total.toFixed(2) : '0.00'}
                   className="h-9 text-sm"
                 />
               </div>

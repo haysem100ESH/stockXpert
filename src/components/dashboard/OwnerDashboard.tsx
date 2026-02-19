@@ -365,10 +365,10 @@ export default function OwnerDashboard() {
   }
 
   return (
-    <div className="space-y-6">
+    <div className="space-y-6 min-w-0">
       <TelegramConnectionDialog />
       <div className="flex items-center justify-between flex-wrap gap-4">
-        <h1 className="text-3xl font-bold">{isPharmacy ? 'Pharmacy Dashboard' : 'Inventory Dashboard'}</h1>
+        <h1 className="text-2xl md:text-3xl font-bold">{isPharmacy ? 'Pharmacy Dashboard' : 'Inventory Dashboard'}</h1>
         
         <div className="flex items-center gap-4">
           <Select value={dateFilter} onValueChange={setDateFilter}>
@@ -386,7 +386,7 @@ export default function OwnerDashboard() {
       </div>
 
       {/* Stats Cards */}
-      <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-6">
+      <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4 md:gap-6">
         <Card>
           <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
             <CardTitle className="text-sm font-medium">Total Revenue</CardTitle>
@@ -477,7 +477,7 @@ export default function OwnerDashboard() {
 
       {/* Main Tabs */}
       <Tabs defaultValue="overview" className="space-y-4">
-        <TabsList className="grid w-full grid-cols-6">
+        <TabsList className="flex flex-wrap w-full h-auto gap-1">
           <TabsTrigger value="overview">Overview</TabsTrigger>
           <TabsTrigger value="inventory">Inventory</TabsTrigger>
           <TabsTrigger value="sales">Sales</TabsTrigger>
@@ -486,134 +486,158 @@ export default function OwnerDashboard() {
           <TabsTrigger value="staff">Staff</TabsTrigger>
         </TabsList>
 
-        <TabsContent value="overview" className="space-y-4">          
+        <TabsContent value="overview" className="space-y-4">
           <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
             {/* Medicines Sold by Category - pharmacy only */}
             {isPharmacy && (
-              <Card>
+              <Card className="min-w-0">
                 <CardHeader>
                   <CardTitle>Medicines Sold by Category</CardTitle>
                   <CardDescription>Medicine sales performance</CardDescription>
                 </CardHeader>
-                <CardContent>
-                  <ResponsiveContainer width="100%" height={300}>
-                    <BarChart data={medicinesCategorySales}>
-                      <CartesianGrid strokeDasharray="3 3" />
-                      <XAxis dataKey="category" />
-                      <YAxis />
-                      <Bar dataKey="sales" fill="hsl(var(--primary))" />
-                    </BarChart>
-                  </ResponsiveContainer>
+                <CardContent className="p-3 sm:p-6 pt-0 sm:pt-0">
+                  <div className="w-full overflow-x-auto">
+                    <div style={{ minWidth: 280 }}>
+                      <ResponsiveContainer width="100%" height={260}>
+                        <BarChart data={medicinesCategorySales} margin={{ left: -20, right: 8, top: 5, bottom: 40 }}>
+                          <CartesianGrid strokeDasharray="3 3" />
+                          <XAxis dataKey="category" tick={{ fontSize: 10 }} interval={0} angle={-30} textAnchor="end" height={60} />
+                          <YAxis tick={{ fontSize: 11 }} width={40} />
+                          <Bar dataKey="sales" fill="hsl(var(--primary))" radius={[3,3,0,0]} />
+                        </BarChart>
+                      </ResponsiveContainer>
+                    </div>
+                  </div>
                 </CardContent>
               </Card>
             )}
 
             {/* Items Sold by Category */}
-            <Card>
+            <Card className="min-w-0">
               <CardHeader>
-                <CardTitle>{isPharmacy ? 'Items Sold by Category' : 'Items Sold by Category'}</CardTitle>
-                <CardDescription>{isPharmacy ? 'Non-medicine items sales' : 'Sales breakdown by item category'}</CardDescription>
+                <CardTitle>Items Sold by Category</CardTitle>
+                <CardDescription>{isPharmacy ? 'Non-medicine items sales' : 'Sales breakdown by category'}</CardDescription>
               </CardHeader>
-              <CardContent>
-                <ResponsiveContainer width="100%" height={300}>
-                  <BarChart data={isPharmacy ? itemsCategorySales : categorySales}>
-                    <CartesianGrid strokeDasharray="3 3" />
-                    <XAxis dataKey="category" />
-                    <YAxis />
-                    <Bar dataKey="sales" fill="hsl(var(--secondary))" />
-                  </BarChart>
-                </ResponsiveContainer>
+              <CardContent className="p-3 sm:p-6 pt-0 sm:pt-0">
+                <div className="w-full overflow-x-auto">
+                  <div style={{ minWidth: 280 }}>
+                    <ResponsiveContainer width="100%" height={260}>
+                      <BarChart data={isPharmacy ? itemsCategorySales : categorySales} margin={{ left: -20, right: 8, top: 5, bottom: 40 }}>
+                        <CartesianGrid strokeDasharray="3 3" />
+                        <XAxis dataKey="category" tick={{ fontSize: 10 }} interval={0} angle={-30} textAnchor="end" height={60} />
+                        <YAxis tick={{ fontSize: 11 }} width={40} />
+                        <Bar dataKey="sales" fill="hsl(var(--secondary))" radius={[3,3,0,0]} />
+                      </BarChart>
+                    </ResponsiveContainer>
+                  </div>
+                </div>
               </CardContent>
             </Card>
 
             {/* Top-Selling Medicines - pharmacy only */}
             {isPharmacy && (
-              <Card>
+              <Card className="min-w-0">
                 <CardHeader>
                   <CardTitle>Top-Selling Medicines</CardTitle>
                   <CardDescription>Best performing medicines</CardDescription>
                 </CardHeader>
-                <CardContent>
-                  <ResponsiveContainer width="100%" height={300}>
+                <CardContent className="p-3 sm:p-6 pt-0 sm:pt-0">
+                  <ResponsiveContainer width="100%" height={220}>
                     <PieChart>
-                      <Pie data={topMedicines.slice(0, 5)} cx="50%" cy="50%" outerRadius={80} fill="hsl(var(--primary))" dataKey="sales" label={(entry: any) => entry.name}>
-                        {topMedicines.slice(0, 5).map((entry, index) => (
+                      <Pie data={topMedicines.slice(0, 5)} cx="50%" cy="50%" outerRadius="55%" fill="hsl(var(--primary))" dataKey="sales" label={false} nameKey="name">
+                        {topMedicines.slice(0, 5).map((_, index) => (
                           <Cell key={`cell-${index}`} fill={`hsl(${(index * 72) % 360}, 70%, 50%)`} />
                         ))}
                       </Pie>
                     </PieChart>
                   </ResponsiveContainer>
+                  <div className="mt-2 flex flex-wrap gap-2 justify-center">
+                    {topMedicines.slice(0, 5).map((entry, index) => (
+                      <div key={entry.name} className="flex items-center gap-1 text-xs">
+                        <div className="w-3 h-3 rounded-full shrink-0" style={{ backgroundColor: `hsl(${(index * 72) % 360}, 70%, 50%)` }} />
+                        <span className="truncate max-w-[120px]">{entry.name} ({entry.sales})</span>
+                      </div>
+                    ))}
+                  </div>
                 </CardContent>
               </Card>
             )}
 
             {/* Top-Selling Items */}
-            <Card>
+            <Card className="min-w-0">
               <CardHeader>
-                <CardTitle>{isPharmacy ? 'Top-Selling Items' : 'Top-Selling Items'}</CardTitle>
-                <CardDescription>{isPharmacy ? 'Best performing items' : 'Best performing items'}</CardDescription>
+                <CardTitle>Top-Selling Items</CardTitle>
+                <CardDescription>{isPharmacy ? 'Best performing items' : 'Best performing products'}</CardDescription>
               </CardHeader>
-              <CardContent>
-                <ResponsiveContainer width="100%" height={300}>
+              <CardContent className="p-3 sm:p-6 pt-0 sm:pt-0">
+                <ResponsiveContainer width="100%" height={220}>
                   <PieChart>
-                    <Pie data={(isPharmacy ? topItems : productPerformance).slice(0, 5)} cx="50%" cy="50%" outerRadius={80} fill="hsl(var(--accent))" dataKey="sales" label={(entry: any) => entry.name}>
-                      {(isPharmacy ? topItems : productPerformance).slice(0, 5).map((entry, index) => (
+                    <Pie data={(isPharmacy ? topItems : productPerformance).slice(0, 5)} cx="50%" cy="50%" outerRadius="55%" fill="hsl(var(--accent))" dataKey="sales" label={false} nameKey="name">
+                      {(isPharmacy ? topItems : productPerformance).slice(0, 5).map((_, index) => (
                         <Cell key={`cell-${index}`} fill={`hsl(${(index * 90) % 360}, 65%, 55%)`} />
                       ))}
                     </Pie>
                   </PieChart>
                 </ResponsiveContainer>
+                <div className="mt-2 flex flex-wrap gap-2 justify-center">
+                  {(isPharmacy ? topItems : productPerformance).slice(0, 5).map((entry, index) => (
+                    <div key={entry.name} className="flex items-center gap-1 text-xs">
+                      <div className="w-3 h-3 rounded-full shrink-0" style={{ backgroundColor: `hsl(${(index * 90) % 360}, 65%, 55%)` }} />
+                      <span className="truncate max-w-[120px]">{entry.name} ({entry.sales})</span>
+                    </div>
+                  ))}
+                </div>
               </CardContent>
             </Card>
 
-            {/* Payment Method Distribution */}
-            <Card>
+            {/* Payment Methods */}
+            <Card className="min-w-0">
               <CardHeader>
                 <CardTitle>Payment Methods</CardTitle>
                 <CardDescription>Revenue by payment method</CardDescription>
               </CardHeader>
-              <CardContent>
-                <ResponsiveContainer width="100%" height={300}>
+              <CardContent className="p-3 sm:p-6 pt-0 sm:pt-0">
+                <ResponsiveContainer width="100%" height={220}>
                   <PieChart>
-                    <Pie
-                      data={paymentMethodData}
-                      cx="50%"
-                      cy="50%"
-                      outerRadius={80}
-                      fill="hsl(var(--accent))"
-                      dataKey="amount"
-                      label={(entry: any) => `${entry.method}: ETB ${Number(entry.amount).toFixed(2)}`}
-                    >
-                      {paymentMethodData.map((entry, index) => (
+                    <Pie data={paymentMethodData} cx="50%" cy="50%" outerRadius="55%" fill="hsl(var(--accent))" dataKey="amount" label={false} nameKey="method">
+                      {paymentMethodData.map((_, index) => (
                         <Cell key={`cell-${index}`} fill={`hsl(${(index * 90) % 360}, 65%, 55%)`} />
                       ))}
                     </Pie>
                   </PieChart>
                 </ResponsiveContainer>
+                <div className="mt-2 flex flex-wrap gap-2 justify-center">
+                  {paymentMethodData.map((entry, index) => (
+                    <div key={entry.method} className="flex items-center gap-1 text-xs">
+                      <div className="w-3 h-3 rounded-full shrink-0" style={{ backgroundColor: `hsl(${(index * 90) % 360}, 65%, 55%)` }} />
+                      <span>{entry.method}: ETB {Number(entry.amount).toFixed(2)}</span>
+                    </div>
+                  ))}
+                </div>
               </CardContent>
             </Card>
 
-            <Card>
+            <Card className="min-w-0">
               <CardHeader>
                 <CardTitle>Quick Actions</CardTitle>
                 <CardDescription>Frequently used actions</CardDescription>
               </CardHeader>
               <CardContent>
-                <div className="grid grid-cols-2 gap-4">
-                  <Button variant="outline" className="h-20 flex flex-col">
-                    <Plus className="h-6 w-6 mb-2" />
+                <div className="grid grid-cols-2 gap-3">
+                  <Button variant="outline" className="h-20 flex flex-col gap-1 text-xs sm:text-sm">
+                    <Plus className="h-5 w-5" />
                     {isPharmacy ? 'Add Medicine' : 'Add Item'}
                   </Button>
-                  <Button variant="outline" className="h-20 flex flex-col">
-                    <ShoppingCart className="h-6 w-6 mb-2" />
+                  <Button variant="outline" className="h-20 flex flex-col gap-1 text-xs sm:text-sm">
+                    <ShoppingCart className="h-5 w-5" />
                     New Sale
                   </Button>
-                  <Button variant="outline" className="h-20 flex flex-col">
-                    <Users className="h-6 w-6 mb-2" />
+                  <Button variant="outline" className="h-20 flex flex-col gap-1 text-xs sm:text-sm">
+                    <Users className="h-5 w-5" />
                     Manage Staff
                   </Button>
-                  <Button variant="outline" className="h-20 flex flex-col">
-                    <FileText className="h-6 w-6 mb-2" />
+                  <Button variant="outline" className="h-20 flex flex-col gap-1 text-xs sm:text-sm">
+                    <FileText className="h-5 w-5" />
                     Reports
                   </Button>
                 </div>

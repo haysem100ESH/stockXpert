@@ -1,14 +1,16 @@
 import { useState, useEffect } from 'react';
+import { ColumnDef } from '@tanstack/react-table';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
-import { Input } from '@/components/ui/input';
 import { Badge } from '@/components/ui/badge';
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
-import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@/components/ui/table';
-import { Search, Plus, Users, DollarSign, AlertTriangle, Edit, CreditCard, Eye } from 'lucide-react';
+import {
+  DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuTrigger,
+} from '@/components/ui/dropdown-menu';
+import { DataTable } from '@/components/ui/data-table';
+import { Search, Plus, Users, DollarSign, AlertTriangle, Edit, CreditCard, Eye, MoreHorizontal } from 'lucide-react';
 import { supabase } from '@/lib/db';
 import { useToast } from '@/hooks/use-toast';
-import { useAuth } from '@/hooks/useAuth';
 import { useBranchContext } from '@/hooks/useBranchContext';
 import AddCustomerDialog from './AddCustomerDialog';
 import EditCustomerDialog from './EditCustomerDialog';
@@ -27,101 +29,174 @@ interface Customer {
   lastPurchaseDate?: string;
 }
 
+type PaymentStatus = 'No Sales' | 'Paid' | 'Partial' | 'Unpaid';
+
+const statusVariant: Record<PaymentStatus, 'secondary' | 'default' | 'outline' | 'destructive'> = {
+  'No Sales': 'secondary',
+  'Paid': 'default',
+  'Partial': 'outline',
+  'Unpaid': 'destructive',
+};
+
+function getPaymentStatus(c: Customer): PaymentStatus {
+  if (c.totalPurchases === 0) return 'No Sales';
+  if (c.totalDebt === 0) return 'Paid';
+  if (c.totalPaid > 0) return 'Partial';
+  return 'Unpaid';
+}
+
 export default function CustomerManagement() {
   const [customers, setCustomers] = useState<Customer[]>([]);
-  const [searchTerm, setSearchTerm] = useState('');
   const [loading, setLoading] = useState(true);
   const [showAddDialog, setShowAddDialog] = useState(false);
   const [showEditDialog, setShowEditDialog] = useState(false);
   const [showPaymentDialog, setShowPaymentDialog] = useState(false);
   const [showDetailDialog, setShowDetailDialog] = useState(false);
   const [selectedCustomer, setSelectedCustomer] = useState<Customer | null>(null);
-  const { profile } = useAuth();
   const { selectedBranch } = useBranchContext();
   const { toast } = useToast();
 
   useEffect(() => { fetchCustomers(); }, [selectedBranch]);
 
   const fetchCustomers = async () => {
+    setLoading(true);
     try {
-      let query = supabase.from('customers').select('*').order('name');
+      let query = (supabase as any).from('customers').select('*').order('name');
       if (selectedBranch) query = query.eq('branch_id', selectedBranch);
       const { data: customersData, error } = await query;
       if (error) throw error;
 
-      // Fetch sales and payments for each customer
       const enriched: Customer[] = await Promise.all(
         (customersData || []).map(async (c: any) => {
-          // Total purchases from sales
-          let salesQuery = supabase.from('sales').select('total_amount, created_at').eq('customer_id', c.id).order('created_at', { ascending: false });
-          const { data: salesData } = await salesQuery;
-          const totalPurchases = salesData?.reduce((sum, s) => sum + Number(s.total_amount), 0) || 0;
+          const { data: salesData } = await (supabase as any)
+            .from('sales').select('total_amount, amount_paid, created_at')
+            .eq('customer_id', c.id).order('created_at', { ascending: false });
+          const totalPurchases = salesData?.reduce((s: number, r: any) => s + Number(r.total_amount), 0) || 0;
+          const paidAtSale = salesData?.reduce((s: number, r: any) => s + Number(r.amount_paid || 0), 0) || 0;
           const lastPurchaseDate = salesData?.[0]?.created_at;
 
-          // Total debt payments
-          const { data: paymentsData } = await supabase.from('customer_payments').select('amount').eq('customer_id', c.id);
-          const totalPayments = paymentsData?.reduce((sum, p) => sum + Number(p.amount), 0) || 0;
-
-          // Amount paid at sale time
-          let paidAtSale = 0;
-          if (salesData) {
-            const saleIds = salesData.map(s => (s as any).id).filter(Boolean);
-            // amount_paid is on sales table
-            const { data: salesWithPaid } = await supabase.from('sales').select('amount_paid').eq('customer_id', c.id);
-            paidAtSale = salesWithPaid?.reduce((sum, s) => sum + Number((s as any).amount_paid || 0), 0) || 0;
-          }
+          const { data: paymentsData } = await (supabase as any)
+            .from('customer_payments').select('amount').eq('customer_id', c.id);
+          const totalPayments = paymentsData?.reduce((s: number, p: any) => s + Number(p.amount), 0) || 0;
 
           const totalPaid = paidAtSale + totalPayments;
           const totalDebt = Math.max(0, totalPurchases - totalPaid);
-
-          return {
-            ...c,
-            totalPurchases,
-            totalPaid,
-            totalDebt,
-            lastPurchaseDate,
-          };
+          return { ...c, totalPurchases, totalPaid, totalDebt, lastPurchaseDate };
         })
       );
-
       setCustomers(enriched);
-    } catch (error) {
-      toast({ title: "Error", description: "Failed to fetch customers", variant: "destructive" });
+    } catch {
+      toast({ title: 'Error', description: 'Failed to fetch customers', variant: 'destructive' });
     } finally {
       setLoading(false);
     }
   };
 
-  const filtered = customers.filter(c =>
-    c.name.toLowerCase().includes(searchTerm.toLowerCase()) ||
-    c.phone?.toLowerCase().includes(searchTerm.toLowerCase())
-  );
+  const openEdit = (c: Customer) => { setSelectedCustomer(c); setShowEditDialog(true); };
+  const openPayment = (c: Customer) => { setSelectedCustomer(c); setShowPaymentDialog(true); };
+  const openDetail = (c: Customer) => { setSelectedCustomer(c); setShowDetailDialog(true); };
 
-  const totalOutstanding = customers.reduce((sum, c) => sum + c.totalDebt, 0);
+  const allColumns: ColumnDef<Customer>[] = [
+    { accessorKey: 'name', header: 'Name', cell: ({ row }) => <span className="font-medium">{row.original.name}</span> },
+    { accessorKey: 'phone', header: 'Phone', cell: ({ row }) => row.original.phone || <span className="text-muted-foreground">—</span> },
+    {
+      accessorKey: 'totalPurchases',
+      header: 'Total Purchases',
+      cell: ({ row }) => `ETB ${row.original.totalPurchases.toFixed(2)}`,
+    },
+    {
+      accessorKey: 'totalPaid',
+      header: 'Paid',
+      cell: ({ row }) => `ETB ${row.original.totalPaid.toFixed(2)}`,
+    },
+    {
+      accessorKey: 'totalDebt',
+      header: 'Outstanding',
+      cell: ({ row }) => (
+        <span className={row.original.totalDebt > 0 ? 'text-destructive font-semibold' : ''}>
+          ETB {row.original.totalDebt.toFixed(2)}
+        </span>
+      ),
+    },
+    {
+      accessorKey: 'status',
+      header: 'Status',
+      cell: ({ row }) => {
+        const status = getPaymentStatus(row.original);
+        return <Badge variant={statusVariant[status]}>{status}</Badge>;
+      },
+    },
+    {
+      id: 'actions',
+      header: 'Actions',
+      cell: ({ row }) => {
+        const c = row.original;
+        return (
+          <DropdownMenu>
+            <DropdownMenuTrigger asChild>
+              <Button variant="ghost" size="sm" className="h-8 w-8 p-0">
+                <MoreHorizontal className="h-4 w-4" />
+              </Button>
+            </DropdownMenuTrigger>
+            <DropdownMenuContent align="end">
+              <DropdownMenuItem onClick={() => openDetail(c)}>
+                <Eye className="mr-2 h-4 w-4" /> View Details
+              </DropdownMenuItem>
+              <DropdownMenuItem onClick={() => openEdit(c)}>
+                <Edit className="mr-2 h-4 w-4" /> Edit
+              </DropdownMenuItem>
+              {c.totalDebt > 0 && (
+                <DropdownMenuItem onClick={() => openPayment(c)}>
+                  <CreditCard className="mr-2 h-4 w-4" /> Record Payment
+                </DropdownMenuItem>
+              )}
+            </DropdownMenuContent>
+          </DropdownMenu>
+        );
+      },
+    },
+  ];
+
+  const debtorColumns: ColumnDef<Customer>[] = [
+    { accessorKey: 'name', header: 'Name', cell: ({ row }) => <span className="font-medium">{row.original.name}</span> },
+    { accessorKey: 'phone', header: 'Phone', cell: ({ row }) => row.original.phone || '—' },
+    {
+      accessorKey: 'totalDebt',
+      header: 'Outstanding',
+      cell: ({ row }) => <span className="text-destructive font-semibold">ETB {row.original.totalDebt.toFixed(2)}</span>,
+    },
+    {
+      accessorKey: 'lastPurchaseDate',
+      header: 'Last Purchase',
+      cell: ({ row }) => row.original.lastPurchaseDate
+        ? new Date(row.original.lastPurchaseDate).toLocaleDateString()
+        : '—',
+    },
+    {
+      id: 'actions',
+      header: 'Actions',
+      cell: ({ row }) => (
+        <Button size="sm" variant="outline" onClick={() => openPayment(row.original)}>
+          <CreditCard className="h-3 w-3 mr-1" /> Record Payment
+        </Button>
+      ),
+    },
+  ];
+
+  const totalOutstanding = customers.reduce((s, c) => s + c.totalDebt, 0);
   const customersWithDebt = customers.filter(c => c.totalDebt > 0).length;
-  const topDebtors = [...customers].sort((a, b) => b.totalDebt - a.totalDebt).filter(c => c.totalDebt > 0).slice(0, 5);
-
-  const getPaymentStatus = (c: Customer) => {
-    if (c.totalPurchases === 0) return { label: 'No Sales', variant: 'secondary' as const };
-    if (c.totalDebt === 0) return { label: 'Paid', variant: 'default' as const };
-    if (c.totalPaid > 0) return { label: 'Partial', variant: 'outline' as const };
-    return { label: 'Unpaid', variant: 'destructive' as const };
-  };
-
-  if (loading) return <div>Loading customers...</div>;
+  const debtors = [...customers].filter(c => c.totalDebt > 0).sort((a, b) => b.totalDebt - a.totalDebt);
 
   return (
     <div className="space-y-6">
       {/* Summary Cards */}
-      <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
+      <div className="grid grid-cols-1 sm:grid-cols-3 gap-4">
         <Card>
           <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
             <CardTitle className="text-sm font-medium">Total Customers</CardTitle>
             <Users className="h-4 w-4 text-muted-foreground" />
           </CardHeader>
-          <CardContent>
-            <div className="text-2xl font-bold">{customers.length}</div>
-          </CardContent>
+          <CardContent><div className="text-2xl font-bold">{customers.length}</div></CardContent>
         </Card>
         <Card>
           <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
@@ -137,9 +212,7 @@ export default function CustomerManagement() {
             <CardTitle className="text-sm font-medium">Customers with Debt</CardTitle>
             <AlertTriangle className="h-4 w-4 text-warning" />
           </CardHeader>
-          <CardContent>
-            <div className="text-2xl font-bold">{customersWithDebt}</div>
-          </CardContent>
+          <CardContent><div className="text-2xl font-bold">{customersWithDebt}</div></CardContent>
         </Card>
       </div>
 
@@ -147,107 +220,39 @@ export default function CustomerManagement() {
         <div className="flex items-center justify-between flex-wrap gap-2">
           <TabsList>
             <TabsTrigger value="all">All Customers</TabsTrigger>
-            <TabsTrigger value="debtors">Debtors</TabsTrigger>
+            <TabsTrigger value="debtors">Debtors ({debtors.length})</TabsTrigger>
           </TabsList>
-          <div className="flex items-center gap-2">
-            <div className="relative">
-              <Search className="absolute left-2 top-2.5 h-4 w-4 text-muted-foreground" />
-              <Input placeholder="Search by name or phone..." value={searchTerm} onChange={e => setSearchTerm(e.target.value)} className="pl-8 w-64" />
-            </div>
-            <Button onClick={() => setShowAddDialog(true)}>
-              <Plus className="h-4 w-4 mr-2" />Add Customer
-            </Button>
-          </div>
+          <Button onClick={() => setShowAddDialog(true)} size="sm">
+            <Plus className="h-4 w-4 mr-1" /> Add Customer
+          </Button>
         </div>
 
         <TabsContent value="all">
           <Card>
-            <CardContent className="p-0">
-              <Table>
-                <TableHeader>
-                  <TableRow>
-                    <TableHead>Name</TableHead>
-                    <TableHead>Phone</TableHead>
-                    <TableHead>Total Purchases</TableHead>
-                    <TableHead>Paid</TableHead>
-                    <TableHead>Outstanding</TableHead>
-                    <TableHead>Status</TableHead>
-                    <TableHead>Actions</TableHead>
-                  </TableRow>
-                </TableHeader>
-                <TableBody>
-                  {filtered.length === 0 ? (
-                    <TableRow><TableCell colSpan={7} className="text-center text-muted-foreground py-8">No customers found</TableCell></TableRow>
-                  ) : filtered.map(c => {
-                    const status = getPaymentStatus(c);
-                    return (
-                      <TableRow key={c.id} className={c.totalDebt > 0 ? 'bg-destructive/5' : ''}>
-                        <TableCell className="font-medium">{c.name}</TableCell>
-                        <TableCell>{c.phone || '-'}</TableCell>
-                        <TableCell>ETB {c.totalPurchases.toFixed(2)}</TableCell>
-                        <TableCell>ETB {c.totalPaid.toFixed(2)}</TableCell>
-                        <TableCell className={c.totalDebt > 0 ? 'text-destructive font-medium' : ''}>
-                          ETB {c.totalDebt.toFixed(2)}
-                        </TableCell>
-                        <TableCell><Badge variant={status.variant}>{status.label}</Badge></TableCell>
-                        <TableCell>
-                          <div className="flex gap-1">
-                            <Button size="sm" variant="ghost" onClick={() => { setSelectedCustomer(c); setShowDetailDialog(true); }}>
-                              <Eye className="h-3 w-3" />
-                            </Button>
-                            <Button size="sm" variant="ghost" onClick={() => { setSelectedCustomer(c); setShowEditDialog(true); }}>
-                              <Edit className="h-3 w-3" />
-                            </Button>
-                            {c.totalDebt > 0 && (
-                              <Button size="sm" variant="ghost" onClick={() => { setSelectedCustomer(c); setShowPaymentDialog(true); }}>
-                                <CreditCard className="h-3 w-3" />
-                              </Button>
-                            )}
-                          </div>
-                        </TableCell>
-                      </TableRow>
-                    );
-                  })}
-                </TableBody>
-              </Table>
+            <CardContent className="pt-4">
+              <DataTable
+                columns={allColumns}
+                data={customers}
+                searchKey="name"
+                searchPlaceholder="Search customers..."
+                loading={loading}
+                emptyMessage="No customers found."
+              />
             </CardContent>
           </Card>
         </TabsContent>
 
         <TabsContent value="debtors">
           <Card>
-            <CardHeader>
-              <CardTitle className="text-lg">Top Debtors</CardTitle>
-            </CardHeader>
-            <CardContent className="p-0">
-              <Table>
-                <TableHeader>
-                  <TableRow>
-                    <TableHead>Name</TableHead>
-                    <TableHead>Phone</TableHead>
-                    <TableHead>Outstanding</TableHead>
-                    <TableHead>Last Purchase</TableHead>
-                    <TableHead>Actions</TableHead>
-                  </TableRow>
-                </TableHeader>
-                <TableBody>
-                  {customers.filter(c => c.totalDebt > 0).sort((a, b) => b.totalDebt - a.totalDebt).length === 0 ? (
-                    <TableRow><TableCell colSpan={5} className="text-center text-muted-foreground py-8">No outstanding debts 🎉</TableCell></TableRow>
-                  ) : customers.filter(c => c.totalDebt > 0).sort((a, b) => b.totalDebt - a.totalDebt).map(c => (
-                    <TableRow key={c.id}>
-                      <TableCell className="font-medium">{c.name}</TableCell>
-                      <TableCell>{c.phone || '-'}</TableCell>
-                      <TableCell className="text-destructive font-medium">ETB {c.totalDebt.toFixed(2)}</TableCell>
-                      <TableCell>{c.lastPurchaseDate ? new Date(c.lastPurchaseDate).toLocaleDateString() : '-'}</TableCell>
-                      <TableCell>
-                        <Button size="sm" variant="outline" onClick={() => { setSelectedCustomer(c); setShowPaymentDialog(true); }}>
-                          <CreditCard className="h-3 w-3 mr-1" />Record Payment
-                        </Button>
-                      </TableCell>
-                    </TableRow>
-                  ))}
-                </TableBody>
-              </Table>
+            <CardContent className="pt-4">
+              <DataTable
+                columns={debtorColumns}
+                data={debtors}
+                searchKey="name"
+                searchPlaceholder="Search debtors..."
+                loading={loading}
+                emptyMessage="No outstanding debts 🎉"
+              />
             </CardContent>
           </Card>
         </TabsContent>

@@ -523,31 +523,31 @@ export default function Dashboard() {
   ];
 
   return (
-    <div className="space-y-6">
+    <div className="space-y-6 min-w-0">
       {profile?.role === 'owner' && <TelegramConnectionDialog />}
-      <div className="flex items-center justify-between">
+      <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4">
         <div>
-          <h2 className="text-3xl font-bold tracking-tight">Dashboard</h2>
-          <p className="text-muted-foreground">
+          <h2 className="text-2xl sm:text-3xl font-bold tracking-tight">Dashboard</h2>
+          <p className="text-sm text-muted-foreground">
             Welcome back, {profile.full_name}! Here's what's happening {isPharmacy ? 'at your pharmacy' : 'in your inventory'}.
           </p>
         </div>
         
-        <div className="flex items-center gap-2">
+        <div className="flex flex-wrap items-center gap-2">
           {profile?.role === 'owner' && !profile?.telegram_chat_id && (
             <Button 
               onClick={handleConnectTelegram}
               variant="outline"
+              size="sm"
               className="gap-2"
             >
               <MessageCircle className="h-4 w-4" />
-              Connect Telegram
+              <span className="hidden sm:inline">Connect Telegram</span>
               <ExternalLink className="h-3 w-3" />
             </Button>
           )}
-          <div className="flex items-center space-x-4">
           <Select value={reportPeriod} onValueChange={setReportPeriod}>
-            <SelectTrigger className="w-32">
+            <SelectTrigger className="w-28">
               <SelectValue />
             </SelectTrigger>
             <SelectContent>
@@ -560,9 +560,9 @@ export default function Dashboard() {
           
           <Popover>
             <PopoverTrigger asChild>
-              <Button variant="outline" className="w-48 justify-start text-left font-normal">
-                <CalendarIcon className="mr-2 h-4 w-4" />
-                {customDate ? format(customDate, "PPP") : <span>Pick a date</span>}
+              <Button variant="outline" size="sm" className="w-auto justify-start text-left font-normal">
+                <CalendarIcon className="mr-1 h-4 w-4" />
+                {customDate ? format(customDate, "PP") : <span>Date</span>}
               </Button>
             </PopoverTrigger>
             <PopoverContent className="w-auto p-0">
@@ -576,15 +576,14 @@ export default function Dashboard() {
             </PopoverContent>
           </Popover>
           
-          <Button onClick={exportToCSV} variant="outline">
-            <Download className="h-4 w-4 mr-2" />
+          <Button onClick={exportToCSV} variant="outline" size="sm">
+            <Download className="h-4 w-4 mr-1" />
             CSV
           </Button>
-          </div>
         </div>
       </div>
 
-      <div className="grid gap-4 md:grid-cols-2 lg:grid-cols-6">
+      <div className="grid gap-4 grid-cols-1 sm:grid-cols-2 lg:grid-cols-4">
         {profile?.role === 'owner' && (
           <Card>
             <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
@@ -673,25 +672,25 @@ export default function Dashboard() {
             <CardTitle>Items Sold by Category</CardTitle>
             <CardDescription>Sales breakdown by {isPharmacy ? 'medicine' : 'item'} category</CardDescription>
           </CardHeader>
-          <CardContent>
-            <ChartContainer
-              config={{
-                sales: { label: "Sales", color: "hsl(217 91% 60%)" }
-              }}
-              className="h-[300px]"
-            >
-              <BarChart data={categorySales} width={533} height={300}>
-                <CartesianGrid strokeDasharray="3 3" />
-                <XAxis dataKey="category" />
-                <YAxis />
-                <ChartTooltip content={<ChartTooltipContent />} />
-                <Bar dataKey="sales">
-                  {categorySales.map((entry, index) => (
-                    <Cell key={`cell-${index}`} fill={COLORS[index % COLORS.length]} />
-                  ))}
-                </Bar>
-              </BarChart>
-            </ChartContainer>
+          <CardContent className="overflow-hidden p-2 sm:p-6 pt-0 sm:pt-0">
+                <ChartContainer
+                  config={{
+                    sales: { label: "Sales", color: "hsl(217 91% 60%)" }
+                  }}
+                  className="h-[300px] w-full"
+                >
+                  <BarChart data={categorySales} margin={{ left: -20, right: 8, top: 5, bottom: 5 }}>
+                    <CartesianGrid strokeDasharray="3 3" />
+                    <XAxis dataKey="category" tick={{ fontSize: 11 }} interval={0} angle={-30} textAnchor="end" height={60} />
+                    <YAxis tick={{ fontSize: 11 }} width={40} />
+                    <ChartTooltip content={<ChartTooltipContent />} />
+                    <Bar dataKey="sales">
+                      {categorySales.map((entry, index) => (
+                        <Cell key={`cell-${index}`} fill={COLORS[index % COLORS.length]} />
+                      ))}
+                    </Bar>
+                  </BarChart>
+                </ChartContainer>
           </CardContent>
         </Card>
 
@@ -701,30 +700,39 @@ export default function Dashboard() {
             <CardTitle>Payment Methods</CardTitle>
             <CardDescription>Revenue breakdown by payment method</CardDescription>
           </CardHeader>
-          <CardContent>
-            <ChartContainer
-              config={{
-                amount: { label: "Amount", color: "hsl(142 76% 36%)" }
-              }}
-              className="h-[300px]"
-            >
-              <PieChart width={533} height={300}>
-                <Pie
-                  data={paymentMethodData}
-                  cx="50%"
-                  cy="50%"
-                  outerRadius={80}
-                  fill="hsl(142 76% 36%)"
-                  dataKey="amount"
-                  label={(entry) => `${entry.method}: ETB ${entry.amount.toFixed(2)}`}
+          <CardContent className="overflow-hidden p-2 sm:p-6 pt-0 sm:pt-0">
+                <ChartContainer
+                  config={{
+                    amount: { label: "Amount", color: "hsl(142 76% 36%)" }
+                  }}
+                  className="h-[300px] w-full"
                 >
+                  <PieChart>
+                    <Pie
+                      data={paymentMethodData}
+                      cx="50%"
+                      cy="50%"
+                      outerRadius={70}
+                      fill="hsl(142 76% 36%)"
+                      dataKey="amount"
+                      label={false}
+                      nameKey="method"
+                    >
+                      {paymentMethodData.map((entry, index) => (
+                        <Cell key={`cell-${index}`} fill={COLORS[index % COLORS.length]} />
+                      ))}
+                    </Pie>
+                    <ChartTooltip content={<ChartTooltipContent />} />
+                  </PieChart>
+                </ChartContainer>
+                <div className="mt-2 flex flex-wrap gap-2 justify-center">
                   {paymentMethodData.map((entry, index) => (
-                    <Cell key={`cell-${index}`} fill={COLORS[index % COLORS.length]} />
+                    <div key={entry.method} className="flex items-center gap-1 text-xs">
+                      <div className="w-3 h-3 rounded-full" style={{ backgroundColor: COLORS[index % COLORS.length] }} />
+                      <span>{entry.method}: ETB {entry.amount.toFixed(2)}</span>
+                    </div>
                   ))}
-                </Pie>
-                <ChartTooltip content={<ChartTooltipContent />} />
-              </PieChart>
-            </ChartContainer>
+                </div>
           </CardContent>
         </Card>
       </div>
@@ -735,30 +743,39 @@ export default function Dashboard() {
           <CardTitle>Top Selling {isPharmacy ? 'Products' : 'Items'}</CardTitle>
           <CardDescription>Most frequently sold {isPharmacy ? 'products' : 'items'}</CardDescription>
         </CardHeader>
-        <CardContent>
-          <ChartContainer
-            config={{
-              sales: { label: "Sales", color: "hsl(38 92% 50%)" }
-            }}
-            className="h-[300px]"
-          >
-            <PieChart width={533} height={300}>
-              <Pie
-                data={productPerformance.slice(0, 5)}
-                cx="50%"
-                cy="50%"
-                outerRadius={80}
-                fill="hsl(38 92% 50%)"
-                dataKey="sales"
-                label={(entry) => entry.name}
+        <CardContent className="overflow-hidden p-2 sm:p-6 pt-0 sm:pt-0">
+              <ChartContainer
+                config={{
+                  sales: { label: "Sales", color: "hsl(38 92% 50%)" }
+                }}
+                className="h-[300px] w-full"
               >
+                <PieChart>
+                  <Pie
+                    data={productPerformance.slice(0, 5)}
+                    cx="50%"
+                    cy="50%"
+                    outerRadius={70}
+                    fill="hsl(38 92% 50%)"
+                    dataKey="sales"
+                    label={false}
+                    nameKey="name"
+                  >
+                    {productPerformance.slice(0, 5).map((entry, index) => (
+                      <Cell key={`cell-${index}`} fill={COLORS[index % COLORS.length]} />
+                    ))}
+                  </Pie>
+                  <ChartTooltip content={<ChartTooltipContent />} />
+                </PieChart>
+              </ChartContainer>
+              <div className="mt-2 flex flex-wrap gap-2 justify-center">
                 {productPerformance.slice(0, 5).map((entry, index) => (
-                  <Cell key={`cell-${index}`} fill={COLORS[index % COLORS.length]} />
+                  <div key={entry.name} className="flex items-center gap-1 text-xs">
+                    <div className="w-3 h-3 rounded-full" style={{ backgroundColor: COLORS[index % COLORS.length] }} />
+                    <span>{entry.name} ({entry.sales})</span>
+                  </div>
                 ))}
-              </Pie>
-              <ChartTooltip content={<ChartTooltipContent />} />
-            </PieChart>
-          </ChartContainer>
+              </div>
         </CardContent>
       </Card>
 
@@ -769,33 +786,37 @@ export default function Dashboard() {
             <CardTitle>Income vs Expenses</CardTitle>
             <CardDescription>Daily comparison of income and expenses</CardDescription>
           </CardHeader>
-          <CardContent>
-            <ChartContainer
-              config={{
-                income: { label: "Income", color: "hsl(var(--success))" },
-                expenses: { label: "Expenses", color: "hsl(var(--destructive))" }
-              }}
-              className="h-[400px]"
-            >
-              <LineChart data={incomeExpenseData} width={533} height={400}>
-                <CartesianGrid strokeDasharray="3 3" />
-                <XAxis dataKey="date" />
-                <YAxis />
-                <ChartTooltip content={<ChartTooltipContent />} />
-                <Line 
-                  type="monotone" 
-                  dataKey="income" 
-                  stroke="hsl(var(--success))" 
-                  strokeWidth={2}
-                />
-                <Line 
-                  type="monotone" 
-                  dataKey="expenses" 
-                  stroke="hsl(var(--destructive))" 
-                  strokeWidth={2}
-                />
-              </LineChart>
-            </ChartContainer>
+          <CardContent className="overflow-hidden p-2 sm:p-6 pt-0 sm:pt-0">
+                <ChartContainer
+                  config={{
+                    income: { label: "Income", color: "hsl(var(--success))" },
+                    expenses: { label: "Expenses", color: "hsl(var(--destructive))" }
+                  }}
+                  className="h-[350px] w-full"
+                >
+                  <LineChart data={incomeExpenseData} margin={{ left: -20, right: 8, top: 5, bottom: 5 }}>
+                    <CartesianGrid strokeDasharray="3 3" />
+                    <XAxis dataKey="date" tick={{ fontSize: 10 }} angle={-45} textAnchor="end" height={70} />
+                    <YAxis tick={{ fontSize: 11 }} width={45} />
+                    <ChartTooltip content={<ChartTooltipContent />} />
+                    <Line 
+                      type="monotone" 
+                      dataKey="income" 
+                      stroke="hsl(var(--success))" 
+                      strokeWidth={2}
+                    />
+                    <Line 
+                      type="monotone" 
+                      dataKey="expenses" 
+                      stroke="hsl(var(--destructive))" 
+                      strokeWidth={2}
+                    />
+                  </LineChart>
+                </ChartContainer>
+                <div className="mt-2 flex gap-4 justify-center text-xs">
+                  <div className="flex items-center gap-1"><div className="w-3 h-3 rounded-full bg-[hsl(var(--success))]" /><span>Income</span></div>
+                  <div className="flex items-center gap-1"><div className="w-3 h-3 rounded-full bg-[hsl(var(--destructive))]" /><span>Expenses</span></div>
+                </div>
           </CardContent>
         </Card>
       )}
