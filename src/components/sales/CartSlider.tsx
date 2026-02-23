@@ -1,4 +1,4 @@
-import { useRef, useEffect } from 'react';
+import { useRef, useState } from 'react';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
@@ -6,7 +6,7 @@ import { Badge } from '@/components/ui/badge';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
 import { Separator } from '@/components/ui/separator';
 import { RadioGroup, RadioGroupItem } from '@/components/ui/radio-group';
-import { ShoppingCart, Trash2, CreditCard, Percent, ArrowLeftRight, Wallet, X, Plus, Minus } from 'lucide-react';
+import { ShoppingCart, Trash2, CreditCard, Percent, ArrowLeftRight, Wallet, X, Plus, Minus, Search } from 'lucide-react';
 import { cn } from '@/lib/utils';
 
 interface CartItem {
@@ -27,7 +27,7 @@ interface Customer {
   id: string;
   name: string;
   phone?: string | null;
-  current_debt?: number;
+  computed_debt?: number;
 }
 
 type ChangeAction = 'keep_profit' | 'deduct_debt' | 'give_change' | null;
@@ -72,6 +72,7 @@ export default function CartSlider({
   processing, onCheckout,
 }: CartSliderProps) {
   const overlayRef = useRef<HTMLDivElement>(null);
+  const [customerSearch, setCustomerSearch] = useState('');
 
   // Close on overlay click
   const handleOverlayClick = (e: React.MouseEvent) => {
@@ -84,7 +85,13 @@ export default function CartSlider({
   const hasShortfall = amountReceived !== '' && receivedAmount < total;
 
   const selectedCustomer = customers.find(c => c.id === selectedCustomerId);
-  const customerHasDebt = selectedCustomer && (selectedCustomer.current_debt || 0) > 0;
+  const customerHasDebt = selectedCustomer && (selectedCustomer.computed_debt || 0) > 0;
+
+  const filteredCustomers = customers.filter(c => {
+    if (!customerSearch.trim()) return true;
+    const q = customerSearch.toLowerCase();
+    return c.name.toLowerCase().includes(q) || (c.phone || '').toLowerCase().includes(q);
+  });
 
   return (
     <>
@@ -184,9 +191,26 @@ export default function CartSlider({
                           >
                             <Minus className="h-3 w-3" />
                           </Button>
-                          <span className="text-sm font-medium min-w-[2rem] text-center">
-                            {item.saleType === 'by_stripe' ? item.stripesCount : item.quantity}
-                          </span>
+                          {item.saleType === 'by_stripe' ? (
+                            <input
+                              type="number"
+                              step="0.5"
+                              min="0.5"
+                              value={item.stripesCount ?? 1}
+                              onChange={(e) => {
+                                const val = parseFloat(e.target.value);
+                                if (!isNaN(val) && val > 0) {
+                                  const delta = val - (item.stripesCount ?? 1);
+                                  onUpdateQuantity(item.id, item.saleType, delta);
+                                }
+                              }}
+                              className="w-16 text-sm font-medium text-center border rounded-md h-7 bg-background px-1 focus:outline-none focus:ring-1 focus:ring-ring"
+                            />
+                          ) : (
+                            <span className="text-sm font-medium min-w-[2rem] text-center">
+                              {item.quantity}
+                            </span>
+                          )}
                           <Button
                             size="icon"
                             variant="outline"
@@ -208,6 +232,72 @@ export default function CartSlider({
                           ? `ETB ${item.selling_price} × ${item.quantity}`
                           : `ETB ${pricePerStripe.toFixed(2)} × ${item.stripesCount} ${unitLabel}s`}
                       </p>
+
+                      {/* Leftover strip info for by_stripe sales */}
+                      {item.saleType === 'by_stripe' && item.units_per_pack && item.stripesCount && (() => {
+                        // open_pack_units is already in real decimal units (normalized in fetchMedicines)
+                        const openPack = item.open_pack_units || 0;
+                        const uPP = item.units_per_pack;
+                        const sold = item.stripesCount;
+
+                        // 1. Consume from open pack first (exact arithmetic)
+                        const soldFromOpen = Math.min(sold, openPack);
+                        const remainingInOpen = parseFloat((openPack - soldFromOpen).toFixed(6));
+
+                        // 2. Remainder that needs new sealed packs
+                        const needFromNew = parseFloat((sold - soldFromOpen).toFixed(6));
+                        const packsToOpen = needFromNew > 0 ? Math.ceil(needFromNew / uPP) : 0;
+
+                        // 3. Leftover units in the last newly opened pack
+                        // e.g. need 1 unit from a 3-unit pack → 2 units leftover
+                        const usedFromLastPack = needFromNew > 0 ? needFromNew % uPP || (needFromNew > 0 ? uPP : 0) : 0;
+                        const leftoverInNewPack = packsToOpen > 0
+                          ? parseFloat((uPP * packsToOpen - needFromNew).toFixed(6))
+                          : 0;
+
+                        // Total opened packs in this sale (opened because of unit selling)
+                        const totalOpenedPacks = packsToOpen + (openPack > 0 ? 1 : 0);
+                        // Total original pack stock the item had
+                        const totalPacks = item.stock_quantity;
+
+                        // Remaining units in open pack after sale — display as fraction A/B
+                        // After sale: if we still have remainingInOpen from the old open pack
+                        // OR leftoverInNewPack from a newly opened pack
+                        const finalRemainingUnits = remainingInOpen > 0
+                          ? remainingInOpen
+                          : leftoverInNewPack > 0 ? leftoverInNewPack : 0;
+
+                        const showFraction = finalRemainingUnits > 0;
+
+                        return (
+                          <div className="text-xs space-y-1 bg-muted/50 rounded px-2 py-1.5 border border-border/60 mt-1">
+                            {soldFromOpen > 0 && (
+                              <div className="flex justify-between">
+                                <span className="text-muted-foreground">From open pack:</span>
+                                <span className="font-medium">{soldFromOpen} {unitLabel}</span>
+                              </div>
+                            )}
+                            {showFraction && (
+                              <div className="flex justify-between text-warning">
+                                <span>Remaining in open pack:</span>
+                                <span className="font-medium">{finalRemainingUnits}/{uPP} {unitLabel}</span>
+                              </div>
+                            )}
+                            {packsToOpen > 0 && (
+                              <div className="flex justify-between text-muted-foreground">
+                                <span>Packs to open:</span>
+                                <span className="font-medium">{packsToOpen} pack{packsToOpen > 1 ? 's' : ''}</span>
+                              </div>
+                            )}
+                            {totalOpenedPacks > 0 && (
+                              <div className="flex justify-between font-medium">
+                                <span>Opened packs:</span>
+                                <span>{totalOpenedPacks} opened from {totalPacks} total</span>
+                              </div>
+                            )}
+                          </div>
+                        );
+                      })()}
                     </div>
                   );
                 })}
@@ -218,16 +308,37 @@ export default function CartSlider({
               {/* Customer */}
               <div className="space-y-1.5">
                 <Label className="text-xs">Customer (optional)</Label>
-                <Select value={selectedCustomerId} onValueChange={onSelectCustomer}>
+                {/* Search input */}
+                <div className="relative">
+                  <Search className="absolute left-2 top-2 h-3.5 w-3.5 text-muted-foreground" />
+                  <Input
+                    placeholder="Search by name or phone..."
+                    value={customerSearch}
+                    onChange={e => setCustomerSearch(e.target.value)}
+                    className="h-8 pl-7 text-xs"
+                  />
+                </div>
+                <Select value={selectedCustomerId} onValueChange={id => { onSelectCustomer(id); setCustomerSearch(''); }}>
                   <SelectTrigger className="h-9 text-sm"><SelectValue placeholder="Walk-in customer" /></SelectTrigger>
                   <SelectContent>
                     <SelectItem value="none">Walk-in (no customer)</SelectItem>
-                    {customers.map(c => (
-                      <SelectItem key={c.id} value={c.id}>
-                        {c.name}{c.phone ? ` — ${c.phone}` : ''}
-                        {(c.current_debt || 0) > 0 ? ` · Debt: ETB ${c.current_debt}` : ''}
-                      </SelectItem>
-                    ))}
+                    {filteredCustomers.map(c => {
+                      const debt = c.computed_debt || 0;
+                      return (
+                        <SelectItem key={c.id} value={c.id}>
+                          <span className="flex items-center gap-1">
+                            {c.name}
+                            {c.phone ? <span className="text-muted-foreground"> — 📞 {c.phone}</span> : null}
+                            {debt > 0 ? (
+                              <span className="text-destructive font-medium"> — 🔴 Debt: {debt.toFixed(2)} ETB</span>
+                            ) : null}
+                          </span>
+                        </SelectItem>
+                      );
+                    })}
+                    {filteredCustomers.length === 0 && customerSearch && (
+                      <div className="py-2 px-3 text-xs text-muted-foreground">No customers match "{customerSearch}"</div>
+                    )}
                   </SelectContent>
                 </Select>
               </div>
@@ -319,12 +430,12 @@ export default function CartSlider({
                       </div>
                       {customerHasDebt ? (
                         <div className="space-y-2">
-                          <p className="text-xs text-muted-foreground">Customer has debt of ETB {selectedCustomer?.current_debt}. How to handle?</p>
+                          <p className="text-xs text-muted-foreground">Customer has debt of ETB {(selectedCustomer?.computed_debt || 0).toFixed(2)}. How to handle?</p>
                           <RadioGroup value={keepChangeOption} onValueChange={(v: any) => onKeepChangeOption(v)} className="space-y-1">
                             <div className="flex items-center gap-2">
                               <RadioGroupItem value="deduct_debt" id="opt-debt-sl" />
                               <Label htmlFor="opt-debt-sl" className="text-xs cursor-pointer">
-                                Deduct ETB {Math.min(changeAmount, selectedCustomer?.current_debt || 0).toFixed(2)} from customer debt
+                                Deduct ETB {Math.min(changeAmount, selectedCustomer?.computed_debt || 0).toFixed(2)} from customer debt
                               </Label>
                             </div>
                             <div className="flex items-center gap-2">
@@ -358,11 +469,16 @@ export default function CartSlider({
           <Button
             onClick={onCheckout}
             className="w-full"
-            disabled={processing || cart.length === 0 || (hasChange && !changeAction)}
+            disabled={processing || cart.length === 0 || (hasChange && !changeAction) || (hasShortfall && selectedCustomerId === 'none')}
           >
             <CreditCard className="h-4 w-4 mr-2" />
             {processing ? 'Processing...' : `Checkout · ETB ${total.toFixed(2)}`}
           </Button>
+          {hasShortfall && selectedCustomerId === 'none' && (
+            <p className="text-xs text-destructive text-center mt-1">
+              Walk-in customers cannot purchase on debt. Please collect full amount or select a customer.
+            </p>
+          )}
         </div>
       </div>
     </>

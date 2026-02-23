@@ -32,7 +32,7 @@ const hashAnswer = (answer: string) => {
 };
 
 export default function AccountSettings() {
-  const { user, profile } = useAuth();
+  const { user, profile, refreshProfile } = useAuth();
   const { toast } = useToast();
   const [loading, setLoading] = useState(false);
   
@@ -79,22 +79,49 @@ export default function AccountSettings() {
     setLoading(true);
 
     try {
-      // Update profile information
-      const { error: profileError } = await supabase
+      // Update profile information and select to verify it actually updated
+      const { data: updatedData, error: profileError } = await supabase
         .from('profiles')
         .update({
           full_name: profileData.full_name,
           phone: profileData.phone
         })
-        .eq('id', user?.id);
+        .eq('id', user?.id)
+        .select()
+        .single();
 
       if (profileError) throw profileError;
+
+      if (!updatedData) {
+        toast({
+          title: "Error",
+          description: "Failed to update profile - no changes were saved",
+          variant: "destructive"
+        });
+        setLoading(false);
+        return;
+      }
+
+      // Update local state with the confirmed data from DB
+      setProfileData({
+        full_name: updatedData.full_name || '',
+        phone: updatedData.phone || ''
+      });
+
+      await refreshProfile();
 
       toast({
         title: "Success",
         description: "Profile updated successfully"
       });
     } catch (error) {
+      // Revert form to actual profile data
+      if (profile) {
+        setProfileData({
+          full_name: profile.full_name || '',
+          phone: profile.phone || ''
+        });
+      }
       toast({
         title: "Error",
         description: "Failed to update profile",

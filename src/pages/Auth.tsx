@@ -22,7 +22,7 @@ import { useToast } from "@/hooks/use-toast";
 import { supabase } from "@/integrations/supabase/client";
 
 // Forgot Password Component
-function ForgotPasswordForm() {
+function ForgotPasswordForm({ onResetComplete }: { onResetComplete?: () => void }) {
   const [step, setStep] = useState<"email" | "question" | "reset">("email");
   const [email, setEmail] = useState("");
   const [securityQuestion, setSecurityQuestion] = useState("");
@@ -44,20 +44,30 @@ function ForgotPasswordForm() {
         body: { email, step: "verify_email" },
       });
 
-      if (error) throw error;
+      if (error) {
+        let errorMessage = "Failed to verify email address";
+        try {
+          const errorBody = error?.context ? await error.context.json() : null;
+          if (errorBody?.error) errorMessage = errorBody.error;
+        } catch { /* fallback */ }
+        toast({ title: "Error", description: errorMessage, variant: "destructive" });
+        setIsSubmitting(false);
+        return;
+      }
 
-      if (data.error) {
+      if (data?.error) {
         toast({ title: "Error", description: data.error, variant: "destructive" });
+        setIsSubmitting(false);
         return;
       }
 
       setSecurityQuestion(data.security_question);
       setUserId(data.user_id);
       setStep("question");
-    } catch {
+    } catch (err: any) {
       toast({
         title: "Error",
-        description: "Failed to verify email address",
+        description: err?.message || "Failed to verify email address",
         variant: "destructive",
       });
     } finally {
@@ -74,18 +84,28 @@ function ForgotPasswordForm() {
         body: { email, securityAnswer, step: "verify_answer" },
       });
 
-      if (error) throw error;
+      if (error) {
+        let errorMessage = "Failed to verify security answer";
+        try {
+          const errorBody = error?.context ? await error.context.json() : null;
+          if (errorBody?.error) errorMessage = errorBody.error;
+        } catch { /* fallback */ }
+        toast({ title: "Error", description: errorMessage, variant: "destructive" });
+        setIsSubmitting(false);
+        return;
+      }
 
-      if (data.error) {
+      if (data?.error) {
         toast({ title: "Error", description: data.error, variant: "destructive" });
+        setIsSubmitting(false);
         return;
       }
 
       setStep("reset");
-    } catch {
+    } catch (err: any) {
       toast({
         title: "Error",
-        description: "Failed to verify security answer",
+        description: err?.message || "Failed to verify security answer",
         variant: "destructive",
       });
     } finally {
@@ -117,16 +137,26 @@ function ForgotPasswordForm() {
         body: { email, newPassword, step: "reset_password" },
       });
 
-      if (error) throw error;
+      if (error) {
+        let errorMessage = "Failed to reset password";
+        try {
+          const errorBody = error?.context ? await error.context.json() : null;
+          if (errorBody?.error) errorMessage = errorBody.error;
+        } catch {
+          // fallback
+        }
+        toast({ title: "Error", description: errorMessage, variant: "destructive" });
+        return;
+      }
 
-      if (data.error) {
+      if (data?.error) {
         toast({ title: "Error", description: data.error, variant: "destructive" });
         return;
       }
 
-      toast({ title: "Success", description: "Password reset successfully." });
+      toast({ title: "Success", description: "Password reset successfully. Please sign in with your new password." });
 
-      // Reset form
+      // Reset form and redirect to sign-in
       setStep("email");
       setEmail("");
       setSecurityQuestion("");
@@ -134,6 +164,7 @@ function ForgotPasswordForm() {
       setNewPassword("");
       setConfirmPassword("");
       setUserId("");
+      onResetComplete?.();
     } catch {
       toast({
         title: "Error",
@@ -254,6 +285,7 @@ export default function Auth() {
   const { user, signIn, loading } = useAuth();
   const [isSubmitting, setIsSubmitting] = useState(false);
   const [showPassword, setShowPassword] = useState(false);
+  const [activeTab, setActiveTab] = useState("signin");
 
   if (loading) {
     return (
@@ -298,7 +330,7 @@ export default function Auth() {
 
         {/* Tabs & Forms */}
         <CardContent className="px-6 pb-6">
-          <Tabs defaultValue="signin" className="w-full">
+          <Tabs value={activeTab} onValueChange={setActiveTab} className="w-full">
             <TabsList className="grid w-full grid-cols-2 mb-6 rounded-xl bg-gray-100 p-1">
               <TabsTrigger
                 value="signin"
@@ -357,7 +389,7 @@ export default function Auth() {
 
             {/* Forgot Password Form */}
             <TabsContent value="forgot">
-              <ForgotPasswordForm />
+              <ForgotPasswordForm onResetComplete={() => setActiveTab("signin")} />
             </TabsContent>
           </Tabs>
         </CardContent>

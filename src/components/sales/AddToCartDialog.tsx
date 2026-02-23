@@ -30,6 +30,7 @@ export default function AddToCartDialog({ open, onOpenChange, medicine, onAddToC
   const [saleType, setSaleType] = useState<'full_pack' | 'by_stripe'>(getDefaultSaleType());
   const [stripesCount, setStripesCount] = useState<number>(1);
   const [packQuantity, setPackQuantity] = useState<number>(1);
+  const [stripInputValue, setStripInputValue] = useState<string>('1');
 
   if (!medicine) return null;
 
@@ -46,24 +47,29 @@ export default function AddToCartDialog({ open, onOpenChange, medicine, onAddToC
   const handleSaleTypeChange = (val: 'full_pack' | 'by_stripe') => {
     setSaleType(val);
     setStripesCount(1);
+    setStripInputValue('1');
     setPackQuantity(1);
   };
 
   const handleAdd = () => {
-    if (saleType === 'by_stripe') {
-      onAddToCart(medicine, saleType, stripesCount);
-    } else {
-      onAddToCart(medicine, saleType, packQuantity);
-    }
+    const finalCount = saleType === 'by_stripe' ? stripesCount : packQuantity;
+    if (finalCount <= 0) return;
+    onAddToCart(medicine, saleType, finalCount);
     onOpenChange(false);
     setSaleType(getDefaultSaleType());
     setStripesCount(1);
+    setStripInputValue('1');
     setPackQuantity(1);
   };
 
   return (
     <Dialog open={open} onOpenChange={(v) => {
-      if (!v) { setSaleType(getDefaultSaleType()); setStripesCount(1); setPackQuantity(1); }
+      if (!v) {
+        setSaleType(getDefaultSaleType());
+        setStripesCount(1);
+        setStripInputValue('1');
+        setPackQuantity(1);
+      }
       onOpenChange(v);
     }}>
       <DialogContent className="sm:max-w-[425px]">
@@ -147,17 +153,28 @@ export default function AddToCartDialog({ open, onOpenChange, medicine, onAddToC
             </div>
           )}
 
-          {/* Quantity for by_stripe */}
+          {/* Quantity for by_stripe — supports decimals */}
           {saleType === 'by_stripe' && medicine.units_per_pack && (
             <div className="space-y-2">
               <Label htmlFor="stripes-count">Number of {unitLabelCap}s</Label>
               <Input
                 id="stripes-count"
                 type="number"
-                min="1"
+                step="0.5"
+                min="0.5"
                 max={totalAvailableStripes}
-                value={stripesCount}
-                onChange={(e) => setStripesCount(Math.max(1, parseInt(e.target.value) || 1))}
+                value={stripInputValue}
+                onChange={(e) => {
+                  setStripInputValue(e.target.value);
+                  const val = parseFloat(e.target.value);
+                  if (!isNaN(val) && val > 0) setStripesCount(val);
+                }}
+                onBlur={() => {
+                  const val = parseFloat(stripInputValue);
+                  const clamped = isNaN(val) || val <= 0 ? 0.5 : Math.min(val, totalAvailableStripes);
+                  setStripesCount(clamped);
+                  setStripInputValue(String(clamped));
+                }}
               />
               <p className="text-sm text-muted-foreground">
                 Total: ETB {(stripesCount * parseFloat(pricePerStripe)).toFixed(2)}

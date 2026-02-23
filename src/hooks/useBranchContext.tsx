@@ -13,58 +13,74 @@ interface BranchContextType {
 
 const BranchContext = createContext<BranchContextType | undefined>(undefined);
 
+const STORAGE_KEY = 'selectedBranchId';
+
 export function BranchProvider({ children }: { children: React.ReactNode }) {
-  const [selectedBranch, setSelectedBranch] = useState<string | null>(null);
+  const [selectedBranch, setSelectedBranchState] = useState<string | null>(null);
   const [userBranch, setUserBranch] = useState<string | null>(null);
   const [branchType, setBranchType] = useState<BranchType>('pharmacy');
   const { profile, user } = useAuth();
 
-  // Get user's assigned branch if they are staff, or owner's first branch
+  // Persist selection to localStorage (owner only)
+  const setSelectedBranch = (branchId: string | null) => {
+    setSelectedBranchState(branchId);
+    if (profile?.role === 'owner') {
+      if (branchId) {
+        localStorage.setItem(STORAGE_KEY, branchId);
+      } else {
+        localStorage.removeItem(STORAGE_KEY);
+      }
+    }
+  };
+
   useEffect(() => {
     const fetchUserBranch = async () => {
       if (profile?.role === 'staff' && user?.id) {
         try {
-          // Get the branch_id directly from the profile since we have it in context
           if (profile.branch_id) {
             setUserBranch(profile.branch_id);
-            setSelectedBranch(profile.branch_id); // Staff can only see their branch
+            setSelectedBranchState(profile.branch_id); // Staff can only see their branch
           }
         } catch (error) {
           console.error('Error fetching user branch:', error);
         }
       } else if (profile?.role === 'owner' && profile?.id) {
-        // Owners default to their first branch for better performance
-        try {
-          const { data: branches } = await supabase
+        // Restore persisted branch selection, or default to "All Branches" (null)
+        const persisted = localStorage.getItem(STORAGE_KEY);
+        if (persisted) {
+          // Validate that the persisted branch still belongs to this owner
+          const { data: match } = await supabase
             .from('pharmacy_branches')
             .select('id, branch_type')
+            .eq('id', persisted)
             .eq('pharmacy_owner_id', profile.id)
-            .order('is_main_branch', { ascending: false })
-            .order('created_at', { ascending: true })
-            .limit(1);
-          
-          if (branches && branches.length > 0) {
-            setSelectedBranch(branches[0].id);
-            setBranchType((branches[0] as any).branch_type || 'pharmacy');
+            .maybeSingle();
+          if (match) {
+            setSelectedBranchState(match.id);
+            setBranchType((match as any).branch_type || 'pharmacy');
           } else {
-            setSelectedBranch(null); // No branches, default to "all"
+            // Branch no longer valid — clear and fall back to All Branches
+            localStorage.removeItem(STORAGE_KEY);
+            setSelectedBranchState(null);
           }
-          setUserBranch(null); // Owners don't have a fixed branch
-        } catch (error) {
-          console.error('Error fetching owner branches:', error);
-          setSelectedBranch(null);
-          setUserBranch(null);
+        } else {
+          // Default: "All Branches"
+          setSelectedBranchState(null);
         }
+        setUserBranch(null);
       }
     };
 
     fetchUserBranch();
   }, [profile, user]);
 
-  // Fetch branch type whenever selectedBranch changes (e.g. owner switches branch)
+  // Fetch branch type whenever selectedBranch changes
   useEffect(() => {
     const fetchBranchType = async () => {
-      if (!selectedBranch) return;
+      if (!selectedBranch) {
+        setBranchType('pharmacy'); // sensible default when viewing all
+        return;
+      }
       const { data } = await supabase
         .from('pharmacy_branches')
         .select('branch_type')

@@ -297,13 +297,18 @@ export default function FinanceManagement() {
 
         const branchStats: BranchData[] = (branchesData || []).map(branch => {
           const branchSales = salesData?.filter((s: any) => s.branch_id === branch.id) || [];
-          const branchExpenses = expensesData?.filter((e: any) => e.branch_id === branch.id) || [];
+          const branchCustomExpenses = expensesData?.filter((e: any) => e.branch_id === branch.id) || [];
+          const branchInvExpenses = invExpenses.filter((e: any) => {
+            const med = (inventoryData || []).find((m: any) => m.id === e.id);
+            return med?.branch_id === branch.id;
+          });
           
           return {
             branchId: branch.id,
             branchName: branch.name,
             income: branchSales.reduce((sum, sale) => sum + Number(sale.total_amount), 0),
-            expenses: branchExpenses.reduce((sum, expense) => sum + Number(expense.amount), 0)
+            expenses: branchCustomExpenses.reduce((sum, expense) => sum + Number(expense.amount), 0)
+              + branchInvExpenses.reduce((sum, inv) => sum + inv.total_cost, 0)
           };
         });
 
@@ -694,8 +699,8 @@ export default function FinanceManagement() {
                         formatter={(value: number) => `ETB ${value.toFixed(2)}`}
                       />
                       <Legend />
-                      <Bar dataKey="income" fill="hsl(var(--success))" name="Income" />
-                      <Bar dataKey="expenses" fill="hsl(var(--destructive))" name="Expenses" />
+                      <Bar dataKey="income" fill="hsl(142, 76%, 36%)" name="Income" />
+                      <Bar dataKey="expenses" fill="hsl(0, 84%, 60%)" name="Expenses" />
                     </BarChart>
                   </ResponsiveContainer>
                   </div>
@@ -796,7 +801,6 @@ export default function FinanceManagement() {
                                     {item.totalStripes} {item.unitLabel || 'unit'}{item.totalStripes !== 1 ? 's' : ''}
                                   </div>
                                 )}
-                                {item.totalQuantity === 0 && item.totalStripes === 0 && <span>0</span>}
                               </div>
                             </TableCell>
                             <TableCell className="text-right text-success font-medium">
@@ -839,7 +843,6 @@ export default function FinanceManagement() {
                             {sale.itemStripes > 0 && (
                               <span>{sale.itemStripes} {sale.unitLabel || 'unit'}{sale.itemStripes !== 1 ? 's' : ''}</span>
                             )}
-                            {sale.itemQty === 0 && sale.itemStripes === 0 && <span>0 qty</span>}
                           </div>
                           <div className="text-xs text-muted-foreground">
                             {new Date(sale.created_at).toLocaleDateString()} · {new Date(sale.created_at).toLocaleTimeString()}
@@ -984,32 +987,99 @@ export default function FinanceManagement() {
           <Card>
             <CardHeader>
               <CardTitle>Financial Report</CardTitle>
-              <CardDescription>Summary of financial performance</CardDescription>
+              <CardDescription>Detailed transaction report for the selected period</CardDescription>
             </CardHeader>
             <CardContent>
               <div className="space-y-6">
-                <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-                  <div className="space-y-2">
-                    <h4 className="font-medium">Performance Metrics</h4>
-                    <div className="space-y-1 text-sm">
-                      <div className="flex justify-between">
-                        <span>Total Transactions:</span>
-                        <span>{sales.length}</span>
-                      </div>
-                      <div className="flex justify-between">
-                       <span>Average Income:</span>
-                        <span>ETB {sales.length > 0 ? (stats.totalIncome / sales.length).toFixed(2) : '0.00'}</span>
-                      </div>
-                      <div className="flex justify-between">
-                        <span>Average Expense:</span>
-                        <span>ETB {expenses.length > 0 ? (stats.totalExpenses / expenses.length).toFixed(2) : '0.00'}</span>
-                      </div>
-                      <div className="flex justify-between">
-                        <span>Total Expenses:</span>
-                        <span>{expenses.length}</span>
-                      </div>
+                {/* KPI Summary */}
+                <div className="grid grid-cols-2 md:grid-cols-4 gap-3">
+                  {[
+                    { label: 'Total Transactions', value: sales.length.toString() },
+                    { label: 'Avg. Sale Value', value: `ETB ${sales.length > 0 ? (stats.totalIncome / sales.length).toFixed(2) : '0.00'}` },
+                    { label: 'Total Income', value: `ETB ${stats.totalIncome.toFixed(2)}` },
+                    { label: 'Net Profit', value: `ETB ${stats.netProfit.toFixed(2)}` },
+                  ].map(kpi => (
+                    <div key={kpi.label} className="rounded-lg border bg-muted/30 p-3 space-y-1">
+                      <p className="text-xs text-muted-foreground">{kpi.label}</p>
+                      <p className="text-sm font-semibold">{kpi.value}</p>
                     </div>
-                  </div>
+                  ))}
+                </div>
+
+                {/* Transactions Table */}
+                <div>
+                  <h4 className="text-sm font-semibold mb-3">All Transactions</h4>
+                  {sales.length === 0 ? (
+                    <p className="text-muted-foreground text-center py-8 text-sm">No transactions in the selected period</p>
+                  ) : (
+                    <div className="overflow-x-auto rounded-md border">
+                      <Table className="min-w-[700px]">
+                        <TableHeader>
+                          <TableRow className="bg-muted/50">
+                            <TableHead className="font-semibold text-xs">Date & Time</TableHead>
+                            <TableHead className="font-semibold text-xs">Items</TableHead>
+                            <TableHead className="font-semibold text-xs">Sold By</TableHead>
+                            <TableHead className="font-semibold text-xs">Payment</TableHead>
+                            <TableHead className="font-semibold text-xs text-right">Discount</TableHead>
+                            <TableHead className="font-semibold text-xs text-right">Amount</TableHead>
+                            <TableHead className="font-semibold text-xs text-center">Status</TableHead>
+                          </TableRow>
+                        </TableHeader>
+                        <TableBody>
+                          {paginatedSales.map((sale, idx) => {
+                            const itemNames = sale.sale_items?.map(si => {
+                              const name = si.medicines?.name || 'Unknown';
+                              if (si.sale_type === 'by_stripe' && si.stripes_sold) {
+                                const qty = si.stripes_sold / 1000;
+                                const label = si.medicines?.unit_label || 'unit';
+                                return `${name} (${qty % 1 === 0 ? qty.toFixed(0) : qty} ${label})`;
+                              }
+                              if (si.quantity > 0) return `${name} ×${si.quantity}`;
+                              return name;
+                            }).join(', ') || '—';
+
+                            const isPaid = Number(sale.total_amount) <= ((sale as any).amount_paid || 0);
+                            const isPartial = !isPaid && ((sale as any).amount_paid || 0) > 0;
+
+                            return (
+                              <TableRow key={sale.id} className={idx % 2 === 0 ? '' : 'bg-muted/20'}>
+                                <TableCell className="text-xs whitespace-nowrap">
+                                  <div>{new Date(sale.created_at).toLocaleDateString()}</div>
+                                  <div className="text-muted-foreground">{new Date(sale.created_at).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })}</div>
+                                </TableCell>
+                                <TableCell className="text-xs max-w-[200px]">
+                                  <div className="truncate" title={itemNames}>{itemNames}</div>
+                                </TableCell>
+                                <TableCell className="text-xs">
+                                  {sale.seller ? (
+                                    <span>{sale.seller.role === 'owner' ? 'Owner' : 'Staff'}<br /><span className="text-muted-foreground">{sale.seller.full_name}</span></span>
+                                  ) : '—'}
+                                </TableCell>
+                                <TableCell className="text-xs">{(sale as any).payment_method || '—'}</TableCell>
+                                <TableCell className="text-xs text-right">
+                                  {Number(sale.discount_amount) > 0 ? (
+                                    <span className="text-success">−ETB {Number(sale.discount_amount).toFixed(2)}</span>
+                                  ) : '—'}
+                                </TableCell>
+                                <TableCell className="text-xs text-right font-semibold">
+                                  ETB {Number(sale.total_amount).toFixed(2)}
+                                </TableCell>
+                                <TableCell className="text-xs text-center">
+                                  <span className={`inline-flex items-center rounded-full px-2 py-0.5 text-[10px] font-medium ${isPaid ? 'bg-green-100 text-green-700 dark:bg-green-900/30 dark:text-green-400' : isPartial ? 'bg-yellow-100 text-yellow-700 dark:bg-yellow-900/30 dark:text-yellow-400' : 'bg-red-100 text-red-700 dark:bg-red-900/30 dark:text-red-400'}`}>
+                                    {isPaid ? 'Paid' : isPartial ? 'Partial' : 'Unpaid'}
+                                  </span>
+                                </TableCell>
+                              </TableRow>
+                            );
+                          })}
+                        </TableBody>
+                      </Table>
+                    </div>
+                  )}
+                  {renderPagination(salesPage, sales.length, setSalesPage)}
+                  <p className="text-xs text-muted-foreground text-center pt-2">
+                    {sales.length} transaction(s) · Total: ETB {stats.totalIncome.toFixed(2)}
+                  </p>
                 </div>
               </div>
             </CardContent>

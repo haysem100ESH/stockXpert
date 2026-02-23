@@ -11,6 +11,7 @@ import { useAuth } from '@/hooks/useAuth';
 import { useBranchContext } from '@/hooks/useBranchContext';
 import AddSupplierDialog from './AddSupplierDialog';
 import EditSupplierDialog from './EditSupplierDialog';
+import { ConfirmationDialog } from '@/components/ui/confirmation-dialog';
 
 interface Supplier {
   id: string;
@@ -32,6 +33,7 @@ export default function SupplierManagement() {
   const [showAddDialog, setShowAddDialog] = useState(false);
   const [showEditDialog, setShowEditDialog] = useState(false);
   const [selectedSupplier, setSelectedSupplier] = useState<Supplier | null>(null);
+  const [deleteConfirm, setDeleteConfirm] = useState<{ open: boolean; supplierId: string; supplierName: string }>({ open: false, supplierId: '', supplierName: '' });
   const { toast } = useToast();
   const { profile } = useAuth();
   const { selectedBranch } = useBranchContext();
@@ -102,40 +104,23 @@ export default function SupplierManagement() {
     setShowEditDialog(true);
   };
 
-  const handleDeleteSupplier = async (supplierId: string) => {
+  const handleDeleteSupplier = (supplierId: string, supplierName: string) => {
     if (!profile || profile.role !== 'owner') {
-      toast({
-        title: "Error",
-        description: "Only owners can delete suppliers",
-        variant: "destructive"
-      });
+      toast({ title: "Error", description: "Only owners can delete suppliers", variant: "destructive" });
       return;
     }
+    setDeleteConfirm({ open: true, supplierId, supplierName });
+  };
 
-    if (!confirm("Are you sure you want to delete this supplier? This action cannot be undone.")) {
-      return;
-    }
-
+  const confirmDeleteSupplier = async () => {
+    setDeleteConfirm(prev => ({ ...prev, open: false }));
     try {
-      const { error } = await supabase
-        .from('suppliers')
-        .delete()
-        .eq('id', supplierId);
-
+      const { error } = await supabase.from('suppliers').delete().eq('id', deleteConfirm.supplierId);
       if (error) throw error;
-
-      toast({
-        title: "Success",
-        description: "Supplier deleted successfully"
-      });
-
+      toast({ title: "Success", description: "Supplier deleted successfully" });
       fetchSuppliers();
     } catch (error) {
-      toast({
-        title: "Error",
-        description: "Failed to delete supplier",
-        variant: "destructive"
-      });
+      toast({ title: "Error", description: "Failed to delete supplier", variant: "destructive" });
     }
   };
 
@@ -196,7 +181,7 @@ export default function SupplierManagement() {
                     <Button 
                       variant="ghost" 
                       size="sm"
-                      onClick={() => handleDeleteSupplier(supplier.id)}
+                      onClick={() => handleDeleteSupplier(supplier.id, supplier.name)}
                     >
                       <Trash2 className="h-4 w-4" />
                     </Button>
@@ -302,6 +287,16 @@ export default function SupplierManagement() {
         onOpenChange={setShowEditDialog}
         supplier={selectedSupplier}
         onSupplierUpdated={handleSupplierUpdated}
+      />
+
+      <ConfirmationDialog
+        open={deleteConfirm.open}
+        onOpenChange={(open) => setDeleteConfirm(prev => ({ ...prev, open }))}
+        title="Delete Supplier"
+        description={`Are you sure you want to delete "${deleteConfirm.supplierName}"? This action cannot be undone.`}
+        onConfirm={confirmDeleteSupplier}
+        confirmText="Delete"
+        cancelText="Cancel"
       />
     </div>
   );

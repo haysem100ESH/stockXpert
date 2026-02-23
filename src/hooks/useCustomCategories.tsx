@@ -1,9 +1,6 @@
 import { useState, useEffect } from 'react';
 import { supabase } from '@/lib/db';
 
-const DEFAULT_PHARMACY = ['tablet', 'capsule', 'syrup', 'injection', 'cream', 'ointment', 'drops', 'inhaler', 'other'];
-const DEFAULT_GENERAL = ['other'];
-
 export function useCustomCategories(systemType: 'pharmacy' | 'general') {
   const [categories, setCategories] = useState<string[]>([]);
   const [loading, setLoading] = useState(true);
@@ -11,7 +8,6 @@ export function useCustomCategories(systemType: 'pharmacy' | 'general') {
   useEffect(() => {
     const fetch = async () => {
       setLoading(true);
-      const defaults = systemType === 'pharmacy' ? DEFAULT_PHARMACY : DEFAULT_GENERAL;
 
       const { data } = await supabase
         .from('custom_categories')
@@ -19,9 +15,8 @@ export function useCustomCategories(systemType: 'pharmacy' | 'general') {
         .eq('system_type', systemType)
         .order('name');
 
-      const customNames = (data || []).map(c => c.name.toLowerCase());
-      const merged = [...new Set([...defaults, ...customNames])].sort();
-      setCategories(merged);
+      const customNames = (data || []).map((c: { name: string }) => c.name);
+      setCategories(customNames);
       setLoading(false);
     };
     fetch();
@@ -29,3 +24,4 @@ export function useCustomCategories(systemType: 'pharmacy' | 'general') {
 
   return { categories, loading };
 }
+

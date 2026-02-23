@@ -25,6 +25,20 @@ export default function BranchSelector({ selectedBranch, onBranchChange, showAll
     fetchBranches();
   }, [profile]);
 
+  // Real-time subscription for branch changes
+  useEffect(() => {
+    const channel = supabase
+      .channel('branch-selector-changes')
+      .on(
+        'postgres_changes',
+        { event: '*', schema: 'public', table: 'pharmacy_branches' },
+        () => { fetchBranches(); }
+      )
+      .subscribe();
+
+    return () => { supabase.removeChannel(channel); };
+  }, []);
+
   const fetchBranches = async () => {
     try {
       let query = supabase

@@ -50,7 +50,7 @@ export default function EditMedicineDialog({
   const [medicineData, setMedicineData] = useState({
     name: '',
     generic_name: '',
-    category: '' as 'tablet' | 'capsule' | 'syrup' | 'injection' | 'cream' | 'ointment' | 'drops' | 'inhaler' | 'other',
+    category: '',
     manufacturer: '',
     batch_number: '',
     country_name: '',
@@ -102,7 +102,7 @@ export default function EditMedicineDialog({
       setMedicineData({
         name: medicine.name,
         generic_name: medicine.generic_name || '',
-        category: medicine.category as any,
+        category: medicine.category,
         manufacturer: medicine.manufacturer || '',
         batch_number: medicine.batch_number || '',
         country_name: medicine.country_name || '',
@@ -125,10 +125,11 @@ export default function EditMedicineDialog({
     setLoading(true);
 
     try {
+      // category is now free-text — store the selected value directly
       const updateData: any = {
         name: medicineData.name,
         generic_name: medicineData.generic_name || null,
-        category: medicineData.category,
+        category: medicineData.category || 'other',
         manufacturer: medicineData.manufacturer || null,
         batch_number: isPharmacy ? (medicineData.batch_number || null) : null,
         country_name: medicineData.country_name || null,
@@ -145,7 +146,7 @@ export default function EditMedicineDialog({
       if (userRole === 'owner' && medicineData.branch_id) {
         updateData.branch_id = medicineData.branch_id;
       }
-      
+
       const { error } = await supabase.from('medicines').update(updateData).eq('id', medicine.id);
       if (error) throw error;
 
@@ -189,6 +190,12 @@ export default function EditMedicineDialog({
                     {cat.charAt(0).toUpperCase() + cat.slice(1).replace(/_/g, ' ')}
                   </SelectItem>
                 ))}
+                {/* Ensure current custom category is always shown even if not in list */}
+                {medicineData.category && !customCategories.includes(medicineData.category) && (
+                  <SelectItem key={medicineData.category} value={medicineData.category}>
+                    {medicineData.category.charAt(0).toUpperCase() + medicineData.category.slice(1)}
+                  </SelectItem>
+                )}
               </SelectContent>
             </Select>
           </div>
@@ -241,7 +248,7 @@ export default function EditMedicineDialog({
               <Input id="stock_quantity" type="number" value={medicineData.stock_quantity} onChange={(e) => setMedicineData({ ...medicineData, stock_quantity: e.target.value })} required />
             </div>
             <div className="space-y-2">
-              <Label htmlFor="minimum_stock_level">Minimum Stock Level *</Label>
+              <Label htmlFor="minimum_stock_level">Minimum Stock Level(for alert!) *</Label>
               <Input id="minimum_stock_level" type="number" value={medicineData.minimum_stock_level} onChange={(e) => setMedicineData({ ...medicineData, minimum_stock_level: e.target.value })} required />
             </div>
           </div>
@@ -252,7 +259,7 @@ export default function EditMedicineDialog({
           </div>
 
           <div className="space-y-2">
-            <Label htmlFor="units_per_pack">Units Per Pack</Label>
+            <Label htmlFor="units_per_pack">Units Per stock</Label>
             <Input id="units_per_pack" type="number" min="1" value={medicineData.units_per_pack} onChange={(e) => setMedicineData({ ...medicineData, units_per_pack: e.target.value })} placeholder="Leave empty if not sold by unit" />
           </div>
 

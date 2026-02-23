@@ -51,7 +51,11 @@ interface Transfer {
   };
 }
 
-export default function MedicineTransfer() {
+interface MedicineTransferProps {
+  onTransferComplete?: () => void;
+}
+
+export default function MedicineTransfer({ onTransferComplete }: MedicineTransferProps = {}) {
   const [branches, setBranches] = useState<Branch[]>([]);
   const [medicines, setMedicines] = useState<Medicine[]>([]);
   const [transfers, setTransfers] = useState<Transfer[]>([]);
@@ -356,6 +360,7 @@ export default function MedicineTransfer() {
 
       // Refresh data
       fetchTransferHistory();
+      onTransferComplete?.();
     } catch (error: any) {
       toast({
         title: 'Error',

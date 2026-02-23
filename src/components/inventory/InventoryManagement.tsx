@@ -74,11 +74,12 @@ export default function InventoryManagement() {
       const matchesSearch = medicine.name.toLowerCase().includes(searchTerm.toLowerCase()) ||
         medicine.generic_name?.toLowerCase().includes(searchTerm.toLowerCase());
       
+      const displayCat = getDisplayCategory(medicine);
       let matchesCategory = true;
       if (categoryFilter === 'medicines_only') {
         matchesCategory = medicineCategories.includes(medicine.category);
       } else if (categoryFilter !== 'all') {
-        matchesCategory = medicine.category === categoryFilter;
+        matchesCategory = displayCat === categoryFilter;
       }
       
       let matchesDate = true;
@@ -106,7 +107,8 @@ export default function InventoryManagement() {
   useEffect(() => {
     const counts: Record<string, number> = {};
     medicines.forEach(medicine => {
-      counts[medicine.category] = (counts[medicine.category] || 0) + 1;
+      const cat = getDisplayCategory(medicine);
+      counts[cat] = (counts[cat] || 0) + 1;
     });
     setCategoryCounts(counts);
   }, [medicines]);
@@ -158,8 +160,9 @@ export default function InventoryManagement() {
     setShowAddDialog(false);
   };
 
+  const getDisplayCategory = (medicine: Medicine) => medicine.category;
   const totalPages = Math.ceil(filteredMedicines.length / itemsPerPage);
-  const getUniqueCategories = () => [...new Set(medicines.map(m => m.category))].sort();
+  const getUniqueCategories = () => [...new Set(medicines.map(m => getDisplayCategory(m)))].sort();
   const isOutOfStock = (medicine: Medicine) => medicine.stock_quantity === 0;
   const isLowStock = (medicine: Medicine) => medicine.stock_quantity > 0 && medicine.stock_quantity <= medicine.minimum_stock_level;
 
@@ -309,7 +312,7 @@ export default function InventoryManagement() {
               <div className="space-y-2">
                 <div className="flex justify-between text-sm">
                   <span>Category:</span>
-                  <Badge variant="outline">{medicine.category}</Badge>
+                  <Badge variant="outline">{getDisplayCategory(medicine)}</Badge>
                 </div>
                 {isPharmacy && medicine.batch_number && (
                   <div className="flex justify-between text-sm">

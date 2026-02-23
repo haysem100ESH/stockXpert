@@ -1,11 +1,11 @@
 import { ReactNode, useState, useEffect } from 'react';
-import { Navigate } from 'react-router-dom';
+import { Navigate, useNavigate } from 'react-router-dom';
 import { useAuth } from '@/hooks/useAuth';
 import { Button } from '@/components/ui/button';
 import { Avatar, AvatarFallback } from '@/components/ui/avatar';
 import { SidebarProvider, SidebarTrigger } from '@/components/ui/sidebar';
 import { AppSidebar } from '@/components/AppSidebar';
-import { LogOut } from 'lucide-react';
+import { LogOut, Settings } from 'lucide-react';
 import { Loader2 } from 'lucide-react';
 import { ConfirmationDialog } from '@/components/ui/confirmation-dialog';
 import SubscriptionStatus from '@/components/subscription/SubscriptionStatus';
@@ -14,6 +14,7 @@ import { BranchProvider } from '@/hooks/useBranchContext';
 import BranchSelector from '@/components/branch/BranchSelector';
 import { useBranchContext } from '@/hooks/useBranchContext';
 import { useBranding } from '@/hooks/useBranding';
+import { DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuLabel, DropdownMenuSeparator, DropdownMenuTrigger } from '@/components/ui/dropdown-menu';
 
 interface LayoutProps {
   children: ReactNode;
@@ -81,6 +82,7 @@ export default function Layout({ children }: LayoutProps) {
 function LayoutHeader({ profile, user, onSignOut }: { profile: any, user: any, onSignOut: () => void }) {
   const { selectedBranch, setSelectedBranch } = useBranchContext();
   const branding = useBranding();
+  const navigate = useNavigate();
 
   useEffect(() => {
     document.title = branding.systemName;
@@ -102,20 +104,38 @@ function LayoutHeader({ profile, user, onSignOut }: { profile: any, user: any, o
       </div>
       
       <div className="flex items-center space-x-4">
-        <div className="flex items-center space-x-2">
-          <Avatar className="h-8 w-8">
-            <AvatarFallback>
-              {profile?.full_name.charAt(0).toUpperCase() || 'U'}
-            </AvatarFallback>
-          </Avatar>
-          <span className="text-sm font-medium hidden sm:block">
-            {profile?.full_name || user.email}
-          </span>
-        </div>
-        <Button variant="outline" size="sm" onClick={onSignOut}>
-          <LogOut className="h-4 w-4 mr-2" />
-          <span className="hidden sm:inline">Sign Out</span>
-        </Button>
+        <DropdownMenu>
+          <DropdownMenuTrigger asChild>
+            <button className="flex items-center space-x-2 cursor-pointer rounded-full hover:bg-muted p-1 transition-colors">
+              <Avatar className="h-8 w-8">
+                <AvatarFallback>
+                  {profile?.full_name.charAt(0).toUpperCase() || 'U'}
+                </AvatarFallback>
+              </Avatar>
+              <span className="text-sm font-medium hidden sm:block">
+                {profile?.full_name || user.email}
+              </span>
+            </button>
+          </DropdownMenuTrigger>
+          <DropdownMenuContent align="end" className="w-56">
+            <DropdownMenuLabel>
+              <div className="flex flex-col space-y-1">
+                <p className="text-sm font-medium">{profile?.full_name}</p>
+                <p className="text-xs text-muted-foreground">{user.email}</p>
+              </div>
+            </DropdownMenuLabel>
+            <DropdownMenuSeparator />
+            <DropdownMenuItem onClick={() => navigate('/account')}>
+              <Settings className="mr-2 h-4 w-4" />
+              Open Settings
+            </DropdownMenuItem>
+            <DropdownMenuSeparator />
+            <DropdownMenuItem onClick={onSignOut}>
+              <LogOut className="mr-2 h-4 w-4" />
+              Sign Out
+            </DropdownMenuItem>
+          </DropdownMenuContent>
+        </DropdownMenu>
       </div>
     </header>
   );

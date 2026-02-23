@@ -60,7 +60,13 @@ inspector_port = 54331
 verify_jwt = false
 
 [functions.create-staff-account]
-verify_jwt = true
+verify_jwt = false
+
+[functions.delete-staff-account]
+verify_jwt = false
+
+[functions.reset-staff-password]
+verify_jwt = false
 
 [functions.daily-credit-deduction]
 verify_jwt = false
@@ -78,4 +84,7 @@ verify_jwt = false
 verify_jwt = false
 
 [functions.telegram-webhook]
+verify_jwt = false
+
+[functions.get-staff-emails]
 verify_jwt = false

@@ -97,9 +97,6 @@ export default function CategoryManagement() {
 
   const filtered = categories.filter(c => c.system_type === activeTab);
 
-  const defaultPharmacy = ['Tablet', 'Capsule', 'Syrup', 'Injection', 'Cream', 'Ointment', 'Drops', 'Inhaler', 'Other'];
-  const defaultGeneral = ['Other'];
-
   return (
     <Card>
       <CardHeader>
@@ -108,7 +105,7 @@ export default function CategoryManagement() {
           Category Management
         </CardTitle>
         <CardDescription>
-          Create and manage custom categories for your inventory. Default categories are always available.
+          Create and manage categories for your inventory. All categories you create will be available when adding or editing items.
         </CardDescription>
       </CardHeader>
       <CardContent className="space-y-4">
@@ -117,28 +114,8 @@ export default function CategoryManagement() {
             <TabsTrigger value="pharmacy">Pharmacy Categories</TabsTrigger>
             <TabsTrigger value="general">General Inventory Categories</TabsTrigger>
           </TabsList>
-
-          <TabsContent value="pharmacy" className="space-y-4">
-            <div>
-              <p className="text-xs text-muted-foreground mb-2">Default categories (always available):</p>
-              <div className="flex flex-wrap gap-1.5">
-                {defaultPharmacy.map(c => (
-                  <Badge key={c} variant="secondary" className="text-xs">{c}</Badge>
-                ))}
-              </div>
-            </div>
-          </TabsContent>
-
-          <TabsContent value="general" className="space-y-4">
-            <div>
-              <p className="text-xs text-muted-foreground mb-2">Default categories (always available):</p>
-              <div className="flex flex-wrap gap-1.5">
-                {defaultGeneral.map(c => (
-                  <Badge key={c} variant="secondary" className="text-xs">{c}</Badge>
-                ))}
-              </div>
-            </div>
-          </TabsContent>
+          <TabsContent value="pharmacy" className="space-y-4" />
+          <TabsContent value="general" className="space-y-4" />
         </Tabs>
 
         {/* Custom categories list */}

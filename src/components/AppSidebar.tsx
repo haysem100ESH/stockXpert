@@ -1,5 +1,5 @@
-import { useState } from "react";
 import { NavLink, useLocation } from "react-router-dom";
+import { useIsMobile } from "@/hooks/use-mobile";
 import { 
   LayoutDashboard, 
   Package, 
@@ -31,8 +31,9 @@ import { useBranding } from "@/hooks/useBranding";
 import { Badge } from "@/components/ui/badge";
 
 export function AppSidebar() {
-  const { state } = useSidebar();
+  const { state, setOpenMobile } = useSidebar();
   const location = useLocation();
+  const isMobile = useIsMobile();
   const { profile } = useAuth();
   const { branchType } = useBranchContext();
   const branding = useBranding();
@@ -124,6 +125,7 @@ export function AppSidebar() {
                       to={item.url} 
                       end={item.url === "/"}
                       className={getNavCls(item.url)}
+                      onClick={() => { if (isMobile) setOpenMobile(false); }}
                     >
                       <item.icon className="h-4 w-4" />
                       {!isCollapsed && <span>{item.title}</span>}

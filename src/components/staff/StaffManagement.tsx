@@ -4,9 +4,8 @@ import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
 import { Badge } from '@/components/ui/badge';
-import { Dialog, DialogContent, DialogDescription, DialogHeader, DialogTitle, DialogTrigger } from '@/components/ui/dialog';
-import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
-import { Plus, Users, Phone, Mail, Edit, Trash2, Search } from 'lucide-react';
+import { Dialog, DialogContent, DialogDescription, DialogHeader, DialogTitle } from '@/components/ui/dialog';
+import { Plus, Users, Phone, Mail, Edit, Trash2, Search, KeyRound } from 'lucide-react';
 import { supabase } from '@/lib/db';
 import { useToast } from '@/hooks/use-toast';
 import { useAuth } from '@/hooks/useAuth';
@@ -14,10 +13,12 @@ import { useBranchContext } from '@/hooks/useBranchContext';
 import { ConfirmationDialog } from '@/components/ui/confirmation-dialog';
 import EditStaffDialog from './EditStaffDialog';
 import CreateStaffDialog from './CreateStaffDialog';
+import { usePlanLimits } from '@/hooks/usePlanLimits';
 
 interface StaffMember {
   id: string;
   full_name: string;
+  email?: string;
   role: 'owner' | 'staff' | 'developer';
   phone?: string;
   branch_id?: string;
@@ -27,8 +28,6 @@ interface StaffMember {
   } | null;
 }
 
-import { usePlanLimits } from '@/hooks/usePlanLimits';
-
 export default function StaffManagement() {
   const [staff, setStaff] = useState<StaffMember[]>([]);
   const [filteredStaff, setFilteredStaff] = useState<StaffMember[]>([]);
@@ -37,7 +36,10 @@ export default function StaffManagement() {
   const [showCreateDialog, setShowCreateDialog] = useState(false);
   const [showEditDialog, setShowEditDialog] = useState(false);
   const [showDeleteDialog, setShowDeleteDialog] = useState(false);
+  const [showResetPasswordDialog, setShowResetPasswordDialog] = useState(false);
   const [selectedStaff, setSelectedStaff] = useState<StaffMember | null>(null);
+  const [newPassword, setNewPassword] = useState('');
+  const [resettingPassword, setResettingPassword] = useState(false);
   const { toast } = useToast();
   const { profile } = useAuth();
   const { selectedBranch } = useBranchContext();
@@ -48,12 +50,11 @@ export default function StaffManagement() {
   }, [selectedBranch]);
 
   useEffect(() => {
-    // Filter by search term (branch filtering is handled in fetchStaff)
     const filtered = staff.filter(member =>
       member.full_name.toLowerCase().includes(searchTerm.toLowerCase()) ||
-      member.phone?.toLowerCase().includes(searchTerm.toLowerCase())
+      member.phone?.toLowerCase().includes(searchTerm.toLowerCase()) ||
+      member.email?.toLowerCase().includes(searchTerm.toLowerCase())
     );
-
     setFilteredStaff(filtered);
   }, [staff, searchTerm]);
 
@@ -61,7 +62,6 @@ export default function StaffManagement() {
     try {
       setLoading(true);
       
-      // Get owner's branches first
       const { data: ownerBranches, error: branchesError } = await supabase
         .from('pharmacy_branches')
         .select('id')
@@ -69,9 +69,8 @@ export default function StaffManagement() {
 
       if (branchesError) throw branchesError;
 
-      const branchIds = ownerBranches?.map(b => b.id) || [];
+      const branchIds = ownerBranches?.map((b: any) => b.id) || [];
 
-      // Fetch staff only from owner's branches
       let query = supabase
         .from('profiles')
         .select('id, full_name, role, phone, branch_id, created_at, pharmacy_branches!profiles_branch_id_fkey(name)')
@@ -79,18 +78,35 @@ export default function StaffManagement() {
         .in('branch_id', branchIds)
         .order('created_at');
 
-      // Filter by specific branch if selected
       if (selectedBranch) {
         query = query.eq('branch_id', selectedBranch);
       }
 
       const { data: profilesData, error } = await query;
-
       if (error) throw error;
       
-      const staffData: StaffMember[] = profilesData || [];
+      // Fetch emails for each staff member from auth metadata via a simple lookup
+      // We'll use the profiles data and try to get email from auth user list
+      const staffWithEmail: StaffMember[] = (profilesData || []).map((s: any) => ({ ...s, email: undefined }));
       
-      setStaff(staffData);
+      // Try fetching emails using a edge function or from auth - for now use the admin list approach
+      // Since we can't list auth users from client, we'll fetch from auth user metadata stored in profiles
+      // Alternative: query the auth.users via an edge function. For simplicity, let's try to get email from
+      // the user_metadata or from a separate call
+      try {
+        const { data: emailData } = await supabase.functions.invoke('get-staff-emails', {
+          body: { staffIds: staffWithEmail.map(s => s.id) }
+        });
+        if (emailData?.emails) {
+          for (const s of staffWithEmail) {
+            s.email = emailData.emails[s.id] || undefined;
+          }
+        }
+      } catch {
+        // If edge function doesn't exist yet, emails will be undefined
+      }
+      
+      setStaff(staffWithEmail);
     } catch (error) {
       console.error('Staff fetch error:', error);
       toast({
@@ -116,11 +132,7 @@ export default function StaffManagement() {
 
   const handleDeleteClick = (staff: StaffMember) => {
     if (!profile || profile.role !== 'owner') {
-      toast({
-        title: "Error",
-        description: "Only owners can delete staff members",
-        variant: "destructive"
-      });
+      toast({ title: "Error", description: "Only owners can delete staff members", variant: "destructive" });
       return;
     }
     setSelectedStaff(staff);
@@ -131,28 +143,54 @@ export default function StaffManagement() {
     if (!selectedStaff) return;
 
     try {
-      // Note: This will also delete the auth.users record due to CASCADE
-      const { error } = await supabase
-        .from('profiles')
-        .delete()
-        .eq('id', selectedStaff.id);
-
-      if (error) throw error;
-
-      toast({
-        title: "Success",
-        description: "Staff member removed successfully"
+      const { data, error } = await supabase.functions.invoke('delete-staff-account', {
+        body: { staffId: selectedStaff.id, staffUserId: selectedStaff.id },
       });
 
+      if (error) throw new Error(error.message);
+      if (data?.error) throw new Error(data.error);
+
+      toast({ title: "Success", description: `${selectedStaff.full_name} has been removed successfully` });
       setShowDeleteDialog(false);
       setSelectedStaff(null);
       fetchStaff();
-    } catch (error) {
-      toast({
-        title: "Error",
-        description: "Failed to remove staff member",
-        variant: "destructive"
+    } catch (error: any) {
+      console.error('Delete staff error:', error);
+      toast({ title: "Error", description: error?.message || "Failed to remove staff member", variant: "destructive" });
+    }
+  };
+
+  const handleResetPasswordClick = (member: StaffMember) => {
+    setSelectedStaff(member);
+    setNewPassword('');
+    setShowResetPasswordDialog(true);
+  };
+
+  const handleResetPassword = async () => {
+    if (!selectedStaff || !newPassword) return;
+    if (newPassword.length < 6) {
+      toast({ title: "Error", description: "Password must be at least 6 characters", variant: "destructive" });
+      return;
+    }
+
+    setResettingPassword(true);
+    try {
+      const { data, error } = await supabase.functions.invoke('reset-staff-password', {
+        body: { staffId: selectedStaff.id, newPassword },
       });
+
+      if (error) throw new Error(error.message);
+      if (data?.error) throw new Error(data.error);
+
+      toast({ title: "Success", description: `Password reset for ${selectedStaff.full_name}` });
+      setShowResetPasswordDialog(false);
+      setSelectedStaff(null);
+      setNewPassword('');
+    } catch (error: any) {
+      console.error('Reset password error:', error);
+      toast({ title: "Error", description: error?.message || "Failed to reset password", variant: "destructive" });
+    } finally {
+      setResettingPassword(false);
     }
   };
 
@@ -187,9 +225,9 @@ export default function StaffManagement() {
       </div>
       
       {planLimits && !planLimits.canAddStaff && profile?.role === 'owner' && (
-        <Card className="border-orange-200 bg-orange-50">
+        <Card className="border-destructive/30 bg-destructive/5">
           <CardContent className="pt-6">
-            <p className="text-sm text-orange-800">
+            <p className="text-sm text-destructive">
               You have reached your plan limit. Upgrade to add more staff members.
             </p>
           </CardContent>
@@ -200,7 +238,7 @@ export default function StaffManagement() {
         <div className="relative flex-1">
           <Search className="absolute left-2 top-2.5 h-4 w-4 text-muted-foreground" />
           <Input
-            placeholder="Search staff by name or phone..."
+            placeholder="Search staff by name, phone, or email..."
             value={searchTerm}
             onChange={(e) => setSearchTerm(e.target.value)}
             className="pl-8"
@@ -226,19 +264,14 @@ export default function StaffManagement() {
                 </div>
                 {profile?.role === 'owner' && (
                   <div className="flex space-x-1">
-                    <Button 
-                      variant="ghost" 
-                      size="sm"
-                      onClick={() => handleEditStaff(member)}
-                    >
+                    <Button variant="ghost" size="sm" onClick={() => handleResetPasswordClick(member)} title="Reset Password">
+                      <KeyRound className="h-4 w-4" />
+                    </Button>
+                    <Button variant="ghost" size="sm" onClick={() => handleEditStaff(member)}>
                       <Edit className="h-4 w-4" />
                     </Button>
                     {member.role !== 'owner' && (
-                      <Button 
-                        variant="ghost" 
-                        size="sm"
-                        onClick={() => handleDeleteClick(member)}
-                      >
+                      <Button variant="ghost" size="sm" onClick={() => handleDeleteClick(member)}>
                         <Trash2 className="h-4 w-4" />
                       </Button>
                     )}
@@ -248,6 +281,12 @@ export default function StaffManagement() {
             </CardHeader>
             <CardContent>
                 <div className="space-y-3">
+                  {member.email && (
+                    <div className="flex items-center space-x-2 text-sm">
+                      <Mail className="h-4 w-4 text-muted-foreground" />
+                      <span>{member.email}</span>
+                    </div>
+                  )}
                   {member.phone && (
                     <div className="flex items-center space-x-2 text-sm">
                       <Phone className="h-4 w-4 text-muted-foreground" />
@@ -300,6 +339,39 @@ export default function StaffManagement() {
         confirmText="Delete"
         cancelText="Cancel"
       />
+
+      {/* Reset Password Dialog */}
+      <Dialog open={showResetPasswordDialog} onOpenChange={setShowResetPasswordDialog}>
+        <DialogContent>
+          <DialogHeader>
+            <DialogTitle>Reset Password</DialogTitle>
+            <DialogDescription>
+              Set a new password for {selectedStaff?.full_name}
+            </DialogDescription>
+          </DialogHeader>
+          <div className="space-y-4">
+            <div className="space-y-2">
+              <Label htmlFor="newPassword">New Password *</Label>
+              <Input
+                id="newPassword"
+                type="password"
+                value={newPassword}
+                onChange={(e) => setNewPassword(e.target.value)}
+                placeholder="Min 6 characters"
+                minLength={6}
+              />
+            </div>
+            <div className="flex gap-2">
+              <Button onClick={handleResetPassword} disabled={resettingPassword || newPassword.length < 6} className="flex-1">
+                {resettingPassword ? 'Resetting...' : 'Reset Password'}
+              </Button>
+              <Button variant="outline" onClick={() => setShowResetPasswordDialog(false)}>
+                Cancel
+              </Button>
+            </div>
+          </div>
+        </DialogContent>
+      </Dialog>
     </div>
   );
 }

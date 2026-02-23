@@ -9,7 +9,7 @@ import { Calendar } from '@/components/ui/calendar';
 import { Popover, PopoverContent, PopoverTrigger } from '@/components/ui/popover';
 import { ChartContainer, ChartTooltip, ChartTooltipContent } from '@/components/ui/chart';
 import { DollarSign, Package, ShoppingCart, AlertTriangle, Download, CalendarIcon, Calendar as CalendarDaysIcon, MessageCircle, ExternalLink, Send } from 'lucide-react';
-import { BarChart, Bar, XAxis, YAxis, CartesianGrid, ResponsiveContainer, PieChart, Pie, Cell, LineChart, Line } from 'recharts';
+import { BarChart, Bar, XAxis, YAxis, CartesianGrid, ResponsiveContainer, PieChart, Pie, Cell, LineChart, Line, Legend } from 'recharts';
 import { format, subDays, subWeeks, subMonths, subYears, startOfDay, endOfDay } from 'date-fns';
 import { supabase } from '@/lib/db';
 import { useBranchContext } from '@/hooks/useBranchContext';
@@ -320,7 +320,7 @@ export default function Dashboard() {
         .sort((a, b) => b.sales - a.sales)
         .slice(0, 10);
 
-      // Fetch expenses for income vs expense chart
+      // Fetch custom expenses for income vs expense chart
       const { data: expensesData } = await (function(){
         let expensesQuery = supabase
           .from('expenses')
@@ -328,13 +328,28 @@ export default function Dashboard() {
           .gte('created_at', start.toISOString())
           .lte('created_at', end.toISOString());
         
-        // For staff, filter by their branch; for owners, optionally filter by selected branch
         if (profile?.role === 'staff') {
           expensesQuery = expensesQuery.eq('branch_id', userBranch || profile?.branch_id);
         } else if (effectiveBranchId) {
           expensesQuery = expensesQuery.eq('branch_id', effectiveBranchId);
         }
         return expensesQuery;
+      })();
+
+      // Fetch inventory expenses (purchase costs of medicines added in period)
+      const { data: inventoryExpData } = await (function(){
+        let invQuery = supabase
+          .from('medicines')
+          .select('purchase_price, stock_quantity, created_at')
+          .gte('created_at', start.toISOString())
+          .lte('created_at', end.toISOString());
+        
+        if (profile?.role === 'staff') {
+          invQuery = invQuery.eq('branch_id', userBranch || profile?.branch_id);
+        } else if (effectiveBranchId) {
+          invQuery = invQuery.eq('branch_id', effectiveBranchId);
+        }
+        return invQuery;
       })();
 
       // Process income vs expense data by day
@@ -348,12 +363,23 @@ export default function Dashboard() {
         });
       });
 
+      // Add custom expenses
       expensesData?.forEach(expense => {
         const date = format(new Date(expense.created_at), 'yyyy-MM-dd');
         const existing = dateMap.get(date) || { income: 0, expenses: 0 };
         dateMap.set(date, {
           ...existing,
           expenses: existing.expenses + Number(expense.amount)
+        });
+      });
+
+      // Add inventory purchase costs as expenses
+      inventoryExpData?.forEach((med: any) => {
+        const date = format(new Date(med.created_at), 'yyyy-MM-dd');
+        const existing = dateMap.get(date) || { income: 0, expenses: 0 };
+        dateMap.set(date, {
+          ...existing,
+          expenses: existing.expenses + (Number(med.purchase_price) * Number(med.stock_quantity))
         });
       });
 
@@ -799,23 +825,30 @@ export default function Dashboard() {
                     <XAxis dataKey="date" tick={{ fontSize: 10 }} angle={-45} textAnchor="end" height={70} />
                     <YAxis tick={{ fontSize: 11 }} width={45} />
                     <ChartTooltip content={<ChartTooltipContent />} />
+                    <Legend />
                     <Line 
                       type="monotone" 
-                      dataKey="income" 
-                      stroke="hsl(var(--success))" 
+                      dataKey="income"
+                      name="Income"
+                      stroke="hsl(142, 76%, 36%)" 
                       strokeWidth={2}
+                      dot={{ r: 3 }}
+                      activeDot={{ r: 5 }}
                     />
                     <Line 
                       type="monotone" 
-                      dataKey="expenses" 
-                      stroke="hsl(var(--destructive))" 
+                      dataKey="expenses"
+                      name="Expenses"
+                      stroke="hsl(0, 84%, 60%)" 
                       strokeWidth={2}
+                      dot={{ r: 3 }}
+                      activeDot={{ r: 5 }}
                     />
                   </LineChart>
                 </ChartContainer>
                 <div className="mt-2 flex gap-4 justify-center text-xs">
-                  <div className="flex items-center gap-1"><div className="w-3 h-3 rounded-full bg-[hsl(var(--success))]" /><span>Income</span></div>
-                  <div className="flex items-center gap-1"><div className="w-3 h-3 rounded-full bg-[hsl(var(--destructive))]" /><span>Expenses</span></div>
+                  <div className="flex items-center gap-1"><div className="w-3 h-3 rounded-full" style={{ backgroundColor: 'hsl(142, 76%, 36%)' }} /><span>Income</span></div>
+                  <div className="flex items-center gap-1"><div className="w-3 h-3 rounded-full" style={{ backgroundColor: 'hsl(0, 84%, 60%)' }} /><span>Expenses</span></div>
                 </div>
           </CardContent>
         </Card>

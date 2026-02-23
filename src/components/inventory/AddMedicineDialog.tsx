@@ -99,16 +99,18 @@ export default function AddMedicineDialog({ open, onOpenChange, onMedicineAdded,
 
     const formData = new FormData(e.currentTarget);
     
-    // Get current user ID
     const { data: { user } } = await supabase.auth.getUser();
     
     const unitsPerPackValue = formData.get('units_per_pack') as string;
     const unitsPerPack = unitsPerPackValue ? parseInt(unitsPerPackValue) : null;
+
+    // category column is now free-text — store the selected category name directly
+    const selectedCategory = (formData.get('category') as string) || 'other';
     
-    const medicineData = {
+    const medicineData: Record<string, any> = {
       name: formData.get('name') as string,
       generic_name: formData.get('generic_name') as string || null,
-      category: formData.get('category') as 'tablet' | 'capsule' | 'syrup' | 'injection' | 'cream' | 'ointment' | 'drops' | 'inhaler' | 'other',
+      category: selectedCategory,
       manufacturer: formData.get('manufacturer') as string || null,
       batch_number: formData.get('batch_number') as string || null,
       country_name: formData.get('country_name') as string || null,
@@ -126,24 +128,14 @@ export default function AddMedicineDialog({ open, onOpenChange, onMedicineAdded,
     };
 
     try {
-      const { error } = await supabase
-        .from('medicines')
-        .insert([medicineData]);
-
+      const { error } = await supabase.from('medicines').insert([medicineData]);
       if (error) throw error;
 
-      toast({
-        title: "Success",
-        description: label.success
-      });
-
+      toast({ title: "Success", description: label.success });
       onMedicineAdded();
+      onOpenChange(false);
     } catch (error) {
-      toast({
-        title: "Error",
-        description: label.fail,
-        variant: "destructive"
-      });
+      toast({ title: "Error", description: label.fail, variant: "destructive" });
     } finally {
       setLoading(false);
     }
@@ -259,7 +251,7 @@ export default function AddMedicineDialog({ open, onOpenChange, onMedicineAdded,
             </div>
 
             <div className="space-y-2">
-              <Label htmlFor="minimum_stock_level">Minimum Stock Level *</Label>
+              <Label htmlFor="minimum_stock_level">Minimum Stock Level(for alert!) *</Label>
               <Input
                 id="minimum_stock_level"
                 name="minimum_stock_level"
@@ -281,7 +273,7 @@ export default function AddMedicineDialog({ open, onOpenChange, onMedicineAdded,
             </div>
 
             <div className="space-y-2">
-              <Label htmlFor="units_per_pack">Units Per Pack</Label>
+              <Label htmlFor="units_per_pack">Units Per Stock</Label>
               <Input
                 id="units_per_pack"
                 name="units_per_pack"

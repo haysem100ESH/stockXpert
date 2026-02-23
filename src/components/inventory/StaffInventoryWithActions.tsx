@@ -448,7 +448,7 @@ export default function StaffInventoryWithActions() {
         </TabsContent>
 
         <TabsContent value="transfer">
-          <MedicineTransfer />
+          <MedicineTransfer onTransferComplete={fetchMedicines} />
         </TabsContent>
 
         <TabsContent value="categories">

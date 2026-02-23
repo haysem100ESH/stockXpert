@@ -49,7 +49,7 @@ export default function SalesManagement() {
   const [paymentMethod, setPaymentMethod] = useState<string>('Cash');
   const [discountPercent, setDiscountPercent] = useState<number>(0);
   const [showCheckoutConfirm, setShowCheckoutConfirm] = useState(false);
-  const [customers, setCustomers] = useState<{id: string; name: string; phone?: string | null; current_debt?: number}[]>([]);
+  const [customers, setCustomers] = useState<{id: string; name: string; phone?: string | null; computed_debt?: number}[]>([]);
   const [selectedCustomerId, setSelectedCustomerId] = useState<string>('none');
   const [amountReceived, setAmountReceived] = useState<string>('');
   const [changeAction, setChangeAction] = useState<ChangeAction>(null);
@@ -70,7 +70,8 @@ export default function SalesManagement() {
     const filtered = medicines.filter(medicine => {
       const matchesSearch = medicine.name.toLowerCase().includes(searchTerm.toLowerCase()) ||
         medicine.generic_name?.toLowerCase().includes(searchTerm.toLowerCase());
-      const matchesCategory = categoryFilter === 'all' || medicine.category === categoryFilter;
+      const displayCat = medicine.category || '';
+      const matchesCategory = categoryFilter === 'all' || displayCat === categoryFilter;
       return matchesSearch && matchesCategory;
     });
     setFilteredMedicines(filtered);
@@ -98,12 +99,18 @@ export default function SalesManagement() {
       let query = (supabase as any)
         .from('medicines')
         .select('id, name, generic_name, selling_price, stock_quantity, category, expiry_date, units_per_pack, open_pack_units, unit_label')
-        .gt('stock_quantity', 0)
+        .or('stock_quantity.gt.0,open_pack_units.gt.0')
         .order('name');
       if (selectedBranch) query = query.eq('branch_id', selectedBranch);
       const { data, error } = await query;
       if (error) throw error;
-      setMedicines(data || []);
+      // open_pack_units is stored as INTEGER thousandths in DB (e.g. 2500 = 2.5 strips).
+      // Convert to real decimal units for all UI/cart arithmetic.
+      const normalized = (data || []).map((m: any) => ({
+        ...m,
+        open_pack_units: m.units_per_pack ? (m.open_pack_units || 0) / 1000 : (m.open_pack_units || 0),
+      }));
+      setMedicines(normalized);
     } catch {
       toast({ title: 'Error', description: `Failed to fetch ${isPharmacy ? 'medicines' : 'items'}`, variant: 'destructive' });
     } finally {
@@ -113,19 +120,44 @@ export default function SalesManagement() {
 
   const fetchCustomers = async () => {
     try {
-      // Note: customers table does not have branch_id column yet — fetch all and filter by owner's branches
-      const { data, error } = await (supabase as any)
+      // Fetch customers — note: current_debt does NOT exist on the customers table;
+      // we compute debt from the sales table instead.
+      let query = (supabase as any)
         .from('customers')
-        .select('id, name, phone, current_debt')
+        .select('id, name, phone')
         .order('name');
+      if (selectedBranch) {
+        query = query.eq('branch_id', selectedBranch);
+      }
+      const { data, error } = await query;
       if (error) {
         console.warn('[Customers] fetch warning:', error.message);
         setCustomers([]);
         return;
       }
-      setCustomers(data || []);
-    } catch (error) {
-      console.error('Error fetching customers:', error);
+      const rawCustomers: {id: string; name: string; phone?: string | null}[] = data || [];
+      if (rawCustomers.length === 0) { setCustomers([]); return; }
+
+      // Compute debt per customer: sum(total_amount) - sum(amount_paid) from sales
+      const customerIds = rawCustomers.map(c => c.id);
+      const { data: salesData } = await (supabase as any)
+        .from('sales')
+        .select('customer_id, total_amount, amount_paid')
+        .in('customer_id', customerIds);
+
+      const debtMap: Record<string, number> = {};
+      for (const sale of salesData || []) {
+        if (!sale.customer_id) continue;
+        const owed = (Number(sale.total_amount) || 0) - (Number(sale.amount_paid) || 0);
+        debtMap[sale.customer_id] = (debtMap[sale.customer_id] || 0) + owed;
+      }
+
+      setCustomers(rawCustomers.map(c => ({
+        ...c,
+        computed_debt: Math.max(0, debtMap[c.id] || 0),
+      })));
+    } catch (err) {
+      console.error('Error fetching customers:', err);
     }
   };
 
@@ -160,6 +192,10 @@ export default function SalesManagement() {
         toast({ title: 'Error', description: 'This item is not configured for unit sales', variant: 'destructive' });
         return;
       }
+      if (count <= 0) {
+        toast({ title: 'Error', description: 'Quantity must be greater than 0', variant: 'destructive' });
+        return;
+      }
       const totalAvailableStripes = (medicine.stock_quantity * medicine.units_per_pack) + (medicine.open_pack_units || 0);
       const stripesInCart = cart
         .filter(item => item.id === medicine.id && item.saleType === 'by_stripe')
@@ -184,11 +220,11 @@ export default function SalesManagement() {
           : item
       ));
     } else if (existingItem && saleType === 'by_stripe') {
-      const newCount = (existingItem.stripesCount || 0) + count;
+      const newCount = parseFloat(((existingItem.stripesCount || 0) + count).toFixed(4));
       const pricePerStripe = medicine.selling_price / (medicine.units_per_pack || 1);
       setCart(prev => prev.map(item =>
         item.id === medicine.id && item.saleType === saleType
-          ? { ...item, stripesCount: newCount, total: newCount * pricePerStripe }
+          ? { ...item, stripesCount: newCount, total: parseFloat((newCount * pricePerStripe).toFixed(2)) }
           : item
       ));
     } else {
@@ -200,7 +236,9 @@ export default function SalesManagement() {
         quantity: saleType === 'full_pack' ? count : 0,
         saleType,
         stripesCount: saleType === 'by_stripe' ? count : undefined,
-        total: saleType === 'by_stripe' ? count * pricePerStripe : count * medicine.selling_price,
+        total: saleType === 'by_stripe'
+          ? parseFloat((count * pricePerStripe).toFixed(2))
+          : count * medicine.selling_price,
       }]);
     }
   };
@@ -219,11 +257,26 @@ export default function SalesManagement() {
       } else {
         const pricePerStripe = item.selling_price / (item.units_per_pack || 1);
         const totalAvailableStripes = (item.stock_quantity * (item.units_per_pack || 1)) + (item.open_pack_units || 0);
-        const newCount = Math.max(1, (item.stripesCount || 1) + delta);
+        // Use 0.5 step for strip delta adjustments to support decimals
+        const step = Math.abs(delta) === 1 ? (delta > 0 ? 0.5 : -0.5) : delta;
+        const newCount = parseFloat((Math.max(0.5, (item.stripesCount || 1) + step)).toFixed(4));
         if (newCount > totalAvailableStripes) return item;
-        return { ...item, stripesCount: newCount, total: newCount * pricePerStripe };
+        return { ...item, stripesCount: newCount, total: parseFloat((newCount * pricePerStripe).toFixed(2)) };
       }
     }));
+  };
+
+  // Compute leftover strips info for a cart item
+  const getStripLeftoverInfo = (item: CartItem) => {
+    if (item.saleType !== 'by_stripe' || !item.units_per_pack || !item.stripesCount) return null;
+    const openPack = item.open_pack_units || 0;
+    const usingFromOpen = Math.min(item.stripesCount, openPack);
+    const remainingFromOpen = openPack - usingFromOpen;
+    const needFromNewPacks = Math.max(0, item.stripesCount - openPack);
+    const packsOpened = needFromNewPacks > 0 ? Math.ceil(needFromNewPacks / item.units_per_pack) : 0;
+    const stripsUsedFromLastPack = needFromNewPacks > 0 ? needFromNewPacks % item.units_per_pack || item.units_per_pack : 0;
+    const leftoverInOpenedPack = packsOpened > 0 ? (item.units_per_pack * packsOpened) - needFromNewPacks : 0;
+    return { remainingFromOpen, packsOpened, leftoverInOpenedPack, stripsUsedFromLastPack };
   };
 
   const changeSaleType = (id: string, newSaleType: 'full_pack' | 'by_stripe') => {
@@ -249,9 +302,13 @@ export default function SalesManagement() {
   };
 
   const selectedCustomer = customers.find(c => c.id === selectedCustomerId);
-  const customerHasDebt = selectedCustomer && (selectedCustomer.current_debt || 0) > 0;
+  const customerHasDebt = selectedCustomer && (selectedCustomer.computed_debt || 0) > 0;
 
   const handleCheckout = () => {
+    if (!selectedBranch) {
+      toast({ title: 'Branch Required', description: 'Please select a specific branch before selling.', variant: 'destructive' });
+      return;
+    }
     if (cart.length === 0) {
       toast({ title: 'Error', description: 'Cart is empty', variant: 'destructive' });
       return;
@@ -269,14 +326,16 @@ export default function SalesManagement() {
     setProcessing(true);
     try {
       const total = calculateTotal();
-      const received = parseFloat(amountReceived) || total;
+      const received = amountReceived !== '' ? parseFloat(amountReceived) : total;
       const change = Math.max(0, received - total);
+      const underpaid = total - received; // positive when received < total
 
-      let actualPaid = total;
+      let actualPaid = received; // default: whatever was received
       let extraProfit = 0;
       let finalChangeAction: string | null = null;
 
       if (change > 0.001) {
+        // Overpayment — handle change options
         if (changeAction === 'give_change') {
           actualPaid = total;
           extraProfit = 0;
@@ -292,9 +351,12 @@ export default function SalesManagement() {
             finalChangeAction = 'keep_profit';
           }
         }
-      } else {
-        actualPaid = Math.min(received, total);
+      } else if (underpaid > 0.001) {
+        // Underpayment — record as partial/debt
+        actualPaid = received;
+        finalChangeAction = null;
       }
+      // else exact payment — actualPaid = received = total
 
       const paymentStatus = actualPaid >= total ? 'paid' : actualPaid > 0 ? 'partial' : 'unpaid';
 
@@ -344,6 +406,9 @@ export default function SalesManagement() {
       }
       saleData = saleResult.data;
 
+      // stripes_sold DB column is INTEGER — store as thousandths of a strip (×1000)
+      // so 1.5 strips → 1500, 2.25 → 2250. Divide by 1000 when reading back.
+      // This preserves decimal precision within the integer column constraint.
       const saleItems = cart.map(item => ({
         sale_id: saleData.id,
         medicine_id: item.id,
@@ -351,7 +416,9 @@ export default function SalesManagement() {
         unit_price: Number(item.selling_price),
         total_price: Number(item.total.toFixed(2)),
         sale_type: item.saleType,
-        stripes_sold: item.saleType === 'by_stripe' ? Number(item.stripesCount) : null,
+        stripes_sold: item.saleType === 'by_stripe' && item.stripesCount != null
+          ? Math.round(item.stripesCount * 1000)
+          : null,
       }));
 
       const { error: itemsError } = await (supabase as any).from('sale_items').insert(saleItems);
@@ -361,6 +428,8 @@ export default function SalesManagement() {
       }
 
       // Stock deduction
+      // NOTE: open_pack_units is stored in the DB as INTEGER thousandths (×1000).
+      // e.g. 2.5 strips → stored as 2500. We multiply before writing and divide after reading.
       for (const item of cart) {
         if (item.saleType === 'full_pack') {
           await (supabase as any)
@@ -370,34 +439,56 @@ export default function SalesManagement() {
         } else if (item.saleType === 'by_stripe' && item.stripesCount) {
           const medicine = medicines.find(m => m.id === item.id);
           if (!medicine?.units_per_pack) continue;
+
+          // open_pack_units in `medicines` state is already normalized to real decimal units
+          // (done in fetchMedicines: DB-thousandths / 1000 → real units).
+          // Do NOT divide again here — that caused the 1.502 bug.
+          const openPackReal = medicine.open_pack_units || 0;
+          const unitsPerPack = medicine.units_per_pack;
+
           let stripesToDeduct = item.stripesCount;
-          let newOpenPackStripes = medicine.open_pack_units || 0;
+          let newOpenPackReal = openPackReal;
           let newStockQuantity = medicine.stock_quantity;
-          if (newOpenPackStripes > 0) {
-            const deductFromOpen = Math.min(stripesToDeduct, newOpenPackStripes);
-            newOpenPackStripes -= deductFromOpen;
-            stripesToDeduct -= deductFromOpen;
+
+          // First consume from open pack
+          if (newOpenPackReal > 0) {
+            const deductFromOpen = Math.min(stripesToDeduct, newOpenPackReal);
+            newOpenPackReal = parseFloat((newOpenPackReal - deductFromOpen).toFixed(6));
+            stripesToDeduct = parseFloat((stripesToDeduct - deductFromOpen).toFixed(6));
           }
-          while (stripesToDeduct > 0 && newStockQuantity > 0) {
+
+          // Then consume from sealed packs
+          while (stripesToDeduct > 0.000001 && newStockQuantity > 0) {
             newStockQuantity--;
-            const deductFromNewPack = Math.min(stripesToDeduct, medicine.units_per_pack);
-            newOpenPackStripes = medicine.units_per_pack - deductFromNewPack;
-            stripesToDeduct -= deductFromNewPack;
+            const stripsFromThisPack = Math.min(stripesToDeduct, unitsPerPack);
+            newOpenPackReal = parseFloat((unitsPerPack - stripsFromThisPack).toFixed(6));
+            stripesToDeduct = parseFloat((stripesToDeduct - stripsFromThisPack).toFixed(6));
           }
+
+          // Convert back to integer thousandths for DB storage
+          const newOpenPackThousandths = Math.round(newOpenPackReal * 1000);
+
           await (supabase as any)
             .from('medicines')
-            .update({ stock_quantity: newStockQuantity, open_pack_units: newOpenPackStripes })
+            .update({ stock_quantity: newStockQuantity, open_pack_units: newOpenPackThousandths })
             .eq('id', item.id);
         }
       }
 
-      // Handle debt deduction
+      // Handle debt deduction — recorded via a customer_payment entry instead of
+      // a non-existent current_debt column on the customers table
       if (finalChangeAction === 'deduct_debt' && customerHasDebt && selectedCustomer) {
-        const deductAmount = Math.min(change, selectedCustomer.current_debt || 0);
+        const deductAmount = Math.min(change, selectedCustomer.computed_debt || 0);
         await (supabase as any)
-          .from('customers')
-          .update({ current_debt: (selectedCustomer.current_debt || 0) - deductAmount })
-          .eq('id', selectedCustomer.id);
+          .from('customer_payments')
+          .insert([{
+            customer_id: selectedCustomer.id,
+            amount: deductAmount,
+            payment_method: paymentMethod,
+            notes: 'Auto-deducted from change',
+            branch_id: selectedBranch ?? profile?.branch_id ?? null,
+            created_by: profile?.id ?? null,
+          }]);
       }
 
       let successMessage = `Sale completed! Total: ETB ${total.toFixed(2)} via ${paymentMethod}.`;
@@ -430,7 +521,8 @@ export default function SalesManagement() {
     }
   };
 
-  const getUniqueCategories = () => [...new Set(medicines.map(m => m.category).filter(Boolean))].sort() as string[];
+  const getDisplayCategory = (medicine: Medicine) => medicine.category || '';
+  const getUniqueCategories = () => [...new Set(medicines.map(m => getDisplayCategory(m)).filter(Boolean))].sort() as string[];
 
   const subtotal = calculateSubtotal();
   const discount = calculateDiscount();
@@ -523,9 +615,17 @@ export default function SalesManagement() {
                   <div className="flex justify-between text-sm">
                     <span>Stock:</span>
                     <Badge variant={medicine.stock_quantity <= 10 ? 'destructive' : 'secondary'}>
-                      {medicine.stock_quantity}
+                      {medicine.stock_quantity} {medicine.stock_quantity === 1 ? 'pack' : 'packs'}
                     </Badge>
                   </div>
+                  {medicine.units_per_pack && (medicine.open_pack_units || 0) > 0 && (
+                    <div className="flex justify-between text-sm text-muted-foreground">
+                      <span>Open pack:</span>
+                      <Badge variant="outline" className="text-xs">
+                        {medicine.open_pack_units}/{medicine.units_per_pack} {medicine.unit_label || 'unit'}s
+                      </Badge>
+                    </div>
+                  )}
                   {isPharmacy && medicine.expiry_date && (
                     <div className="flex justify-between text-sm">
                       <span>Expires:</span>
@@ -539,12 +639,18 @@ export default function SalesManagement() {
                     </div>
                   )}
                   <Button
-                    onClick={() => addToCartInstant(medicine)}
+                    onClick={() => {
+                      if (!selectedBranch) {
+                        toast({ title: 'Branch Required', description: 'Please select a specific branch before selling.', variant: 'destructive' });
+                        return;
+                      }
+                      addToCartInstant(medicine);
+                    }}
                     className="w-full"
-                    disabled={medicine.stock_quantity === 0 || (isPharmacy && isExpired(medicine.expiry_date))}
+                    disabled={medicine.stock_quantity === 0 || (isPharmacy && isExpired(medicine.expiry_date)) || !selectedBranch}
                   >
                     <Plus className="h-4 w-4 mr-2" />
-                    {isPharmacy && isExpired(medicine.expiry_date) ? 'Expired' : 'Add to Cart'}
+                    {!selectedBranch ? 'Select a Branch' : isPharmacy && isExpired(medicine.expiry_date) ? 'Expired' : 'Add to Cart'}
                   </Button>
                 </div>
               </CardContent>
