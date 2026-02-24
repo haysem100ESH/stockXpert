@@ -18,7 +18,7 @@ const STORAGE_KEY = 'selectedBranchId';
 export function BranchProvider({ children }: { children: React.ReactNode }) {
   const [selectedBranch, setSelectedBranchState] = useState<string | null>(null);
   const [userBranch, setUserBranch] = useState<string | null>(null);
-  const [branchType, setBranchType] = useState<BranchType>('pharmacy');
+  const [branchType, setBranchType] = useState<BranchType>('general');
   const { profile, user } = useAuth();
 
   // Persist selection to localStorage (owner only)
@@ -78,7 +78,7 @@ export function BranchProvider({ children }: { children: React.ReactNode }) {
   useEffect(() => {
     const fetchBranchType = async () => {
       if (!selectedBranch) {
-        setBranchType('pharmacy'); // sensible default when viewing all
+        setBranchType('general'); // default to StockXpert when viewing all branches
         return;
       }
       const { data } = await supabase
