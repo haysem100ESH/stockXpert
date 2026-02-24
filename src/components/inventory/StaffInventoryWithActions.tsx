@@ -8,6 +8,7 @@ import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
 import { Search, Edit2, Plus, Trash2, Filter } from 'lucide-react';
 import { supabase } from '@/lib/db';
 import { useToast } from '@/hooks/use-toast';
+import { useAuth } from '@/hooks/useAuth';
 import { useBranchContext } from '@/hooks/useBranchContext';
 import AddMedicineDialog from './AddMedicineDialog';
 import EditMedicineDialog from './EditMedicineDialog';
@@ -59,6 +60,7 @@ export default function StaffInventoryWithActions() {
   });
   const [hasBranches, setHasBranches] = useState(true);
   const { toast } = useToast();
+  const { profile } = useAuth();
   const { selectedBranch, branchType } = useBranchContext();
   const isPharmacy = branchType === 'pharmacy';
 
@@ -69,10 +71,16 @@ export default function StaffInventoryWithActions() {
 
   const checkBranches = async () => {
     try {
-      const { data, error } = await supabase
+      let query = supabase
         .from('pharmacy_branches')
         .select('id')
         .limit(1);
+      
+      if (profile?.role === 'owner' && profile?.id) {
+        query = query.eq('pharmacy_owner_id', profile.id);
+      }
+
+      const { data, error } = await query;
       
       if (error) throw error;
       setHasBranches(data && data.length > 0);
@@ -102,6 +110,23 @@ export default function StaffInventoryWithActions() {
 
   const fetchMedicines = async () => {
     try {
+      // Owner isolation: when "All Branches", only fetch from owner's branches
+      let ownerBranchIds: string[] = [];
+      if (!selectedBranch && profile?.role === 'owner' && profile?.id) {
+        const { data: ownerBranches } = await supabase
+          .from('pharmacy_branches')
+          .select('id')
+          .eq('pharmacy_owner_id', profile.id);
+        ownerBranchIds = (ownerBranches || []).map((b: any) => b.id);
+      }
+
+      // If owner has no branches yet, show empty data
+      if (!selectedBranch && ownerBranchIds.length === 0 && profile?.role === 'owner') {
+        setMedicines([]);
+        setLoading(false);
+        return;
+      }
+
       let query = supabase
         .from('medicines')
         .select('*')
@@ -109,6 +134,8 @@ export default function StaffInventoryWithActions() {
 
       if (selectedBranch) {
         query = query.eq('branch_id', selectedBranch);
+      } else if (ownerBranchIds.length > 0) {
+        query = query.in('branch_id', ownerBranchIds);
       }
 
       const { data, error } = await query;

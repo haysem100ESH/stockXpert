@@ -108,8 +108,27 @@ export default function OwnerDashboard() {
       }
 
       const medicineCategories = ['tablet', 'capsule', 'syrup', 'injection', 'cream', 'ointment', 'drops', 'inhaler'];
+
+      // Owner isolation: fetch owner's branch IDs when "All Branches"
+      let ownerBranchIds: string[] = [];
+      if (!selectedBranch && profile?.role === 'owner' && profile?.id) {
+        const { data: ownerBranches } = await supabase
+          .from('pharmacy_branches')
+          .select('id')
+          .eq('pharmacy_owner_id', profile.id);
+        ownerBranchIds = (ownerBranches || []).map((b: any) => b.id);
+      }
       
-      // Build queries - RLS policies handle ownership filtering automatically
+      // If owner has no branches yet, show empty data
+      if (!selectedBranch && ownerBranchIds.length === 0 && profile?.role === 'owner') {
+        setStats({ totalRevenue: 0, totalProducts: 0, totalMedicines: 0, totalItems: 0, totalSoldItems: 0, lowStockItems: 0, outOfStockItems: 0, expiredItems: 0 });
+        setCategorySales([]); setMedicinesCategorySales([]); setItemsCategorySales([]);
+        setProductPerformance([]); setTopMedicines([]); setTopItems([]); setPaymentMethodData([]);
+        setLoading(false);
+        return;
+      }
+
+      // Build queries
       let salesQuery = supabase.from('sales').select('total_amount, payment_method, discount_amount, branch_id, created_at')
         .gte('created_at', startDate.toISOString())
         .lte('created_at', now.toISOString());
@@ -121,11 +140,15 @@ export default function OwnerDashboard() {
           sales!inner(branch_id, created_at)
         `);
 
-      // Filter by specific branch if selected
+      // Filter by specific branch or owner's branches
       if (selectedBranch) {
         salesQuery = salesQuery.eq('branch_id', selectedBranch);
         medicinesQuery = medicinesQuery.eq('branch_id', selectedBranch);
         saleItemsQuery = saleItemsQuery.eq('sales.branch_id', selectedBranch);
+      } else if (ownerBranchIds.length > 0) {
+        salesQuery = salesQuery.in('branch_id', ownerBranchIds);
+        medicinesQuery = medicinesQuery.in('branch_id', ownerBranchIds);
+        saleItemsQuery = saleItemsQuery.in('sales.branch_id', ownerBranchIds);
       }
 
       // Fetch data
@@ -152,6 +175,8 @@ export default function OwnerDashboard() {
       
       if (selectedBranch) {
         expiredQuery = expiredQuery.eq('branch_id', selectedBranch);
+      } else if (ownerBranchIds.length > 0) {
+        expiredQuery = expiredQuery.in('branch_id', ownerBranchIds);
       }
 
       const { data: expiredMedicinesData } = await expiredQuery;
@@ -173,6 +198,8 @@ export default function OwnerDashboard() {
       
       if (selectedBranch) {
         salesWithItemsQuery = salesWithItemsQuery.eq('branch_id', selectedBranch);
+      } else if (ownerBranchIds.length > 0) {
+        salesWithItemsQuery = salesWithItemsQuery.in('branch_id', ownerBranchIds);
       }
 
       const { data: salesWithItems } = await salesWithItemsQuery;

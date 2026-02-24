@@ -115,6 +115,23 @@ export default function InventoryManagement() {
 
   const fetchMedicines = async () => {
     try {
+      // When "All Branches", restrict to current owner's branches only
+      let ownerBranchIds: string[] = [];
+      if (!selectedBranch && profile?.role === 'owner' && profile?.id) {
+        const { data: ownerBranches } = await supabase
+          .from('pharmacy_branches')
+          .select('id')
+          .eq('pharmacy_owner_id', profile.id);
+        ownerBranchIds = (ownerBranches || []).map((b: any) => b.id);
+      }
+
+      // If owner has no branches yet, show empty data
+      if (!selectedBranch && ownerBranchIds.length === 0 && profile?.role === 'owner') {
+        setMedicines([]);
+        setLoading(false);
+        return;
+      }
+
       let query = supabase
         .from('medicines')
         .select('*')
@@ -122,6 +139,8 @@ export default function InventoryManagement() {
 
       if (selectedBranch) {
         query = query.eq('branch_id', selectedBranch);
+      } else if (ownerBranchIds.length > 0) {
+        query = query.in('branch_id', ownerBranchIds);
       }
 
       const { data, error } = await query;

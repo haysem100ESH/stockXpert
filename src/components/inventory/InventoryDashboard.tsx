@@ -7,6 +7,7 @@ import { supabase } from '@/lib/db';
 import { useToast } from '@/hooks/use-toast';
 import { ConfirmationDialog } from '@/components/ui/confirmation-dialog';
 import { useBranchContext } from '@/hooks/useBranchContext';
+import { useAuth } from '@/hooks/useAuth';
 
 interface OutOfStockItem {
   id: string;
@@ -56,6 +57,7 @@ export default function InventoryDashboard() {
   });
   const { toast } = useToast();
   const { selectedBranch, branchType } = useBranchContext();
+  const { profile } = useAuth();
   const isPharmacy = branchType === 'pharmacy';
 
   useEffect(() => {
@@ -88,6 +90,23 @@ export default function InventoryDashboard() {
 
   const fetchInventoryData = async () => {
     try {
+      // Owner isolation: fetch owner's branch IDs when "All Branches"
+      let ownerBranchIds: string[] = [];
+      if (!selectedBranch && profile?.role === 'owner' && profile?.id) {
+        const { data: ownerBranches } = await supabase
+          .from('pharmacy_branches')
+          .select('id')
+          .eq('pharmacy_owner_id', profile.id);
+        ownerBranchIds = (ownerBranches || []).map((b: any) => b.id);
+      }
+
+      // If owner has no branches yet, show empty data
+      if (!selectedBranch && ownerBranchIds.length === 0 && profile?.role === 'owner') {
+        setOutOfStockItems([]); setLowStockItems([]); setExpiringItems([]); setExpiredItems([]);
+        setLoading(false);
+        return;
+      }
+
       // Fetch out of stock items
       let outOfStockQuery = supabase
         .from('medicines')
@@ -96,6 +115,8 @@ export default function InventoryDashboard() {
       
       if (selectedBranch) {
         outOfStockQuery = outOfStockQuery.eq('branch_id', selectedBranch);
+      } else if (ownerBranchIds.length > 0) {
+        outOfStockQuery = outOfStockQuery.in('branch_id', ownerBranchIds);
       }
 
       const { data: outOfStockDetails } = await outOfStockQuery;
@@ -108,6 +129,8 @@ export default function InventoryDashboard() {
       
       if (selectedBranch) {
         lowStockDirectQuery = lowStockDirectQuery.eq('branch_id', selectedBranch);
+      } else if (ownerBranchIds.length > 0) {
+        lowStockDirectQuery = lowStockDirectQuery.in('branch_id', ownerBranchIds);
       }
 
       const { data: allMedicines } = await lowStockDirectQuery;
@@ -137,6 +160,8 @@ export default function InventoryDashboard() {
         
         if (selectedBranch) {
           expiringQuery = expiringQuery.eq('branch_id', selectedBranch);
+        } else if (ownerBranchIds.length > 0) {
+          expiringQuery = expiringQuery.in('branch_id', ownerBranchIds);
         }
 
         const { data: expiringData } = await expiringQuery;
@@ -151,6 +176,8 @@ export default function InventoryDashboard() {
         
         if (selectedBranch) {
           expiredQuery = expiredQuery.eq('branch_id', selectedBranch);
+        } else if (ownerBranchIds.length > 0) {
+          expiredQuery = expiredQuery.in('branch_id', ownerBranchIds);
         }
 
         const { data: expiredData } = await expiredQuery;

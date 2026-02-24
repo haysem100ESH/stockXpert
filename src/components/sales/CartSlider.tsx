@@ -95,7 +95,7 @@ export default function CartSlider({
 
   return (
     <>
-      {/* Backdrop — mobile only */}
+      {/* Backdrop — below 1024px */}
       <div
         ref={overlayRef}
         onClick={handleOverlayClick}

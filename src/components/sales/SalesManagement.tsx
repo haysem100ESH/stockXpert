@@ -60,7 +60,17 @@ export default function SalesManagement() {
   const { toast } = useToast();
   const { selectedBranch, branchType } = useBranchContext();
   const isMobile = useIsMobile();
+  const [isSmallScreen, setIsSmallScreen] = useState(false);
   const isPharmacy = branchType === 'pharmacy';
+
+  // Track < 1024px for cart icon behavior (tablet + mobile)
+  useEffect(() => {
+    const mql = window.matchMedia('(max-width: 1023px)');
+    const onChange = () => setIsSmallScreen(mql.matches);
+    mql.addEventListener('change', onChange);
+    setIsSmallScreen(mql.matches);
+    return () => mql.removeEventListener('change', onChange);
+  }, []);
 
   const itemsPerPage = 16;
 
@@ -96,12 +106,34 @@ export default function SalesManagement() {
 
   const fetchMedicines = async () => {
     try {
+      // When "All Branches" is selected, fetch only branches belonging to
+      // the current owner and filter medicines by those branch IDs.
+      let branchIds: string[] = [];
+      if (!selectedBranch && profile?.role === 'owner' && profile?.id) {
+        const { data: ownerBranches } = await (supabase as any)
+          .from('pharmacy_branches')
+          .select('id')
+          .eq('pharmacy_owner_id', profile.id);
+        branchIds = (ownerBranches || []).map((b: any) => b.id);
+      }
+
+      // If owner has no branches yet, show empty data
+      if (!selectedBranch && branchIds.length === 0 && profile?.role === 'owner') {
+        setMedicines([]);
+        setLoading(false);
+        return;
+      }
+
       let query = (supabase as any)
         .from('medicines')
         .select('id, name, generic_name, selling_price, stock_quantity, category, expiry_date, units_per_pack, open_pack_units, unit_label')
         .or('stock_quantity.gt.0,open_pack_units.gt.0')
         .order('name');
-      if (selectedBranch) query = query.eq('branch_id', selectedBranch);
+      if (selectedBranch) {
+        query = query.eq('branch_id', selectedBranch);
+      } else if (branchIds.length > 0) {
+        query = query.in('branch_id', branchIds);
+      }
       const { data, error } = await query;
       if (error) throw error;
       // open_pack_units is stored as INTEGER thousandths in DB (e.g. 2500 = 2.5 strips).
@@ -122,12 +154,30 @@ export default function SalesManagement() {
     try {
       // Fetch customers — note: current_debt does NOT exist on the customers table;
       // we compute debt from the sales table instead.
+      // Filter customers by owner's branches when "All Branches"
+      let custBranchIds: string[] = [];
+      if (!selectedBranch && profile?.role === 'owner' && profile?.id) {
+        const { data: ownerBranches } = await (supabase as any)
+          .from('pharmacy_branches')
+          .select('id')
+          .eq('pharmacy_owner_id', profile.id);
+        custBranchIds = (ownerBranches || []).map((b: any) => b.id);
+      }
+
+      // If owner has no branches yet, show empty customers
+      if (!selectedBranch && custBranchIds.length === 0 && profile?.role === 'owner') {
+        setCustomers([]);
+        return;
+      }
+
       let query = (supabase as any)
         .from('customers')
         .select('id, name, phone')
         .order('name');
       if (selectedBranch) {
         query = query.eq('branch_id', selectedBranch);
+      } else if (custBranchIds.length > 0) {
+        query = query.in('branch_id', custBranchIds);
       }
       const { data, error } = await query;
       if (error) {
@@ -183,7 +233,7 @@ export default function SalesManagement() {
   const addToCartInstant = (medicine: Medicine) => {
     const defaultSaleType: 'full_pack' | 'by_stripe' = medicine.units_per_pack ? 'by_stripe' : 'full_pack';
     addToCart(medicine, defaultSaleType, 1);
-    if (isMobile) setCartOpen(true);
+    if (isSmallScreen) setCartOpen(true);
   };
 
   const addToCart = (medicine: Medicine, saleType: 'full_pack' | 'by_stripe', count: number) => {
@@ -562,8 +612,8 @@ export default function SalesManagement() {
             </Select>
           </div>
 
-          {/* Mobile cart FAB */}
-          {isMobile && (
+          {/* Cart icon for < 1024px (mobile + tablet) */}
+          {isSmallScreen && (
             <Button
               variant="default"
               size="icon"
@@ -638,20 +688,20 @@ export default function SalesManagement() {
                       </div>
                     </div>
                   )}
-                  <Button
-                    onClick={() => {
-                      if (!selectedBranch) {
-                        toast({ title: 'Branch Required', description: 'Please select a specific branch before selling.', variant: 'destructive' });
-                        return;
-                      }
-                      addToCartInstant(medicine);
-                    }}
-                    className="w-full"
-                    disabled={medicine.stock_quantity === 0 || (isPharmacy && isExpired(medicine.expiry_date)) || !selectedBranch}
-                  >
-                    <Plus className="h-4 w-4 mr-2" />
-                    {!selectedBranch ? 'Select a Branch' : isPharmacy && isExpired(medicine.expiry_date) ? 'Expired' : 'Add to Cart'}
-                  </Button>
+                  {selectedBranch ? (
+                    <Button
+                      onClick={() => addToCartInstant(medicine)}
+                      className="w-full"
+                      disabled={medicine.stock_quantity === 0 || (isPharmacy && isExpired(medicine.expiry_date))}
+                    >
+                      <Plus className="h-4 w-4 mr-2" />
+                      {isPharmacy && isExpired(medicine.expiry_date) ? 'Expired' : 'Add to Cart'}
+                    </Button>
+                  ) : (
+                    <p className="text-sm text-muted-foreground text-center py-2">
+                      Please select a branch to sell items
+                    </p>
+                  )}
                 </div>
               </CardContent>
             </Card>

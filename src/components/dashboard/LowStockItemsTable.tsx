@@ -5,6 +5,7 @@ import { Badge } from '@/components/ui/badge';
 import { Package } from 'lucide-react';
 import { supabase } from '@/lib/db';
 import { useBranchContext } from '@/hooks/useBranchContext';
+import { useAuth } from '@/hooks/useAuth';
 
 interface LowStockItem {
   id: string;
@@ -17,6 +18,7 @@ export default function LowStockItemsTable() {
   const [lowStockItems, setLowStockItems] = useState<LowStockItem[]>([]);
   const [loading, setLoading] = useState(true);
   const { selectedBranch } = useBranchContext();
+  const { profile } = useAuth();
 
   useEffect(() => {
     fetchLowStockItems();
@@ -24,21 +26,37 @@ export default function LowStockItemsTable() {
 
   const fetchLowStockItems = async () => {
     try {
+      // Owner isolation
+      let ownerBranchIds: string[] = [];
+      if (!selectedBranch && profile?.role === 'owner' && profile?.id) {
+        const { data: ownerBranches } = await supabase
+          .from('pharmacy_branches')
+          .select('id')
+          .eq('pharmacy_owner_id', profile.id);
+        ownerBranchIds = (ownerBranches || []).map((b: any) => b.id);
+      }
+
+      if (!selectedBranch && ownerBranchIds.length === 0 && profile?.role === 'owner') {
+        setLowStockItems([]);
+        setLoading(false);
+        return;
+      }
+
       let query = supabase
         .from('medicines')
         .select('id, name, stock_quantity, minimum_stock_level')
         .gt('stock_quantity', 0);
 
-      // Filter by selected branch if one is selected
       if (selectedBranch) {
         query = query.eq('branch_id', selectedBranch);
+      } else if (ownerBranchIds.length > 0) {
+        query = query.in('branch_id', ownerBranchIds);
       }
 
       const { data, error } = await query.order('stock_quantity', { ascending: true });
 
       if (error) throw error;
 
-      // Filter for low stock items (stock <= minimum level)
       const lowStock = (data || []).filter(item => 
         item.stock_quantity <= item.minimum_stock_level
       );

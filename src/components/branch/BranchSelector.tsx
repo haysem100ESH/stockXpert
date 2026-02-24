@@ -1,4 +1,4 @@
-import { useState, useEffect } from 'react';
+import { useState, useEffect, useCallback } from 'react';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
 import { supabase } from '@/lib/db';
 import { useAuth } from '@/hooks/useAuth';
@@ -21,11 +21,32 @@ export default function BranchSelector({ selectedBranch, onBranchChange, showAll
   const [loading, setLoading] = useState(true);
   const { profile } = useAuth();
 
-  useEffect(() => {
-    fetchBranches();
+  const fetchBranches = useCallback(async () => {
+    try {
+      let query = supabase
+        .from('pharmacy_branches')
+        .select('id, name, is_main_branch, branch_type')
+        .order('is_main_branch', { ascending: false })
+        .order('created_at', { ascending: true });
+
+      if (profile?.role === 'owner' && profile?.id) {
+        query = query.eq('pharmacy_owner_id', profile.id);
+      }
+
+      const { data, error } = await query;
+      if (error) throw error;
+      setBranches(data || []);
+    } catch (error) {
+      console.error('Error fetching branches:', error);
+    } finally {
+      setLoading(false);
+    }
   }, [profile]);
 
-  // Real-time subscription for branch changes
+  useEffect(() => {
+    fetchBranches();
+  }, [fetchBranches]);
+
   useEffect(() => {
     const channel = supabase
       .channel('branch-selector-changes')
@@ -36,32 +57,15 @@ export default function BranchSelector({ selectedBranch, onBranchChange, showAll
       )
       .subscribe();
 
-    return () => { supabase.removeChannel(channel); };
-  }, []);
+    // Also listen for explicit refetch events from same-client mutations
+    const handleBranchesUpdated = () => { fetchBranches(); };
+    window.addEventListener('branches-updated', handleBranchesUpdated);
 
-  const fetchBranches = async () => {
-    try {
-      let query = supabase
-        .from('pharmacy_branches')
-        .select('id, name, is_main_branch, branch_type')
-        .order('is_main_branch', { ascending: false })
-        .order('created_at', { ascending: true });
-
-      // Filter by pharmacy owner if user is an owner
-      if (profile?.role === 'owner' && profile?.id) {
-        query = query.eq('pharmacy_owner_id', profile.id);
-      }
-
-      const { data, error } = await query;
-
-      if (error) throw error;
-      setBranches(data || []);
-    } catch (error) {
-      console.error('Error fetching branches:', error);
-    } finally {
-      setLoading(false);
-    }
-  };
+    return () => {
+      supabase.removeChannel(channel);
+      window.removeEventListener('branches-updated', handleBranchesUpdated);
+    };
+  }, [fetchBranches]);
 
   if (loading) {
     return (
