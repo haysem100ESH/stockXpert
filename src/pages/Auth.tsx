@@ -316,7 +316,7 @@ export default function Auth() {
         <CardHeader className="text-center space-y-2 pb-6">
           <div className="flex flex-col items-center">
             <img
-                src="/lovable-uploads/2f79a84c-a540-4f7f-bbe7-0bb88136976a.png"
+                src="/stockpert-uploads/64c5eeb6-dc27-4b3f-9e26-d9252abb0380.png"
                 alt="System Logo"
                 className="w-28 h-28 object-cover rounded-full shadow-md mb-3 transition-transform duration-300 hover:scale-105"
                 />
