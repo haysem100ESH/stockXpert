@@ -282,7 +282,7 @@ export default function Dashboard() {
         console.log('Expired medicines found:', expiredDetails?.length || 0);
       }
 
-      // Fetch sales data with medicine details for charts
+      // Fetch sales data with medicine details for charts (include strip sales)
       const { data: salesWithItems } = await (function(){
         let salesWithItemsQuery = supabase
           .from('sales')
@@ -291,6 +291,9 @@ export default function Dashboard() {
             sale_items (
               quantity,
               medicine_id,
+              sale_type,
+              stripes_sold,
+              total_price,
               medicines (name, category)
             )
           `)
@@ -307,16 +310,21 @@ export default function Dashboard() {
         return salesWithItemsQuery;
       })();
 
-      // Process category sales data
+      // Process category sales data — include both pack and strip sales
       const categoryMap = new Map<string, { sales: number; revenue: number }>();
       salesWithItems?.forEach(sale => {
         sale.sale_items?.forEach((item: any) => {
           if (item.medicines) {
             const category = item.medicines.category;
             const existing = categoryMap.get(category) || { sales: 0, revenue: 0 };
+            // For strip sales, stripes_sold is stored as thousandths in DB
+            const soldQty = item.sale_type === 'by_stripe'
+              ? (item.stripes_sold ? item.stripes_sold / 1000 : item.quantity)
+              : (item.quantity || 0);
+            const itemRevenue = Number(item.total_price || 0);
             categoryMap.set(category, {
-              sales: existing.sales + item.quantity,
-              revenue: existing.revenue + (item.quantity * Number(sale.total_amount) / sale.sale_items.length)
+              sales: existing.sales + soldQty,
+              revenue: existing.revenue + itemRevenue
             });
           }
         });
@@ -327,16 +335,20 @@ export default function Dashboard() {
         ...data
       }));
 
-      // Process product performance data
+      // Process product performance data — include both pack and strip sales
       const productMap = new Map<string, { sales: number; revenue: number }>();
       salesWithItems?.forEach(sale => {
         sale.sale_items?.forEach((item: any) => {
           if (item.medicines) {
             const name = item.medicines.name;
             const existing = productMap.get(name) || { sales: 0, revenue: 0 };
+            const soldQty = item.sale_type === 'by_stripe'
+              ? (item.stripes_sold ? item.stripes_sold / 1000 : item.quantity)
+              : (item.quantity || 0);
+            const itemRevenue = Number(item.total_price || 0);
             productMap.set(name, {
-              sales: existing.sales + item.quantity,
-              revenue: existing.revenue + (item.quantity * Number(sale.total_amount) / sale.sale_items.length)
+              sales: existing.sales + soldQty,
+              revenue: existing.revenue + itemRevenue
             });
           }
         });

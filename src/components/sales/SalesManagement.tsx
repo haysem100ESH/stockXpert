@@ -13,6 +13,7 @@ import { useBranchContext } from '@/hooks/useBranchContext';
 import { ConfirmationDialog } from '@/components/ui/confirmation-dialog';
 import CartSlider from './CartSlider';
 import { useIsMobile } from '@/hooks/use-mobile';
+import { updateCreditScore } from '@/hooks/useCreditScore';
 
 interface Medicine {
   id: string;
@@ -49,7 +50,7 @@ export default function SalesManagement() {
   const [paymentMethod, setPaymentMethod] = useState<string>('Cash');
   const [discountPercent, setDiscountPercent] = useState<number>(0);
   const [showCheckoutConfirm, setShowCheckoutConfirm] = useState(false);
-  const [customers, setCustomers] = useState<{id: string; name: string; phone?: string | null; computed_debt?: number}[]>([]);
+  const [customers, setCustomers] = useState<{id: string; name: string; phone?: string | null; computed_debt?: number; credit_score?: number; max_credit_limit?: number}[]>([]);
   const [selectedCustomerId, setSelectedCustomerId] = useState<string>('none');
   const [amountReceived, setAmountReceived] = useState<string>('');
   const [changeAction, setChangeAction] = useState<ChangeAction>(null);
@@ -172,7 +173,7 @@ export default function SalesManagement() {
 
       let query = (supabase as any)
         .from('customers')
-        .select('id, name, phone')
+        .select('id, name, phone, credit_score')
         .order('name');
       if (selectedBranch) {
         query = query.eq('branch_id', selectedBranch);
@@ -185,7 +186,7 @@ export default function SalesManagement() {
         setCustomers([]);
         return;
       }
-      const rawCustomers: {id: string; name: string; phone?: string | null}[] = data || [];
+      const rawCustomers: {id: string; name: string; phone?: string | null; credit_score?: number; max_credit_limit?: number}[] = data || [];
       if (rawCustomers.length === 0) { setCustomers([]); return; }
 
       // Compute debt per customer: sum(total_amount) - sum(amount_paid) from sales
@@ -205,6 +206,8 @@ export default function SalesManagement() {
       setCustomers(rawCustomers.map(c => ({
         ...c,
         computed_debt: Math.max(0, debtMap[c.id] || 0),
+        credit_score: c.credit_score ?? 50,
+        max_credit_limit: c.max_credit_limit ?? 5000,
       })));
     } catch (err) {
       console.error('Error fetching customers:', err);
@@ -354,9 +357,30 @@ export default function SalesManagement() {
   const selectedCustomer = customers.find(c => c.id === selectedCustomerId);
   const customerHasDebt = selectedCustomer && (selectedCustomer.computed_debt || 0) > 0;
 
+  // Credit limit check for debt sales
+  const getCreditCheckResult = () => {
+    if (!selectedCustomer || selectedCustomerId === 'none') return null;
+    const received = amountReceived ? parseFloat(amountReceived) : calculateTotal();
+    const shortfall = calculateTotal() - received;
+    if (shortfall <= 0) return null; // fully paid, no credit needed
+    const currentDebt = selectedCustomer.computed_debt || 0;
+    const maxLimit = selectedCustomer.max_credit_limit ?? 5000;
+    const score = selectedCustomer.credit_score ?? 50;
+    if (maxLimit === 0) return { allowed: false, reason: 'Credit score too low — Cash Only', score };
+    const available = Math.max(0, maxLimit - currentDebt);
+    if (shortfall > available) return { allowed: false, reason: `Debt (ETB ${(currentDebt + shortfall).toFixed(2)}) would exceed credit limit (ETB ${maxLimit.toFixed(2)})`, score };
+    return { allowed: true, score };
+  };
+  const creditCheck = getCreditCheckResult();
+
   const handleCheckout = () => {
     if (!selectedBranch) {
       toast({ title: 'Branch Required', description: 'Please select a specific branch before selling.', variant: 'destructive' });
+      return;
+    }
+    // Credit limit check
+    if (creditCheck && !creditCheck.allowed) {
+      toast({ title: 'Credit Denied', description: creditCheck.reason, variant: 'destructive' });
       return;
     }
     if (cart.length === 0) {
@@ -541,6 +565,21 @@ export default function SalesManagement() {
           }]);
       }
 
+      // Auto credit score: penalize for debt sale (underpaid)
+      if (selectedCustomerId !== 'none' && underpaid > 0.001) {
+        const cust = customers.find(c => c.id === selectedCustomerId);
+        if (cust) {
+          await updateCreditScore({
+            customerId: selectedCustomerId,
+            currentScore: cust.credit_score ?? 50,
+            changeAmount: -5,
+            reason: `New debt from sale (ETB ${underpaid.toFixed(2)} unpaid)`,
+            createdBy: profile?.id,
+            branchId: selectedBranch || profile?.branch_id,
+          });
+        }
+      }
+
       let successMessage = `Sale completed! Total: ETB ${total.toFixed(2)} via ${paymentMethod}.`;
       if (extraProfit > 0) successMessage += ` Extra profit: ETB ${extraProfit.toFixed(2)}.`;
       if (finalChangeAction === 'give_change') successMessage += ` Change given: ETB ${change.toFixed(2)}.`;
@@ -663,16 +702,16 @@ export default function SalesManagement() {
                     </div>
                   )}
                   <div className="flex justify-between text-sm">
-                    <span>Stock:</span>
+                    <span>{medicine.units_per_pack ? 'Unopened Packs:' : 'Stock:'}</span>
                     <Badge variant={medicine.stock_quantity <= 10 ? 'destructive' : 'secondary'}>
                       {medicine.stock_quantity} {medicine.stock_quantity === 1 ? 'pack' : 'packs'}
                     </Badge>
                   </div>
-                  {medicine.units_per_pack && (medicine.open_pack_units || 0) > 0 && (
+                  {medicine.units_per_pack && (
                     <div className="flex justify-between text-sm text-muted-foreground">
                       <span>Open pack:</span>
                       <Badge variant="outline" className="text-xs">
-                        {medicine.open_pack_units}/{medicine.units_per_pack} {medicine.unit_label || 'unit'}s
+                        {medicine.open_pack_units || 0}/{medicine.units_per_pack} {medicine.unit_label || 'unit'}s remaining
                       </Badge>
                     </div>
                   )}
@@ -775,6 +814,7 @@ export default function SalesManagement() {
         total={total}
         processing={processing}
         onCheckout={handleCheckout}
+        creditCheck={creditCheck}
       />
 
       <ConfirmationDialog

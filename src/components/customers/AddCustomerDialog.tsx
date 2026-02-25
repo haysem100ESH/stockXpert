@@ -67,7 +67,7 @@ export default function AddCustomerDialog({ open, onOpenChange, onCustomerAdded 
           </div>
           <div className="space-y-2">
             <Label htmlFor="notes">Notes</Label>
-            <Textarea id="notes" value={notes} onChange={e => setNotes(e.target.value)} placeholder="Optional notes about this customer" />
+            <Textarea id="notes" value={notes} onChange={e => setNotes(e.target.value)} placeholder="E.g. Equb member, Holiday payment promise, etc." />
           </div>
           <div className="flex justify-end gap-2">
             <Button type="button" variant="outline" onClick={() => onOpenChange(false)}>Cancel</Button>

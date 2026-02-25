@@ -45,7 +45,14 @@ export default function EditMedicineDialog({
 }: EditMedicineDialogProps) {
   const { branchType } = useBranchContext();
   const isPharmacy = branchType === 'pharmacy';
-  const { categories: customCategories } = useCustomCategories(isPharmacy ? 'pharmacy' : 'general');
+  const { categories: customCategories, loading: categoriesLoading } = useCustomCategories(isPharmacy ? 'pharmacy' : 'general');
+
+  // Also fetch owner-level categories to ensure we have all categories available
+  const { categories: generalCategories } = useCustomCategories('general');
+  const { categories: pharmacyCategories } = useCustomCategories('pharmacy');
+
+  // Merge all categories, removing duplicates
+  const allCategories = [...new Set([...customCategories, ...(isPharmacy ? pharmacyCategories : generalCategories)])].sort();
 
   const [medicineData, setMedicineData] = useState({
     name: '',
@@ -183,15 +190,15 @@ export default function EditMedicineDialog({
           <div className="space-y-2">
             <Label htmlFor="category">Category *</Label>
             <Select value={medicineData.category} onValueChange={(value: any) => setMedicineData({ ...medicineData, category: value })}>
-              <SelectTrigger><SelectValue placeholder="Select category" /></SelectTrigger>
+              <SelectTrigger><SelectValue placeholder={categoriesLoading ? "Loading categories..." : "Select category"} /></SelectTrigger>
               <SelectContent>
-                {customCategories.map((cat) => (
+                {allCategories.map((cat) => (
                   <SelectItem key={cat} value={cat}>
                     {cat.charAt(0).toUpperCase() + cat.slice(1).replace(/_/g, ' ')}
                   </SelectItem>
                 ))}
-                {/* Ensure current custom category is always shown even if not in list */}
-                {medicineData.category && !customCategories.includes(medicineData.category) && (
+                {/* Ensure current category is always shown even if not in the fetched list */}
+                {medicineData.category && !allCategories.includes(medicineData.category) && (
                   <SelectItem key={medicineData.category} value={medicineData.category}>
                     {medicineData.category.charAt(0).toUpperCase() + medicineData.category.slice(1)}
                   </SelectItem>

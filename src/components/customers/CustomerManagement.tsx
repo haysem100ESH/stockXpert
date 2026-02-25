@@ -12,6 +12,9 @@ import { Search, Plus, Users, DollarSign, AlertTriangle, Edit, CreditCard, Eye, 
 import { supabase } from '@/lib/db';
 import { useToast } from '@/hooks/use-toast';
 import { useBranchContext } from '@/hooks/useBranchContext';
+import { getCreditLimit } from '@/hooks/useCreditScore';
+import CreditScoreBadge from './CreditScoreBadge';
+import DebtProgressBar from './DebtProgressBar';
 import AddCustomerDialog from './AddCustomerDialog';
 import EditCustomerDialog from './EditCustomerDialog';
 import RecordPaymentDialog from './RecordPaymentDialog';
@@ -27,6 +30,8 @@ interface Customer {
   totalPaid: number;
   totalDebt: number;
   lastPurchaseDate?: string;
+  credit_score: number;
+  max_credit_limit: number;
 }
 
 type PaymentStatus = 'No Sales' | 'Paid' | 'Partial' | 'Unpaid';
@@ -81,7 +86,9 @@ export default function CustomerManagement() {
 
           const totalPaid = paidAtSale + totalPayments;
           const totalDebt = Math.max(0, totalPurchases - totalPaid);
-          return { ...c, totalPurchases, totalPaid, totalDebt, lastPurchaseDate };
+          const creditScore = c.credit_score ?? 50;
+          const maxCreditLimit = c.max_credit_limit ?? getCreditLimit(creditScore);
+          return { ...c, totalPurchases, totalPaid, totalDebt, lastPurchaseDate, credit_score: creditScore, max_credit_limit: maxCreditLimit };
         })
       );
       setCustomers(enriched);
@@ -100,23 +107,23 @@ export default function CustomerManagement() {
     { accessorKey: 'name', header: 'Name', cell: ({ row }) => <span className="font-medium">{row.original.name}</span> },
     { accessorKey: 'phone', header: 'Phone', cell: ({ row }) => row.original.phone || <span className="text-muted-foreground">—</span> },
     {
-      accessorKey: 'totalPurchases',
-      header: 'Total Purchases',
-      cell: ({ row }) => `ETB ${row.original.totalPurchases.toFixed(2)}`,
-    },
-    {
-      accessorKey: 'totalPaid',
-      header: 'Paid',
-      cell: ({ row }) => `ETB ${row.original.totalPaid.toFixed(2)}`,
+      accessorKey: 'credit_score',
+      header: 'Credit Score',
+      cell: ({ row }) => <CreditScoreBadge score={row.original.credit_score} />,
     },
     {
       accessorKey: 'totalDebt',
-      header: 'Outstanding',
+      header: 'Debt / Limit',
       cell: ({ row }) => (
-        <span className={row.original.totalDebt > 0 ? 'text-destructive font-semibold' : ''}>
-          ETB {row.original.totalDebt.toFixed(2)}
-        </span>
+        <div className="min-w-[160px]">
+          <DebtProgressBar currentDebt={row.original.totalDebt} maxCreditLimit={row.original.max_credit_limit} />
+        </div>
       ),
+    },
+    {
+      accessorKey: 'totalPurchases',
+      header: 'Purchases',
+      cell: ({ row }) => `ETB ${row.original.totalPurchases.toFixed(2)}`,
     },
     {
       accessorKey: 'status',
@@ -222,7 +229,13 @@ export default function CustomerManagement() {
             <TabsTrigger value="all">All Customers</TabsTrigger>
             <TabsTrigger value="debtors">Debtors ({debtors.length})</TabsTrigger>
           </TabsList>
-          <Button onClick={() => setShowAddDialog(true)} size="sm">
+          <Button onClick={() => {
+            if (!selectedBranch) {
+              toast({ title: 'Branch Required', description: 'Please select a specific branch before creating a customer.', variant: 'destructive' });
+              return;
+            }
+            setShowAddDialog(true);
+          }} size="sm">
             <Plus className="h-4 w-4 mr-1" /> Add Customer
           </Button>
         </div>
@@ -268,6 +281,7 @@ export default function CustomerManagement() {
             customerId={selectedCustomer.id}
             customerName={selectedCustomer.name}
             outstandingAmount={selectedCustomer.totalDebt}
+            creditScore={selectedCustomer.credit_score}
             onPaymentRecorded={fetchCustomers}
           />
           <CustomerDetailDialog

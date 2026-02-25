@@ -16,7 +16,8 @@ import {
   ShoppingCart,
   MessageCircle,
   ExternalLink,
-  Send
+  Send,
+  CreditCard
 } from 'lucide-react';
 import { BarChart, Bar, XAxis, YAxis, CartesianGrid, ResponsiveContainer, PieChart, Pie, Cell } from 'recharts';
 import { supabase } from '@/lib/db';
@@ -33,6 +34,7 @@ import LowStockItemsTable from './LowStockItemsTable';
 
 import SubscriptionPlanCard from '@/components/subscription/SubscriptionPlanCard';
 import { TelegramConnectionDialog } from '@/components/telegram/TelegramConnectionDialog';
+import { getCreditLimit, getCreditScoreLabel } from '@/hooks/useCreditScore';
 
 interface DashboardStats {
   totalRevenue: number;
@@ -80,6 +82,7 @@ export default function OwnerDashboard() {
   const [topMedicines, setTopMedicines] = useState<ProductPerformanceData[]>([]);
   const [topItems, setTopItems] = useState<ProductPerformanceData[]>([]);
   const [paymentMethodData, setPaymentMethodData] = useState<PaymentMethodData[]>([]);
+  const [creditOverview, setCreditOverview] = useState<{ avgScore: number; atRisk: number; totalExposure: number; totalCustomers: number }>({ avgScore: 0, atRisk: 0, totalExposure: 0, totalCustomers: 0 });
   const [loading, setLoading] = useState(true);
   const [sendingTestMessage, setSendingTestMessage] = useState(false);
   const [dateFilter, setDateFilter] = useState('monthly');
@@ -322,6 +325,32 @@ export default function OwnerDashboard() {
       setTopMedicines(topMedicinesArray);
       setTopItems(topItemsArray);
       setPaymentMethodData(paymentMethodArray);
+
+      // Fetch credit overview
+      let custQuery = supabase.from('customers').select('id, credit_score, max_credit_limit, branch_id');
+      if (selectedBranch) {
+        custQuery = custQuery.eq('branch_id', selectedBranch);
+      } else if (ownerBranchIds.length > 0) {
+        custQuery = custQuery.in('branch_id', ownerBranchIds);
+      }
+      const { data: custData } = await custQuery;
+      if (custData && custData.length > 0) {
+        const scores = custData.map((c: any) => c.credit_score ?? 50);
+        const avgScore = Math.round(scores.reduce((a: number, b: number) => a + b, 0) / scores.length);
+        const atRisk = scores.filter((s: number) => s < 30).length;
+        // Fetch total exposure (sum of unpaid debts)
+        let salesQ = supabase.from('sales').select('total_amount, amount_paid, customer_id').not('customer_id', 'is', null);
+        if (selectedBranch) salesQ = salesQ.eq('branch_id', selectedBranch);
+        else if (ownerBranchIds.length > 0) salesQ = salesQ.in('branch_id', ownerBranchIds);
+        const { data: salesDebt } = await salesQ;
+        const custIds = new Set(custData.map((c: any) => c.id));
+        const totalExposure = (salesDebt || [])
+          .filter((s: any) => custIds.has(s.customer_id))
+          .reduce((sum: number, s: any) => sum + Math.max(0, Number(s.total_amount) - Number(s.amount_paid || 0)), 0);
+        setCreditOverview({ avgScore, atRisk, totalExposure, totalCustomers: custData.length });
+      } else {
+        setCreditOverview({ avgScore: 0, atRisk: 0, totalExposure: 0, totalCustomers: 0 });
+      }
     } catch (error) {
       toast({
         title: "Error",
@@ -640,6 +669,38 @@ export default function OwnerDashboard() {
                       <span>{entry.method}: ETB {Number(entry.amount).toFixed(2)}</span>
                     </div>
                   ))}
+                </div>
+              </CardContent>
+            </Card>
+
+            {/* Credit Score Overview */}
+            <Card className="min-w-0">
+              <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
+                <div>
+                  <CardTitle>Credit Score Overview</CardTitle>
+                  <CardDescription>Customer credit health snapshot</CardDescription>
+                </div>
+                <CreditCard className="h-5 w-5 text-muted-foreground" />
+              </CardHeader>
+              <CardContent className="space-y-4">
+                <div className="grid grid-cols-2 gap-4">
+                  <div className="space-y-1">
+                    <p className="text-xs text-muted-foreground">Avg Score</p>
+                    <p className={`text-2xl font-bold ${creditOverview.avgScore >= 80 ? 'text-green-600' : creditOverview.avgScore >= 50 ? 'text-yellow-600' : creditOverview.avgScore >= 30 ? 'text-orange-500' : 'text-red-600'}`}>
+                      {creditOverview.avgScore}
+                    </p>
+                    <p className="text-xs text-muted-foreground">{getCreditScoreLabel(creditOverview.avgScore)}</p>
+                  </div>
+                  <div className="space-y-1">
+                    <p className="text-xs text-muted-foreground">At Risk (Score &lt; 30)</p>
+                    <p className="text-2xl font-bold text-destructive">{creditOverview.atRisk}</p>
+                    <p className="text-xs text-muted-foreground">of {creditOverview.totalCustomers} customers</p>
+                  </div>
+                  <div className="col-span-2 space-y-1">
+                    <p className="text-xs text-muted-foreground">Total Credit Exposure</p>
+                    <p className="text-xl font-bold">ETB {creditOverview.totalExposure.toFixed(2)}</p>
+                    <p className="text-xs text-muted-foreground">Outstanding debt across all customers</p>
+                  </div>
                 </div>
               </CardContent>
             </Card>

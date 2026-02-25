@@ -6,8 +6,10 @@ import { Badge } from '@/components/ui/badge';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
 import { Separator } from '@/components/ui/separator';
 import { RadioGroup, RadioGroupItem } from '@/components/ui/radio-group';
-import { ShoppingCart, Trash2, CreditCard, Percent, ArrowLeftRight, Wallet, X, Plus, Minus, Search } from 'lucide-react';
+import { ShoppingCart, Trash2, CreditCard, Percent, ArrowLeftRight, Wallet, X, Plus, Minus, Search, AlertTriangle } from 'lucide-react';
 import { cn } from '@/lib/utils';
+import CreditScoreBadge from '@/components/customers/CreditScoreBadge';
+import DebtProgressBar from '@/components/customers/DebtProgressBar';
 
 interface CartItem {
   id: string;
@@ -28,6 +30,8 @@ interface Customer {
   name: string;
   phone?: string | null;
   computed_debt?: number;
+  credit_score?: number;
+  max_credit_limit?: number;
 }
 
 type ChangeAction = 'keep_profit' | 'deduct_debt' | 'give_change' | null;
@@ -57,6 +61,7 @@ interface CartSliderProps {
   total: number;
   processing: boolean;
   onCheckout: () => void;
+  creditCheck?: { allowed: boolean; reason?: string; score?: number } | null;
 }
 
 export default function CartSlider({
@@ -70,6 +75,7 @@ export default function CartSlider({
   keepChangeOption, onKeepChangeOption,
   subtotal, discount, total,
   processing, onCheckout,
+  creditCheck,
 }: CartSliderProps) {
   const overlayRef = useRef<HTMLDivElement>(null);
   const [customerSearch, setCustomerSearch] = useState('');
@@ -340,8 +346,20 @@ export default function CartSlider({
                       <div className="py-2 px-3 text-xs text-muted-foreground">No customers match "{customerSearch}"</div>
                     )}
                   </SelectContent>
-                </Select>
-              </div>
+              </Select>
+              {/* Credit info for selected customer */}
+              {selectedCustomer && selectedCustomerId !== 'none' && (
+                <div className="space-y-2 p-2 rounded-lg border bg-muted/30">
+                  <div className="flex items-center gap-2 flex-wrap">
+                    <CreditScoreBadge score={selectedCustomer.credit_score ?? 50} />
+                  </div>
+                  <DebtProgressBar
+                    currentDebt={selectedCustomer.computed_debt || 0}
+                    maxCreditLimit={selectedCustomer.max_credit_limit ?? 5000}
+                  />
+                </div>
+              )}
+            </div>
 
               {/* Payment Method */}
               <div className="space-y-1.5">
@@ -466,10 +484,22 @@ export default function CartSlider({
 
         {/* Footer checkout button */}
         <div className="border-t p-4 bg-card">
+          {/* Credit denied warning */}
+          {creditCheck && !creditCheck.allowed && (
+            <div className="px-4 pb-2">
+              <div className="rounded-md bg-destructive/10 border border-destructive/30 p-3 flex items-start gap-2">
+                <AlertTriangle className="h-4 w-4 text-destructive mt-0.5 shrink-0" />
+                <div className="text-xs text-destructive">
+                  <p className="font-semibold">Credit Denied</p>
+                  <p>{creditCheck.reason}</p>
+                </div>
+              </div>
+            </div>
+          )}
           <Button
             onClick={onCheckout}
             className="w-full"
-            disabled={processing || cart.length === 0 || (hasChange && !changeAction) || (hasShortfall && selectedCustomerId === 'none')}
+            disabled={processing || cart.length === 0 || (hasChange && !changeAction) || (hasShortfall && selectedCustomerId === 'none') || (creditCheck != null && !creditCheck.allowed)}
           >
             <CreditCard className="h-4 w-4 mr-2" />
             {processing ? 'Processing...' : `Checkout · ETB ${total.toFixed(2)}`}

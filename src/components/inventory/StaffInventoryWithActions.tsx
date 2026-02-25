@@ -30,6 +30,11 @@ interface Medicine {
   batch_number?: string;
   manufacturer?: string;
   country_name?: string;
+  units_per_pack?: number;
+  open_pack_units?: number;
+  unit_label?: string;
+  branch_id?: string;
+  branch_name?: string;
   creator?: {
     full_name: string;
     email: string;
@@ -141,22 +146,34 @@ export default function StaffInventoryWithActions() {
       const { data, error } = await query;
 
       if (error) throw error;
+
+      // Fetch branch names in bulk
+      const branchIds = [...new Set((data || []).map((m: any) => m.branch_id).filter(Boolean))];
+      const branchMap: Record<string, string> = {};
+      if (branchIds.length > 0) {
+        const { data: branches } = await supabase
+          .from('pharmacy_branches')
+          .select('id, name')
+          .in('id', branchIds);
+        (branches || []).forEach((b: any) => { branchMap[b.id] = b.name; });
+      }
       
       const medicinesWithCreator = await Promise.all(
         (data || []).map(async (medicine: any) => {
+          let creatorData = null;
           if (medicine.created_by) {
-            const { data: creatorData } = await supabase
+            const { data: cd } = await supabase
               .from('profiles')
               .select('full_name')
               .eq('id', medicine.created_by)
               .maybeSingle();
-            
-            return {
-              ...medicine,
-              creator: creatorData
-            };
+            creatorData = cd;
           }
-          return medicine;
+          const openPackUnits = medicine.units_per_pack
+            ? (medicine.open_pack_units || 0) / 1000
+            : (medicine.open_pack_units || 0);
+          const branchName = medicine.branch_id ? branchMap[medicine.branch_id] : undefined;
+          return { ...medicine, creator: creatorData, open_pack_units: openPackUnits, branch_name: branchName };
         })
       );
       
@@ -443,6 +460,26 @@ export default function StaffInventoryWithActions() {
                         )}
                       </div>
                     </div>
+                    {medicine.units_per_pack && (
+                      <>
+                        <div className="flex justify-between text-sm">
+                          <span>Unopened Packs:</span>
+                          <Badge variant="secondary">{medicine.stock_quantity}</Badge>
+                        </div>
+                        <div className="flex justify-between text-sm">
+                          <span>Open Pack:</span>
+                          <span className="font-medium">
+                            {medicine.open_pack_units || 0}/{medicine.units_per_pack} {medicine.unit_label || 'units'} remaining
+                          </span>
+                        </div>
+                      </>
+                    )}
+                    {medicine.branch_name && (
+                      <div className="flex justify-between text-sm">
+                        <span>Branch:</span>
+                        <Badge variant="outline">{medicine.branch_name}</Badge>
+                      </div>
+                    )}
                     {isPharmacy && medicine.expiry_date && (
                       <div className="flex justify-between text-sm">
                         <span>Expiry:</span>
