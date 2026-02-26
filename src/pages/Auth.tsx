@@ -315,11 +315,15 @@ export default function Auth() {
         {/* Header */}
         <CardHeader className="text-center space-y-2 pb-6">
           <div className="flex flex-col items-center">
-            <img
+            <div className="w-32 h-32 flex items-center justify-center bg-white rounded-full shadow-md mb-3 transition-transform duration-300 hover:scale-105 border border-gray-100">
+              <img
                 src="/stocxpert-uploads/SIcon.svg"
                 alt="System Logo"
-               className="w-32 h-32 object-contain p-6 rounded-full shadow-md mb-3 style={{ overflow: 'visible' }} transition-transform duration-300 hover:scale-105"
-                />
+                /* w-3/4 ensures the logo only takes up 75% of the circle's width, 
+                   leaving plenty of space so nothing gets cut off */
+                className="w-3/4 h-3/4 object-contain"
+              />
+            </div>
 
             <CardTitle className="text-3xl font-extrabold text-foreground">Welcome</CardTitle>
             <CardDescription className="text-muted-foreground">
