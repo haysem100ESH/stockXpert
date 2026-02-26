@@ -14,14 +14,14 @@ const brandingMap: Record<BranchType, BrandingConfig> = {
     tagline: 'Pharmacy Management System',
     sidebarColor: 'bg-[hsl(187,38%,48%)]', // teal/pharma
     logoAlt: 'PharmaXpert Logo',
-    logoSrc: '/lovable-uploads/SPharmacyIcon.svg',
+    logoSrc: '/stocxpert-uploads/SPharmacyIcon.svg',
   },
   general: {
     systemName: 'StockXpert',
     tagline: 'Inventory Management System',
     sidebarColor: 'bg-[hsl(220,60%,45%)]', // blue/business
     logoAlt: 'StockXpert Logo',
-    logoSrc: '/lovable-uploads/SIcon.svg',
+    logoSrc: '/stocxpert-uploads/SIcon.svg',
   },
 };
 
