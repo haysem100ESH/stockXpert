@@ -318,7 +318,7 @@ export default function Auth() {
             <img
                 src="/stocxpert-uploads/SIcon.svg"
                 alt="System Logo"
-               className="w-28 h-28 object-contain p-2 rounded-full shadow-md mb-3 transition-transform duration-300 hover:scale-105"
+               className="w-28 h-28 object-contain p-4 rounded-full shadow-md mb-3 transition-transform duration-300 hover:scale-105"
                 />
 
             <CardTitle className="text-3xl font-extrabold text-foreground">Welcome</CardTitle>
