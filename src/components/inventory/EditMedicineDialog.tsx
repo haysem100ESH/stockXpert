@@ -45,14 +45,14 @@ export default function EditMedicineDialog({
 }: EditMedicineDialogProps) {
   const { branchType } = useBranchContext();
   const isPharmacy = branchType === 'pharmacy';
-  const { categories: customCategories, loading: categoriesLoading } = useCustomCategories(isPharmacy ? 'pharmacy' : 'general');
-
-  // Also fetch owner-level categories to ensure we have all categories available
-  const { categories: generalCategories } = useCustomCategories('general');
-  const { categories: pharmacyCategories } = useCustomCategories('pharmacy');
+  
+  // Fetch both category types to ensure all categories are available
+  const { categories: pharmacyCategories, loading: pharmLoading } = useCustomCategories('pharmacy');
+  const { categories: generalCategories, loading: genLoading } = useCustomCategories('general');
+  const categoriesLoading = pharmLoading || genLoading;
 
   // Merge all categories, removing duplicates
-  const allCategories = [...new Set([...customCategories, ...(isPharmacy ? pharmacyCategories : generalCategories)])].sort();
+  const allCategories = [...new Set([...pharmacyCategories, ...generalCategories])].sort();
 
   const [medicineData, setMedicineData] = useState({
     name: '',
@@ -107,9 +107,9 @@ export default function EditMedicineDialog({
     if (medicine && open) {
       const medicineWithBranch = medicine as MedicineWithBranch & { units_per_pack?: number; unit_label?: string };
       setMedicineData({
-        name: medicine.name,
+        name: medicine.name || '',
         generic_name: medicine.generic_name || '',
-        category: medicine.category,
+        category: medicine.category || '',
         manufacturer: medicine.manufacturer || '',
         batch_number: medicine.batch_number || '',
         country_name: medicine.country_name || '',
@@ -189,20 +189,21 @@ export default function EditMedicineDialog({
 
           <div className="space-y-2">
             <Label htmlFor="category">Category *</Label>
-            <Select value={medicineData.category} onValueChange={(value: any) => setMedicineData({ ...medicineData, category: value })}>
+            <Select value={medicineData.category || '__none__'} onValueChange={(value: any) => setMedicineData({ ...medicineData, category: value === '__none__' ? '' : value })}>
               <SelectTrigger><SelectValue placeholder={categoriesLoading ? "Loading categories..." : "Select category"} /></SelectTrigger>
               <SelectContent>
+                <SelectItem value="__none__">Select category</SelectItem>
+                {/* Always render current category so value is never unmatched */}
+                {medicineData.category && medicineData.category !== '__none__' && !allCategories.includes(medicineData.category) && (
+                  <SelectItem key={`current-${medicineData.category}`} value={medicineData.category}>
+                    {medicineData.category.charAt(0).toUpperCase() + medicineData.category.slice(1).replace(/_/g, ' ')}
+                  </SelectItem>
+                )}
                 {allCategories.map((cat) => (
                   <SelectItem key={cat} value={cat}>
                     {cat.charAt(0).toUpperCase() + cat.slice(1).replace(/_/g, ' ')}
                   </SelectItem>
                 ))}
-                {/* Ensure current category is always shown even if not in the fetched list */}
-                {medicineData.category && !allCategories.includes(medicineData.category) && (
-                  <SelectItem key={medicineData.category} value={medicineData.category}>
-                    {medicineData.category.charAt(0).toUpperCase() + medicineData.category.slice(1)}
-                  </SelectItem>
-                )}
               </SelectContent>
             </Select>
           </div>

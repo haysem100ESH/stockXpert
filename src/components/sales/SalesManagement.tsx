@@ -189,11 +189,17 @@ export default function SalesManagement() {
       const rawCustomers: {id: string; name: string; phone?: string | null; credit_score?: number; max_credit_limit?: number}[] = data || [];
       if (rawCustomers.length === 0) { setCustomers([]); return; }
 
-      // Compute debt per customer: sum(total_amount) - sum(amount_paid) from sales
+      // Compute debt per customer: sum(total_amount) - sum(amount_paid) from sales - sum(payments)
       const customerIds = rawCustomers.map(c => c.id);
       const { data: salesData } = await (supabase as any)
         .from('sales')
         .select('customer_id, total_amount, amount_paid')
+        .in('customer_id', customerIds);
+
+      // Fetch customer payments to subtract from debt
+      const { data: paymentsData } = await (supabase as any)
+        .from('customer_payments')
+        .select('customer_id, amount')
         .in('customer_id', customerIds);
 
       const debtMap: Record<string, number> = {};
@@ -201,6 +207,11 @@ export default function SalesManagement() {
         if (!sale.customer_id) continue;
         const owed = (Number(sale.total_amount) || 0) - (Number(sale.amount_paid) || 0);
         debtMap[sale.customer_id] = (debtMap[sale.customer_id] || 0) + owed;
+      }
+      // Subtract payments
+      for (const payment of paymentsData || []) {
+        if (!payment.customer_id) continue;
+        debtMap[payment.customer_id] = (debtMap[payment.customer_id] || 0) - (Number(payment.amount) || 0);
       }
 
       setCustomers(rawCustomers.map(c => ({
@@ -310,9 +321,9 @@ export default function SalesManagement() {
       } else {
         const pricePerStripe = item.selling_price / (item.units_per_pack || 1);
         const totalAvailableStripes = (item.stock_quantity * (item.units_per_pack || 1)) + (item.open_pack_units || 0);
-        // Use 0.5 step for strip delta adjustments to support decimals
-        const step = Math.abs(delta) === 1 ? (delta > 0 ? 0.5 : -0.5) : delta;
-        const newCount = parseFloat((Math.max(0.5, (item.stripesCount || 1) + step)).toFixed(4));
+        // Use 0.25 step for strip delta adjustments to support quarter quantities
+        const step = Math.abs(delta) === 1 ? (delta > 0 ? 0.25 : -0.25) : delta;
+        const newCount = parseFloat((Math.max(0.25, (item.stripesCount || 1) + step)).toFixed(4));
         if (newCount > totalAvailableStripes) return item;
         return { ...item, stripesCount: newCount, total: parseFloat((newCount * pricePerStripe).toFixed(2)) };
       }
@@ -408,6 +419,9 @@ export default function SalesManagement() {
       let extraProfit = 0;
       let finalChangeAction: string | null = null;
 
+      // Track whether we need to deduct from debt (handled separately, not via change_action)
+      let shouldDeductDebt = false;
+
       if (change > 0.001) {
         // Overpayment — handle change options
         if (changeAction === 'give_change') {
@@ -416,13 +430,16 @@ export default function SalesManagement() {
           finalChangeAction = 'give_change';
         } else if (changeAction === 'keep_profit') {
           if (keepChangeOption === 'deduct_debt' && customerHasDebt) {
+            // DB only allows 'keep_change' or 'give_change' — use 'give_change' and handle debt separately
             actualPaid = total;
             extraProfit = 0;
-            finalChangeAction = 'deduct_debt';
+            finalChangeAction = 'give_change';
+            shouldDeductDebt = true;
           } else {
+            // Tip / extra profit — map to 'keep_change'
             actualPaid = received;
             extraProfit = change;
-            finalChangeAction = 'keep_profit';
+            finalChangeAction = 'keep_change';
           }
         }
       } else if (underpaid > 0.001) {
@@ -549,9 +566,8 @@ export default function SalesManagement() {
         }
       }
 
-      // Handle debt deduction — recorded via a customer_payment entry instead of
-      // a non-existent current_debt column on the customers table
-      if (finalChangeAction === 'deduct_debt' && customerHasDebt && selectedCustomer) {
+      // Handle debt deduction — recorded via a customer_payment entry
+      if (shouldDeductDebt && customerHasDebt && selectedCustomer) {
         const deductAmount = Math.min(change, selectedCustomer.computed_debt || 0);
         await (supabase as any)
           .from('customer_payments')
@@ -583,7 +599,7 @@ export default function SalesManagement() {
       let successMessage = `Sale completed! Total: ETB ${total.toFixed(2)} via ${paymentMethod}.`;
       if (extraProfit > 0) successMessage += ` Extra profit: ETB ${extraProfit.toFixed(2)}.`;
       if (finalChangeAction === 'give_change') successMessage += ` Change given: ETB ${change.toFixed(2)}.`;
-      if (finalChangeAction === 'deduct_debt') successMessage += ` ETB ${change.toFixed(2)} deducted from customer debt.`;
+      if (shouldDeductDebt) successMessage += ` ETB ${Math.min(change, selectedCustomer?.computed_debt || 0).toFixed(2)} deducted from customer debt.`;
 
       toast({ title: 'Success', description: successMessage });
 

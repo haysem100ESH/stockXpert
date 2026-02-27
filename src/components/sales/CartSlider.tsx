@@ -200,8 +200,8 @@ export default function CartSlider({
                           {item.saleType === 'by_stripe' ? (
                             <input
                               type="number"
-                              step="0.5"
-                              min="0.5"
+                step="0.25"
+                min="0.25"
                               value={item.stripesCount ?? 1}
                               onChange={(e) => {
                                 const val = parseFloat(e.target.value);

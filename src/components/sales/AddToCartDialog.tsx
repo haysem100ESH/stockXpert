@@ -160,8 +160,8 @@ export default function AddToCartDialog({ open, onOpenChange, medicine, onAddToC
               <Input
                 id="stripes-count"
                 type="number"
-                step="0.5"
-                min="0.5"
+                step="0.25"
+                min="0.25"
                 max={totalAvailableStripes}
                 value={stripInputValue}
                 onChange={(e) => {
@@ -171,7 +171,7 @@ export default function AddToCartDialog({ open, onOpenChange, medicine, onAddToC
                 }}
                 onBlur={() => {
                   const val = parseFloat(stripInputValue);
-                  const clamped = isNaN(val) || val <= 0 ? 0.5 : Math.min(val, totalAvailableStripes);
+                  const clamped = isNaN(val) || val <= 0 ? 0.25 : Math.min(val, totalAvailableStripes);
                   setStripesCount(clamped);
                   setStripInputValue(String(clamped));
                 }}

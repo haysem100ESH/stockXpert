@@ -535,14 +535,13 @@ export default function StaffInventoryWithActions() {
         mode="general"
       />
 
-      {isPharmacy && (
-        <AddMedicineDialog
-          open={showReplicateDialog}
-          onOpenChange={setShowReplicateDialog}
-          onMedicineAdded={handleMedicineAdded}
-          replicateData={medicineToReplicate}
-        />
-      )}
+      <AddMedicineDialog
+        open={showReplicateDialog}
+        onOpenChange={setShowReplicateDialog}
+        onMedicineAdded={handleMedicineAdded}
+        replicateData={medicineToReplicate}
+        mode={isPharmacy ? 'pharmacy' : 'general'}
+      />
 
       {editingMedicine && (
         <EditMedicineDialog

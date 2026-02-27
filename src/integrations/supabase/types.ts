@@ -10,32 +10,155 @@ export type Database = {
   // Allows to automatically instantiate createClient with right options
   // instead of createClient<Database, { PostgrestVersion: 'XX' }>(URL, KEY)
   __InternalSupabase: {
-    PostgrestVersion: "13.0.5"
+    PostgrestVersion: "14.1"
   }
   public: {
     Tables: {
-      todos: {
+      credit_logs: {
         Row: {
-          completed: boolean
+          branch_id: string | null
+          change_amount: number
           created_at: string
+          created_by: string | null
+          customer_id: string
           id: string
-          title: string
+          new_score: number
+          notes: string | null
+          previous_score: number
+          reason: string
+        }
+        Insert: {
+          branch_id?: string | null
+          change_amount: number
+          created_at?: string
+          created_by?: string | null
+          customer_id: string
+          id?: string
+          new_score: number
+          notes?: string | null
+          previous_score: number
+          reason: string
+        }
+        Update: {
+          branch_id?: string | null
+          change_amount?: number
+          created_at?: string
+          created_by?: string | null
+          customer_id?: string
+          id?: string
+          new_score?: number
+          notes?: string | null
+          previous_score?: number
+          reason?: string
+        }
+        Relationships: []
+      }
+      gemini_api_keys: {
+        Row: {
+          api_key: string
+          created_at: string
+          exhausted_at: string | null
+          id: string
+          is_exhausted: boolean
+          label: string | null
+          last_used_at: string | null
+          request_count: number
+          updated_at: string
+          user_id: string | null
+        }
+        Insert: {
+          api_key: string
+          created_at?: string
+          exhausted_at?: string | null
+          id?: string
+          is_exhausted?: boolean
+          label?: string | null
+          last_used_at?: string | null
+          request_count?: number
+          updated_at?: string
+          user_id?: string | null
+        }
+        Update: {
+          api_key?: string
+          created_at?: string
+          exhausted_at?: string | null
+          id?: string
+          is_exhausted?: boolean
+          label?: string | null
+          last_used_at?: string | null
+          request_count?: number
+          updated_at?: string
+          user_id?: string | null
+        }
+        Relationships: []
+      }
+      ocr_tasks: {
+        Row: {
+          completed_at: string | null
+          created_at: string
+          error_message: string | null
+          extracted_text: string | null
+          file_name: string | null
+          id: string
+          image_data: string | null
+          image_url: string | null
+          queue_position: number | null
+          status: string
           updated_at: string
           user_id: string
         }
         Insert: {
-          completed?: boolean
+          completed_at?: string | null
           created_at?: string
+          error_message?: string | null
+          extracted_text?: string | null
+          file_name?: string | null
           id?: string
-          title: string
+          image_data?: string | null
+          image_url?: string | null
+          queue_position?: number | null
+          status?: string
           updated_at?: string
           user_id: string
         }
         Update: {
-          completed?: boolean
+          completed_at?: string | null
           created_at?: string
+          error_message?: string | null
+          extracted_text?: string | null
+          file_name?: string | null
           id?: string
-          title?: string
+          image_data?: string | null
+          image_url?: string | null
+          queue_position?: number | null
+          status?: string
+          updated_at?: string
+          user_id?: string
+        }
+        Relationships: []
+      }
+      profiles: {
+        Row: {
+          created_at: string
+          display_name: string | null
+          email: string | null
+          id: string
+          updated_at: string
+          user_id: string
+        }
+        Insert: {
+          created_at?: string
+          display_name?: string | null
+          email?: string | null
+          id?: string
+          updated_at?: string
+          user_id: string
+        }
+        Update: {
+          created_at?: string
+          display_name?: string | null
+          email?: string | null
+          id?: string
           updated_at?: string
           user_id?: string
         }
@@ -46,7 +169,7 @@ export type Database = {
       [_ in never]: never
     }
     Functions: {
-      [_ in never]: never
+      reset_exhausted_gemini_keys: { Args: never; Returns: undefined }
     }
     Enums: {
       [_ in never]: never
