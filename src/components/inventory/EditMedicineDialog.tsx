@@ -189,21 +189,29 @@ export default function EditMedicineDialog({
 
           <div className="space-y-2">
             <Label htmlFor="category">Category *</Label>
-            <Select value={medicineData.category || '__none__'} onValueChange={(value: any) => setMedicineData({ ...medicineData, category: value === '__none__' ? '' : value })}>
-              <SelectTrigger><SelectValue placeholder={categoriesLoading ? "Loading categories..." : "Select category"} /></SelectTrigger>
+            <Select 
+              key={`category-select-${medicineData.category}-${allCategories.length}`}
+              value={medicineData.category || undefined} 
+              onValueChange={(value: string) => setMedicineData({ ...medicineData, category: value })}
+            >
+              <SelectTrigger>
+                <SelectValue placeholder={categoriesLoading ? "Loading categories..." : "Select category"} />
+              </SelectTrigger>
               <SelectContent>
-                <SelectItem value="__none__">Select category</SelectItem>
-                {/* Always render current category so value is never unmatched */}
-                {medicineData.category && medicineData.category !== '__none__' && !allCategories.includes(medicineData.category) && (
-                  <SelectItem key={`current-${medicineData.category}`} value={medicineData.category}>
-                    {medicineData.category.charAt(0).toUpperCase() + medicineData.category.slice(1).replace(/_/g, ' ')}
-                  </SelectItem>
-                )}
-                {allCategories.map((cat) => (
-                  <SelectItem key={cat} value={cat}>
-                    {cat.charAt(0).toUpperCase() + cat.slice(1).replace(/_/g, ' ')}
-                  </SelectItem>
-                ))}
+                {/* Build complete list: merge allCategories + current category if missing */}
+                {(() => {
+                  const currentCat = medicineData.category;
+                  const displayList = [...allCategories];
+                  if (currentCat && !displayList.includes(currentCat)) {
+                    displayList.push(currentCat);
+                  }
+                  displayList.sort();
+                  return displayList.map((cat) => (
+                    <SelectItem key={cat} value={cat}>
+                      {cat.charAt(0).toUpperCase() + cat.slice(1).replace(/_/g, ' ')}
+                    </SelectItem>
+                  ));
+                })()}
               </SelectContent>
             </Select>
           </div>
