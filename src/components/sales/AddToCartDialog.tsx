@@ -15,6 +15,7 @@ interface Medicine {
   units_per_pack?: number;
   open_pack_units?: number;
   unit_label?: string;
+  item_type?: string;
 }
 
 interface AddToCartDialogProps {
@@ -25,16 +26,20 @@ interface AddToCartDialogProps {
 }
 
 export default function AddToCartDialog({ open, onOpenChange, medicine, onAddToCart }: AddToCartDialogProps) {
-  // Default to by_stripe if the medicine supports unit/strip selling
   const getDefaultSaleType = () => medicine?.units_per_pack ? 'by_stripe' : 'full_pack';
   const [saleType, setSaleType] = useState<'full_pack' | 'by_stripe'>(getDefaultSaleType());
   const [stripesCount, setStripesCount] = useState<number>(1);
   const [packQuantity, setPackQuantity] = useState<number>(1);
   const [stripInputValue, setStripInputValue] = useState<string>('1');
 
+  // Measurable dual input
+  const [measurableWhole, setMeasurableWhole] = useState<string>('1');
+  const [measurableDecimal, setMeasurableDecimal] = useState<string>('0');
+
   if (!medicine) return null;
 
-  const unitLabel = medicine.unit_label || 'unit';
+  const isMeasurable = medicine.item_type === 'measurable';
+  const unitLabel = medicine.unit_label || (isMeasurable ? 'kg' : 'unit');
   const unitLabelCap = unitLabel.charAt(0).toUpperCase() + unitLabel.slice(1);
   const pricePerStripe = medicine.units_per_pack
     ? (medicine.selling_price / medicine.units_per_pack).toFixed(2)
@@ -44,6 +49,13 @@ export default function AddToCartDialog({ open, onOpenChange, medicine, onAddToC
     ? (medicine.stock_quantity * medicine.units_per_pack) + (medicine.open_pack_units || 0)
     : 0;
 
+  const getMeasurableQuantity = () => {
+    const whole = parseInt(measurableWhole) || 0;
+    const padded = (measurableDecimal || '0').padEnd(2, '0').slice(0, 2);
+    const dec = parseInt(padded) / 100;
+    return parseFloat((whole + dec).toFixed(2));
+  };
+
   const handleSaleTypeChange = (val: 'full_pack' | 'by_stripe') => {
     setSaleType(val);
     setStripesCount(1);
@@ -51,25 +63,32 @@ export default function AddToCartDialog({ open, onOpenChange, medicine, onAddToC
     setPackQuantity(1);
   };
 
-  const handleAdd = () => {
-    const finalCount = saleType === 'by_stripe' ? stripesCount : packQuantity;
-    if (finalCount <= 0) return;
-    onAddToCart(medicine, saleType, finalCount);
-    onOpenChange(false);
+  const resetState = () => {
     setSaleType(getDefaultSaleType());
     setStripesCount(1);
     setStripInputValue('1');
     setPackQuantity(1);
+    setMeasurableWhole('1');
+    setMeasurableDecimal('0');
+  };
+
+  const handleAdd = () => {
+    if (isMeasurable) {
+      const qty = getMeasurableQuantity();
+      if (qty <= 0 || qty > medicine.stock_quantity) return;
+      onAddToCart(medicine, 'full_pack', qty);
+    } else {
+      const finalCount = saleType === 'by_stripe' ? stripesCount : packQuantity;
+      if (finalCount <= 0) return;
+      onAddToCart(medicine, saleType, finalCount);
+    }
+    onOpenChange(false);
+    resetState();
   };
 
   return (
     <Dialog open={open} onOpenChange={(v) => {
-      if (!v) {
-        setSaleType(getDefaultSaleType());
-        setStripesCount(1);
-        setStripInputValue('1');
-        setPackQuantity(1);
-      }
+      if (!v) resetState();
       onOpenChange(v);
     }}>
       <DialogContent className="sm:max-w-[425px]">
@@ -85,14 +104,16 @@ export default function AddToCartDialog({ open, onOpenChange, medicine, onAddToC
           {/* Info section */}
           <div className="space-y-2 bg-muted/40 rounded-lg p-3">
             <div className="flex justify-between text-sm">
-              <span>Full Pack Price:</span>
+              <span>{isMeasurable ? `Price per ${unitLabel}:` : 'Full Pack Price:'}</span>
               <span className="font-medium">ETB {medicine.selling_price}</span>
             </div>
             <div className="flex justify-between text-sm">
               <span>Available Stock:</span>
-              <Badge variant="secondary">{medicine.stock_quantity} packs</Badge>
+              <Badge variant="secondary">
+                {medicine.stock_quantity} {isMeasurable ? unitLabel : 'packs'}
+              </Badge>
             </div>
-            {medicine.units_per_pack && (
+            {!isMeasurable && medicine.units_per_pack && (
               <>
                 <div className="flex justify-between text-sm">
                   <span>{unitLabelCap}s Per Pack:</span>
@@ -116,70 +137,110 @@ export default function AddToCartDialog({ open, onOpenChange, medicine, onAddToC
             )}
           </div>
 
-          {/* Sale Type */}
-          <div className="space-y-2">
-            <Label htmlFor="sale-type">Sale Type</Label>
-            <Select value={saleType} onValueChange={(value: any) => handleSaleTypeChange(value)}>
-              <SelectTrigger id="sale-type">
-                <SelectValue />
-              </SelectTrigger>
-              <SelectContent>
-                <SelectItem value="full_pack">Full Pack</SelectItem>
-                {medicine.units_per_pack && (
-                  <SelectItem value="by_stripe">By {unitLabelCap}</SelectItem>
-                )}
-              </SelectContent>
-            </Select>
-            {medicine.units_per_pack && saleType === 'by_stripe' && (
-              <p className="text-xs text-primary font-medium">✓ Selling by individual {unitLabel}</p>
-            )}
-          </div>
-
-          {/* Quantity for full pack */}
-          {saleType === 'full_pack' && (
+          {/* Measurable items: dual input */}
+          {isMeasurable && (
             <div className="space-y-2">
-              <Label htmlFor="pack-quantity">Number of Packs</Label>
-              <Input
-                id="pack-quantity"
-                type="number"
-                min="1"
-                max={medicine.stock_quantity}
-                value={packQuantity}
-                onChange={(e) => setPackQuantity(Math.max(1, parseInt(e.target.value) || 1))}
-              />
+              <Label>Quantity ({unitLabel})</Label>
+              <div className="flex items-center gap-2">
+                <Input
+                  type="number"
+                  min="0"
+                  step="1"
+                  value={measurableWhole}
+                  onChange={(e) => setMeasurableWhole(e.target.value)}
+                  placeholder="Whole"
+                  className="flex-1"
+                />
+                <span className="text-lg font-bold">.</span>
+                <Input
+                  type="text"
+                  inputMode="numeric"
+                  maxLength={2}
+                  value={measurableDecimal}
+                  onChange={(e) => {
+                    const val = e.target.value.replace(/[^0-9]/g, '').slice(0, 2);
+                    setMeasurableDecimal(val);
+                  }}
+                  placeholder="00"
+                  className="w-20 text-center"
+                />
+                <span className="text-sm text-muted-foreground">{unitLabel}</span>
+              </div>
               <p className="text-sm text-muted-foreground">
-                Total: ETB {(packQuantity * medicine.selling_price).toFixed(2)}
+                Total: ETB {(getMeasurableQuantity() * medicine.selling_price).toFixed(2)}
               </p>
             </div>
           )}
 
-          {/* Quantity for by_stripe — supports decimals */}
-          {saleType === 'by_stripe' && medicine.units_per_pack && (
-            <div className="space-y-2">
-              <Label htmlFor="stripes-count">Number of {unitLabelCap}s</Label>
-              <Input
-                id="stripes-count"
-                type="number"
-                step="0.25"
-                min="0.25"
-                max={totalAvailableStripes}
-                value={stripInputValue}
-                onChange={(e) => {
-                  setStripInputValue(e.target.value);
-                  const val = parseFloat(e.target.value);
-                  if (!isNaN(val) && val > 0) setStripesCount(val);
-                }}
-                onBlur={() => {
-                  const val = parseFloat(stripInputValue);
-                  const clamped = isNaN(val) || val <= 0 ? 0.25 : Math.min(val, totalAvailableStripes);
-                  setStripesCount(clamped);
-                  setStripInputValue(String(clamped));
-                }}
-              />
-              <p className="text-sm text-muted-foreground">
-                Total: ETB {(stripesCount * parseFloat(pricePerStripe)).toFixed(2)}
-              </p>
-            </div>
+          {/* Non-measurable: Sale Type */}
+          {!isMeasurable && (
+            <>
+              <div className="space-y-2">
+                <Label htmlFor="sale-type">Sale Type</Label>
+                <Select value={saleType} onValueChange={(value: any) => handleSaleTypeChange(value)}>
+                  <SelectTrigger id="sale-type">
+                    <SelectValue />
+                  </SelectTrigger>
+                  <SelectContent>
+                    <SelectItem value="full_pack">Full Pack</SelectItem>
+                    {medicine.units_per_pack && (
+                      <SelectItem value="by_stripe">By {unitLabelCap}</SelectItem>
+                    )}
+                  </SelectContent>
+                </Select>
+                {medicine.units_per_pack && saleType === 'by_stripe' && (
+                  <p className="text-xs text-primary font-medium">✓ Selling by individual {unitLabel}</p>
+                )}
+              </div>
+
+              {/* Quantity for full pack — integer only */}
+              {saleType === 'full_pack' && (
+                <div className="space-y-2">
+                  <Label htmlFor="pack-quantity">Number of Packs</Label>
+                  <Input
+                    id="pack-quantity"
+                    type="number"
+                    min="1"
+                    step="1"
+                    max={medicine.stock_quantity}
+                    value={packQuantity}
+                    onChange={(e) => setPackQuantity(Math.max(1, parseInt(e.target.value) || 1))}
+                  />
+                  <p className="text-sm text-muted-foreground">
+                    Total: ETB {(packQuantity * medicine.selling_price).toFixed(2)}
+                  </p>
+                </div>
+              )}
+
+              {/* Quantity for by_stripe — integer only for full_pcs */}
+              {saleType === 'by_stripe' && medicine.units_per_pack && (
+                <div className="space-y-2">
+                  <Label htmlFor="stripes-count">Number of {unitLabelCap}s</Label>
+                  <Input
+                    id="stripes-count"
+                    type="number"
+                    step="1"
+                    min="1"
+                    max={totalAvailableStripes}
+                    value={stripInputValue}
+                    onChange={(e) => {
+                      setStripInputValue(e.target.value);
+                      const val = parseInt(e.target.value);
+                      if (!isNaN(val) && val > 0) setStripesCount(val);
+                    }}
+                    onBlur={() => {
+                      const val = parseInt(stripInputValue);
+                      const clamped = isNaN(val) || val <= 0 ? 1 : Math.min(val, totalAvailableStripes);
+                      setStripesCount(clamped);
+                      setStripInputValue(String(clamped));
+                    }}
+                  />
+                  <p className="text-sm text-muted-foreground">
+                    Total: ETB {(stripesCount * parseFloat(pricePerStripe)).toFixed(2)}
+                  </p>
+                </div>
+              )}
+            </>
           )}
 
           <div className="flex gap-2 pt-2">

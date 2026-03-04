@@ -12,6 +12,7 @@ import { useAuth } from '@/hooks/useAuth';
 import { useBranchContext } from '@/hooks/useBranchContext';
 import { ConfirmationDialog } from '@/components/ui/confirmation-dialog';
 import CartSlider from './CartSlider';
+import AddToCartDialog from './AddToCartDialog';
 import { useIsMobile } from '@/hooks/use-mobile';
 import { updateCreditScore } from '@/hooks/useCreditScore';
 
@@ -26,6 +27,7 @@ interface Medicine {
   units_per_pack?: number;
   open_pack_units?: number;
   unit_label?: string;
+  item_type?: string;
 }
 
 interface CartItem extends Medicine {
@@ -56,6 +58,7 @@ export default function SalesManagement() {
   const [changeAction, setChangeAction] = useState<ChangeAction>(null);
   const [keepChangeOption, setKeepChangeOption] = useState<'profit' | 'deduct_debt'>('profit');
   const [cartOpen, setCartOpen] = useState(false);
+  const [selectedMedicineForDialog, setSelectedMedicineForDialog] = useState<Medicine | null>(null);
 
   const { profile } = useAuth();
   const { toast } = useToast();
@@ -127,7 +130,7 @@ export default function SalesManagement() {
 
       let query = (supabase as any)
         .from('medicines')
-        .select('id, name, generic_name, selling_price, stock_quantity, category, expiry_date, units_per_pack, open_pack_units, unit_label')
+        .select('id, name, generic_name, selling_price, stock_quantity, category, expiry_date, units_per_pack, open_pack_units, unit_label, item_type')
         .or('stock_quantity.gt.0,open_pack_units.gt.0')
         .order('name');
       if (selectedBranch) {
@@ -243,8 +246,14 @@ export default function SalesManagement() {
     return expiry <= thirtyDaysFromNow;
   };
 
-  // Instant add — no dialog, defaults to strip if available
+  // Instant add — no dialog for full_pcs, open dialog for measurable
   const addToCartInstant = (medicine: Medicine) => {
+    if (medicine.item_type === 'measurable') {
+      // For measurable items, we need the dialog for structured input
+      // We'll use AddToCartDialog — set state to open it
+      setSelectedMedicineForDialog(medicine);
+      return;
+    }
     const defaultSaleType: 'full_pack' | 'by_stripe' = medicine.units_per_pack ? 'by_stripe' : 'full_pack';
     addToCart(medicine, defaultSaleType, 1);
     if (isSmallScreen) setCartOpen(true);
@@ -831,6 +840,13 @@ export default function SalesManagement() {
         processing={processing}
         onCheckout={handleCheckout}
         creditCheck={creditCheck}
+      />
+
+      <AddToCartDialog
+        open={!!selectedMedicineForDialog}
+        onOpenChange={(v) => { if (!v) setSelectedMedicineForDialog(null); }}
+        medicine={selectedMedicineForDialog}
+        onAddToCart={addToCart}
       />
 
       <ConfirmationDialog

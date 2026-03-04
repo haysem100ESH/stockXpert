@@ -322,6 +322,7 @@ export default function MedicineTransfer({ onTransferComplete }: MedicineTransfe
         });
       } else {
         // No match found - create new medicine record in destination branch
+        // Duplicate ALL properties from the source item
         const { error: insertError } = await supabase
           .from('medicines')
           .insert({
@@ -337,6 +338,10 @@ export default function MedicineTransfer({ onTransferComplete }: MedicineTransfe
             minimum_stock_level: sourceMedDetails.minimum_stock_level,
             expiry_alert_enabled: sourceMedDetails.expiry_alert_enabled,
             supplier_id: sourceMedDetails.supplier_id,
+            units_per_pack: sourceMedDetails.units_per_pack,
+            unit_label: sourceMedDetails.unit_label,
+            open_pack_units: 0,
+            item_type: sourceMedDetails.item_type || 'full_pcs',
             branch_id: toBranch,
             stock_quantity: transferQty,
             created_by: user.id,
