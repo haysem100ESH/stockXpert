@@ -318,9 +318,13 @@ export default function SalesManagement() {
       } else {
         const pricePerStripe = item.selling_price / (item.units_per_pack || 1);
         const totalAvailableStripes = (item.stock_quantity * (item.units_per_pack || 1)) + (item.open_pack_units || 0);
-        // Use 0.25 step for strip delta adjustments to support quarter quantities
-        const step = Math.abs(delta) === 1 ? (delta > 0 ? 0.25 : -0.25) : delta;
-        const newCount = parseFloat((Math.max(0.25, (item.stripesCount || 1) + step)).toFixed(4));
+        // For countable (full_pcs) items, always increment by 1; for measurable, use fractional step
+        const isMeasurableItem = item.item_type === 'measurable';
+        const step = isMeasurableItem
+          ? (Math.abs(delta) === 1 ? (delta > 0 ? 0.25 : -0.25) : delta)
+          : delta;
+        const minStep = isMeasurableItem ? 0.25 : 1;
+        const newCount = parseFloat((Math.max(minStep, (item.stripesCount || 1) + step)).toFixed(4));
         if (newCount > totalAvailableStripes) return item;
         return { ...item, stripesCount: newCount, total: parseFloat((newCount * pricePerStripe).toFixed(2)) };
       }
