@@ -15,6 +15,7 @@ import CartSlider from './CartSlider';
 import AddToCartDialog from './AddToCartDialog';
 import { useIsMobile } from '@/hooks/use-mobile';
 import { updateCreditScore } from '@/hooks/useCreditScore';
+import { isMeasurable } from '@/lib/itemTypes';
 
 interface Medicine {
   id: string;
@@ -192,29 +193,16 @@ export default function SalesManagement() {
       const rawCustomers: {id: string; name: string; phone?: string | null; credit_score?: number; max_credit_limit?: number}[] = data || [];
       if (rawCustomers.length === 0) { setCustomers([]); return; }
 
-      // Compute debt per customer: sum(total_amount) - sum(amount_paid) from sales - sum(payments)
+      // Fetch debt from customer_credits table for fast lookup
       const customerIds = rawCustomers.map(c => c.id);
-      const { data: salesData } = await (supabase as any)
-        .from('sales')
-        .select('customer_id, total_amount, amount_paid')
-        .in('customer_id', customerIds);
-
-      // Fetch customer payments to subtract from debt
-      const { data: paymentsData } = await (supabase as any)
-        .from('customer_payments')
-        .select('customer_id, amount')
+      const { data: creditsData } = await (supabase as any)
+        .from('customer_credits')
+        .select('customer_id, total_debt')
         .in('customer_id', customerIds);
 
       const debtMap: Record<string, number> = {};
-      for (const sale of salesData || []) {
-        if (!sale.customer_id) continue;
-        const owed = (Number(sale.total_amount) || 0) - (Number(sale.amount_paid) || 0);
-        debtMap[sale.customer_id] = (debtMap[sale.customer_id] || 0) + owed;
-      }
-      // Subtract payments
-      for (const payment of paymentsData || []) {
-        if (!payment.customer_id) continue;
-        debtMap[payment.customer_id] = (debtMap[payment.customer_id] || 0) - (Number(payment.amount) || 0);
+      for (const credit of creditsData || []) {
+        debtMap[credit.customer_id] = Math.max(0, Number(credit.total_debt) || 0);
       }
 
       setCustomers(rawCustomers.map(c => ({
@@ -330,11 +318,39 @@ export default function SalesManagement() {
       } else {
         const pricePerStripe = item.selling_price / (item.units_per_pack || 1);
         const totalAvailableStripes = (item.stock_quantity * (item.units_per_pack || 1)) + (item.open_pack_units || 0);
-        // Use 0.25 step for strip delta adjustments to support quarter quantities
-        const step = Math.abs(delta) === 1 ? (delta > 0 ? 0.25 : -0.25) : delta;
-        const newCount = parseFloat((Math.max(0.25, (item.stripesCount || 1) + step)).toFixed(4));
+        // For countable strip items, quantity must always be whole numbers.
+        // Measurable items can still use fractional strip quantities.
+        const isMeasurableItem = item.item_type === 'measurable' || isMeasurable(item.unit_label);
+        const currentCount = item.stripesCount || 1;
+
+        let newCount: number;
+        if (isMeasurableItem) {
+          const step = Math.abs(delta) === 1 ? (delta > 0 ? 0.25 : -0.25) : delta;
+          newCount = parseFloat((Math.max(0.25, currentCount + step)).toFixed(4));
+        } else {
+          const integerDelta = Number.isInteger(delta) ? delta : Math.round(delta);
+          newCount = Math.max(1, Math.round(currentCount + integerDelta));
+        }
+
         if (newCount > totalAvailableStripes) return item;
         return { ...item, stripesCount: newCount, total: parseFloat((newCount * pricePerStripe).toFixed(2)) };
+      }
+    }));
+  };
+
+  const setMeasurableQuantity = (id: string, quantity: number) => {
+    setCart(prev => prev.map(item => {
+      if (item.id !== id) return item;
+      // Measurable items use full_pack saleType with decimal quantity
+      if (item.saleType === 'full_pack') {
+        if (quantity > item.stock_quantity) return item;
+        return { ...item, quantity, total: parseFloat((quantity * item.selling_price).toFixed(2)) };
+      } else {
+        // by_stripe measurable
+        const pricePerStripe = item.selling_price / (item.units_per_pack || 1);
+        const totalAvailable = (item.stock_quantity * (item.units_per_pack || 1)) + (item.open_pack_units || 0);
+        if (quantity > totalAvailable) return item;
+        return { ...item, stripesCount: quantity, total: parseFloat((quantity * pricePerStripe).toFixed(2)) };
       }
     }));
   };
@@ -506,20 +522,28 @@ export default function SalesManagement() {
       }
       saleData = saleResult.data;
 
-      // stripes_sold DB column is INTEGER — store as thousandths of a strip (×1000)
-      // so 1.5 strips → 1500, 2.25 → 2250. Divide by 1000 when reading back.
-      // This preserves decimal precision within the integer column constraint.
-      const saleItems = cart.map(item => ({
-        sale_id: saleData.id,
-        medicine_id: item.id,
-        quantity: item.saleType === 'full_pack' ? Number(item.quantity) : 0,
-        unit_price: Number(item.selling_price),
-        total_price: Number(item.total.toFixed(2)),
-        sale_type: item.saleType,
-        stripes_sold: item.saleType === 'by_stripe' && item.stripesCount != null
-          ? Math.round(item.stripesCount * 1000)
-          : null,
-      }));
+      // Keep compatibility with both legacy (stripes_sold) and current
+      // strip/pack quantity columns used by debtor and finance views.
+      const saleItems = cart.map(item => {
+        const isByStripe = item.saleType === 'by_stripe';
+        const isMeasurableItem = item.item_type === 'measurable' || isMeasurable(item.unit_label);
+        const stripeQty = Number(item.stripesCount || 0);
+        const packQty = Number(item.quantity || 0);
+
+        return {
+          sale_id: saleData.id,
+          medicine_id: item.id,
+          quantity: isByStripe ? Number(stripeQty.toFixed(4)) : Number(packQty),
+          unit_price: Number(item.selling_price),
+          total_price: Number(item.total.toFixed(2)),
+          sale_type: item.saleType,
+          strip_quantity: isByStripe && !isMeasurableItem ? Math.max(0, Math.round(stripeQty)) : 0,
+          pack_quantity: !isByStripe && !isMeasurableItem ? Math.max(0, Math.round(packQty)) : 0,
+          stripes_sold: isByStripe && stripeQty > 0
+            ? Math.round(stripeQty * 1000)
+            : null,
+        };
+      });
 
       const { error: itemsError } = await (supabase as any).from('sale_items').insert(saleItems);
       if (itemsError) {
@@ -578,7 +602,7 @@ export default function SalesManagement() {
       // Handle debt deduction — recorded via a customer_payment entry
       if (shouldDeductDebt && customerHasDebt && selectedCustomer) {
         const deductAmount = Math.min(change, selectedCustomer.computed_debt || 0);
-        await (supabase as any)
+        const { data: deductPayment } = await (supabase as any)
           .from('customer_payments')
           .insert([{
             customer_id: selectedCustomer.id,
@@ -587,11 +611,80 @@ export default function SalesManagement() {
             notes: 'Auto-deducted from change',
             branch_id: selectedBranch ?? profile?.branch_id ?? null,
             created_by: profile?.id ?? null,
-          }]);
+          }])
+          .select('id')
+          .single();
+
+        // Update customer_credits for debt deduction
+        const { data: existingCredit } = await (supabase as any)
+          .from('customer_credits')
+          .select('id, total_debt')
+          .eq('customer_id', selectedCustomer.id)
+          .single();
+
+        if (existingCredit) {
+          const prevBal = Number(existingCredit.total_debt);
+          const newBal = Math.max(0, prevBal - deductAmount);
+          await (supabase as any).from('customer_credits').update({ total_debt: newBal, last_updated: new Date().toISOString() }).eq('id', existingCredit.id);
+          await (supabase as any).from('customer_credit_transactions').insert({
+            customer_id: selectedCustomer.id,
+            branch_id: selectedBranch ?? profile?.branch_id ?? null,
+            transaction_type: 'payment',
+            amount: deductAmount,
+            previous_balance: prevBal,
+            new_balance: newBal,
+            payment_id: deductPayment?.id ?? null,
+            notes: 'Auto-deducted from change',
+            created_by: profile?.id ?? null,
+          });
+        }
       }
 
-      // Auto credit score: penalize for debt sale (underpaid)
+      // Update customer_credits for credit sale (underpaid)
       if (selectedCustomerId !== 'none' && underpaid > 0.001) {
+        const branchId = selectedBranch ?? profile?.branch_id ?? null;
+        const { data: existingCredit } = await (supabase as any)
+          .from('customer_credits')
+          .select('id, total_debt')
+          .eq('customer_id', selectedCustomerId)
+          .single();
+
+        if (existingCredit) {
+          const prevBal = Number(existingCredit.total_debt);
+          const newBal = prevBal + underpaid;
+          await (supabase as any).from('customer_credits').update({ total_debt: newBal, last_updated: new Date().toISOString() }).eq('id', existingCredit.id);
+          await (supabase as any).from('customer_credit_transactions').insert({
+            customer_id: selectedCustomerId,
+            branch_id: branchId,
+            transaction_type: 'sale_credit',
+            amount: underpaid,
+            previous_balance: prevBal,
+            new_balance: newBal,
+            sale_id: saleData.id,
+            notes: null,
+            created_by: profile?.id ?? null,
+          });
+        } else {
+          // Create new customer_credits record
+          await (supabase as any).from('customer_credits').insert({
+            customer_id: selectedCustomerId,
+            branch_id: branchId,
+            total_debt: underpaid,
+          });
+          await (supabase as any).from('customer_credit_transactions').insert({
+            customer_id: selectedCustomerId,
+            branch_id: branchId,
+            transaction_type: 'sale_credit',
+            amount: underpaid,
+            previous_balance: 0,
+            new_balance: underpaid,
+            sale_id: saleData.id,
+            notes: null,
+            created_by: profile?.id ?? null,
+          });
+        }
+
+        // Auto credit score: penalize for debt sale
         const cust = customers.find(c => c.id === selectedCustomerId);
         if (cust) {
           await updateCreditScore({
@@ -704,13 +797,17 @@ export default function SalesManagement() {
                     <CardTitle className="text-base">{medicine.name}</CardTitle>
                     {medicine.generic_name && <CardDescription>{medicine.generic_name}</CardDescription>}
                   </div>
-                  <div className="flex flex-col gap-1 items-end">
+                   <div className="flex flex-col gap-1 items-end">
                     {medicine.category && <Badge variant="outline" className="text-xs">{medicine.category}</Badge>}
-                    {medicine.units_per_pack && (
+                    {isMeasurable(medicine.unit_label) ? (
+                      <Badge variant="secondary" className="text-xs">
+                        Measurable ({medicine.unit_label})
+                      </Badge>
+                    ) : medicine.units_per_pack ? (
                       <Badge variant="secondary" className="text-xs">
                         By {medicine.unit_label || 'unit'}
                       </Badge>
-                    )}
+                    ) : null}
                   </div>
                 </div>
               </CardHeader>
@@ -727,12 +824,14 @@ export default function SalesManagement() {
                     </div>
                   )}
                   <div className="flex justify-between text-sm">
-                    <span>{medicine.units_per_pack ? 'Unopened Packs:' : 'Stock:'}</span>
+                    <span>{isMeasurable(medicine.unit_label) ? 'Stock:' : medicine.units_per_pack ? 'Unopened Packs:' : 'Stock:'}</span>
                     <Badge variant={medicine.stock_quantity <= 10 ? 'destructive' : 'secondary'}>
-                      {medicine.stock_quantity} {medicine.stock_quantity === 1 ? 'pack' : 'packs'}
+                      {isMeasurable(medicine.unit_label)
+                        ? `${medicine.stock_quantity + ((medicine.open_pack_units || 0) / 1000)} ${medicine.unit_label}`
+                        : `${medicine.stock_quantity} ${medicine.stock_quantity === 1 ? 'pack' : 'packs'}`}
                     </Badge>
                   </div>
-                  {medicine.units_per_pack && (
+                  {!isMeasurable(medicine.unit_label) && medicine.units_per_pack && (
                     <div className="flex justify-between text-sm text-muted-foreground">
                       <span>Open pack:</span>
                       <Badge variant="outline" className="text-xs">
@@ -840,6 +939,7 @@ export default function SalesManagement() {
         processing={processing}
         onCheckout={handleCheckout}
         creditCheck={creditCheck}
+        onSetMeasurableQuantity={setMeasurableQuantity}
       />
 
       <AddToCartDialog

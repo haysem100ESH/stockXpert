@@ -10,6 +10,7 @@ import { supabase } from '@/lib/db';
 import { useToast } from '@/hooks/use-toast';
 import { useBranchContext } from '@/hooks/useBranchContext';
 import { useCustomCategories } from '@/hooks/useCustomCategories';
+import { MEASURABLE_UNIT_OPTIONS } from '@/lib/itemTypes';
 
 interface Medicine {
   id: string;
@@ -25,6 +26,7 @@ interface Medicine {
   minimum_stock_level: number;
   expiry_date?: string;
   expiry_alert_enabled?: boolean;
+  unit_label?: string;
 }
 
 interface AddMedicineDialogProps {
@@ -41,6 +43,7 @@ export default function AddMedicineDialog({ open, onOpenChange, onMedicineAdded,
   const [branches, setBranches] = useState<Array<{ id: string; name: string }>>([]);
   const [selectedBranchId, setSelectedBranchId] = useState<string>('');
   const [itemType, setItemType] = useState<'full_pcs' | 'measurable'>('full_pcs');
+  const [measurableUnit, setMeasurableUnit] = useState<string>('kg');
   const { toast } = useToast();
   const { selectedBranch, userBranch } = useBranchContext();
   const { categories } = useCustomCategories(isGeneral ? 'general' : 'pharmacy');
@@ -50,6 +53,19 @@ export default function AddMedicineDialog({ open, onOpenChange, onMedicineAdded,
     : { item: 'Medicine', genericName: 'Generic Name', manufacturer: 'Manufacturer', success: 'Medicine added successfully', fail: 'Failed to add medicine' };
   
   const [userRole, setUserRole] = useState<'owner' | 'staff' | null>(null);
+
+  // Infer item type from replicateData
+  useEffect(() => {
+    if (replicateData?.unit_label) {
+      const isMeasUnit = MEASURABLE_UNIT_OPTIONS.some(o => o.value === replicateData.unit_label?.toLowerCase());
+      if (isMeasUnit) {
+        setItemType('measurable');
+        setMeasurableUnit(replicateData.unit_label.toLowerCase());
+      } else {
+        setItemType('full_pcs');
+      }
+    }
+  }, [replicateData]);
   
   useEffect(() => {
     const fetchUserRoleAndBranches = async () => {
@@ -64,7 +80,6 @@ export default function AddMedicineDialog({ open, onOpenChange, onMedicineAdded,
       
       if (profile) {
         setUserRole(profile.role as 'owner' | 'staff');
-        
         if (profile.role === 'owner') {
           const { data: branchesData } = await supabase
             .from('pharmacy_branches')
@@ -98,13 +113,13 @@ export default function AddMedicineDialog({ open, onOpenChange, onMedicineAdded,
     setLoading(true);
 
     const formData = new FormData(e.currentTarget);
-    
     const { data: { user } } = await supabase.auth.getUser();
     
-    const unitsPerPackValue = formData.get('units_per_pack') as string;
-    const unitsPerPack = unitsPerPackValue ? parseInt(unitsPerPackValue) : null;
-
     const selectedCategory = (formData.get('category') as string) || 'other';
+
+    const unitLabel = itemType === 'measurable' ? measurableUnit : (formData.get('unit_label') as string || 'strip');
+    const unitsPerPackValue = formData.get('units_per_pack') as string;
+    const unitsPerPack = itemType === 'full_pcs' && unitsPerPackValue ? parseInt(unitsPerPackValue) : null;
     
     const stockQtyRaw = formData.get('stock_quantity') as string;
     const stockQuantity = itemType === 'measurable' ? parseFloat(stockQtyRaw) : parseInt(stockQtyRaw);
@@ -120,8 +135,8 @@ export default function AddMedicineDialog({ open, onOpenChange, onMedicineAdded,
       selling_price: parseFloat(formData.get('selling_price') as string),
       stock_quantity: stockQuantity,
       minimum_stock_level: parseInt(formData.get('minimum_stock_level') as string),
-      units_per_pack: itemType === 'full_pcs' ? unitsPerPack : null,
-      unit_label: formData.get('unit_label') as string || (itemType === 'measurable' ? 'kg' : 'strip'),
+      units_per_pack: unitsPerPack,
+      unit_label: unitLabel,
       open_pack_units: 0,
       expiry_date: formData.get('expiry_date') as string || null,
       expiry_alert_enabled: formData.get('expiry_alert_enabled') === 'on',
@@ -246,12 +261,12 @@ export default function AddMedicineDialog({ open, onOpenChange, onMedicineAdded,
             </div>
 
             <div className="space-y-2">
-              <Label htmlFor="selling_price">Selling Price *</Label>
+              <Label htmlFor="selling_price">Selling Price {itemType === 'measurable' ? `per ${measurableUnit}` : ''} *</Label>
               <Input id="selling_price" name="selling_price" type="number" step="0.01" min="0" defaultValue={replicateData?.selling_price} required />
             </div>
 
             <div className="space-y-2">
-              <Label htmlFor="stock_quantity">Stock Quantity *</Label>
+              <Label htmlFor="stock_quantity">Stock Quantity {itemType === 'measurable' ? `(${measurableUnit})` : ''} *</Label>
               <Input
                 id="stock_quantity"
                 name="stock_quantity"
@@ -268,32 +283,35 @@ export default function AddMedicineDialog({ open, onOpenChange, onMedicineAdded,
               <Input id="minimum_stock_level" name="minimum_stock_level" type="number" min="0" defaultValue={replicateData ? replicateData.minimum_stock_level : 10} required />
             </div>
 
-            <div className="space-y-2">
-              <Label htmlFor="unit_label">Unit Label</Label>
-              {itemType === 'measurable' ? (
-                <Select name="unit_label" defaultValue="kg">
+            {/* Measurable unit selector */}
+            {itemType === 'measurable' && (
+              <div className="space-y-2">
+                <Label>Measurement Unit *</Label>
+                <Select value={measurableUnit} onValueChange={setMeasurableUnit}>
                   <SelectTrigger>
-                    <SelectValue placeholder="Select unit" />
+                    <SelectValue />
                   </SelectTrigger>
                   <SelectContent>
-                    <SelectItem value="kg">Kilogram (kg)</SelectItem>
-                    <SelectItem value="g">Gram (g)</SelectItem>
-                    <SelectItem value="liter">Liter (L)</SelectItem>
-                    <SelectItem value="ml">Milliliter (mL)</SelectItem>
-                    <SelectItem value="meter">Meter (m)</SelectItem>
-                    <SelectItem value="cm">Centimeter (cm)</SelectItem>
+                    {MEASURABLE_UNIT_OPTIONS.map((opt) => (
+                      <SelectItem key={opt.value} value={opt.value}>{opt.label}</SelectItem>
+                    ))}
                   </SelectContent>
                 </Select>
-              ) : (
-                <Input id="unit_label" name="unit_label" placeholder="e.g. strip, piece, bottle" defaultValue="strip" />
-              )}
-            </div>
-
-            {itemType === 'full_pcs' && (
-              <div className="space-y-2">
-                <Label htmlFor="units_per_pack">Units Per Stock</Label>
-                <Input id="units_per_pack" name="units_per_pack" type="number" min="1" placeholder="Leave empty if not sold by unit" />
               </div>
+            )}
+
+            {/* Unit Label & Units Per Pack — only for Full PCS */}
+            {itemType === 'full_pcs' && (
+              <>
+                <div className="space-y-2">
+                  <Label htmlFor="unit_label">Unit Label</Label>
+                  <Input id="unit_label" name="unit_label" placeholder="e.g. strip, piece, bottle" defaultValue="strip" />
+                </div>
+                <div className="space-y-2">
+                  <Label htmlFor="units_per_pack">Units Per Stock</Label>
+                  <Input id="units_per_pack" name="units_per_pack" type="number" min="1" placeholder="Leave empty if not sold by unit" />
+                </div>
+              </>
             )}
 
             <div className="space-y-2">

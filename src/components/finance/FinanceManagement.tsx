@@ -385,8 +385,7 @@ export default function FinanceManagement() {
           }
           if (item.sale_type === 'by_stripe') {
             const rawStripes = item.stripes_sold || item.quantity || 0;
-            // stripes_sold is stored in thousandths in DB — convert to actual units
-            existing.totalStripes += rawStripes >= 1000 ? rawStripes / 1000 : rawStripes;
+            existing.totalStripes += rawStripes >= 100 ? rawStripes / 1000 : rawStripes;
           } else {
             existing.totalQuantity += item.quantity || 0;
           }
@@ -414,7 +413,7 @@ export default function FinanceManagement() {
         const relevantItems = sale.sale_items?.filter(si => si.medicines?.name === selectedItem) || [];
         const itemQty = relevantItems.filter(si => si.sale_type !== 'by_stripe').reduce((sum, si) => sum + (si.quantity || 0), 0);
         const itemStripesRaw = relevantItems.filter(si => si.sale_type === 'by_stripe').reduce((sum, si) => sum + (si.stripes_sold || si.quantity || 0), 0);
-        const itemStripes = itemStripesRaw >= 1000 ? itemStripesRaw / 1000 : itemStripesRaw;
+        const itemStripes = itemStripesRaw >= 100 ? itemStripesRaw / 1000 : itemStripesRaw;
         const itemTotal = relevantItems.reduce((sum, si) => sum + Number(si.total_price || 0), 0);
         return { ...sale, itemQty, itemStripes, itemTotal, unitLabel, unitsPerPack };
       })

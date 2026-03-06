@@ -322,26 +322,16 @@ export default function MedicineTransfer({ onTransferComplete }: MedicineTransfe
         });
       } else {
         // No match found - create new medicine record in destination branch
-        // Duplicate ALL properties from the source item
+        // Duplicate ALL properties from source medicine
+        const {
+          id: _id, created_at: _ca, updated_at: _ua, branch_id: _bid,
+          ...sourceProps
+        } = sourceMedDetails;
+
         const { error: insertError } = await supabase
           .from('medicines')
           .insert({
-            name: sourceMedDetails.name,
-            generic_name: sourceMedDetails.generic_name,
-            manufacturer: sourceMedDetails.manufacturer,
-            batch_number: sourceMedDetails.batch_number,
-            country_name: sourceMedDetails.country_name,
-            category: sourceMedDetails.category,
-            purchase_price: sourceMedDetails.purchase_price,
-            selling_price: sourceMedDetails.selling_price,
-            expiry_date: sourceMedDetails.expiry_date,
-            minimum_stock_level: sourceMedDetails.minimum_stock_level,
-            expiry_alert_enabled: sourceMedDetails.expiry_alert_enabled,
-            supplier_id: sourceMedDetails.supplier_id,
-            units_per_pack: sourceMedDetails.units_per_pack,
-            unit_label: sourceMedDetails.unit_label,
-            open_pack_units: 0,
-            item_type: sourceMedDetails.item_type || 'full_pcs',
+            ...sourceProps,
             branch_id: toBranch,
             stock_quantity: transferQty,
             created_by: user.id,

@@ -31,15 +31,13 @@ export default function AddToCartDialog({ open, onOpenChange, medicine, onAddToC
   const [stripesCount, setStripesCount] = useState<number>(1);
   const [packQuantity, setPackQuantity] = useState<number>(1);
   const [stripInputValue, setStripInputValue] = useState<string>('1');
-
-  // Measurable dual input
   const [measurableWhole, setMeasurableWhole] = useState<string>('1');
   const [measurableDecimal, setMeasurableDecimal] = useState<string>('0');
 
   if (!medicine) return null;
 
-  const isMeasurable = medicine.item_type === 'measurable';
-  const unitLabel = medicine.unit_label || (isMeasurable ? 'kg' : 'unit');
+  const isMeasurableItem = medicine.item_type === 'measurable';
+  const unitLabel = medicine.unit_label || (isMeasurableItem ? 'kg' : 'unit');
   const unitLabelCap = unitLabel.charAt(0).toUpperCase() + unitLabel.slice(1);
   const pricePerStripe = medicine.units_per_pack
     ? (medicine.selling_price / medicine.units_per_pack).toFixed(2)
@@ -73,7 +71,7 @@ export default function AddToCartDialog({ open, onOpenChange, medicine, onAddToC
   };
 
   const handleAdd = () => {
-    if (isMeasurable) {
+    if (isMeasurableItem) {
       const qty = getMeasurableQuantity();
       if (qty <= 0 || qty > medicine.stock_quantity) return;
       onAddToCart(medicine, 'full_pack', qty);
@@ -97,6 +95,7 @@ export default function AddToCartDialog({ open, onOpenChange, medicine, onAddToC
           <DialogDescription>
             {medicine.name}
             {medicine.generic_name && ` (${medicine.generic_name})`}
+            {isMeasurableItem && <Badge variant="secondary" className="ml-2">Measurable</Badge>}
           </DialogDescription>
         </DialogHeader>
 
@@ -104,16 +103,16 @@ export default function AddToCartDialog({ open, onOpenChange, medicine, onAddToC
           {/* Info section */}
           <div className="space-y-2 bg-muted/40 rounded-lg p-3">
             <div className="flex justify-between text-sm">
-              <span>{isMeasurable ? `Price per ${unitLabel}:` : 'Full Pack Price:'}</span>
+              <span>{isMeasurableItem ? `Price per ${unitLabel}:` : 'Full Pack Price:'}</span>
               <span className="font-medium">ETB {medicine.selling_price}</span>
             </div>
             <div className="flex justify-between text-sm">
               <span>Available Stock:</span>
               <Badge variant="secondary">
-                {medicine.stock_quantity} {isMeasurable ? unitLabel : 'packs'}
+                {medicine.stock_quantity} {isMeasurableItem ? unitLabel : 'packs'}
               </Badge>
             </div>
-            {!isMeasurable && medicine.units_per_pack && (
+            {!isMeasurableItem && medicine.units_per_pack && (
               <>
                 <div className="flex justify-between text-sm">
                   <span>{unitLabelCap}s Per Pack:</span>
@@ -138,7 +137,7 @@ export default function AddToCartDialog({ open, onOpenChange, medicine, onAddToC
           </div>
 
           {/* Measurable items: dual input */}
-          {isMeasurable && (
+          {isMeasurableItem && (
             <div className="space-y-2">
               <Label>Quantity ({unitLabel})</Label>
               <div className="flex items-center gap-2">
@@ -173,7 +172,7 @@ export default function AddToCartDialog({ open, onOpenChange, medicine, onAddToC
           )}
 
           {/* Non-measurable: Sale Type */}
-          {!isMeasurable && (
+          {!isMeasurableItem && (
             <>
               <div className="space-y-2">
                 <Label htmlFor="sale-type">Sale Type</Label>

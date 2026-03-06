@@ -58,30 +58,40 @@ export default function DebtManagement() {
       const { data: branchesData } = await supabase.from('pharmacy_branches').select('id, name');
       const branchMap = new Map((branchesData || []).map(b => [b.id, b.name]));
 
-      // Fetch all sales with debt
+      // Fetch debt from customer_credits table
+      const customerIds = (customersData || []).map((c: any) => c.id);
+      const { data: creditsData } = await (supabase as any)
+        .from('customer_credits')
+        .select('customer_id, total_debt')
+        .in('customer_id', customerIds);
+
+      const debtMap: Record<string, number> = {};
+      for (const credit of creditsData || []) {
+        debtMap[credit.customer_id] = Math.max(0, Number(credit.total_debt) || 0);
+      }
+
+      // Fetch sales for total purchases & last date
       let salesQuery = supabase
         .from('sales')
-        .select('id, customer_id, total_amount, amount_paid, payment_status, created_at')
+        .select('customer_id, total_amount, created_at')
         .not('customer_id', 'is', null);
       if (selectedBranch) salesQuery = salesQuery.eq('branch_id', selectedBranch);
       const { data: salesData } = await salesQuery;
 
-      // Fetch payment records
-      let paymentsQuery = supabase.from('customer_payments').select('customer_id, amount');
+      // Fetch payment count
+      let paymentsQuery = supabase.from('customer_payments').select('customer_id');
       if (selectedBranch) paymentsQuery = paymentsQuery.eq('branch_id', selectedBranch);
       const { data: paymentsData } = await paymentsQuery;
 
       const customerDebts: CustomerDebt[] = (customersData || []).map(customer => {
-        const custSales = (salesData || []).filter(s => s.customer_id === customer.id);
-        const custPayments = (paymentsData || []).filter(p => p.customer_id === customer.id);
+        const custSales = (salesData || []).filter((s: any) => s.customer_id === customer.id);
+        const custPayments = (paymentsData || []).filter((p: any) => p.customer_id === customer.id);
         
-        const totalPurchases = custSales.reduce((sum, s) => sum + Number(s.total_amount), 0);
-        const totalSalePaid = custSales.reduce((sum, s) => sum + Number(s.amount_paid || 0), 0);
-        const totalExtraPayments = custPayments.reduce((sum, p) => sum + Number(p.amount), 0);
-        const totalPaid = totalSalePaid + totalExtraPayments;
-        const totalDebt = Math.max(0, totalPurchases - totalPaid);
+        const totalPurchases = custSales.reduce((sum: number, s: any) => sum + Number(s.total_amount), 0);
+        const totalDebt = debtMap[customer.id] || 0;
+        const totalPaid = Math.max(0, totalPurchases - totalDebt);
 
-        const lastSale = custSales.sort((a, b) => new Date(b.created_at || '').getTime() - new Date(a.created_at || '').getTime())[0];
+        const lastSale = custSales.sort((a: any, b: any) => new Date(b.created_at || '').getTime() - new Date(a.created_at || '').getTime())[0];
 
         return {
           id: customer.id,

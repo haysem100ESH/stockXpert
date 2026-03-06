@@ -19,6 +19,7 @@ interface CartItem {
   units_per_pack?: number;
   open_pack_units?: number;
   unit_label?: string;
+  item_type?: string;
   quantity: number;
   total: number;
   saleType: 'full_pack' | 'by_stripe';
@@ -43,6 +44,7 @@ interface CartSliderProps {
   onRemove: (id: string, saleType: 'full_pack' | 'by_stripe') => void;
   onUpdateQuantity: (id: string, saleType: 'full_pack' | 'by_stripe', delta: number) => void;
   onChangeSaleType: (id: string, newSaleType: 'full_pack' | 'by_stripe') => void;
+  onSetMeasurableQuantity?: (id: string, quantity: number) => void;
   customers: Customer[];
   selectedCustomerId: string;
   onSelectCustomer: (id: string) => void;
@@ -66,7 +68,7 @@ interface CartSliderProps {
 
 export default function CartSlider({
   open, onClose,
-  cart, onRemove, onUpdateQuantity, onChangeSaleType,
+  cart, onRemove, onUpdateQuantity, onChangeSaleType, onSetMeasurableQuantity,
   customers, selectedCustomerId, onSelectCustomer,
   paymentMethod, onPaymentMethodChange,
   discountPercent, onDiscountChange,
@@ -189,45 +191,89 @@ export default function CartSlider({
                       {/* Quantity controls */}
                       <div className="flex items-center justify-between">
                         <div className="flex items-center gap-2">
-                          <Button
-                            size="icon"
-                            variant="outline"
-                            className="h-7 w-7"
-                            onClick={() => onUpdateQuantity(item.id, item.saleType, -1)}
-                          >
-                            <Minus className="h-3 w-3" />
-                          </Button>
-                          {item.saleType === 'by_stripe' ? (
-                            <input
-                              type="number"
-                step="0.01"
-                min="0.01"
-                              value={item.stripesCount ?? 1}
-                              onChange={(e) => {
-                                const val = parseFloat(e.target.value);
-                                if (!isNaN(val) && val > 0) {
-                                  const delta = val - (item.stripesCount ?? 1);
-                                  onUpdateQuantity(item.id, item.saleType, delta);
-                                }
-                              }}
-                              className="w-16 text-sm font-medium text-center border rounded-md h-7 bg-background px-1 focus:outline-none focus:ring-1 focus:ring-ring"
-                            />
-                          ) : (
-                            <span className="text-sm font-medium min-w-[2rem] text-center">
-                              {item.quantity}
-                            </span>
+                          {item.item_type === 'measurable' ? (() => {
+                            const currentQty = item.saleType === 'by_stripe' ? (item.stripesCount ?? 1) : item.quantity;
+                            const wholePart = Math.floor(currentQty);
+                            const decPart = Math.round((currentQty - wholePart) * 100);
+                            const measurableUnit = item.unit_label || 'unit';
+                            return (
+                              <div className="flex items-center gap-1">
+                                <input
+                                  type="number"
+                                  min="0"
+                                  value={wholePart}
+                                  onChange={(e) => {
+                                    const w = parseInt(e.target.value) || 0;
+                                    const newQty = parseFloat((w + decPart / 100).toFixed(2));
+                                    if (newQty > 0 && onSetMeasurableQuantity) {
+                                      onSetMeasurableQuantity(item.id, newQty);
+                                    }
+                                  }}
+                                  className="w-14 text-sm font-medium text-center border rounded-md h-7 bg-background px-1 focus:outline-none focus:ring-1 focus:ring-ring"
+                                />
+                                <span className="text-sm font-bold">.</span>
+                                <input
+                                  type="text"
+                                  inputMode="numeric"
+                                  maxLength={2}
+                                  value={decPart.toString().padStart(2, '0')}
+                                  onChange={(e) => {
+                                    const val = e.target.value.replace(/[^0-9]/g, '').slice(0, 2);
+                                    const d = parseInt(val || '0');
+                                    const newQty = parseFloat((wholePart + d / 100).toFixed(2));
+                                    if (newQty > 0 && onSetMeasurableQuantity) {
+                                      onSetMeasurableQuantity(item.id, newQty);
+                                    }
+                                  }}
+                                  className="w-10 text-sm font-medium text-center border rounded-md h-7 bg-background px-1 focus:outline-none focus:ring-1 focus:ring-ring"
+                                />
+                                <span className="text-xs text-muted-foreground">{measurableUnit}</span>
+                              </div>
+                            );
+                          })() : (
+                            <>
+                              <Button
+                                size="icon"
+                                variant="outline"
+                                className="h-7 w-7"
+                                onClick={() => onUpdateQuantity(item.id, item.saleType, -1)}
+                              >
+                                <Minus className="h-3 w-3" />
+                              </Button>
+                              {item.saleType === 'by_stripe' ? (
+                                <input
+                                  type="number"
+                                  step="1"
+                                  min="1"
+                                  value={Math.max(1, Math.round(item.stripesCount ?? 1))}
+                                  onChange={(e) => {
+                                    const val = parseInt(e.target.value, 10);
+                                    if (!isNaN(val) && val > 0) {
+                                      const current = Math.max(1, Math.round(item.stripesCount ?? 1));
+                                      const delta = val - current;
+                                      if (delta !== 0) onUpdateQuantity(item.id, item.saleType, delta);
+                                    }
+                                  }}
+                                  className="w-16 text-sm font-medium text-center border rounded-md h-7 bg-background px-1 focus:outline-none focus:ring-1 focus:ring-ring"
+                                />
+                              ) : (
+                                <span className="text-sm font-medium min-w-[2rem] text-center">
+                                  {item.quantity}
+                                </span>
+                              )}
+                              <Button
+                                size="icon"
+                                variant="outline"
+                                className="h-7 w-7"
+                                onClick={() => onUpdateQuantity(item.id, item.saleType, 1)}
+                              >
+                                <Plus className="h-3 w-3" />
+                              </Button>
+                              <span className="text-xs text-muted-foreground">
+                                {item.saleType === 'by_stripe' ? `${unitLabel}s` : 'packs'}
+                              </span>
+                            </>
                           )}
-                          <Button
-                            size="icon"
-                            variant="outline"
-                            className="h-7 w-7"
-                            onClick={() => onUpdateQuantity(item.id, item.saleType, 1)}
-                          >
-                            <Plus className="h-3 w-3" />
-                          </Button>
-                          <span className="text-xs text-muted-foreground">
-                            {item.saleType === 'by_stripe' ? `${unitLabel}s` : 'packs'}
-                          </span>
                         </div>
                         <span className="text-sm font-semibold">ETB {item.total.toFixed(2)}</span>
                       </div>

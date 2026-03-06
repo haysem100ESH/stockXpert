@@ -57,18 +57,27 @@ function generateChartUrl(labels: string[], incomeData: number[], expenseData: n
 }
 
 async function getDebtorsSummary(supabase: any, branchId: string): Promise<string> {
-  const { data: customers } = await supabase
-    .from('customers')
-    .select('name, phone, total_debt')
+  const { data: credits } = await supabase
+    .from('customer_credits')
+    .select('customer_id, total_debt')
     .eq('branch_id', branchId)
-    .gt('total_debt', 0)
-    .order('total_debt', { ascending: false });
+    .gt('total_debt', 0);
 
-  if (!customers || customers.length === 0) return '\n📌 No outstanding debts 🎉\n';
+  if (!credits || credits.length === 0) return '\n📌 No outstanding debts 🎉\n';
+
+  const customerIds = credits.map((c: any) => c.customer_id);
+  const { data: customers } = await supabase.from('customers').select('id, name, phone').in('id', customerIds);
+
+  const customerMap: Record<string, { name: string; phone: string | null }> = {};
+  for (const c of customers || []) { customerMap[c.id] = { name: c.name, phone: c.phone }; }
+
+  const debtors = credits
+    .map((c: any) => ({ name: customerMap[c.customer_id]?.name || 'Unknown', phone: customerMap[c.customer_id]?.phone || null, debt: Number(c.total_debt) }))
+    .sort((a: any, b: any) => b.debt - a.debt);
 
   let section = '\n📌 *Outstanding Debtors:*\n\n';
-  customers.forEach((c: any, i: number) => {
-    section += `${i + 1}. ${c.name}\n   📞 ${c.phone || 'N/A'}\n   💰 Total Debt: ${formatNumber(c.total_debt)} ETB\n\n`;
+  debtors.forEach((c: any, i: number) => {
+    section += `${i + 1}. ${c.name}\n   📞 ${c.phone || 'N/A'}\n   💰 Total Debt: ${formatNumber(c.debt)} ETB\n\n`;
   });
   return section;
 }

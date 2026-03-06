@@ -10,6 +10,7 @@ import { supabase } from '@/lib/db';
 import { useToast } from '@/hooks/use-toast';
 import { useBranchContext } from '@/hooks/useBranchContext';
 import { useCustomCategories } from '@/hooks/useCustomCategories';
+import { MEASURABLE_UNIT_OPTIONS } from '@/lib/itemTypes';
 
 interface Medicine {
   id: string;
@@ -47,12 +48,9 @@ export default function EditMedicineDialog({
   const { branchType } = useBranchContext();
   const isPharmacy = branchType === 'pharmacy';
   
-  // Fetch both category types to ensure all categories are available
   const { categories: pharmacyCategories, loading: pharmLoading } = useCustomCategories('pharmacy');
   const { categories: generalCategories, loading: genLoading } = useCustomCategories('general');
   const categoriesLoading = pharmLoading || genLoading;
-
-  // Merge all categories, removing duplicates
   const allCategories = [...new Set([...pharmacyCategories, ...generalCategories])].sort();
 
   const [medicineData, setMedicineData] = useState({
@@ -73,6 +71,7 @@ export default function EditMedicineDialog({
     branch_id: '',
     item_type: 'full_pcs' as 'full_pcs' | 'measurable',
   });
+  const [measurableUnit, setMeasurableUnit] = useState<string>('kg');
   const [branches, setBranches] = useState<Array<{ id: string; name: string }>>([]);
   const [userRole, setUserRole] = useState<'owner' | 'staff' | null>(null);
   const [loading, setLoading] = useState(false);
@@ -108,6 +107,11 @@ export default function EditMedicineDialog({
   useEffect(() => {
     if (medicine && open) {
       const medicineWithBranch = medicine as MedicineWithBranch & { units_per_pack?: number; unit_label?: string; item_type?: string };
+      const unitLbl = medicineWithBranch.unit_label || 'strip';
+      const isMeas = (medicineWithBranch.item_type === 'measurable') || MEASURABLE_UNIT_OPTIONS.some(o => o.value === unitLbl.toLowerCase());
+      if (isMeas) {
+        setMeasurableUnit(unitLbl.toLowerCase());
+      }
       setMedicineData({
         name: medicine.name || '',
         generic_name: medicine.generic_name || '',
@@ -120,11 +124,11 @@ export default function EditMedicineDialog({
         stock_quantity: medicine.stock_quantity.toString(),
         minimum_stock_level: medicine.minimum_stock_level.toString(),
         units_per_pack: medicineWithBranch.units_per_pack ? medicineWithBranch.units_per_pack.toString() : '',
-        unit_label: medicineWithBranch.unit_label || 'strip',
+        unit_label: unitLbl,
         expiry_date: medicine.expiry_date || '',
         expiry_alert_enabled: medicine.expiry_alert_enabled ?? true,
         branch_id: medicineWithBranch.branch_id || '',
-        item_type: (medicineWithBranch.item_type as 'full_pcs' | 'measurable') || 'full_pcs',
+        item_type: isMeas ? 'measurable' : ((medicineWithBranch.item_type as 'full_pcs' | 'measurable') || 'full_pcs'),
       });
     }
   }, [medicine, open]);
@@ -135,8 +139,8 @@ export default function EditMedicineDialog({
     setLoading(true);
 
     try {
-      // category is now free-text — store the selected value directly
-      const isMeasurable = medicineData.item_type === 'measurable';
+      const isMeas = medicineData.item_type === 'measurable';
+      const unitLabel = isMeas ? measurableUnit : (medicineData.unit_label || 'strip');
       const updateData: any = {
         name: medicineData.name,
         generic_name: medicineData.generic_name || null,
@@ -146,10 +150,10 @@ export default function EditMedicineDialog({
         country_name: medicineData.country_name || null,
         purchase_price: parseFloat(medicineData.purchase_price),
         selling_price: parseFloat(medicineData.selling_price),
-        stock_quantity: isMeasurable ? parseFloat(medicineData.stock_quantity) : parseInt(medicineData.stock_quantity),
+        stock_quantity: isMeas ? parseFloat(medicineData.stock_quantity) : parseInt(medicineData.stock_quantity),
         minimum_stock_level: parseInt(medicineData.minimum_stock_level),
-        units_per_pack: isMeasurable ? null : (medicineData.units_per_pack ? parseInt(medicineData.units_per_pack) : null),
-        unit_label: medicineData.unit_label || (isMeasurable ? 'kg' : 'strip'),
+        units_per_pack: !isMeas && medicineData.units_per_pack ? parseInt(medicineData.units_per_pack) : null,
+        unit_label: unitLabel,
         expiry_date: isPharmacy ? (medicineData.expiry_date || null) : null,
         expiry_alert_enabled: isPharmacy ? medicineData.expiry_alert_enabled : false,
         item_type: medicineData.item_type,
@@ -226,7 +230,6 @@ export default function EditMedicineDialog({
                 <SelectValue placeholder={categoriesLoading ? "Loading categories..." : "Select category"} />
               </SelectTrigger>
               <SelectContent>
-                {/* Build complete list: merge allCategories + current category if missing */}
                 {(() => {
                   const currentCat = medicineData.category;
                   const displayList = [...allCategories];
@@ -297,30 +300,33 @@ export default function EditMedicineDialog({
             </div>
           </div>
 
-          <div className="space-y-2">
-            <Label htmlFor="unit_label">Unit Label</Label>
-            {medicineData.item_type === 'measurable' ? (
-              <Select value={medicineData.unit_label} onValueChange={(val) => setMedicineData({ ...medicineData, unit_label: val })}>
-                <SelectTrigger><SelectValue placeholder="Select unit" /></SelectTrigger>
+          {/* Measurable unit selector */}
+          {medicineData.item_type === 'measurable' && (
+            <div className="space-y-2">
+              <Label>Measurement Unit *</Label>
+              <Select value={measurableUnit} onValueChange={setMeasurableUnit}>
+                <SelectTrigger><SelectValue /></SelectTrigger>
                 <SelectContent>
-                  <SelectItem value="kg">Kilogram (kg)</SelectItem>
-                  <SelectItem value="g">Gram (g)</SelectItem>
-                  <SelectItem value="liter">Liter (L)</SelectItem>
-                  <SelectItem value="ml">Milliliter (mL)</SelectItem>
-                  <SelectItem value="meter">Meter (m)</SelectItem>
-                  <SelectItem value="cm">Centimeter (cm)</SelectItem>
+                  {MEASURABLE_UNIT_OPTIONS.map((opt) => (
+                    <SelectItem key={opt.value} value={opt.value}>{opt.label}</SelectItem>
+                  ))}
                 </SelectContent>
               </Select>
-            ) : (
-              <Input id="unit_label" value={medicineData.unit_label} onChange={(e) => setMedicineData({ ...medicineData, unit_label: e.target.value })} placeholder="e.g. strip, piece, bottle" />
-            )}
-          </div>
-
-          {medicineData.item_type === 'full_pcs' && (
-            <div className="space-y-2">
-              <Label htmlFor="units_per_pack">Units Per stock</Label>
-              <Input id="units_per_pack" type="number" min="1" value={medicineData.units_per_pack} onChange={(e) => setMedicineData({ ...medicineData, units_per_pack: e.target.value })} placeholder="Leave empty if not sold by unit" />
             </div>
+          )}
+
+          {/* Unit Label & Units Per Pack — only for Full PCS */}
+          {medicineData.item_type === 'full_pcs' && (
+            <>
+              <div className="space-y-2">
+                <Label htmlFor="unit_label">Unit Label</Label>
+                <Input id="unit_label" value={medicineData.unit_label} onChange={(e) => setMedicineData({ ...medicineData, unit_label: e.target.value })} placeholder="e.g. strip, piece, bottle" />
+              </div>
+              <div className="space-y-2">
+                <Label htmlFor="units_per_pack">Units Per Stock</Label>
+                <Input id="units_per_pack" type="number" min="1" value={medicineData.units_per_pack} onChange={(e) => setMedicineData({ ...medicineData, units_per_pack: e.target.value })} placeholder="Leave empty if not sold by unit" />
+              </div>
+            </>
           )}
 
           {isPharmacy && (

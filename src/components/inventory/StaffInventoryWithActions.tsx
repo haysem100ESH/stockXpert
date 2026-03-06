@@ -1,11 +1,12 @@
 import { useState, useEffect } from 'react';
+import { useSearchParams } from 'react-router-dom';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Badge } from '@/components/ui/badge';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
-import { Search, Edit2, Plus, Trash2, Filter } from 'lucide-react';
+import { Search, Edit2, Plus, Trash2, Filter, Settings2, Recycle, SlidersHorizontal } from 'lucide-react';
 import { supabase } from '@/lib/db';
 import { useToast } from '@/hooks/use-toast';
 import { useAuth } from '@/hooks/useAuth';
@@ -16,6 +17,9 @@ import { ConfirmationDialog } from '@/components/ui/confirmation-dialog';
 import InventoryDashboard from './InventoryDashboard';
 import MedicineTransfer from './MedicineTransfer';
 import CategoryManagement from './CategoryManagement';
+import StockEditHistory from './StockEditHistory';
+import OpenPackAdjustmentDialog from './OpenPackAdjustmentDialog';
+import StockAdjustmentDialog from './StockAdjustmentDialog';
 
 interface Medicine {
   id: string;
@@ -42,6 +46,9 @@ interface Medicine {
 }
 
 export default function StaffInventoryWithActions() {
+  const [searchParams] = useSearchParams();
+  const initialTab = searchParams.get('tab') || 'inventory';
+  const [activeTab, setActiveTab] = useState(initialTab);
   const [medicines, setMedicines] = useState<Medicine[]>([]);
   const [filteredMedicines, setFilteredMedicines] = useState<Medicine[]>([]);
   const [searchTerm, setSearchTerm] = useState('');
@@ -64,10 +71,17 @@ export default function StaffInventoryWithActions() {
     medicineName: ''
   });
   const [hasBranches, setHasBranches] = useState(true);
+  const [adjustingMedicine, setAdjustingMedicine] = useState<Medicine | null>(null);
+  const [stockAdjustMedicine, setStockAdjustMedicine] = useState<Medicine | null>(null);
   const { toast } = useToast();
   const { profile } = useAuth();
   const { selectedBranch, branchType } = useBranchContext();
   const isPharmacy = branchType === 'pharmacy';
+
+  useEffect(() => {
+    const tab = searchParams.get('tab');
+    if (tab) setActiveTab(tab);
+  }, [searchParams]);
 
   useEffect(() => {
     fetchMedicines();
@@ -251,6 +265,9 @@ export default function StaffInventoryWithActions() {
 
   const confirmDeleteMedicine = async () => {
     try {
+      // Find the medicine to calculate expense deduction
+      const med = medicines.find(m => m.id === deleteConfirmation.medicineId);
+      
       const { error } = await supabase
         .from('medicines')
         .delete()
@@ -258,7 +275,20 @@ export default function StaffInventoryWithActions() {
 
       if (error) throw error;
 
-      setMedicines(medicines.filter(med => med.id !== deleteConfirmation.medicineId));
+      // Deduct remaining stock cost from expenses
+      if (med && med.stock_quantity > 0) {
+        const stockCost = med.stock_quantity * med.purchase_price;
+        const branchId = med.branch_id || selectedBranch;
+        await supabase.from('expenses').insert({
+          description: `Item deleted: ${med.name} – ${med.stock_quantity} units remaining (cost deducted)`,
+          amount: -stockCost,
+          category: 'Stock Deletion',
+          created_by: profile?.id || null,
+          branch_id: branchId,
+        });
+      }
+
+      setMedicines(medicines.filter(m => m.id !== deleteConfirmation.medicineId));
       
       toast({
         title: "Success",
@@ -335,11 +365,12 @@ export default function StaffInventoryWithActions() {
         )}
       </div>
 
-      <Tabs defaultValue="inventory" className="space-y-4">
-        <TabsList className="grid w-full grid-cols-2 sm:grid-cols-4 h-auto">
+      <Tabs value={activeTab} onValueChange={setActiveTab} className="space-y-4">
+        <TabsList className="grid w-full grid-cols-2 sm:grid-cols-5 h-auto">
           <TabsTrigger value="inventory" className="text-xs sm:text-sm">{isPharmacy ? 'Medicines & Items' : 'Items'}</TabsTrigger>
           <TabsTrigger value="alerts" className="text-xs sm:text-sm">{isPharmacy ? 'Inventory Alerts' : 'Stock Alerts'}</TabsTrigger>
           <TabsTrigger value="transfer" className="text-xs sm:text-sm">{isPharmacy ? 'Transfer Medicine' : 'Transfer Items'}</TabsTrigger>
+          <TabsTrigger value="history" className="text-xs sm:text-sm">Stock History</TabsTrigger>
           <TabsTrigger value="categories" className="text-xs sm:text-sm">Categories</TabsTrigger>
         </TabsList>
 
@@ -390,7 +421,10 @@ export default function StaffInventoryWithActions() {
                         <Edit2 className="h-4 w-4" />
                       </Button>
                       <Button size="sm" variant="ghost" onClick={() => handleReplicateMedicine(medicine)} title="Replicate">
-                        <Plus className="h-4 w-4" />
+                        <Recycle className="h-4 w-4" />
+                      </Button>
+                      <Button size="sm" variant="ghost" onClick={() => setStockAdjustMedicine(medicine)} title="Adjust Stock">
+                        <SlidersHorizontal className="h-4 w-4" />
                       </Button>
                       <Button size="sm" variant="ghost" onClick={() => handleDeleteMedicine(medicine.id, medicine.name)} title="Delete">
                         <Trash2 className="h-4 w-4" />
@@ -462,15 +496,26 @@ export default function StaffInventoryWithActions() {
                     </div>
                     {medicine.units_per_pack && (
                       <>
-                        <div className="flex justify-between text-sm">
+                         <div className="flex justify-between text-sm">
                           <span>Unopened Packs:</span>
                           <Badge variant="secondary">{medicine.stock_quantity}</Badge>
                         </div>
-                        <div className="flex justify-between text-sm">
+                        <div className="flex justify-between text-sm items-center">
                           <span>Open Pack:</span>
-                          <span className="font-medium">
-                            {medicine.open_pack_units || 0}/{medicine.units_per_pack} {medicine.unit_label || 'units'} remaining
-                          </span>
+                          <div className="flex items-center gap-2">
+                            <span className="font-medium">
+                              {medicine.open_pack_units || 0}/{medicine.units_per_pack} {medicine.unit_label || 'units'} remaining
+                            </span>
+                            <Button
+                              size="sm"
+                              variant="ghost"
+                              className="h-6 w-6 p-0"
+                              onClick={() => setAdjustingMedicine(medicine)}
+                              title="Adjust open pack units"
+                            >
+                              <Settings2 className="h-3 w-3" />
+                            </Button>
+                          </div>
                         </div>
                       </>
                     )}
@@ -513,6 +558,10 @@ export default function StaffInventoryWithActions() {
 
         <TabsContent value="transfer">
           <MedicineTransfer onTransferComplete={fetchMedicines} />
+        </TabsContent>
+
+        <TabsContent value="history">
+          <StockEditHistory />
         </TabsContent>
 
         <TabsContent value="categories">
@@ -560,6 +609,20 @@ export default function StaffInventoryWithActions() {
         onConfirm={confirmDeleteMedicine}
         confirmText="Delete"
         cancelText="Cancel"
+      />
+
+      <OpenPackAdjustmentDialog
+        open={!!adjustingMedicine}
+        onOpenChange={(open) => { if (!open) setAdjustingMedicine(null); }}
+        medicine={adjustingMedicine}
+        onAdjusted={fetchMedicines}
+      />
+
+      <StockAdjustmentDialog
+        open={!!stockAdjustMedicine}
+        onOpenChange={(open) => { if (!open) setStockAdjustMedicine(null); }}
+        medicine={stockAdjustMedicine}
+        onAdjusted={fetchMedicines}
       />
     </div>
   );
