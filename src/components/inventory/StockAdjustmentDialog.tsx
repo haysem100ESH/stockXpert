@@ -17,6 +17,8 @@ interface Medicine {
   stock_quantity: number;
   purchase_price: number;
   branch_id?: string;
+  item_type?: string;
+  unit_label?: string;
 }
 
 interface StockAdjustmentDialogProps {
