@@ -318,13 +318,20 @@ export default function SalesManagement() {
       } else {
         const pricePerStripe = item.selling_price / (item.units_per_pack || 1);
         const totalAvailableStripes = (item.stock_quantity * (item.units_per_pack || 1)) + (item.open_pack_units || 0);
-        // For countable (full_pcs) items, always increment by 1; for measurable, use fractional step
-        const isMeasurableItem = item.item_type === 'measurable';
-        const step = isMeasurableItem
-          ? (Math.abs(delta) === 1 ? (delta > 0 ? 0.25 : -0.25) : delta)
-          : delta;
-        const minStep = isMeasurableItem ? 0.25 : 1;
-        const newCount = parseFloat((Math.max(minStep, (item.stripesCount || 1) + step)).toFixed(4));
+        // For countable strip items, quantity must always be whole numbers.
+        // Measurable items can still use fractional strip quantities.
+        const isMeasurableItem = item.item_type === 'measurable' || isMeasurable(item.unit_label);
+        const currentCount = item.stripesCount || 1;
+
+        let newCount: number;
+        if (isMeasurableItem) {
+          const step = Math.abs(delta) === 1 ? (delta > 0 ? 0.25 : -0.25) : delta;
+          newCount = parseFloat((Math.max(0.25, currentCount + step)).toFixed(4));
+        } else {
+          const integerDelta = Number.isInteger(delta) ? delta : Math.round(delta);
+          newCount = Math.max(1, Math.round(currentCount + integerDelta));
+        }
+
         if (newCount > totalAvailableStripes) return item;
         return { ...item, stripesCount: newCount, total: parseFloat((newCount * pricePerStripe).toFixed(2)) };
       }
