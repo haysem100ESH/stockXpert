@@ -101,10 +101,20 @@ function ExpandedCreditItems({ customerId }: { customerId: string }) {
 
         const creditItems: CreditItem[] = saleItemsData.map((si: any) => {
           const med: any = medMap.get(si.medicine_id);
+          // Determine the correct quantity based on sale_type
+          let displayQuantity = Number(si.quantity);
+          let displayUnitLabel = med?.unit_label || 'pcs';
+          if (si.sale_type === 'by_stripe' && si.strip_quantity > 0) {
+            displayQuantity = Number(si.strip_quantity);
+            displayUnitLabel = (med?.unit_label || 'strip') + 's';
+          } else if (si.sale_type === 'full_pack' && si.pack_quantity > 0) {
+            displayQuantity = Number(si.pack_quantity);
+            displayUnitLabel = 'packs';
+          }
           return {
             medicineName: med?.name || 'Unknown Item',
-            quantity: Number(si.quantity),
-            unitLabel: med?.unit_label || 'pcs',
+            quantity: displayQuantity,
+            unitLabel: displayUnitLabel,
             itemType: med?.item_type || 'full_pcs',
             unitPrice: Number(si.unit_price),
             totalPrice: Number(si.total_price),
