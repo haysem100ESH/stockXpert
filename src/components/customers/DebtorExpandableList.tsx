@@ -104,12 +104,20 @@ function ExpandedCreditItems({ customerId }: { customerId: string }) {
           // Determine the correct quantity based on sale_type
           let displayQuantity = Number(si.quantity);
           let displayUnitLabel = med?.unit_label || 'pcs';
-          if (si.sale_type === 'by_stripe' && si.strip_quantity > 0) {
-            displayQuantity = Number(si.strip_quantity);
-            displayUnitLabel = (med?.unit_label || 'strip') + 's';
-          } else if (si.sale_type === 'full_pack' && si.pack_quantity > 0) {
-            displayQuantity = Number(si.pack_quantity);
-            displayUnitLabel = 'packs';
+
+          if (si.sale_type === 'by_stripe') {
+            const directStripQty = Number(si.strip_quantity || 0);
+            const legacyStripesSold = Number(si.stripes_sold || 0);
+            const decodedLegacyQty = legacyStripesSold >= 1000 ? legacyStripesSold / 1000 : legacyStripesSold;
+            const resolvedStripQty = directStripQty > 0 ? directStripQty : decodedLegacyQty;
+
+            displayQuantity = resolvedStripQty > 0 ? resolvedStripQty : Number(si.quantity || 0);
+            const baseUnit = med?.unit_label || 'strip';
+            displayUnitLabel = `${baseUnit}${Math.abs(displayQuantity) === 1 ? '' : 's'}`;
+          } else if (si.sale_type === 'full_pack') {
+            const packQty = Number(si.pack_quantity || 0);
+            displayQuantity = packQty > 0 ? packQty : Number(si.quantity || 0);
+            displayUnitLabel = Math.abs(displayQuantity) === 1 ? 'pack' : 'packs';
           }
           return {
             medicineName: med?.name || 'Unknown Item',

@@ -243,14 +243,15 @@ export default function CartSlider({
                               {item.saleType === 'by_stripe' ? (
                                 <input
                                   type="number"
-                                  step="0.01"
-                                  min="0.01"
-                                  value={item.stripesCount ?? 1}
+                                  step="1"
+                                  min="1"
+                                  value={Math.max(1, Math.round(item.stripesCount ?? 1))}
                                   onChange={(e) => {
-                                    const val = parseFloat(e.target.value);
+                                    const val = parseInt(e.target.value, 10);
                                     if (!isNaN(val) && val > 0) {
-                                      const delta = val - (item.stripesCount ?? 1);
-                                      onUpdateQuantity(item.id, item.saleType, delta);
+                                      const current = Math.max(1, Math.round(item.stripesCount ?? 1));
+                                      const delta = val - current;
+                                      if (delta !== 0) onUpdateQuantity(item.id, item.saleType, delta);
                                     }
                                   }}
                                   className="w-16 text-sm font-medium text-center border rounded-md h-7 bg-background px-1 focus:outline-none focus:ring-1 focus:ring-ring"
