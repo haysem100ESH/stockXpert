@@ -75,7 +75,7 @@ function ExpandedCreditItems({ customerId }: { customerId: string }) {
         // Fetch sale items for these sales
         const { data: saleItemsData, error: itemsErr } = await (supabase as any)
           .from('sale_items')
-          .select('sale_id, medicine_id, quantity, unit_price, total_price')
+          .select('sale_id, medicine_id, quantity, unit_price, total_price, strip_quantity, pack_quantity, sale_type')
           .in('sale_id', saleIds);
 
         if (itemsErr) throw itemsErr;
