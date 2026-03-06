@@ -7,7 +7,14 @@
  
 ## How can I edit this code? 
 
+<<<<<<< HEAD
 There are several ways of editing your application. 
+=======
+There are several ways of editing your application.
+
+
+**Use Lovable**
+>>>>>>> 5629240ec2d228573a6cae7f084f9871dbd43498
 
 **Use Lovable**        
  
