@@ -104,7 +104,7 @@ export default function Dashboard() {
 
   useEffect(() => {
     fetchDashboardData();
-  }, [reportPeriod, customDate, selectedBranch, userBranch]);
+  }, [reportPeriod, customDate, selectedBranch, userBranch, profile]);
 
   const getDateRange = () => {
     const now = new Date();
@@ -130,19 +130,39 @@ export default function Dashboard() {
       
       // Determine which branch to filter by (staff fixed to their branch)
       const effectiveBranchId = profile?.role === 'staff' ? userBranch : selectedBranch;
+
+      // Owner isolation: fetch owner's branch IDs when "All Branches"
+      let ownerBranchIds: string[] = [];
+      if (!effectiveBranchId && profile?.role === 'owner' && profile?.id) {
+        const { data: ownerBranches } = await supabase
+          .from('pharmacy_branches')
+          .select('id')
+          .eq('pharmacy_owner_id', profile.id);
+        ownerBranchIds = (ownerBranches || []).map((b: any) => b.id);
+      }
+
+      // If owner has no branches yet, show empty data
+      if (!effectiveBranchId && ownerBranchIds.length === 0 && profile?.role === 'owner') {
+        setStats({ totalRevenue: 0, totalProducts: 0, todaySales: 0, lowStockItems: 0, outOfStockItems: 0, expiredItems: 0 });
+        setOutOfStockItems([]); setLowStockItems([]); setExpiringItems([]); setExpiredItems([]);
+        setCategorySales([]); setProductPerformance([]); setIncomeExpenseData([]); setPaymentMethodData([]);
+        setLoading(false);
+        return;
+      }
       
-      // Fetch revenue for the selected period - RLS handles ownership filtering
+      // Fetch revenue for the selected period
       let salesQuery = supabase
         .from('sales')
         .select('total_amount, created_at, payment_method, discount_amount')
         .gte('created_at', start.toISOString())
         .lte('created_at', end.toISOString());
       
-      // For staff, filter by their branch; for owners, optionally filter by selected branch
       if (profile?.role === 'staff') {
         salesQuery = salesQuery.eq('branch_id', userBranch || profile?.branch_id);
       } else if (effectiveBranchId) {
         salesQuery = salesQuery.eq('branch_id', effectiveBranchId);
+      } else if (ownerBranchIds.length > 0) {
+        salesQuery = salesQuery.in('branch_id', ownerBranchIds);
       }
       const { data: salesData } = await salesQuery;
       
@@ -153,11 +173,12 @@ export default function Dashboard() {
         .from('medicines')
         .select('stock_quantity, minimum_stock_level');
       
-      // For staff, filter by their branch; for owners, optionally filter by selected branch
       if (profile?.role === 'staff') {
         medicinesQuery = medicinesQuery.eq('branch_id', userBranch || profile?.branch_id);
       } else if (effectiveBranchId) {
         medicinesQuery = medicinesQuery.eq('branch_id', effectiveBranchId);
+      } else if (ownerBranchIds.length > 0) {
+        medicinesQuery = medicinesQuery.in('branch_id', ownerBranchIds);
       }
       const { data: medicinesData } = await medicinesQuery;
 
@@ -174,11 +195,12 @@ export default function Dashboard() {
         .gte('created_at', start.toISOString())
         .lte('created_at', end.toISOString());
       
-      // For staff, filter by their branch; for owners, optionally filter by selected branch
       if (profile?.role === 'staff') {
         periodSalesQuery = periodSalesQuery.eq('branch_id', userBranch || profile?.branch_id);
       } else if (effectiveBranchId) {
         periodSalesQuery = periodSalesQuery.eq('branch_id', effectiveBranchId);
+      } else if (ownerBranchIds.length > 0) {
+        periodSalesQuery = periodSalesQuery.in('branch_id', ownerBranchIds);
       }
       const { data: periodSalesData } = await periodSalesQuery;
 
@@ -190,11 +212,12 @@ export default function Dashboard() {
         .select('id, name, category, stock_quantity')
         .eq('stock_quantity', 0);
       
-      // For staff, filter by their branch; for owners, optionally filter by selected branch
       if (profile?.role === 'staff') {
         outOfStockQuery = outOfStockQuery.eq('branch_id', userBranch || profile?.branch_id);
       } else if (effectiveBranchId) {
         outOfStockQuery = outOfStockQuery.eq('branch_id', effectiveBranchId);
+      } else if (ownerBranchIds.length > 0) {
+        outOfStockQuery = outOfStockQuery.in('branch_id', ownerBranchIds);
       }
       const { data: outOfStockDetails } = await outOfStockQuery;
 
@@ -204,11 +227,12 @@ export default function Dashboard() {
         .select('id, name, category, stock_quantity, minimum_stock_level')
         .gt('stock_quantity', 0);
       
-      // For staff, filter by their branch; for owners, optionally filter by selected branch
       if (profile?.role === 'staff') {
         lowStockQuery = lowStockQuery.eq('branch_id', userBranch || profile?.branch_id);
       } else if (effectiveBranchId) {
         lowStockQuery = lowStockQuery.eq('branch_id', effectiveBranchId);
+      } else if (ownerBranchIds.length > 0) {
+        lowStockQuery = lowStockQuery.in('branch_id', ownerBranchIds);
       }
       const { data: lowStockSource } = await lowStockQuery;
       const lowStockDetails = (lowStockSource || []).filter((m: any) => m.stock_quantity <= m.minimum_stock_level);
@@ -224,11 +248,12 @@ export default function Dashboard() {
           .lte('expiry_date', thirtyDaysFromNow.toISOString().split('T')[0])
           .gte('expiry_date', new Date().toISOString().split('T')[0]);
         
-        // For staff, filter by their branch; for owners, optionally filter by selected branch
         if (profile?.role === 'staff') {
           expiringQuery = expiringQuery.eq('branch_id', userBranch || profile?.branch_id);
         } else if (effectiveBranchId) {
           expiringQuery = expiringQuery.eq('branch_id', effectiveBranchId);
+        } else if (ownerBranchIds.length > 0) {
+          expiringQuery = expiringQuery.in('branch_id', ownerBranchIds);
         }
         return expiringQuery;
       })();
@@ -241,11 +266,12 @@ export default function Dashboard() {
           .not('expiry_date', 'is', null)
           .lte('expiry_date', new Date().toISOString().split('T')[0]);
         
-        // For staff, filter by their branch; for owners, optionally filter by selected branch
         if (profile?.role === 'staff') {
           expiredQuery = expiredQuery.eq('branch_id', userBranch || profile?.branch_id);
         } else if (effectiveBranchId) {
           expiredQuery = expiredQuery.eq('branch_id', effectiveBranchId);
+        } else if (ownerBranchIds.length > 0) {
+          expiredQuery = expiredQuery.in('branch_id', ownerBranchIds);
         }
         return expiredQuery;
       })();
@@ -256,7 +282,7 @@ export default function Dashboard() {
         console.log('Expired medicines found:', expiredDetails?.length || 0);
       }
 
-      // Fetch sales data with medicine details for charts
+      // Fetch sales data with medicine details for charts (include strip sales)
       const { data: salesWithItems } = await (function(){
         let salesWithItemsQuery = supabase
           .from('sales')
@@ -265,31 +291,40 @@ export default function Dashboard() {
             sale_items (
               quantity,
               medicine_id,
+              sale_type,
+              stripes_sold,
+              total_price,
               medicines (name, category)
             )
           `)
           .gte('created_at', start.toISOString())
           .lte('created_at', end.toISOString());
         
-        // For staff, filter by their branch; for owners, optionally filter by selected branch
         if (profile?.role === 'staff') {
           salesWithItemsQuery = salesWithItemsQuery.eq('branch_id', userBranch || profile?.branch_id);
         } else if (effectiveBranchId) {
           salesWithItemsQuery = salesWithItemsQuery.eq('branch_id', effectiveBranchId);
+        } else if (ownerBranchIds.length > 0) {
+          salesWithItemsQuery = salesWithItemsQuery.in('branch_id', ownerBranchIds);
         }
         return salesWithItemsQuery;
       })();
 
-      // Process category sales data
+      // Process category sales data — include both pack and strip sales
       const categoryMap = new Map<string, { sales: number; revenue: number }>();
       salesWithItems?.forEach(sale => {
         sale.sale_items?.forEach((item: any) => {
           if (item.medicines) {
             const category = item.medicines.category;
             const existing = categoryMap.get(category) || { sales: 0, revenue: 0 };
+            // For strip sales, stripes_sold is stored as thousandths in DB
+            const soldQty = item.sale_type === 'by_stripe'
+              ? (item.stripes_sold ? item.stripes_sold / 1000 : item.quantity)
+              : (item.quantity || 0);
+            const itemRevenue = Number(item.total_price || 0);
             categoryMap.set(category, {
-              sales: existing.sales + item.quantity,
-              revenue: existing.revenue + (item.quantity * Number(sale.total_amount) / sale.sale_items.length)
+              sales: existing.sales + soldQty,
+              revenue: existing.revenue + itemRevenue
             });
           }
         });
@@ -300,16 +335,20 @@ export default function Dashboard() {
         ...data
       }));
 
-      // Process product performance data
+      // Process product performance data — include both pack and strip sales
       const productMap = new Map<string, { sales: number; revenue: number }>();
       salesWithItems?.forEach(sale => {
         sale.sale_items?.forEach((item: any) => {
           if (item.medicines) {
             const name = item.medicines.name;
             const existing = productMap.get(name) || { sales: 0, revenue: 0 };
+            const soldQty = item.sale_type === 'by_stripe'
+              ? (item.stripes_sold ? item.stripes_sold / 1000 : item.quantity)
+              : (item.quantity || 0);
+            const itemRevenue = Number(item.total_price || 0);
             productMap.set(name, {
-              sales: existing.sales + item.quantity,
-              revenue: existing.revenue + (item.quantity * Number(sale.total_amount) / sale.sale_items.length)
+              sales: existing.sales + soldQty,
+              revenue: existing.revenue + itemRevenue
             });
           }
         });
@@ -332,6 +371,8 @@ export default function Dashboard() {
           expensesQuery = expensesQuery.eq('branch_id', userBranch || profile?.branch_id);
         } else if (effectiveBranchId) {
           expensesQuery = expensesQuery.eq('branch_id', effectiveBranchId);
+        } else if (ownerBranchIds.length > 0) {
+          expensesQuery = expensesQuery.in('branch_id', ownerBranchIds);
         }
         return expensesQuery;
       })();
@@ -348,6 +389,8 @@ export default function Dashboard() {
           invQuery = invQuery.eq('branch_id', userBranch || profile?.branch_id);
         } else if (effectiveBranchId) {
           invQuery = invQuery.eq('branch_id', effectiveBranchId);
+        } else if (ownerBranchIds.length > 0) {
+          invQuery = invQuery.in('branch_id', ownerBranchIds);
         }
         return invQuery;
       })();

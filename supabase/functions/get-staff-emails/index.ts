@@ -1,5 +1,4 @@
-import { serve } from "https://deno.land/std@0.190.0/http/server.ts";
-import { createClient } from "https://esm.sh/@supabase/supabase-js@2.56.0";
+import { createClient } from 'https://esm.sh/@supabase/supabase-js@2.56.0';
 
 const corsHeaders = {
   'Access-Control-Allow-Origin': '*',
@@ -7,7 +6,7 @@ const corsHeaders = {
   'Access-Control-Allow-Methods': 'POST, OPTIONS',
 };
 
-const handler = async (req: Request): Promise<Response> => {
+Deno.serve(async (req: Request) => {
   if (req.method === 'OPTIONS') {
     return new Response(null, { status: 204, headers: corsHeaders });
   }
@@ -24,22 +23,26 @@ const handler = async (req: Request): Promise<Response> => {
       });
     }
 
-    const userClient = createClient(supabaseUrl, Deno.env.get('SUPABASE_ANON_KEY')!, {
+    const anonKey = Deno.env.get('SUPABASE_ANON_KEY')!;
+    const userClient = createClient(supabaseUrl, anonKey, {
       global: { headers: { Authorization: authHeader } },
     });
 
     const { data: { user: caller }, error: callerError } = await userClient.auth.getUser();
     if (callerError || !caller) {
+      console.error('Auth error:', callerError);
       return new Response(JSON.stringify({ error: 'Unauthorized' }), {
         status: 401, headers: { ...corsHeaders, 'Content-Type': 'application/json' },
       });
     }
 
+    const callerId = caller.id;
+
     // Verify caller is an owner
     const { data: callerProfile } = await supabaseAdmin
       .from('profiles')
       .select('role')
-      .eq('id', caller.id)
+      .eq('id', callerId)
       .single();
 
     if (!callerProfile || callerProfile.role !== 'owner') {
@@ -78,6 +81,4 @@ const handler = async (req: Request): Promise<Response> => {
       status: 500, headers: { ...corsHeaders, 'Content-Type': 'application/json' },
     });
   }
-};
-
-serve(handler);
+});

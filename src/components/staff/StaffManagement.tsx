@@ -85,25 +85,58 @@ export default function StaffManagement() {
       const { data: profilesData, error } = await query;
       if (error) throw error;
       
-      // Fetch emails for each staff member from auth metadata via a simple lookup
-      // We'll use the profiles data and try to get email from auth user list
+      // Fetch emails for staff members via edge function
       const staffWithEmail: StaffMember[] = (profilesData || []).map((s: any) => ({ ...s, email: undefined }));
       
-      // Try fetching emails using a edge function or from auth - for now use the admin list approach
-      // Since we can't list auth users from client, we'll fetch from auth user metadata stored in profiles
-      // Alternative: query the auth.users via an edge function. For simplicity, let's try to get email from
-      // the user_metadata or from a separate call
-      try {
-        const { data: emailData } = await supabase.functions.invoke('get-staff-emails', {
-          body: { staffIds: staffWithEmail.map(s => s.id) }
-        });
-        if (emailData?.emails) {
-          for (const s of staffWithEmail) {
-            s.email = emailData.emails[s.id] || undefined;
+      if (staffWithEmail.length > 0) {
+        try {
+          const staffIds = staffWithEmail.map(s => s.id);
+
+          const applyEmails = (payload: any) => {
+            // Supports both { emails: { [id]: email } } and { data: [{ id, email }] }
+            const emailMap: Record<string, string> = payload?.emails
+              ? payload.emails
+              : Array.isArray(payload?.data)
+                ? payload.data.reduce((acc: Record<string, string>, row: any) => {
+                    if (row?.id && row?.email) acc[row.id] = row.email;
+                    return acc;
+                  }, {})
+                : {};
+
+            for (const s of staffWithEmail) {
+              s.email = emailMap[s.id] || undefined;
+            }
+          };
+
+          const { data: emailData, error: emailError } = await supabase.functions.invoke('get-staff-emails', {
+            body: { staffIds }
+          });
+
+          if (!emailError) {
+            applyEmails(emailData);
+          } else {
+            // Fallback for legacy/deployed CORS configs that block x-client-info
+            const sessionRes = await supabase.auth.getSession();
+            const token = sessionRes.data.session?.access_token;
+            if (!token) throw emailError;
+
+            const fnUrl = `https://tcqlsxmgazrftpbumauk.supabase.co/functions/v1/get-staff-emails`;
+            const response = await fetch(fnUrl, {
+              method: 'POST',
+              headers: {
+                'Content-Type': 'application/json',
+                'Authorization': `Bearer ${token}`,
+              },
+              body: JSON.stringify({ staffIds }),
+            });
+
+            if (!response.ok) throw new Error(`Fallback failed: ${response.status}`);
+            const fallbackData = await response.json();
+            applyEmails(fallbackData);
           }
+        } catch (err) {
+          console.error('Failed to fetch staff emails:', err);
         }
-      } catch {
-        // If edge function doesn't exist yet, emails will be undefined
       }
       
       setStaff(staffWithEmail);

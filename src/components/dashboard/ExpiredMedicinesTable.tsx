@@ -7,6 +7,7 @@ import { supabase } from '@/lib/db';
 import { useToast } from '@/hooks/use-toast';
 import { ConfirmationDialog } from '@/components/ui/confirmation-dialog';
 import { useBranchContext } from '@/hooks/useBranchContext';
+import { useAuth } from '@/hooks/useAuth';
 
 interface ExpiredMedicine {
   id: string;
@@ -23,6 +24,7 @@ export default function ExpiredMedicinesTable() {
   const [medicineToDelete, setMedicineToDelete] = useState<string | null>(null);
   const { toast } = useToast();
   const { selectedBranch } = useBranchContext();
+  const { profile } = useAuth();
 
   useEffect(() => {
     fetchExpiredMedicines();
@@ -30,15 +32,32 @@ export default function ExpiredMedicinesTable() {
 
   const fetchExpiredMedicines = async () => {
     try {
+      // Owner isolation
+      let ownerBranchIds: string[] = [];
+      if (!selectedBranch && profile?.role === 'owner' && profile?.id) {
+        const { data: ownerBranches } = await supabase
+          .from('pharmacy_branches')
+          .select('id')
+          .eq('pharmacy_owner_id', profile.id);
+        ownerBranchIds = (ownerBranches || []).map((b: any) => b.id);
+      }
+
+      if (!selectedBranch && ownerBranchIds.length === 0 && profile?.role === 'owner') {
+        setExpiredMedicines([]);
+        setLoading(false);
+        return;
+      }
+
       let query = supabase
         .from('medicines')
         .select('id, name, batch_number, expiry_date, stock_quantity')
         .not('expiry_date', 'is', null)
         .lt('expiry_date', new Date().toISOString().split('T')[0]);
 
-      // Filter by selected branch if one is selected
       if (selectedBranch) {
         query = query.eq('branch_id', selectedBranch);
+      } else if (ownerBranchIds.length > 0) {
+        query = query.in('branch_id', ownerBranchIds);
       }
 
       const { data, error } = await query.order('expiry_date', { ascending: true });

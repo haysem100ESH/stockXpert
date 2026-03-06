@@ -9,6 +9,7 @@ import { supabase } from '@/lib/db';
 import { useToast } from '@/hooks/use-toast';
 import { useAuth } from '@/hooks/useAuth';
 import { useBranchContext } from '@/hooks/useBranchContext';
+import { updateCreditScore, calculateScoreChange } from '@/hooks/useCreditScore';
 
 interface RecordPaymentDialogProps {
   open: boolean;
@@ -16,10 +17,11 @@ interface RecordPaymentDialogProps {
   customerId: string;
   customerName: string;
   outstandingAmount: number;
+  creditScore?: number;
   onPaymentRecorded: () => void;
 }
 
-export default function RecordPaymentDialog({ open, onOpenChange, customerId, customerName, outstandingAmount, onPaymentRecorded }: RecordPaymentDialogProps) {
+export default function RecordPaymentDialog({ open, onOpenChange, customerId, customerName, outstandingAmount, creditScore = 50, onPaymentRecorded }: RecordPaymentDialogProps) {
   const [amount, setAmount] = useState('');
   const [paymentMethod, setPaymentMethod] = useState('Cash');
   const [notes, setNotes] = useState('');
@@ -35,16 +37,63 @@ export default function RecordPaymentDialog({ open, onOpenChange, customerId, cu
 
     setLoading(true);
     try {
-      const { error } = await supabase.from('customer_payments').insert({
+      const { data: paymentRow, error } = await (supabase as any).from('customer_payments').insert({
         customer_id: customerId,
         amount: parsedAmount,
         payment_method: paymentMethod,
         notes: notes.trim() || null,
         created_by: profile?.id,
         branch_id: selectedBranch || profile?.branch_id,
-      });
+      }).select('id').single();
       if (error) throw error;
-      toast({ title: "Success", description: `Payment of ETB ${parsedAmount.toFixed(2)} recorded for ${customerName}` });
+
+      // Update customer_credits table
+      const branchId = selectedBranch || profile?.branch_id;
+      const { data: existingCredit } = await (supabase as any)
+        .from('customer_credits')
+        .select('id, total_debt')
+        .eq('customer_id', customerId)
+        .single();
+
+      if (existingCredit) {
+        const prevBal = Number(existingCredit.total_debt);
+        const newBal = Math.max(0, prevBal - parsedAmount);
+        await (supabase as any).from('customer_credits').update({ total_debt: newBal, last_updated: new Date().toISOString() }).eq('id', existingCredit.id);
+        await (supabase as any).from('customer_credit_transactions').insert({
+          customer_id: customerId,
+          branch_id: branchId,
+          transaction_type: 'payment',
+          amount: parsedAmount,
+          previous_balance: prevBal,
+          new_balance: newBal,
+          payment_id: paymentRow?.id ?? null,
+          notes: notes.trim() || null,
+          created_by: profile?.id ?? null,
+        });
+      }
+
+      // Auto-update credit score based on payment
+      const isFullPayment = parsedAmount >= outstandingAmount;
+      const partialPercent = (parsedAmount / outstandingAmount) * 100;
+      const scoreChange = calculateScoreChange({
+        paidOnTime: isFullPayment,
+        isPartialPayment: !isFullPayment,
+        partialPercent: isFullPayment ? undefined : partialPercent,
+      });
+
+      if (scoreChange.change !== 0) {
+        await updateCreditScore({
+          customerId,
+          currentScore: creditScore,
+          changeAmount: scoreChange.change,
+          reason: scoreChange.reason,
+          notes: notes.trim() || null,
+          createdBy: profile?.id,
+          branchId: selectedBranch || profile?.branch_id,
+        });
+      }
+
+      toast({ title: "Success", description: `Payment of ETB ${parsedAmount.toFixed(2)} recorded for ${customerName}. ${scoreChange.change !== 0 ? scoreChange.reason : ''}` });
       setAmount(''); setNotes(''); setPaymentMethod('Cash');
       onOpenChange(false);
       onPaymentRecorded();

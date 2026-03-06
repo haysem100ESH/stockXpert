@@ -12,7 +12,10 @@ import { useAuth } from '@/hooks/useAuth';
 import { useBranchContext } from '@/hooks/useBranchContext';
 import { ConfirmationDialog } from '@/components/ui/confirmation-dialog';
 import CartSlider from './CartSlider';
+import AddToCartDialog from './AddToCartDialog';
 import { useIsMobile } from '@/hooks/use-mobile';
+import { updateCreditScore } from '@/hooks/useCreditScore';
+import { isMeasurable } from '@/lib/itemTypes';
 
 interface Medicine {
   id: string;
@@ -25,6 +28,7 @@ interface Medicine {
   units_per_pack?: number;
   open_pack_units?: number;
   unit_label?: string;
+  item_type?: string;
 }
 
 interface CartItem extends Medicine {
@@ -49,18 +53,29 @@ export default function SalesManagement() {
   const [paymentMethod, setPaymentMethod] = useState<string>('Cash');
   const [discountPercent, setDiscountPercent] = useState<number>(0);
   const [showCheckoutConfirm, setShowCheckoutConfirm] = useState(false);
-  const [customers, setCustomers] = useState<{id: string; name: string; phone?: string | null; computed_debt?: number}[]>([]);
+  const [customers, setCustomers] = useState<{id: string; name: string; phone?: string | null; computed_debt?: number; credit_score?: number; max_credit_limit?: number}[]>([]);
   const [selectedCustomerId, setSelectedCustomerId] = useState<string>('none');
   const [amountReceived, setAmountReceived] = useState<string>('');
   const [changeAction, setChangeAction] = useState<ChangeAction>(null);
   const [keepChangeOption, setKeepChangeOption] = useState<'profit' | 'deduct_debt'>('profit');
   const [cartOpen, setCartOpen] = useState(false);
+  const [selectedMedicineForDialog, setSelectedMedicineForDialog] = useState<Medicine | null>(null);
 
   const { profile } = useAuth();
   const { toast } = useToast();
   const { selectedBranch, branchType } = useBranchContext();
   const isMobile = useIsMobile();
+  const [isSmallScreen, setIsSmallScreen] = useState(false);
   const isPharmacy = branchType === 'pharmacy';
+
+  // Track < 1024px for cart icon behavior (tablet + mobile)
+  useEffect(() => {
+    const mql = window.matchMedia('(max-width: 1023px)');
+    const onChange = () => setIsSmallScreen(mql.matches);
+    mql.addEventListener('change', onChange);
+    setIsSmallScreen(mql.matches);
+    return () => mql.removeEventListener('change', onChange);
+  }, []);
 
   const itemsPerPage = 16;
 
@@ -96,12 +111,34 @@ export default function SalesManagement() {
 
   const fetchMedicines = async () => {
     try {
+      // When "All Branches" is selected, fetch only branches belonging to
+      // the current owner and filter medicines by those branch IDs.
+      let branchIds: string[] = [];
+      if (!selectedBranch && profile?.role === 'owner' && profile?.id) {
+        const { data: ownerBranches } = await (supabase as any)
+          .from('pharmacy_branches')
+          .select('id')
+          .eq('pharmacy_owner_id', profile.id);
+        branchIds = (ownerBranches || []).map((b: any) => b.id);
+      }
+
+      // If owner has no branches yet, show empty data
+      if (!selectedBranch && branchIds.length === 0 && profile?.role === 'owner') {
+        setMedicines([]);
+        setLoading(false);
+        return;
+      }
+
       let query = (supabase as any)
         .from('medicines')
-        .select('id, name, generic_name, selling_price, stock_quantity, category, expiry_date, units_per_pack, open_pack_units, unit_label')
+        .select('id, name, generic_name, selling_price, stock_quantity, category, expiry_date, units_per_pack, open_pack_units, unit_label, item_type')
         .or('stock_quantity.gt.0,open_pack_units.gt.0')
         .order('name');
-      if (selectedBranch) query = query.eq('branch_id', selectedBranch);
+      if (selectedBranch) {
+        query = query.eq('branch_id', selectedBranch);
+      } else if (branchIds.length > 0) {
+        query = query.in('branch_id', branchIds);
+      }
       const { data, error } = await query;
       if (error) throw error;
       // open_pack_units is stored as INTEGER thousandths in DB (e.g. 2500 = 2.5 strips).
@@ -122,12 +159,30 @@ export default function SalesManagement() {
     try {
       // Fetch customers — note: current_debt does NOT exist on the customers table;
       // we compute debt from the sales table instead.
+      // Filter customers by owner's branches when "All Branches"
+      let custBranchIds: string[] = [];
+      if (!selectedBranch && profile?.role === 'owner' && profile?.id) {
+        const { data: ownerBranches } = await (supabase as any)
+          .from('pharmacy_branches')
+          .select('id')
+          .eq('pharmacy_owner_id', profile.id);
+        custBranchIds = (ownerBranches || []).map((b: any) => b.id);
+      }
+
+      // If owner has no branches yet, show empty customers
+      if (!selectedBranch && custBranchIds.length === 0 && profile?.role === 'owner') {
+        setCustomers([]);
+        return;
+      }
+
       let query = (supabase as any)
         .from('customers')
-        .select('id, name, phone')
+        .select('id, name, phone, credit_score')
         .order('name');
       if (selectedBranch) {
         query = query.eq('branch_id', selectedBranch);
+      } else if (custBranchIds.length > 0) {
+        query = query.in('branch_id', custBranchIds);
       }
       const { data, error } = await query;
       if (error) {
@@ -135,26 +190,26 @@ export default function SalesManagement() {
         setCustomers([]);
         return;
       }
-      const rawCustomers: {id: string; name: string; phone?: string | null}[] = data || [];
+      const rawCustomers: {id: string; name: string; phone?: string | null; credit_score?: number; max_credit_limit?: number}[] = data || [];
       if (rawCustomers.length === 0) { setCustomers([]); return; }
 
-      // Compute debt per customer: sum(total_amount) - sum(amount_paid) from sales
+      // Fetch debt from customer_credits table for fast lookup
       const customerIds = rawCustomers.map(c => c.id);
-      const { data: salesData } = await (supabase as any)
-        .from('sales')
-        .select('customer_id, total_amount, amount_paid')
+      const { data: creditsData } = await (supabase as any)
+        .from('customer_credits')
+        .select('customer_id, total_debt')
         .in('customer_id', customerIds);
 
       const debtMap: Record<string, number> = {};
-      for (const sale of salesData || []) {
-        if (!sale.customer_id) continue;
-        const owed = (Number(sale.total_amount) || 0) - (Number(sale.amount_paid) || 0);
-        debtMap[sale.customer_id] = (debtMap[sale.customer_id] || 0) + owed;
+      for (const credit of creditsData || []) {
+        debtMap[credit.customer_id] = Math.max(0, Number(credit.total_debt) || 0);
       }
 
       setCustomers(rawCustomers.map(c => ({
         ...c,
         computed_debt: Math.max(0, debtMap[c.id] || 0),
+        credit_score: c.credit_score ?? 50,
+        max_credit_limit: c.max_credit_limit ?? 5000,
       })));
     } catch (err) {
       console.error('Error fetching customers:', err);
@@ -179,11 +234,17 @@ export default function SalesManagement() {
     return expiry <= thirtyDaysFromNow;
   };
 
-  // Instant add — no dialog, defaults to strip if available
+  // Instant add — no dialog for full_pcs, open dialog for measurable
   const addToCartInstant = (medicine: Medicine) => {
+    if (medicine.item_type === 'measurable') {
+      // For measurable items, we need the dialog for structured input
+      // We'll use AddToCartDialog — set state to open it
+      setSelectedMedicineForDialog(medicine);
+      return;
+    }
     const defaultSaleType: 'full_pack' | 'by_stripe' = medicine.units_per_pack ? 'by_stripe' : 'full_pack';
     addToCart(medicine, defaultSaleType, 1);
-    if (isMobile) setCartOpen(true);
+    if (isSmallScreen) setCartOpen(true);
   };
 
   const addToCart = (medicine: Medicine, saleType: 'full_pack' | 'by_stripe', count: number) => {
@@ -257,11 +318,28 @@ export default function SalesManagement() {
       } else {
         const pricePerStripe = item.selling_price / (item.units_per_pack || 1);
         const totalAvailableStripes = (item.stock_quantity * (item.units_per_pack || 1)) + (item.open_pack_units || 0);
-        // Use 0.5 step for strip delta adjustments to support decimals
-        const step = Math.abs(delta) === 1 ? (delta > 0 ? 0.5 : -0.5) : delta;
-        const newCount = parseFloat((Math.max(0.5, (item.stripesCount || 1) + step)).toFixed(4));
+        // Use 0.25 step for strip delta adjustments to support quarter quantities
+        const step = Math.abs(delta) === 1 ? (delta > 0 ? 0.25 : -0.25) : delta;
+        const newCount = parseFloat((Math.max(0.25, (item.stripesCount || 1) + step)).toFixed(4));
         if (newCount > totalAvailableStripes) return item;
         return { ...item, stripesCount: newCount, total: parseFloat((newCount * pricePerStripe).toFixed(2)) };
+      }
+    }));
+  };
+
+  const setMeasurableQuantity = (id: string, quantity: number) => {
+    setCart(prev => prev.map(item => {
+      if (item.id !== id) return item;
+      // Measurable items use full_pack saleType with decimal quantity
+      if (item.saleType === 'full_pack') {
+        if (quantity > item.stock_quantity) return item;
+        return { ...item, quantity, total: parseFloat((quantity * item.selling_price).toFixed(2)) };
+      } else {
+        // by_stripe measurable
+        const pricePerStripe = item.selling_price / (item.units_per_pack || 1);
+        const totalAvailable = (item.stock_quantity * (item.units_per_pack || 1)) + (item.open_pack_units || 0);
+        if (quantity > totalAvailable) return item;
+        return { ...item, stripesCount: quantity, total: parseFloat((quantity * pricePerStripe).toFixed(2)) };
       }
     }));
   };
@@ -304,9 +382,30 @@ export default function SalesManagement() {
   const selectedCustomer = customers.find(c => c.id === selectedCustomerId);
   const customerHasDebt = selectedCustomer && (selectedCustomer.computed_debt || 0) > 0;
 
+  // Credit limit check for debt sales
+  const getCreditCheckResult = () => {
+    if (!selectedCustomer || selectedCustomerId === 'none') return null;
+    const received = amountReceived ? parseFloat(amountReceived) : calculateTotal();
+    const shortfall = calculateTotal() - received;
+    if (shortfall <= 0) return null; // fully paid, no credit needed
+    const currentDebt = selectedCustomer.computed_debt || 0;
+    const maxLimit = selectedCustomer.max_credit_limit ?? 5000;
+    const score = selectedCustomer.credit_score ?? 50;
+    if (maxLimit === 0) return { allowed: false, reason: 'Credit score too low — Cash Only', score };
+    const available = Math.max(0, maxLimit - currentDebt);
+    if (shortfall > available) return { allowed: false, reason: `Debt (ETB ${(currentDebt + shortfall).toFixed(2)}) would exceed credit limit (ETB ${maxLimit.toFixed(2)})`, score };
+    return { allowed: true, score };
+  };
+  const creditCheck = getCreditCheckResult();
+
   const handleCheckout = () => {
     if (!selectedBranch) {
       toast({ title: 'Branch Required', description: 'Please select a specific branch before selling.', variant: 'destructive' });
+      return;
+    }
+    // Credit limit check
+    if (creditCheck && !creditCheck.allowed) {
+      toast({ title: 'Credit Denied', description: creditCheck.reason, variant: 'destructive' });
       return;
     }
     if (cart.length === 0) {
@@ -334,6 +433,9 @@ export default function SalesManagement() {
       let extraProfit = 0;
       let finalChangeAction: string | null = null;
 
+      // Track whether we need to deduct from debt (handled separately, not via change_action)
+      let shouldDeductDebt = false;
+
       if (change > 0.001) {
         // Overpayment — handle change options
         if (changeAction === 'give_change') {
@@ -342,13 +444,16 @@ export default function SalesManagement() {
           finalChangeAction = 'give_change';
         } else if (changeAction === 'keep_profit') {
           if (keepChangeOption === 'deduct_debt' && customerHasDebt) {
+            // DB only allows 'keep_change' or 'give_change' — use 'give_change' and handle debt separately
             actualPaid = total;
             extraProfit = 0;
-            finalChangeAction = 'deduct_debt';
+            finalChangeAction = 'give_change';
+            shouldDeductDebt = true;
           } else {
+            // Tip / extra profit — map to 'keep_change'
             actualPaid = received;
             extraProfit = change;
-            finalChangeAction = 'keep_profit';
+            finalChangeAction = 'keep_change';
           }
         }
       } else if (underpaid > 0.001) {
@@ -475,11 +580,10 @@ export default function SalesManagement() {
         }
       }
 
-      // Handle debt deduction — recorded via a customer_payment entry instead of
-      // a non-existent current_debt column on the customers table
-      if (finalChangeAction === 'deduct_debt' && customerHasDebt && selectedCustomer) {
+      // Handle debt deduction — recorded via a customer_payment entry
+      if (shouldDeductDebt && customerHasDebt && selectedCustomer) {
         const deductAmount = Math.min(change, selectedCustomer.computed_debt || 0);
-        await (supabase as any)
+        const { data: deductPayment } = await (supabase as any)
           .from('customer_payments')
           .insert([{
             customer_id: selectedCustomer.id,
@@ -488,13 +592,97 @@ export default function SalesManagement() {
             notes: 'Auto-deducted from change',
             branch_id: selectedBranch ?? profile?.branch_id ?? null,
             created_by: profile?.id ?? null,
-          }]);
+          }])
+          .select('id')
+          .single();
+
+        // Update customer_credits for debt deduction
+        const { data: existingCredit } = await (supabase as any)
+          .from('customer_credits')
+          .select('id, total_debt')
+          .eq('customer_id', selectedCustomer.id)
+          .single();
+
+        if (existingCredit) {
+          const prevBal = Number(existingCredit.total_debt);
+          const newBal = Math.max(0, prevBal - deductAmount);
+          await (supabase as any).from('customer_credits').update({ total_debt: newBal, last_updated: new Date().toISOString() }).eq('id', existingCredit.id);
+          await (supabase as any).from('customer_credit_transactions').insert({
+            customer_id: selectedCustomer.id,
+            branch_id: selectedBranch ?? profile?.branch_id ?? null,
+            transaction_type: 'payment',
+            amount: deductAmount,
+            previous_balance: prevBal,
+            new_balance: newBal,
+            payment_id: deductPayment?.id ?? null,
+            notes: 'Auto-deducted from change',
+            created_by: profile?.id ?? null,
+          });
+        }
+      }
+
+      // Update customer_credits for credit sale (underpaid)
+      if (selectedCustomerId !== 'none' && underpaid > 0.001) {
+        const branchId = selectedBranch ?? profile?.branch_id ?? null;
+        const { data: existingCredit } = await (supabase as any)
+          .from('customer_credits')
+          .select('id, total_debt')
+          .eq('customer_id', selectedCustomerId)
+          .single();
+
+        if (existingCredit) {
+          const prevBal = Number(existingCredit.total_debt);
+          const newBal = prevBal + underpaid;
+          await (supabase as any).from('customer_credits').update({ total_debt: newBal, last_updated: new Date().toISOString() }).eq('id', existingCredit.id);
+          await (supabase as any).from('customer_credit_transactions').insert({
+            customer_id: selectedCustomerId,
+            branch_id: branchId,
+            transaction_type: 'sale_credit',
+            amount: underpaid,
+            previous_balance: prevBal,
+            new_balance: newBal,
+            sale_id: saleData.id,
+            notes: null,
+            created_by: profile?.id ?? null,
+          });
+        } else {
+          // Create new customer_credits record
+          await (supabase as any).from('customer_credits').insert({
+            customer_id: selectedCustomerId,
+            branch_id: branchId,
+            total_debt: underpaid,
+          });
+          await (supabase as any).from('customer_credit_transactions').insert({
+            customer_id: selectedCustomerId,
+            branch_id: branchId,
+            transaction_type: 'sale_credit',
+            amount: underpaid,
+            previous_balance: 0,
+            new_balance: underpaid,
+            sale_id: saleData.id,
+            notes: null,
+            created_by: profile?.id ?? null,
+          });
+        }
+
+        // Auto credit score: penalize for debt sale
+        const cust = customers.find(c => c.id === selectedCustomerId);
+        if (cust) {
+          await updateCreditScore({
+            customerId: selectedCustomerId,
+            currentScore: cust.credit_score ?? 50,
+            changeAmount: -5,
+            reason: `New debt from sale (ETB ${underpaid.toFixed(2)} unpaid)`,
+            createdBy: profile?.id,
+            branchId: selectedBranch || profile?.branch_id,
+          });
+        }
       }
 
       let successMessage = `Sale completed! Total: ETB ${total.toFixed(2)} via ${paymentMethod}.`;
       if (extraProfit > 0) successMessage += ` Extra profit: ETB ${extraProfit.toFixed(2)}.`;
       if (finalChangeAction === 'give_change') successMessage += ` Change given: ETB ${change.toFixed(2)}.`;
-      if (finalChangeAction === 'deduct_debt') successMessage += ` ETB ${change.toFixed(2)} deducted from customer debt.`;
+      if (shouldDeductDebt) successMessage += ` ETB ${Math.min(change, selectedCustomer?.computed_debt || 0).toFixed(2)} deducted from customer debt.`;
 
       toast({ title: 'Success', description: successMessage });
 
@@ -562,8 +750,8 @@ export default function SalesManagement() {
             </Select>
           </div>
 
-          {/* Mobile cart FAB */}
-          {isMobile && (
+          {/* Cart icon for < 1024px (mobile + tablet) */}
+          {isSmallScreen && (
             <Button
               variant="default"
               size="icon"
@@ -590,13 +778,17 @@ export default function SalesManagement() {
                     <CardTitle className="text-base">{medicine.name}</CardTitle>
                     {medicine.generic_name && <CardDescription>{medicine.generic_name}</CardDescription>}
                   </div>
-                  <div className="flex flex-col gap-1 items-end">
+                   <div className="flex flex-col gap-1 items-end">
                     {medicine.category && <Badge variant="outline" className="text-xs">{medicine.category}</Badge>}
-                    {medicine.units_per_pack && (
+                    {isMeasurable(medicine.unit_label) ? (
+                      <Badge variant="secondary" className="text-xs">
+                        Measurable ({medicine.unit_label})
+                      </Badge>
+                    ) : medicine.units_per_pack ? (
                       <Badge variant="secondary" className="text-xs">
                         By {medicine.unit_label || 'unit'}
                       </Badge>
-                    )}
+                    ) : null}
                   </div>
                 </div>
               </CardHeader>
@@ -613,16 +805,18 @@ export default function SalesManagement() {
                     </div>
                   )}
                   <div className="flex justify-between text-sm">
-                    <span>Stock:</span>
+                    <span>{isMeasurable(medicine.unit_label) ? 'Stock:' : medicine.units_per_pack ? 'Unopened Packs:' : 'Stock:'}</span>
                     <Badge variant={medicine.stock_quantity <= 10 ? 'destructive' : 'secondary'}>
-                      {medicine.stock_quantity} {medicine.stock_quantity === 1 ? 'pack' : 'packs'}
+                      {isMeasurable(medicine.unit_label)
+                        ? `${medicine.stock_quantity + ((medicine.open_pack_units || 0) / 1000)} ${medicine.unit_label}`
+                        : `${medicine.stock_quantity} ${medicine.stock_quantity === 1 ? 'pack' : 'packs'}`}
                     </Badge>
                   </div>
-                  {medicine.units_per_pack && (medicine.open_pack_units || 0) > 0 && (
+                  {!isMeasurable(medicine.unit_label) && medicine.units_per_pack && (
                     <div className="flex justify-between text-sm text-muted-foreground">
                       <span>Open pack:</span>
                       <Badge variant="outline" className="text-xs">
-                        {medicine.open_pack_units}/{medicine.units_per_pack} {medicine.unit_label || 'unit'}s
+                        {medicine.open_pack_units || 0}/{medicine.units_per_pack} {medicine.unit_label || 'unit'}s remaining
                       </Badge>
                     </div>
                   )}
@@ -638,20 +832,20 @@ export default function SalesManagement() {
                       </div>
                     </div>
                   )}
-                  <Button
-                    onClick={() => {
-                      if (!selectedBranch) {
-                        toast({ title: 'Branch Required', description: 'Please select a specific branch before selling.', variant: 'destructive' });
-                        return;
-                      }
-                      addToCartInstant(medicine);
-                    }}
-                    className="w-full"
-                    disabled={medicine.stock_quantity === 0 || (isPharmacy && isExpired(medicine.expiry_date)) || !selectedBranch}
-                  >
-                    <Plus className="h-4 w-4 mr-2" />
-                    {!selectedBranch ? 'Select a Branch' : isPharmacy && isExpired(medicine.expiry_date) ? 'Expired' : 'Add to Cart'}
-                  </Button>
+                  {selectedBranch ? (
+                    <Button
+                      onClick={() => addToCartInstant(medicine)}
+                      className="w-full"
+                      disabled={medicine.stock_quantity === 0 || (isPharmacy && isExpired(medicine.expiry_date))}
+                    >
+                      <Plus className="h-4 w-4 mr-2" />
+                      {isPharmacy && isExpired(medicine.expiry_date) ? 'Expired' : 'Add to Cart'}
+                    </Button>
+                  ) : (
+                    <p className="text-sm text-muted-foreground text-center py-2">
+                      Please select a branch to sell items
+                    </p>
+                  )}
                 </div>
               </CardContent>
             </Card>
@@ -725,6 +919,15 @@ export default function SalesManagement() {
         total={total}
         processing={processing}
         onCheckout={handleCheckout}
+        creditCheck={creditCheck}
+        onSetMeasurableQuantity={setMeasurableQuantity}
+      />
+
+      <AddToCartDialog
+        open={!!selectedMedicineForDialog}
+        onOpenChange={(v) => { if (!v) setSelectedMedicineForDialog(null); }}
+        medicine={selectedMedicineForDialog}
+        onAddToCart={addToCart}
       />
 
       <ConfirmationDialog

@@ -4,11 +4,13 @@ import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
+import { RadioGroup, RadioGroupItem } from '@/components/ui/radio-group';
 import { Checkbox } from '@/components/ui/checkbox';
 import { supabase } from '@/lib/db';
 import { useToast } from '@/hooks/use-toast';
 import { useBranchContext } from '@/hooks/useBranchContext';
 import { useCustomCategories } from '@/hooks/useCustomCategories';
+import { MEASURABLE_UNIT_OPTIONS } from '@/lib/itemTypes';
 
 interface Medicine {
   id: string;
@@ -45,7 +47,11 @@ export default function EditMedicineDialog({
 }: EditMedicineDialogProps) {
   const { branchType } = useBranchContext();
   const isPharmacy = branchType === 'pharmacy';
-  const { categories: customCategories } = useCustomCategories(isPharmacy ? 'pharmacy' : 'general');
+  
+  const { categories: pharmacyCategories, loading: pharmLoading } = useCustomCategories('pharmacy');
+  const { categories: generalCategories, loading: genLoading } = useCustomCategories('general');
+  const categoriesLoading = pharmLoading || genLoading;
+  const allCategories = [...new Set([...pharmacyCategories, ...generalCategories])].sort();
 
   const [medicineData, setMedicineData] = useState({
     name: '',
@@ -62,8 +68,10 @@ export default function EditMedicineDialog({
     unit_label: 'strip',
     expiry_date: '',
     expiry_alert_enabled: true,
-    branch_id: ''
+    branch_id: '',
+    item_type: 'full_pcs' as 'full_pcs' | 'measurable',
   });
+  const [measurableUnit, setMeasurableUnit] = useState<string>('kg');
   const [branches, setBranches] = useState<Array<{ id: string; name: string }>>([]);
   const [userRole, setUserRole] = useState<'owner' | 'staff' | null>(null);
   const [loading, setLoading] = useState(false);
@@ -98,11 +106,16 @@ export default function EditMedicineDialog({
 
   useEffect(() => {
     if (medicine && open) {
-      const medicineWithBranch = medicine as MedicineWithBranch & { units_per_pack?: number; unit_label?: string };
+      const medicineWithBranch = medicine as MedicineWithBranch & { units_per_pack?: number; unit_label?: string; item_type?: string };
+      const unitLbl = medicineWithBranch.unit_label || 'strip';
+      const isMeas = (medicineWithBranch.item_type === 'measurable') || MEASURABLE_UNIT_OPTIONS.some(o => o.value === unitLbl.toLowerCase());
+      if (isMeas) {
+        setMeasurableUnit(unitLbl.toLowerCase());
+      }
       setMedicineData({
-        name: medicine.name,
+        name: medicine.name || '',
         generic_name: medicine.generic_name || '',
-        category: medicine.category,
+        category: medicine.category || '',
         manufacturer: medicine.manufacturer || '',
         batch_number: medicine.batch_number || '',
         country_name: medicine.country_name || '',
@@ -111,10 +124,11 @@ export default function EditMedicineDialog({
         stock_quantity: medicine.stock_quantity.toString(),
         minimum_stock_level: medicine.minimum_stock_level.toString(),
         units_per_pack: medicineWithBranch.units_per_pack ? medicineWithBranch.units_per_pack.toString() : '',
-        unit_label: medicineWithBranch.unit_label || 'strip',
+        unit_label: unitLbl,
         expiry_date: medicine.expiry_date || '',
         expiry_alert_enabled: medicine.expiry_alert_enabled ?? true,
-        branch_id: medicineWithBranch.branch_id || ''
+        branch_id: medicineWithBranch.branch_id || '',
+        item_type: isMeas ? 'measurable' : ((medicineWithBranch.item_type as 'full_pcs' | 'measurable') || 'full_pcs'),
       });
     }
   }, [medicine, open]);
@@ -125,7 +139,8 @@ export default function EditMedicineDialog({
     setLoading(true);
 
     try {
-      // category is now free-text — store the selected value directly
+      const isMeas = medicineData.item_type === 'measurable';
+      const unitLabel = isMeas ? measurableUnit : (medicineData.unit_label || 'strip');
       const updateData: any = {
         name: medicineData.name,
         generic_name: medicineData.generic_name || null,
@@ -135,12 +150,13 @@ export default function EditMedicineDialog({
         country_name: medicineData.country_name || null,
         purchase_price: parseFloat(medicineData.purchase_price),
         selling_price: parseFloat(medicineData.selling_price),
-        stock_quantity: parseInt(medicineData.stock_quantity),
+        stock_quantity: isMeas ? parseFloat(medicineData.stock_quantity) : parseInt(medicineData.stock_quantity),
         minimum_stock_level: parseInt(medicineData.minimum_stock_level),
-        units_per_pack: medicineData.units_per_pack ? parseInt(medicineData.units_per_pack) : null,
-        unit_label: medicineData.unit_label || 'strip',
+        units_per_pack: !isMeas && medicineData.units_per_pack ? parseInt(medicineData.units_per_pack) : null,
+        unit_label: unitLabel,
         expiry_date: isPharmacy ? (medicineData.expiry_date || null) : null,
-        expiry_alert_enabled: isPharmacy ? medicineData.expiry_alert_enabled : false
+        expiry_alert_enabled: isPharmacy ? medicineData.expiry_alert_enabled : false,
+        item_type: medicineData.item_type,
       };
       
       if (userRole === 'owner' && medicineData.branch_id) {
@@ -170,6 +186,29 @@ export default function EditMedicineDialog({
         </DialogHeader>
         
         <form onSubmit={handleSubmit} className="space-y-4">
+          {/* Item Type */}
+          <div className="space-y-3 p-4 rounded-lg border bg-muted/30">
+            <Label className="text-sm font-semibold">Item Type</Label>
+            <RadioGroup
+              value={medicineData.item_type}
+              onValueChange={(val) => setMedicineData({ ...medicineData, item_type: val as 'full_pcs' | 'measurable' })}
+              className="flex gap-6"
+            >
+              <div className="flex items-center space-x-2">
+                <RadioGroupItem value="full_pcs" id="edit_type_full_pcs" />
+                <Label htmlFor="edit_type_full_pcs" className="cursor-pointer">
+                  <span className="font-medium">Full PCS</span>
+                </Label>
+              </div>
+              <div className="flex items-center space-x-2">
+                <RadioGroupItem value="measurable" id="edit_type_measurable" />
+                <Label htmlFor="edit_type_measurable" className="cursor-pointer">
+                  <span className="font-medium">Measurable</span>
+                </Label>
+              </div>
+            </RadioGroup>
+          </div>
+
           <div className="space-y-2">
             <Label htmlFor="name">{isPharmacy ? 'Medicine Name' : 'Item Name'} *</Label>
             <Input id="name" value={medicineData.name} onChange={(e) => setMedicineData({ ...medicineData, name: e.target.value })} required />
@@ -182,20 +221,28 @@ export default function EditMedicineDialog({
 
           <div className="space-y-2">
             <Label htmlFor="category">Category *</Label>
-            <Select value={medicineData.category} onValueChange={(value: any) => setMedicineData({ ...medicineData, category: value })}>
-              <SelectTrigger><SelectValue placeholder="Select category" /></SelectTrigger>
+            <Select 
+              key={`category-select-${medicineData.category}-${allCategories.length}`}
+              value={medicineData.category || undefined} 
+              onValueChange={(value: string) => setMedicineData({ ...medicineData, category: value })}
+            >
+              <SelectTrigger>
+                <SelectValue placeholder={categoriesLoading ? "Loading categories..." : "Select category"} />
+              </SelectTrigger>
               <SelectContent>
-                {customCategories.map((cat) => (
-                  <SelectItem key={cat} value={cat}>
-                    {cat.charAt(0).toUpperCase() + cat.slice(1).replace(/_/g, ' ')}
-                  </SelectItem>
-                ))}
-                {/* Ensure current custom category is always shown even if not in list */}
-                {medicineData.category && !customCategories.includes(medicineData.category) && (
-                  <SelectItem key={medicineData.category} value={medicineData.category}>
-                    {medicineData.category.charAt(0).toUpperCase() + medicineData.category.slice(1)}
-                  </SelectItem>
-                )}
+                {(() => {
+                  const currentCat = medicineData.category;
+                  const displayList = [...allCategories];
+                  if (currentCat && !displayList.includes(currentCat)) {
+                    displayList.push(currentCat);
+                  }
+                  displayList.sort();
+                  return displayList.map((cat) => (
+                    <SelectItem key={cat} value={cat}>
+                      {cat.charAt(0).toUpperCase() + cat.slice(1).replace(/_/g, ' ')}
+                    </SelectItem>
+                  ));
+                })()}
               </SelectContent>
             </Select>
           </div>
@@ -245,7 +292,7 @@ export default function EditMedicineDialog({
           <div className="grid grid-cols-2 gap-4">
             <div className="space-y-2">
               <Label htmlFor="stock_quantity">Stock Quantity *</Label>
-              <Input id="stock_quantity" type="number" value={medicineData.stock_quantity} onChange={(e) => setMedicineData({ ...medicineData, stock_quantity: e.target.value })} required />
+              <Input id="stock_quantity" type="number" step={medicineData.item_type === 'measurable' ? '0.01' : '1'} value={medicineData.stock_quantity} onChange={(e) => setMedicineData({ ...medicineData, stock_quantity: e.target.value })} required />
             </div>
             <div className="space-y-2">
               <Label htmlFor="minimum_stock_level">Minimum Stock Level(for alert!) *</Label>
@@ -253,15 +300,34 @@ export default function EditMedicineDialog({
             </div>
           </div>
 
-          <div className="space-y-2">
-            <Label htmlFor="unit_label">Unit Label</Label>
-            <Input id="unit_label" value={medicineData.unit_label} onChange={(e) => setMedicineData({ ...medicineData, unit_label: e.target.value })} placeholder="e.g. strip, piece, bottle, kg" />
-          </div>
+          {/* Measurable unit selector */}
+          {medicineData.item_type === 'measurable' && (
+            <div className="space-y-2">
+              <Label>Measurement Unit *</Label>
+              <Select value={measurableUnit} onValueChange={setMeasurableUnit}>
+                <SelectTrigger><SelectValue /></SelectTrigger>
+                <SelectContent>
+                  {MEASURABLE_UNIT_OPTIONS.map((opt) => (
+                    <SelectItem key={opt.value} value={opt.value}>{opt.label}</SelectItem>
+                  ))}
+                </SelectContent>
+              </Select>
+            </div>
+          )}
 
-          <div className="space-y-2">
-            <Label htmlFor="units_per_pack">Units Per stock</Label>
-            <Input id="units_per_pack" type="number" min="1" value={medicineData.units_per_pack} onChange={(e) => setMedicineData({ ...medicineData, units_per_pack: e.target.value })} placeholder="Leave empty if not sold by unit" />
-          </div>
+          {/* Unit Label & Units Per Pack — only for Full PCS */}
+          {medicineData.item_type === 'full_pcs' && (
+            <>
+              <div className="space-y-2">
+                <Label htmlFor="unit_label">Unit Label</Label>
+                <Input id="unit_label" value={medicineData.unit_label} onChange={(e) => setMedicineData({ ...medicineData, unit_label: e.target.value })} placeholder="e.g. strip, piece, bottle" />
+              </div>
+              <div className="space-y-2">
+                <Label htmlFor="units_per_pack">Units Per Stock</Label>
+                <Input id="units_per_pack" type="number" min="1" value={medicineData.units_per_pack} onChange={(e) => setMedicineData({ ...medicineData, units_per_pack: e.target.value })} placeholder="Leave empty if not sold by unit" />
+              </div>
+            </>
+          )}
 
           {isPharmacy && (
             <>

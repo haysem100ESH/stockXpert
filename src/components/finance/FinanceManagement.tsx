@@ -165,6 +165,24 @@ export default function FinanceManagement() {
         }
       }
 
+      // Owner isolation: fetch owner's branch IDs when "All Branches"
+      let ownerBranchIds: string[] = [];
+      if (!selectedBranch && profile?.role === 'owner' && profile?.id) {
+        const { data: ownerBranches } = await supabase
+          .from('pharmacy_branches')
+          .select('id')
+          .eq('pharmacy_owner_id', profile.id);
+        ownerBranchIds = (ownerBranches || []).map((b: any) => b.id);
+      }
+
+      // If owner has no branches yet, show empty data
+      if (!selectedBranch && ownerBranchIds.length === 0 && profile?.role === 'owner') {
+        setSales([]); setExpenses([]); setInventoryExpenses([]); setBranchData([]);
+        setStats({ totalIncome: 0, totalExpenses: 0, netProfit: 0, profitMargin: 0 });
+        setLoading(false);
+        return;
+      }
+
       // Fetch sales with medicine details
       let salesQuery = supabase
         .from('sales')
@@ -189,6 +207,8 @@ export default function FinanceManagement() {
 
       if (selectedBranch) {
         salesQuery = salesQuery.eq('branch_id', selectedBranch);
+      } else if (ownerBranchIds.length > 0) {
+        salesQuery = salesQuery.in('branch_id', ownerBranchIds);
       }
 
       const { data: salesData, error: salesError } = await salesQuery;
@@ -234,6 +254,8 @@ export default function FinanceManagement() {
 
       if (selectedBranch) {
         expensesQuery = expensesQuery.eq('branch_id', selectedBranch);
+      } else if (ownerBranchIds.length > 0) {
+        expensesQuery = expensesQuery.in('branch_id', ownerBranchIds);
       }
 
       const { data: expensesData, error: expensesError } = await expensesQuery;
@@ -249,14 +271,20 @@ export default function FinanceManagement() {
 
       if (selectedBranch) {
         inventoryQuery = inventoryQuery.eq('branch_id', selectedBranch);
+      } else if (ownerBranchIds.length > 0) {
+        inventoryQuery = inventoryQuery.in('branch_id', ownerBranchIds);
       }
 
       const { data: inventoryData } = await inventoryQuery;
 
-      // Fetch branch names for inventory expenses
-      const { data: branchesForNames } = await supabase
+      // Fetch branch names for inventory expenses — only owner's branches
+      let branchNameQuery = supabase
         .from('pharmacy_branches')
         .select('id, name');
+      if (profile?.role === 'owner' && profile?.id) {
+        branchNameQuery = branchNameQuery.eq('pharmacy_owner_id', profile.id);
+      }
+      const { data: branchesForNames } = await branchNameQuery;
       const branchNameMap = new Map((branchesForNames || []).map((b: any) => [b.id, b.name]));
 
       const invExpenses: InventoryExpense[] = (inventoryData || []).map((med: any) => ({
@@ -356,7 +384,8 @@ export default function FinanceManagement() {
             existing.unitsPerPack = item.medicines.units_per_pack;
           }
           if (item.sale_type === 'by_stripe') {
-            existing.totalStripes += item.stripes_sold || item.quantity || 0;
+            const rawStripes = item.stripes_sold || item.quantity || 0;
+            existing.totalStripes += rawStripes >= 100 ? rawStripes / 1000 : rawStripes;
           } else {
             existing.totalQuantity += item.quantity || 0;
           }
@@ -383,7 +412,8 @@ export default function FinanceManagement() {
       .map(sale => {
         const relevantItems = sale.sale_items?.filter(si => si.medicines?.name === selectedItem) || [];
         const itemQty = relevantItems.filter(si => si.sale_type !== 'by_stripe').reduce((sum, si) => sum + (si.quantity || 0), 0);
-        const itemStripes = relevantItems.filter(si => si.sale_type === 'by_stripe').reduce((sum, si) => sum + (si.stripes_sold || si.quantity || 0), 0);
+        const itemStripesRaw = relevantItems.filter(si => si.sale_type === 'by_stripe').reduce((sum, si) => sum + (si.stripes_sold || si.quantity || 0), 0);
+        const itemStripes = itemStripesRaw >= 100 ? itemStripesRaw / 1000 : itemStripesRaw;
         const itemTotal = relevantItems.reduce((sum, si) => sum + Number(si.total_price || 0), 0);
         return { ...sale, itemQty, itemStripes, itemTotal, unitLabel, unitsPerPack };
       })

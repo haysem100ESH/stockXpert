@@ -12,10 +12,14 @@ import { Search, Plus, Users, DollarSign, AlertTriangle, Edit, CreditCard, Eye, 
 import { supabase } from '@/lib/db';
 import { useToast } from '@/hooks/use-toast';
 import { useBranchContext } from '@/hooks/useBranchContext';
+import { getCreditLimit } from '@/hooks/useCreditScore';
+import CreditScoreBadge from './CreditScoreBadge';
+import DebtProgressBar from './DebtProgressBar';
 import AddCustomerDialog from './AddCustomerDialog';
 import EditCustomerDialog from './EditCustomerDialog';
 import RecordPaymentDialog from './RecordPaymentDialog';
 import CustomerDetailDialog from './CustomerDetailDialog';
+import DebtorExpandableList from './DebtorExpandableList';
 
 interface Customer {
   id: string;
@@ -27,6 +31,8 @@ interface Customer {
   totalPaid: number;
   totalDebt: number;
   lastPurchaseDate?: string;
+  credit_score: number;
+  max_credit_limit: number;
 }
 
 type PaymentStatus = 'No Sales' | 'Paid' | 'Partial' | 'Unpaid';
@@ -66,24 +72,48 @@ export default function CustomerManagement() {
       const { data: customersData, error } = await query;
       if (error) throw error;
 
-      const enriched: Customer[] = await Promise.all(
-        (customersData || []).map(async (c: any) => {
-          const { data: salesData } = await (supabase as any)
-            .from('sales').select('total_amount, amount_paid, created_at')
-            .eq('customer_id', c.id).order('created_at', { ascending: false });
-          const totalPurchases = salesData?.reduce((s: number, r: any) => s + Number(r.total_amount), 0) || 0;
-          const paidAtSale = salesData?.reduce((s: number, r: any) => s + Number(r.amount_paid || 0), 0) || 0;
-          const lastPurchaseDate = salesData?.[0]?.created_at;
+      // Safely extract non-null IDs only
+      const customerIds: string[] = (customersData || [])
+        .map((c: any) => c.id)
+        .filter((id: any) => id !== null && id !== undefined && typeof id === 'string');
 
-          const { data: paymentsData } = await (supabase as any)
-            .from('customer_payments').select('amount').eq('customer_id', c.id);
-          const totalPayments = paymentsData?.reduce((s: number, p: any) => s + Number(p.amount), 0) || 0;
+      let debtMap: Record<string, number> = {};
+      let allSalesData: any[] = [];
 
-          const totalPaid = paidAtSale + totalPayments;
-          const totalDebt = Math.max(0, totalPurchases - totalPaid);
-          return { ...c, totalPurchases, totalPaid, totalDebt, lastPurchaseDate };
-        })
-      );
+      if (customerIds.length > 0) {
+        // Batch fetch debt from customer_credits
+        const { data: creditsData } = await (supabase as any)
+          .from('customer_credits')
+          .select('customer_id, total_debt')
+          .in('customer_id', customerIds);
+
+        for (const credit of creditsData || []) {
+          if (credit.customer_id) {
+            debtMap[credit.customer_id] = Math.max(0, Number(credit.total_debt) || 0);
+          }
+        }
+
+        // Batch fetch sales for totals & last purchase date
+        const { data: salesData } = await (supabase as any)
+          .from('sales')
+          .select('customer_id, total_amount, created_at')
+          .in('customer_id', customerIds)
+          .order('created_at', { ascending: false });
+
+        allSalesData = (salesData || []).filter((s: any) => s.customer_id !== null);
+      }
+
+      const enriched: Customer[] = (customersData || []).map((c: any) => {
+        const custSales = allSalesData.filter((s: any) => s.customer_id === c.id);
+        const totalPurchases = custSales.reduce((s: number, r: any) => s + Number(r.total_amount), 0);
+        const lastPurchaseDate = custSales[0]?.created_at;
+        const totalDebt = debtMap[c.id] || 0;
+        const totalPaid = Math.max(0, totalPurchases - totalDebt);
+        const creditScore = c.credit_score ?? 50;
+        const maxCreditLimit = c.max_credit_limit ?? getCreditLimit(creditScore);
+        return { ...c, totalPurchases, totalPaid, totalDebt, lastPurchaseDate, credit_score: creditScore, max_credit_limit: maxCreditLimit };
+      });
+
       setCustomers(enriched);
     } catch {
       toast({ title: 'Error', description: 'Failed to fetch customers', variant: 'destructive' });
@@ -100,23 +130,23 @@ export default function CustomerManagement() {
     { accessorKey: 'name', header: 'Name', cell: ({ row }) => <span className="font-medium">{row.original.name}</span> },
     { accessorKey: 'phone', header: 'Phone', cell: ({ row }) => row.original.phone || <span className="text-muted-foreground">—</span> },
     {
-      accessorKey: 'totalPurchases',
-      header: 'Total Purchases',
-      cell: ({ row }) => `ETB ${row.original.totalPurchases.toFixed(2)}`,
-    },
-    {
-      accessorKey: 'totalPaid',
-      header: 'Paid',
-      cell: ({ row }) => `ETB ${row.original.totalPaid.toFixed(2)}`,
+      accessorKey: 'credit_score',
+      header: 'Credit Score',
+      cell: ({ row }) => <CreditScoreBadge score={row.original.credit_score} />,
     },
     {
       accessorKey: 'totalDebt',
-      header: 'Outstanding',
+      header: 'Debt / Limit',
       cell: ({ row }) => (
-        <span className={row.original.totalDebt > 0 ? 'text-destructive font-semibold' : ''}>
-          ETB {row.original.totalDebt.toFixed(2)}
-        </span>
+        <div className="min-w-[160px]">
+          <DebtProgressBar currentDebt={row.original.totalDebt} maxCreditLimit={row.original.max_credit_limit} />
+        </div>
       ),
+    },
+    {
+      accessorKey: 'totalPurchases',
+      header: 'Purchases',
+      cell: ({ row }) => `ETB ${row.original.totalPurchases.toFixed(2)}`,
     },
     {
       accessorKey: 'status',
@@ -222,7 +252,13 @@ export default function CustomerManagement() {
             <TabsTrigger value="all">All Customers</TabsTrigger>
             <TabsTrigger value="debtors">Debtors ({debtors.length})</TabsTrigger>
           </TabsList>
-          <Button onClick={() => setShowAddDialog(true)} size="sm">
+          <Button onClick={() => {
+            if (!selectedBranch) {
+              toast({ title: 'Branch Required', description: 'Please select a specific branch before creating a customer.', variant: 'destructive' });
+              return;
+            }
+            setShowAddDialog(true);
+          }} size="sm">
             <Plus className="h-4 w-4 mr-1" /> Add Customer
           </Button>
         </div>
@@ -245,13 +281,10 @@ export default function CustomerManagement() {
         <TabsContent value="debtors">
           <Card>
             <CardContent className="pt-4">
-              <DataTable
-                columns={debtorColumns}
-                data={debtors}
-                searchKey="name"
-                searchPlaceholder="Search debtors..."
+              <DebtorExpandableList
+                debtors={debtors}
                 loading={loading}
-                emptyMessage="No outstanding debts 🎉"
+                onRecordPayment={(d) => openPayment(d as Customer)}
               />
             </CardContent>
           </Card>
@@ -268,6 +301,7 @@ export default function CustomerManagement() {
             customerId={selectedCustomer.id}
             customerName={selectedCustomer.name}
             outstandingAmount={selectedCustomer.totalDebt}
+            creditScore={selectedCustomer.credit_score}
             onPaymentRecorded={fetchCustomers}
           />
           <CustomerDetailDialog

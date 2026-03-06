@@ -88,7 +88,7 @@ export default function BranchManagement() {
   const [branchName, setBranchName] = useState('');
   const [branchAddress, setBranchAddress] = useState('');
   const [branchPhone, setBranchPhone] = useState('');
-  const [branchType, setBranchType] = useState<'pharmacy' | 'general'>('pharmacy');
+  const [branchType, setBranchType] = useState<'pharmacy' | 'general'>('general');
   const [isMainBranch, setIsMainBranch] = useState(false);
 
   useEffect(() => {
@@ -127,7 +127,7 @@ export default function BranchManagement() {
 
   const resetForm = () => {
     setBranchName(''); setBranchAddress(''); setBranchPhone('');
-    setBranchType('pharmacy'); setIsMainBranch(false); setEditingBranch(null);
+    setBranchType('general'); setIsMainBranch(false); setEditingBranch(null);
   };
 
   const handleCreate = async () => {
@@ -146,6 +146,7 @@ export default function BranchManagement() {
       toast({ title: 'Success', description: 'Branch created successfully' });
       resetForm(); setShowCreateDialog(false);
       fetchBranches(); refetchPlanLimits();
+      window.dispatchEvent(new Event('branches-updated'));
     } catch (e: any) {
       toast({ title: 'Error', description: e.message, variant: 'destructive' });
     } finally {
@@ -163,6 +164,7 @@ export default function BranchManagement() {
       if (error) throw error;
       toast({ title: 'Success', description: 'Branch updated successfully' });
       setShowEditDialog(false); resetForm(); fetchBranches();
+      window.dispatchEvent(new Event('branches-updated'));
     } catch (e: any) {
       toast({ title: 'Error', description: e.message, variant: 'destructive' });
     } finally {

@@ -66,6 +66,7 @@ export default function CategoryManagement() {
       toast({ title: 'Success', description: 'Category added' });
       setNewCategoryName('');
       fetchCategories();
+      window.dispatchEvent(new Event('categories-updated'));
     }
     setLoading(false);
   };
@@ -81,6 +82,7 @@ export default function CategoryManagement() {
       toast({ title: 'Success', description: 'Category updated' });
       setEditingId(null);
       fetchCategories();
+      window.dispatchEvent(new Event('categories-updated'));
     }
   };
 
@@ -91,6 +93,7 @@ export default function CategoryManagement() {
     } else {
       toast({ title: 'Success', description: 'Category deleted' });
       fetchCategories();
+      window.dispatchEvent(new Event('categories-updated'));
     }
     setDeleteConfirm({ open: false, id: '', name: '' });
   };

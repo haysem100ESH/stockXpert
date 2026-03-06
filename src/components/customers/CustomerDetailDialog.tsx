@@ -4,6 +4,10 @@ import { Badge } from '@/components/ui/badge';
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@/components/ui/table';
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
 import { supabase } from '@/lib/db';
+import { getCreditLimit } from '@/hooks/useCreditScore';
+import CreditScoreBadge from './CreditScoreBadge';
+import DebtProgressBar from './DebtProgressBar';
+import CreditHistoryTab from './CreditHistoryTab';
 
 interface CustomerDetailDialogProps {
   open: boolean;
@@ -33,6 +37,9 @@ export default function CustomerDetailDialog({ open, onOpenChange, customerId, c
   const [sales, setSales] = useState<SaleRecord[]>([]);
   const [payments, setPayments] = useState<PaymentRecord[]>([]);
   const [loading, setLoading] = useState(true);
+  const [creditScore, setCreditScore] = useState(50);
+  const [currentDebt, setCurrentDebt] = useState(0);
+  const [maxCreditLimit, setMaxCreditLimit] = useState(5000);
 
   useEffect(() => {
     if (open && customerId) {
@@ -42,12 +49,25 @@ export default function CustomerDetailDialog({ open, onOpenChange, customerId, c
 
   const fetchData = async () => {
     setLoading(true);
-    const [salesRes, paymentsRes] = await Promise.all([
+    const [salesRes, paymentsRes, customerRes] = await Promise.all([
       supabase.from('sales').select('id, total_amount, amount_paid, payment_status, payment_method, created_at').eq('customer_id', customerId).order('created_at', { ascending: false }),
       supabase.from('customer_payments').select('id, amount, payment_method, notes, created_at').eq('customer_id', customerId).order('created_at', { ascending: false }),
+      supabase.from('customers').select('credit_score, max_credit_limit').eq('id', customerId).single(),
     ]);
-    setSales((salesRes.data as any[]) || []);
+    const salesData = (salesRes.data as any[]) || [];
+    setSales(salesData);
     setPayments(paymentsRes.data || []);
+
+    const score = (customerRes as any).data?.credit_score ?? 50;
+    setCreditScore(score);
+    setMaxCreditLimit((customerRes as any).data?.max_credit_limit ?? getCreditLimit(score));
+
+    // Compute debt
+    const totalPurchases = salesData.reduce((s: number, r: any) => s + Number(r.total_amount), 0);
+    const paidAtSale = salesData.reduce((s: number, r: any) => s + Number(r.amount_paid || 0), 0);
+    const totalPayments = (paymentsRes.data || []).reduce((s: number, p: any) => s + Number(p.amount), 0);
+    setCurrentDebt(Math.max(0, totalPurchases - paidAtSale - totalPayments));
+
     setLoading(false);
   };
 
@@ -60,11 +80,21 @@ export default function CustomerDetailDialog({ open, onOpenChange, customerId, c
         </DialogHeader>
 
         {loading ? <div className="py-4 text-center text-muted-foreground">Loading...</div> : (
-          <Tabs defaultValue="purchases" className="space-y-4">
-            <TabsList>
-              <TabsTrigger value="purchases">Purchases ({sales.length})</TabsTrigger>
-              <TabsTrigger value="payments">Debt Payments ({payments.length})</TabsTrigger>
-            </TabsList>
+          <>
+            {/* Credit Score Summary */}
+            <div className="flex items-center gap-4 flex-wrap p-3 rounded-lg border bg-card">
+              <CreditScoreBadge score={creditScore} size="md" />
+              <div className="flex-1 min-w-[180px]">
+                <DebtProgressBar currentDebt={currentDebt} maxCreditLimit={maxCreditLimit} />
+              </div>
+            </div>
+
+            <Tabs defaultValue="purchases" className="space-y-4">
+              <TabsList>
+                <TabsTrigger value="purchases">Purchases ({sales.length})</TabsTrigger>
+                <TabsTrigger value="payments">Debt Payments ({payments.length})</TabsTrigger>
+                <TabsTrigger value="credit">Credit History</TabsTrigger>
+              </TabsList>
 
             <TabsContent value="purchases">
               <Table>
@@ -119,7 +149,11 @@ export default function CustomerDetailDialog({ open, onOpenChange, customerId, c
                 </TableBody>
               </Table>
             </TabsContent>
+            <TabsContent value="credit">
+              <CreditHistoryTab customerId={customerId} />
+            </TabsContent>
           </Tabs>
+          </>
         )}
       </DialogContent>
     </Dialog>

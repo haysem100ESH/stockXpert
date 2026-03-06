@@ -6,8 +6,10 @@ import { Badge } from '@/components/ui/badge';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
 import { Separator } from '@/components/ui/separator';
 import { RadioGroup, RadioGroupItem } from '@/components/ui/radio-group';
-import { ShoppingCart, Trash2, CreditCard, Percent, ArrowLeftRight, Wallet, X, Plus, Minus, Search } from 'lucide-react';
+import { ShoppingCart, Trash2, CreditCard, Percent, ArrowLeftRight, Wallet, X, Plus, Minus, Search, AlertTriangle } from 'lucide-react';
 import { cn } from '@/lib/utils';
+import CreditScoreBadge from '@/components/customers/CreditScoreBadge';
+import DebtProgressBar from '@/components/customers/DebtProgressBar';
 
 interface CartItem {
   id: string;
@@ -17,6 +19,7 @@ interface CartItem {
   units_per_pack?: number;
   open_pack_units?: number;
   unit_label?: string;
+  item_type?: string;
   quantity: number;
   total: number;
   saleType: 'full_pack' | 'by_stripe';
@@ -28,6 +31,8 @@ interface Customer {
   name: string;
   phone?: string | null;
   computed_debt?: number;
+  credit_score?: number;
+  max_credit_limit?: number;
 }
 
 type ChangeAction = 'keep_profit' | 'deduct_debt' | 'give_change' | null;
@@ -39,6 +44,7 @@ interface CartSliderProps {
   onRemove: (id: string, saleType: 'full_pack' | 'by_stripe') => void;
   onUpdateQuantity: (id: string, saleType: 'full_pack' | 'by_stripe', delta: number) => void;
   onChangeSaleType: (id: string, newSaleType: 'full_pack' | 'by_stripe') => void;
+  onSetMeasurableQuantity?: (id: string, quantity: number) => void;
   customers: Customer[];
   selectedCustomerId: string;
   onSelectCustomer: (id: string) => void;
@@ -57,11 +63,12 @@ interface CartSliderProps {
   total: number;
   processing: boolean;
   onCheckout: () => void;
+  creditCheck?: { allowed: boolean; reason?: string; score?: number } | null;
 }
 
 export default function CartSlider({
   open, onClose,
-  cart, onRemove, onUpdateQuantity, onChangeSaleType,
+  cart, onRemove, onUpdateQuantity, onChangeSaleType, onSetMeasurableQuantity,
   customers, selectedCustomerId, onSelectCustomer,
   paymentMethod, onPaymentMethodChange,
   discountPercent, onDiscountChange,
@@ -70,6 +77,7 @@ export default function CartSlider({
   keepChangeOption, onKeepChangeOption,
   subtotal, discount, total,
   processing, onCheckout,
+  creditCheck,
 }: CartSliderProps) {
   const overlayRef = useRef<HTMLDivElement>(null);
   const [customerSearch, setCustomerSearch] = useState('');
@@ -95,7 +103,7 @@ export default function CartSlider({
 
   return (
     <>
-      {/* Backdrop — mobile only */}
+      {/* Backdrop — below 1024px */}
       <div
         ref={overlayRef}
         onClick={handleOverlayClick}
@@ -183,45 +191,88 @@ export default function CartSlider({
                       {/* Quantity controls */}
                       <div className="flex items-center justify-between">
                         <div className="flex items-center gap-2">
-                          <Button
-                            size="icon"
-                            variant="outline"
-                            className="h-7 w-7"
-                            onClick={() => onUpdateQuantity(item.id, item.saleType, -1)}
-                          >
-                            <Minus className="h-3 w-3" />
-                          </Button>
-                          {item.saleType === 'by_stripe' ? (
-                            <input
-                              type="number"
-                              step="0.5"
-                              min="0.5"
-                              value={item.stripesCount ?? 1}
-                              onChange={(e) => {
-                                const val = parseFloat(e.target.value);
-                                if (!isNaN(val) && val > 0) {
-                                  const delta = val - (item.stripesCount ?? 1);
-                                  onUpdateQuantity(item.id, item.saleType, delta);
-                                }
-                              }}
-                              className="w-16 text-sm font-medium text-center border rounded-md h-7 bg-background px-1 focus:outline-none focus:ring-1 focus:ring-ring"
-                            />
-                          ) : (
-                            <span className="text-sm font-medium min-w-[2rem] text-center">
-                              {item.quantity}
-                            </span>
+                          {item.item_type === 'measurable' ? (() => {
+                            const currentQty = item.saleType === 'by_stripe' ? (item.stripesCount ?? 1) : item.quantity;
+                            const wholePart = Math.floor(currentQty);
+                            const decPart = Math.round((currentQty - wholePart) * 100);
+                            const measurableUnit = item.unit_label || 'unit';
+                            return (
+                              <div className="flex items-center gap-1">
+                                <input
+                                  type="number"
+                                  min="0"
+                                  value={wholePart}
+                                  onChange={(e) => {
+                                    const w = parseInt(e.target.value) || 0;
+                                    const newQty = parseFloat((w + decPart / 100).toFixed(2));
+                                    if (newQty > 0 && onSetMeasurableQuantity) {
+                                      onSetMeasurableQuantity(item.id, newQty);
+                                    }
+                                  }}
+                                  className="w-14 text-sm font-medium text-center border rounded-md h-7 bg-background px-1 focus:outline-none focus:ring-1 focus:ring-ring"
+                                />
+                                <span className="text-sm font-bold">.</span>
+                                <input
+                                  type="text"
+                                  inputMode="numeric"
+                                  maxLength={2}
+                                  value={decPart.toString().padStart(2, '0')}
+                                  onChange={(e) => {
+                                    const val = e.target.value.replace(/[^0-9]/g, '').slice(0, 2);
+                                    const d = parseInt(val || '0');
+                                    const newQty = parseFloat((wholePart + d / 100).toFixed(2));
+                                    if (newQty > 0 && onSetMeasurableQuantity) {
+                                      onSetMeasurableQuantity(item.id, newQty);
+                                    }
+                                  }}
+                                  className="w-10 text-sm font-medium text-center border rounded-md h-7 bg-background px-1 focus:outline-none focus:ring-1 focus:ring-ring"
+                                />
+                                <span className="text-xs text-muted-foreground">{measurableUnit}</span>
+                              </div>
+                            );
+                          })() : (
+                            <>
+                              <Button
+                                size="icon"
+                                variant="outline"
+                                className="h-7 w-7"
+                                onClick={() => onUpdateQuantity(item.id, item.saleType, -1)}
+                              >
+                                <Minus className="h-3 w-3" />
+                              </Button>
+                              {item.saleType === 'by_stripe' ? (
+                                <input
+                                  type="number"
+                                  step="0.01"
+                                  min="0.01"
+                                  value={item.stripesCount ?? 1}
+                                  onChange={(e) => {
+                                    const val = parseFloat(e.target.value);
+                                    if (!isNaN(val) && val > 0) {
+                                      const delta = val - (item.stripesCount ?? 1);
+                                      onUpdateQuantity(item.id, item.saleType, delta);
+                                    }
+                                  }}
+                                  className="w-16 text-sm font-medium text-center border rounded-md h-7 bg-background px-1 focus:outline-none focus:ring-1 focus:ring-ring"
+                                />
+                              ) : (
+                                <span className="text-sm font-medium min-w-[2rem] text-center">
+                                  {item.quantity}
+                                </span>
+                              )}
+                              <Button
+                                size="icon"
+                                variant="outline"
+                                className="h-7 w-7"
+                                onClick={() => onUpdateQuantity(item.id, item.saleType, 1)}
+                              >
+                                <Plus className="h-3 w-3" />
+                              </Button>
+                              <span className="text-xs text-muted-foreground">
+                                {item.saleType === 'by_stripe' ? `${unitLabel}s` : 'packs'}
+                              </span>
+                            </>
                           )}
-                          <Button
-                            size="icon"
-                            variant="outline"
-                            className="h-7 w-7"
-                            onClick={() => onUpdateQuantity(item.id, item.saleType, 1)}
-                          >
-                            <Plus className="h-3 w-3" />
-                          </Button>
-                          <span className="text-xs text-muted-foreground">
-                            {item.saleType === 'by_stripe' ? `${unitLabel}s` : 'packs'}
-                          </span>
                         </div>
                         <span className="text-sm font-semibold">ETB {item.total.toFixed(2)}</span>
                       </div>
@@ -340,8 +391,20 @@ export default function CartSlider({
                       <div className="py-2 px-3 text-xs text-muted-foreground">No customers match "{customerSearch}"</div>
                     )}
                   </SelectContent>
-                </Select>
-              </div>
+              </Select>
+              {/* Credit info for selected customer */}
+              {selectedCustomer && selectedCustomerId !== 'none' && (
+                <div className="space-y-2 p-2 rounded-lg border bg-muted/30">
+                  <div className="flex items-center gap-2 flex-wrap">
+                    <CreditScoreBadge score={selectedCustomer.credit_score ?? 50} />
+                  </div>
+                  <DebtProgressBar
+                    currentDebt={selectedCustomer.computed_debt || 0}
+                    maxCreditLimit={selectedCustomer.max_credit_limit ?? 5000}
+                  />
+                </div>
+              )}
+            </div>
 
               {/* Payment Method */}
               <div className="space-y-1.5">
@@ -466,10 +529,22 @@ export default function CartSlider({
 
         {/* Footer checkout button */}
         <div className="border-t p-4 bg-card">
+          {/* Credit denied warning */}
+          {creditCheck && !creditCheck.allowed && (
+            <div className="px-4 pb-2">
+              <div className="rounded-md bg-destructive/10 border border-destructive/30 p-3 flex items-start gap-2">
+                <AlertTriangle className="h-4 w-4 text-destructive mt-0.5 shrink-0" />
+                <div className="text-xs text-destructive">
+                  <p className="font-semibold">Credit Denied</p>
+                  <p>{creditCheck.reason}</p>
+                </div>
+              </div>
+            </div>
+          )}
           <Button
             onClick={onCheckout}
             className="w-full"
-            disabled={processing || cart.length === 0 || (hasChange && !changeAction) || (hasShortfall && selectedCustomerId === 'none')}
+            disabled={processing || cart.length === 0 || (hasChange && !changeAction) || (hasShortfall && selectedCustomerId === 'none') || (creditCheck != null && !creditCheck.allowed)}
           >
             <CreditCard className="h-4 w-4 mr-2" />
             {processing ? 'Processing...' : `Checkout · ETB ${total.toFixed(2)}`}
