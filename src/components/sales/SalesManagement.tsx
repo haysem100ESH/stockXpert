@@ -318,13 +318,20 @@ export default function SalesManagement() {
       } else {
         const pricePerStripe = item.selling_price / (item.units_per_pack || 1);
         const totalAvailableStripes = (item.stock_quantity * (item.units_per_pack || 1)) + (item.open_pack_units || 0);
-        // For countable (full_pcs) items, always increment by 1; for measurable, use fractional step
-        const isMeasurableItem = item.item_type === 'measurable';
-        const step = isMeasurableItem
-          ? (Math.abs(delta) === 1 ? (delta > 0 ? 0.25 : -0.25) : delta)
-          : delta;
-        const minStep = isMeasurableItem ? 0.25 : 1;
-        const newCount = parseFloat((Math.max(minStep, (item.stripesCount || 1) + step)).toFixed(4));
+        // For countable strip items, quantity must always be whole numbers.
+        // Measurable items can still use fractional strip quantities.
+        const isMeasurableItem = item.item_type === 'measurable' || isMeasurable(item.unit_label);
+        const currentCount = item.stripesCount || 1;
+
+        let newCount: number;
+        if (isMeasurableItem) {
+          const step = Math.abs(delta) === 1 ? (delta > 0 ? 0.25 : -0.25) : delta;
+          newCount = parseFloat((Math.max(0.25, currentCount + step)).toFixed(4));
+        } else {
+          const integerDelta = Number.isInteger(delta) ? delta : Math.round(delta);
+          newCount = Math.max(1, Math.round(currentCount + integerDelta));
+        }
+
         if (newCount > totalAvailableStripes) return item;
         return { ...item, stripesCount: newCount, total: parseFloat((newCount * pricePerStripe).toFixed(2)) };
       }
@@ -515,20 +522,28 @@ export default function SalesManagement() {
       }
       saleData = saleResult.data;
 
-      // stripes_sold DB column is INTEGER — store as thousandths of a strip (×1000)
-      // so 1.5 strips → 1500, 2.25 → 2250. Divide by 1000 when reading back.
-      // This preserves decimal precision within the integer column constraint.
-      const saleItems = cart.map(item => ({
-        sale_id: saleData.id,
-        medicine_id: item.id,
-        quantity: item.saleType === 'full_pack' ? Number(item.quantity) : 0,
-        unit_price: Number(item.selling_price),
-        total_price: Number(item.total.toFixed(2)),
-        sale_type: item.saleType,
-        stripes_sold: item.saleType === 'by_stripe' && item.stripesCount != null
-          ? Math.round(item.stripesCount * 1000)
-          : null,
-      }));
+      // Keep compatibility with both legacy (stripes_sold) and current
+      // strip/pack quantity columns used by debtor and finance views.
+      const saleItems = cart.map(item => {
+        const isByStripe = item.saleType === 'by_stripe';
+        const isMeasurableItem = item.item_type === 'measurable' || isMeasurable(item.unit_label);
+        const stripeQty = Number(item.stripesCount || 0);
+        const packQty = Number(item.quantity || 0);
+
+        return {
+          sale_id: saleData.id,
+          medicine_id: item.id,
+          quantity: isByStripe ? Number(stripeQty.toFixed(4)) : Number(packQty),
+          unit_price: Number(item.selling_price),
+          total_price: Number(item.total.toFixed(2)),
+          sale_type: item.saleType,
+          strip_quantity: isByStripe && !isMeasurableItem ? Math.max(0, Math.round(stripeQty)) : 0,
+          pack_quantity: !isByStripe && !isMeasurableItem ? Math.max(0, Math.round(packQty)) : 0,
+          stripes_sold: isByStripe && stripeQty > 0
+            ? Math.round(stripeQty * 1000)
+            : null,
+        };
+      });
 
       const { error: itemsError } = await (supabase as any).from('sale_items').insert(saleItems);
       if (itemsError) {
