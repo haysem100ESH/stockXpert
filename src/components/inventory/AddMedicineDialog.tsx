@@ -256,7 +256,7 @@ export default function AddMedicineDialog({ open, onOpenChange, onMedicineAdded,
             )}
 
             <div className="space-y-2">
-              <Label htmlFor="purchase_price">Purchase Price *</Label>
+              <Label htmlFor="purchase_price">Purchase Price {itemType === 'measurable' ? `per ${measurableUnit}` : ''} *</Label>
               <Input id="purchase_price" name="purchase_price" type="number" step="0.01" min="0" defaultValue={replicateData?.purchase_price} required />
             </div>
 
