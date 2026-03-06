@@ -17,6 +17,8 @@ interface Medicine {
   stock_quantity: number;
   purchase_price: number;
   branch_id?: string;
+  item_type?: string;
+  unit_label?: string;
 }
 
 interface StockAdjustmentDialogProps {
@@ -88,7 +90,20 @@ export default function StockAdjustmentDialog({ open, onOpenChange, medicine, on
         });
       if (logErr) throw logErr;
 
-      // Deduct from expenses if requested
+      // Auto-record expense for measurable items on stock increase
+      if (adjustmentType === 'increase' && medicine.item_type === 'measurable' && medicine.purchase_price > 0) {
+        const expenseAmount = qty * medicine.purchase_price;
+        const unit = (medicine.unit_label || 'unit').toUpperCase();
+        await supabase.from('expenses').insert({
+          description: `Purchase of ${medicine.name} (${qty} ${unit})`,
+          amount: expenseAmount,
+          category: 'Stock Purchase',
+          created_by: profile?.id || null,
+          branch_id: branchId,
+        });
+      }
+
+      // Deduct from expenses if requested (for decrease)
       if (adjustmentType === 'decrease' && deductFromExpense) {
         const expenseAmount = qty * medicine.purchase_price;
         await supabase.from('expenses').insert({

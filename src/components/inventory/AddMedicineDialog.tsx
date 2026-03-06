@@ -149,6 +149,20 @@ export default function AddMedicineDialog({ open, onOpenChange, onMedicineAdded,
       const { error } = await supabase.from('medicines').insert([medicineData]);
       if (error) throw error;
 
+      // Auto-record expense for measurable items: qty × purchase_price
+      if (itemType === 'measurable' && stockQuantity > 0 && medicineData.purchase_price > 0) {
+        const expenseAmount = stockQuantity * medicineData.purchase_price;
+        const itemName = medicineData.name || 'Item';
+        const unit = unitLabel || 'unit';
+        await supabase.from('expenses').insert({
+          description: `Purchase of ${itemName} (${stockQuantity} ${unit.toUpperCase()})`,
+          amount: expenseAmount,
+          category: 'Stock Purchase',
+          created_by: user?.id || null,
+          branch_id: selectedBranchId || userBranch || selectedBranch || null,
+        });
+      }
+
       toast({ title: "Success", description: label.success });
       onMedicineAdded();
       onOpenChange(false);
@@ -256,7 +270,7 @@ export default function AddMedicineDialog({ open, onOpenChange, onMedicineAdded,
             )}
 
             <div className="space-y-2">
-              <Label htmlFor="purchase_price">Purchase Price *</Label>
+              <Label htmlFor="purchase_price">Purchase Price {itemType === 'measurable' ? `per ${measurableUnit}` : ''} *</Label>
               <Input id="purchase_price" name="purchase_price" type="number" step="0.01" min="0" defaultValue={replicateData?.purchase_price} required />
             </div>
 
