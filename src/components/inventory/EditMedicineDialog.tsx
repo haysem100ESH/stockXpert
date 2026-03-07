@@ -395,6 +395,18 @@ export default function EditMedicineDialog({
             </>
           )}
 
+          {/* Record in Expense checkbox */}
+          <div className="flex items-center space-x-2 rounded-md border p-3 bg-muted/30">
+            <Checkbox
+              id="edit-record-in-expense"
+              checked={recordInExpense}
+              onCheckedChange={(checked) => setRecordInExpense(!!checked)}
+            />
+            <Label htmlFor="edit-record-in-expense" className="text-sm cursor-pointer">
+              Record in Expense
+            </Label>
+          </div>
+
           <div className="flex gap-2 pt-4">
             <Button type="submit" disabled={loading} className="flex-1">
               {loading ? "Updating..." : `Update ${isPharmacy ? 'Medicine' : 'Item'}`}
