@@ -355,6 +355,18 @@ export default function AddMedicineDialog({ open, onOpenChange, onMedicineAdded,
             </Select>
           </div>
 
+          {/* Record in Expense checkbox */}
+          <div className="flex items-center space-x-2 rounded-md border p-3 bg-muted/30">
+            <Checkbox
+              id="record-in-expense"
+              checked={recordInExpense}
+              onCheckedChange={(checked) => setRecordInExpense(!!checked)}
+            />
+            <Label htmlFor="record-in-expense" className="text-sm cursor-pointer">
+              Record in Expense
+            </Label>
+          </div>
+
           <div className="flex justify-end space-x-2 pt-4">
             <Button type="button" variant="outline" onClick={() => onOpenChange(false)}>
               Cancel
