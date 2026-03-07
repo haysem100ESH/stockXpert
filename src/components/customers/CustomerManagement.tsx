@@ -59,6 +59,7 @@ export default function CustomerManagement() {
   const [showEditDialog, setShowEditDialog] = useState(false);
   const [showPaymentDialog, setShowPaymentDialog] = useState(false);
   const [showDetailDialog, setShowDetailDialog] = useState(false);
+  const [showLedgerDialog, setShowLedgerDialog] = useState(false);
   const [selectedCustomer, setSelectedCustomer] = useState<Customer | null>(null);
   const { selectedBranch } = useBranchContext();
   const { toast } = useToast();
