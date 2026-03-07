@@ -19,6 +19,7 @@ import AddCustomerDialog from './AddCustomerDialog';
 import EditCustomerDialog from './EditCustomerDialog';
 import RecordPaymentDialog from './RecordPaymentDialog';
 import CustomerDetailDialog from './CustomerDetailDialog';
+import CustomerLedgerDialog from './CustomerLedgerDialog';
 import DebtorExpandableList from './DebtorExpandableList';
 
 interface Customer {
