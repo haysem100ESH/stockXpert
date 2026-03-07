@@ -1,5 +1,5 @@
 import { useState } from 'react';
-import { ChevronDown, ChevronRight, CreditCard, Loader2 } from 'lucide-react';
+import { ChevronDown, ChevronRight, CreditCard, FileText, Loader2 } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { Badge } from '@/components/ui/badge';
 import {
@@ -34,6 +34,7 @@ interface DebtorExpandableListProps {
   debtors: Debtor[];
   loading: boolean;
   onRecordPayment: (debtor: Debtor) => void;
+  onViewLedger?: (debtor: Debtor) => void;
 }
 
 function formatQuantity(quantity: number, unitLabel: string, itemType: string): string {
@@ -196,7 +197,7 @@ function ExpandedCreditItems({ customerId }: { customerId: string }) {
   );
 }
 
-export default function DebtorExpandableList({ debtors, loading, onRecordPayment }: DebtorExpandableListProps) {
+export default function DebtorExpandableList({ debtors, loading, onRecordPayment, onViewLedger }: DebtorExpandableListProps) {
   const [expandedIds, setExpandedIds] = useState<Set<string>>(new Set());
   const [search, setSearch] = useState('');
 
@@ -285,10 +286,15 @@ export default function DebtorExpandableList({ debtors, loading, onRecordPayment
                                 ? new Date(debtor.lastPurchaseDate).toLocaleDateString()
                                 : '—'}
                             </span>
-                            <div>
+                            <div className="flex gap-1">
                               <Button size="sm" variant="outline" onClick={() => onRecordPayment(debtor)}>
-                                <CreditCard className="h-3 w-3 mr-1" /> Record Payment
+                                <CreditCard className="h-3 w-3 mr-1" /> Pay
                               </Button>
+                              {onViewLedger && (
+                                <Button size="sm" variant="outline" onClick={() => onViewLedger(debtor)}>
+                                  <FileText className="h-3 w-3 mr-1" /> Ledger
+                                </Button>
+                              )}
                             </div>
                           </div>
                         </div>
