@@ -181,6 +181,32 @@ export default function EditMedicineDialog({
       const { error } = await supabase.from('medicines').update(updateData).eq('id', medicine.id);
       if (error) throw error;
 
+      // Expense sync logic
+      const { data: { user } } = await supabase.auth.getUser();
+      if (recordInExpense && !originalRecordInExpense) {
+        // Unchecked → Checked: add expense
+        const stockQty = isMeas ? parseFloat(medicineData.stock_quantity) : parseInt(medicineData.stock_quantity);
+        const purchasePrice = parseFloat(medicineData.purchase_price);
+        if (stockQty > 0 && purchasePrice > 0) {
+          const expenseAmount = stockQty * purchasePrice;
+          const unit = isMeas ? measurableUnit.toUpperCase() : (medicineData.unit_label || 'pcs');
+          await supabase.from('expenses').insert({
+            description: `Purchase of ${medicineData.name} (${stockQty} ${unit})`,
+            amount: expenseAmount,
+            category: 'Stock Purchase',
+            created_by: user?.id || null,
+            branch_id: medicineData.branch_id || null,
+          });
+        }
+      } else if (!recordInExpense && originalRecordInExpense) {
+        // Checked → Unchecked: remove expense
+        await supabase
+          .from('expenses')
+          .delete()
+          .ilike('description', `%Purchase of ${medicine.name}%`)
+          .eq('category', 'Stock Purchase');
+      }
+
       toast({ title: "Success", description: `${isPharmacy ? 'Medicine' : 'Item'} updated successfully` });
       onMedicineUpdated();
     } catch (error) {
