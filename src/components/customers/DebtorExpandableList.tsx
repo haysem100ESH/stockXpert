@@ -197,7 +197,7 @@ function ExpandedCreditItems({ customerId }: { customerId: string }) {
   );
 }
 
-export default function DebtorExpandableList({ debtors, loading, onRecordPayment }: DebtorExpandableListProps) {
+export default function DebtorExpandableList({ debtors, loading, onRecordPayment, onViewLedger }: DebtorExpandableListProps) {
   const [expandedIds, setExpandedIds] = useState<Set<string>>(new Set());
   const [search, setSearch] = useState('');
 
