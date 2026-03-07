@@ -127,6 +127,7 @@ export default function CustomerManagement() {
   const openEdit = (c: Customer) => { setSelectedCustomer(c); setShowEditDialog(true); };
   const openPayment = (c: Customer) => { setSelectedCustomer(c); setShowPaymentDialog(true); };
   const openDetail = (c: Customer) => { setSelectedCustomer(c); setShowDetailDialog(true); };
+  const openLedger = (c: Customer) => { setSelectedCustomer(c); setShowLedgerDialog(true); };
 
   const allColumns: ColumnDef<Customer>[] = [
     { accessorKey: 'name', header: 'Name', cell: ({ row }) => <span className="font-medium">{row.original.name}</span> },
