@@ -132,6 +132,19 @@ export default function EditMedicineDialog({
         branch_id: medicineWithBranch.branch_id || '',
         item_type: isMeas ? 'measurable' : ((medicineWithBranch.item_type as 'full_pcs' | 'measurable') || 'full_pcs'),
       });
+
+      // Check if an expense exists for this item
+      (async () => {
+        const { data: existingExpense } = await supabase
+          .from('expenses')
+          .select('id')
+          .ilike('description', `%Purchase of ${medicine.name}%`)
+          .eq('category', 'Stock Purchase')
+          .limit(1);
+        const hasExpense = existingExpense && existingExpense.length > 0;
+        setRecordInExpense(hasExpense);
+        setOriginalRecordInExpense(hasExpense);
+      })();
     }
   }, [medicine, open]);
 
