@@ -72,6 +72,8 @@ export default function EditMedicineDialog({
     item_type: 'full_pcs' as 'full_pcs' | 'measurable',
   });
   const [measurableUnit, setMeasurableUnit] = useState<string>('kg');
+  const [recordInExpense, setRecordInExpense] = useState(true);
+  const [originalRecordInExpense, setOriginalRecordInExpense] = useState(true);
   const [branches, setBranches] = useState<Array<{ id: string; name: string }>>([]);
   const [userRole, setUserRole] = useState<'owner' | 'staff' | null>(null);
   const [loading, setLoading] = useState(false);
