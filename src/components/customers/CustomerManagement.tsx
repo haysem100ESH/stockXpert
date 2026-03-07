@@ -317,6 +317,12 @@ export default function CustomerManagement() {
             customerId={selectedCustomer.id}
             customerName={selectedCustomer.name}
           />
+          <CustomerLedgerDialog
+            open={showLedgerDialog}
+            onOpenChange={setShowLedgerDialog}
+            customerId={selectedCustomer.id}
+            customerName={selectedCustomer.name}
+          />
         </>
       )}
     </div>
