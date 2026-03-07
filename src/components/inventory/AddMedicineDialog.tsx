@@ -151,13 +151,14 @@ export default function AddMedicineDialog({ open, onOpenChange, onMedicineAdded,
       const { error } = await supabase.from('medicines').insert([medicineData]);
       if (error) throw error;
 
-      // Auto-record expense for measurable items: qty × purchase_price
-      if (itemType === 'measurable' && stockQuantity > 0 && medicineData.purchase_price > 0) {
+      // Record expense if checkbox is checked
+      if (recordInExpense && stockQuantity > 0 && medicineData.purchase_price > 0) {
         const expenseAmount = stockQuantity * medicineData.purchase_price;
         const itemName = medicineData.name || 'Item';
-        const unit = unitLabel || 'unit';
+        const unit = (unitLabel || 'unit').toUpperCase();
+        const qtyLabel = itemType === 'measurable' ? `${stockQuantity} ${unit}` : `${stockQuantity} ${unitLabel || 'pcs'}`;
         await supabase.from('expenses').insert({
-          description: `Purchase of ${itemName} (${stockQuantity} ${unit.toUpperCase()})`,
+          description: `Purchase of ${itemName} (${qtyLabel})`,
           amount: expenseAmount,
           category: 'Stock Purchase',
           created_by: user?.id || null,
