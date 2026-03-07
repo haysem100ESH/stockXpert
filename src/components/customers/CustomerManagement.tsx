@@ -8,7 +8,7 @@ import {
   DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuTrigger,
 } from '@/components/ui/dropdown-menu';
 import { DataTable } from '@/components/ui/data-table';
-import { Search, Plus, Users, DollarSign, AlertTriangle, Edit, CreditCard, Eye, MoreHorizontal } from 'lucide-react';
+import { Search, Plus, Users, DollarSign, AlertTriangle, Edit, CreditCard, Eye, MoreHorizontal, FileText } from 'lucide-react';
 import { supabase } from '@/lib/db';
 import { useToast } from '@/hooks/use-toast';
 import { useBranchContext } from '@/hooks/useBranchContext';
