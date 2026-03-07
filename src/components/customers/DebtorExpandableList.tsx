@@ -105,7 +105,11 @@ function ExpandedCreditItems({ customerId }: { customerId: string }) {
           let displayQuantity = Number(si.quantity);
           let displayUnitLabel = med?.unit_label || 'pcs';
 
-          if (si.sale_type === 'by_stripe') {
+          // For measurable items, always use unit_label from medicines (KG, L, etc.)
+          if (med?.item_type === 'measurable') {
+            displayQuantity = Number(si.quantity);
+            displayUnitLabel = (med?.unit_label || 'unit').toUpperCase();
+          } else if (si.sale_type === 'by_stripe') {
             const directStripQty = Number(si.strip_quantity || 0);
             const legacyStripesSold = Number(si.stripes_sold || 0);
             const decodedLegacyQty = legacyStripesSold >= 1000 ? legacyStripesSold / 1000 : legacyStripesSold;

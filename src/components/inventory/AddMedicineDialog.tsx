@@ -5,6 +5,7 @@ import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
 import { RadioGroup, RadioGroupItem } from '@/components/ui/radio-group';
+import { Checkbox } from '@/components/ui/checkbox';
 import { Loader2 } from 'lucide-react';
 import { supabase } from '@/lib/db';
 import { useToast } from '@/hooks/use-toast';
@@ -44,6 +45,7 @@ export default function AddMedicineDialog({ open, onOpenChange, onMedicineAdded,
   const [selectedBranchId, setSelectedBranchId] = useState<string>('');
   const [itemType, setItemType] = useState<'full_pcs' | 'measurable'>('full_pcs');
   const [measurableUnit, setMeasurableUnit] = useState<string>('kg');
+  const [recordInExpense, setRecordInExpense] = useState(true);
   const { toast } = useToast();
   const { selectedBranch, userBranch } = useBranchContext();
   const { categories } = useCustomCategories(isGeneral ? 'general' : 'pharmacy');
@@ -149,13 +151,14 @@ export default function AddMedicineDialog({ open, onOpenChange, onMedicineAdded,
       const { error } = await supabase.from('medicines').insert([medicineData]);
       if (error) throw error;
 
-      // Auto-record expense for measurable items: qty × purchase_price
-      if (itemType === 'measurable' && stockQuantity > 0 && medicineData.purchase_price > 0) {
+      // Record expense if checkbox is checked
+      if (recordInExpense && stockQuantity > 0 && medicineData.purchase_price > 0) {
         const expenseAmount = stockQuantity * medicineData.purchase_price;
         const itemName = medicineData.name || 'Item';
-        const unit = unitLabel || 'unit';
+        const unit = (unitLabel || 'unit').toUpperCase();
+        const qtyLabel = itemType === 'measurable' ? `${stockQuantity} ${unit}` : `${stockQuantity} ${unitLabel || 'pcs'}`;
         await supabase.from('expenses').insert({
-          description: `Purchase of ${itemName} (${stockQuantity} ${unit.toUpperCase()})`,
+          description: `Purchase of ${itemName} (${qtyLabel})`,
           amount: expenseAmount,
           category: 'Stock Purchase',
           created_by: user?.id || null,
@@ -350,6 +353,18 @@ export default function AddMedicineDialog({ open, onOpenChange, onMedicineAdded,
                 <SelectItem value="6">6 Months</SelectItem>
               </SelectContent>
             </Select>
+          </div>
+
+          {/* Record in Expense checkbox */}
+          <div className="flex items-center space-x-2 rounded-md border p-3 bg-muted/30">
+            <Checkbox
+              id="record-in-expense"
+              checked={recordInExpense}
+              onCheckedChange={(checked) => setRecordInExpense(!!checked)}
+            />
+            <Label htmlFor="record-in-expense" className="text-sm cursor-pointer">
+              Record in Expense
+            </Label>
           </div>
 
           <div className="flex justify-end space-x-2 pt-4">
