@@ -45,6 +45,7 @@ export default function AddMedicineDialog({ open, onOpenChange, onMedicineAdded,
   const [selectedBranchId, setSelectedBranchId] = useState<string>('');
   const [itemType, setItemType] = useState<'full_pcs' | 'measurable'>('full_pcs');
   const [measurableUnit, setMeasurableUnit] = useState<string>('kg');
+  const [recordInExpense, setRecordInExpense] = useState(true);
   const { toast } = useToast();
   const { selectedBranch, userBranch } = useBranchContext();
   const { categories } = useCustomCategories(isGeneral ? 'general' : 'pharmacy');
