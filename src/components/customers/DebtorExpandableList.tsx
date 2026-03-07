@@ -34,6 +34,7 @@ interface DebtorExpandableListProps {
   debtors: Debtor[];
   loading: boolean;
   onRecordPayment: (debtor: Debtor) => void;
+  onViewLedger?: (debtor: Debtor) => void;
 }
 
 function formatQuantity(quantity: number, unitLabel: string, itemType: string): string {
