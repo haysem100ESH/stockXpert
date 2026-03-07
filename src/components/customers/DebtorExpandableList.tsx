@@ -1,5 +1,5 @@
 import { useState } from 'react';
-import { ChevronDown, ChevronRight, CreditCard, Loader2 } from 'lucide-react';
+import { ChevronDown, ChevronRight, CreditCard, FileText, Loader2 } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { Badge } from '@/components/ui/badge';
 import {
