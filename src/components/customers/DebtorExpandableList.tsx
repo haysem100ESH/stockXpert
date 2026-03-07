@@ -286,10 +286,15 @@ export default function DebtorExpandableList({ debtors, loading, onRecordPayment
                                 ? new Date(debtor.lastPurchaseDate).toLocaleDateString()
                                 : '—'}
                             </span>
-                            <div>
+                            <div className="flex gap-1">
                               <Button size="sm" variant="outline" onClick={() => onRecordPayment(debtor)}>
-                                <CreditCard className="h-3 w-3 mr-1" /> Record Payment
+                                <CreditCard className="h-3 w-3 mr-1" /> Pay
                               </Button>
+                              {onViewLedger && (
+                                <Button size="sm" variant="outline" onClick={() => onViewLedger(debtor)}>
+                                  <FileText className="h-3 w-3 mr-1" /> Ledger
+                                </Button>
+                              )}
                             </div>
                           </div>
                         </div>
