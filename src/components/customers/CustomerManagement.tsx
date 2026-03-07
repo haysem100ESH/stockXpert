@@ -291,6 +291,7 @@ export default function CustomerManagement() {
                 debtors={debtors}
                 loading={loading}
                 onRecordPayment={(d) => openPayment(d as Customer)}
+                onViewLedger={(d) => openLedger(d as Customer)}
               />
             </CardContent>
           </Card>
