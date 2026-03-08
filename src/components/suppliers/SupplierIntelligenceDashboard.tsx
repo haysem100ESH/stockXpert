@@ -9,11 +9,14 @@ import { Progress } from '@/components/ui/progress';
 import { Input } from '@/components/ui/input';
 import {
   Truck, TrendingUp, AlertTriangle, DollarSign, Award, Search,
-  RefreshCw, Shield, BarChart3, Users
+  RefreshCw, Shield, BarChart3, Users, Download
 } from 'lucide-react';
 import SupplierScoreCard from './SupplierScoreCard';
 import PriceComparisonTable from './PriceComparisonTable';
 import SupplierDependenceChart from './SupplierDependenceChart';
+import jsPDF from 'jspdf';
+import autoTable from 'jspdf-autotable';
+import ExcelJS from 'exceljs';
 
 export default function SupplierIntelligenceDashboard() {
   const {
