@@ -138,12 +138,23 @@ export default function BranchManagement() {
     }
     setSaving(true);
     try {
-      const { error } = await (supabase as any).from('pharmacy_branches').insert({
+      const { data: newBranch, error } = await (supabase as any).from('pharmacy_branches').insert({
         pharmacy_owner_id: user!.id, name: branchName,
         address: branchAddress || null, phone: branchPhone || null,
         branch_type: branchType, is_main_branch: isMainBranch,
-      });
+      }).select().single();
       if (error) throw error;
+
+      // Auto-create linked location entry for stock movements/transfers
+      if (newBranch) {
+        await (supabase as any).from('locations').insert({
+          pharmacy_owner_id: user!.id,
+          name: branchName,
+          type: branchType === 'pharmacy' ? 'pharmacy' : 'store',
+          branch_id: newBranch.id,
+        });
+      }
+
       toast({ title: 'Success', description: 'Branch created successfully' });
       resetForm(); setShowCreateDialog(false);
       fetchBranches(); refetchPlanLimits();
