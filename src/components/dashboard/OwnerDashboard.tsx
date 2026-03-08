@@ -95,6 +95,7 @@ export default function OwnerDashboard() {
   const { profile } = useAuth();
   const isPharmacy = branchType === 'pharmacy';
   const { topSeasonalThisMonth, currentMonthName, isPharmacy: seasonalIsPharmacy } = useSeasonalPerformance();
+  const { summary: smartSummary } = useSmartInventory();
 
   useEffect(() => {
     fetchDashboardStats();
