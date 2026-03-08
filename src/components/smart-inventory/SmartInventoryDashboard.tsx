@@ -30,6 +30,7 @@ import SeasonalTrendsWidget from './SeasonalTrendsWidget';
 
 export default function SmartInventoryDashboard() {
   const { items, summary, loading, isPharmacy, refetch } = useSmartInventory();
+  const seasonal = useSeasonalPerformance();
   const { branchType } = useBranchContext();
 
   if (loading) {
