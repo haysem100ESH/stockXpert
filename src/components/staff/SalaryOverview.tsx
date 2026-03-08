@@ -18,9 +18,7 @@ interface StaffSalaryInfo {
   branch_id: string | null;
   branch_name?: string;
   individualSales: number;
-  isPaid: boolean;
-  paidAt?: string;
-  newSalesAfterPayment: number;
+  totalPaid: number;
 }
 
 const MONTHS = [
@@ -56,16 +54,6 @@ export default function SalaryOverview() {
 
     return () => { supabase.removeChannel(salesSubscription); };
   }, [selectedBranch, profile, selectedMonth, selectedYear]);
-
-  const getBranchIds = async () => {
-    if (!profile) return [];
-    if (selectedBranch) return [selectedBranch];
-    const { data: branches } = await supabase
-      .from('pharmacy_branches')
-      .select('id')
-      .eq('pharmacy_owner_id', profile.id);
-    return (branches || []).map((b: any) => b.id);
-  };
 
   const fetchAll = async () => {
     if (!profile) return;
@@ -107,13 +95,12 @@ export default function SalaryOverview() {
     setProfit(ts - te);
 
     // Fetch staff
-    let staffQuery = supabase
+    const { data: staffData } = await supabase
       .from('profiles')
       .select('id, full_name, salary_percentage, branch_id')
       .eq('role', 'staff')
       .in('branch_id', filteredBranchIds);
 
-    const { data: staffData } = await staffQuery;
     const staffIds = (staffData || []).map((s: any) => s.id);
 
     if (staffIds.length === 0) {
@@ -122,43 +109,31 @@ export default function SalaryOverview() {
       return;
     }
 
-    // Fetch all sales for month per staff
-    const { data: allSalesData } = await supabase
-      .from('sales')
-      .select('sold_by, total_amount, created_at')
-      .in('sold_by', staffIds)
-      .in('branch_id', filteredBranchIds)
-      .gte('created_at', startOfMonth)
-      .lte('created_at', endOfMonth);
+    // Fetch all sales for month per staff & paid amounts in parallel
+    const [allSalesRes, paidRes] = await Promise.all([
+      supabase.from('sales')
+        .select('sold_by, total_amount')
+        .in('sold_by', staffIds)
+        .in('branch_id', filteredBranchIds)
+        .gte('created_at', startOfMonth)
+        .lte('created_at', endOfMonth),
+      supabase.from('salary_expenses')
+        .select('staff_id, amount')
+        .in('staff_id', staffIds)
+        .eq('month', selectedMonth)
+        .eq('year', selectedYear),
+    ]);
 
-    // Fetch paid status with payment date
-    const { data: paidData } = await supabase
-      .from('salary_expenses')
-      .select('staff_id, payment_date')
-      .in('staff_id', staffIds)
-      .eq('month', selectedMonth)
-      .eq('year', selectedYear);
-
-    const paidMap: Record<string, string> = {};
-    (paidData || []).forEach((r: any) => { paidMap[r.staff_id] = r.payment_date; });
-
-    // Calculate sales totals
+    // Sum sales per staff
     const salesMap: Record<string, number> = {};
-    const newSalesMap: Record<string, number> = {};
+    (allSalesRes.data || []).forEach((sale: any) => {
+      salesMap[sale.sold_by] = (salesMap[sale.sold_by] || 0) + Number(sale.total_amount);
+    });
 
-    (allSalesData || []).forEach((sale: any) => {
-      const staffId = sale.sold_by;
-      const amount = Number(sale.total_amount);
-      salesMap[staffId] = (salesMap[staffId] || 0) + amount;
-
-      // If paid, count sales after payment date
-      if (paidMap[staffId]) {
-        const paymentDate = new Date(paidMap[staffId]);
-        const saleDate = new Date(sale.created_at);
-        if (saleDate > paymentDate) {
-          newSalesMap[staffId] = (newSalesMap[staffId] || 0) + amount;
-        }
-      }
+    // Sum total paid per staff (supports multiple payments)
+    const paidTotalMap: Record<string, number> = {};
+    (paidRes.data || []).forEach((r: any) => {
+      paidTotalMap[r.staff_id] = (paidTotalMap[r.staff_id] || 0) + Number(r.amount);
     });
 
     setStaffList((staffData || []).map((s: any) => ({
@@ -166,26 +141,24 @@ export default function SalaryOverview() {
       salary_percentage: Number(s.salary_percentage) || 0,
       branch_name: s.branch_id ? branchMap.get(s.branch_id) : undefined,
       individualSales: salesMap[s.id] || 0,
-      isPaid: !!paidMap[s.id],
-      paidAt: paidMap[s.id] || undefined,
-      newSalesAfterPayment: newSalesMap[s.id] || 0,
+      totalPaid: paidTotalMap[s.id] || 0,
     })));
     setLoading(false);
   };
 
-  const calculateSalary = (staff: StaffSalaryInfo) => {
-    if (staff.isPaid) {
-      // After payment, only calculate from new sales
-      return (staff.newSalesAfterPayment * staff.salary_percentage) / 100;
-    }
+  const calculateTotalSalary = (staff: StaffSalaryInfo) => {
     return (staff.individualSales * staff.salary_percentage) / 100;
+  };
+
+  const calculateUnpaid = (staff: StaffSalaryInfo) => {
+    const total = calculateTotalSalary(staff);
+    return Math.max(0, total - staff.totalPaid);
   };
 
   const handlePaySalary = async (staff: StaffSalaryInfo) => {
     if (!profile) return;
     setPaying(staff.id);
-    const salaryAmount = calculateSalary(staff);
-    const salesBase = staff.isPaid ? staff.newSalesAfterPayment : staff.individualSales;
+    const unpaidAmount = calculateUnpaid(staff);
 
     try {
       const { error: salaryError } = await supabase
@@ -193,14 +166,14 @@ export default function SalaryOverview() {
         .insert({
           staff_id: staff.id,
           branch_id: staff.branch_id || selectedBranch,
-          amount: salaryAmount,
+          amount: unpaidAmount,
           salary_percentage: staff.salary_percentage,
           branch_profit_at_payment: profit,
           payment_date: new Date().toISOString(),
           created_by: profile.id,
           month: selectedMonth,
           year: selectedYear,
-          notes: `Salary for ${staff.full_name} - ${selectedMonth}/${selectedYear} (Sales: ETB ${salesBase.toFixed(2)})`,
+          notes: `Salary for ${staff.full_name} - ${selectedMonth}/${selectedYear} (Sales: ETB ${staff.individualSales.toFixed(2)}, Paid: ETB ${unpaidAmount.toFixed(2)})`,
         });
 
       if (salaryError) throw salaryError;
@@ -208,8 +181,8 @@ export default function SalaryOverview() {
       const { error: expenseError } = await supabase
         .from('expenses')
         .insert({
-          description: `Salary Payment - ${staff.full_name} (${staff.salary_percentage}% of ETB ${salesBase.toFixed(2)} sales)`,
-          amount: salaryAmount,
+          description: `Salary Payment - ${staff.full_name} (${staff.salary_percentage}% of sales, ETB ${unpaidAmount.toFixed(2)})`,
+          amount: unpaidAmount,
           category: 'Salary Expense',
           branch_id: staff.branch_id || selectedBranch,
           created_by: profile.id,
@@ -217,7 +190,7 @@ export default function SalaryOverview() {
 
       if (expenseError) throw expenseError;
 
-      toast({ title: "Success", description: `Salary of ETB ${salaryAmount.toFixed(2)} paid to ${staff.full_name}` });
+      toast({ title: "Success", description: `Salary of ETB ${unpaidAmount.toFixed(2)} paid to ${staff.full_name}` });
       fetchAll();
     } catch (error: any) {
       console.error('Pay salary error:', error);
@@ -228,7 +201,6 @@ export default function SalaryOverview() {
     }
   };
 
-  // Generate year options
   const yearOptions = [];
   for (let y = now.getFullYear() - 2; y <= now.getFullYear(); y++) {
     yearOptions.push(y);
@@ -309,7 +281,7 @@ export default function SalaryOverview() {
             Staff Salary Overview
           </CardTitle>
           <p className="text-xs text-muted-foreground">
-            Salary = Staff's Individual Sales × Salary %. After payment, only new sales count toward the next payout.
+            Calculated Salary = total month sales × %. Unpaid Remaining = Calculated Salary − already paid amount.
           </p>
         </CardHeader>
         <CardContent>
@@ -321,42 +293,43 @@ export default function SalaryOverview() {
                 <TableRow>
                   <TableHead>Staff Name</TableHead>
                   <TableHead>Branch</TableHead>
-                  <TableHead className="text-right">Total Sales</TableHead>
+                  <TableHead className="text-right">Sales This Month</TableHead>
                   <TableHead className="text-right">Salary %</TableHead>
                   <TableHead className="text-right">Calculated Salary</TableHead>
+                  <TableHead className="text-right">Paid Amount</TableHead>
+                  <TableHead className="text-right">Unpaid Remaining</TableHead>
                   <TableHead>Status</TableHead>
                   <TableHead className="text-right">Action</TableHead>
                 </TableRow>
               </TableHeader>
               <TableBody>
                 {staffList.map(staff => {
-                  const salary = calculateSalary(staff);
+                  const totalSalary = calculateTotalSalary(staff);
+                  const unpaid = calculateUnpaid(staff);
+                  const fullyPaid = staff.totalPaid > 0 && unpaid <= 0;
                   return (
                     <TableRow key={staff.id}>
                       <TableCell className="font-medium">{staff.full_name}</TableCell>
                       <TableCell>{staff.branch_name || '—'}</TableCell>
-                      <TableCell className="text-right">
-                        ETB {staff.individualSales.toFixed(2)}
-                        {staff.isPaid && staff.newSalesAfterPayment > 0 && (
-                          <span className="block text-xs text-muted-foreground">
-                            New: ETB {staff.newSalesAfterPayment.toFixed(2)}
-                          </span>
-                        )}
-                      </TableCell>
+                      <TableCell className="text-right">ETB {staff.individualSales.toFixed(2)}</TableCell>
                       <TableCell className="text-right">{staff.salary_percentage}%</TableCell>
-                      <TableCell className="text-right font-medium">ETB {salary.toFixed(2)}</TableCell>
+                      <TableCell className="text-right font-medium">ETB {totalSalary.toFixed(2)}</TableCell>
+                      <TableCell className="text-right text-success">ETB {staff.totalPaid.toFixed(2)}</TableCell>
+                      <TableCell className={`text-right font-semibold ${unpaid > 0 ? 'text-destructive' : 'text-success'}`}>
+                        ETB {unpaid.toFixed(2)}
+                      </TableCell>
                       <TableCell>
-                        <Badge variant={staff.isPaid ? 'default' : 'secondary'}>
-                          {staff.isPaid ? 'Paid' : 'Unpaid'}
+                        <Badge variant={fullyPaid ? 'default' : staff.totalPaid > 0 ? 'outline' : 'secondary'}>
+                          {fullyPaid ? 'Fully Paid' : staff.totalPaid > 0 ? 'Partial' : 'Unpaid'}
                         </Badge>
                       </TableCell>
                       <TableCell className="text-right">
                         <Button
                           size="sm"
-                          disabled={salary <= 0 || paying === staff.id}
+                          disabled={unpaid <= 0 || paying === staff.id}
                           onClick={() => setConfirmStaff(staff)}
                         >
-                          {paying === staff.id ? 'Paying...' : staff.isPaid ? 'Pay New' : 'Pay Salary'}
+                          {paying === staff.id ? 'Paying...' : unpaid > 0 && staff.totalPaid > 0 ? 'Pay Remaining' : 'Pay Salary'}
                         </Button>
                       </TableCell>
                     </TableRow>
@@ -372,7 +345,7 @@ export default function SalaryOverview() {
         open={!!confirmStaff}
         onOpenChange={(open) => { if (!open) setConfirmStaff(null); }}
         title="Confirm Salary Payment"
-        description={confirmStaff ? `Pay ETB ${calculateSalary(confirmStaff).toFixed(2)} to ${confirmStaff.full_name}? (${confirmStaff.salary_percentage}% of ETB ${(confirmStaff.isPaid ? confirmStaff.newSalesAfterPayment : confirmStaff.individualSales).toFixed(2)} sales). This will be recorded as a Salary Expense.` : ''}
+        description={confirmStaff ? `Pay ETB ${calculateUnpaid(confirmStaff).toFixed(2)} to ${confirmStaff.full_name}? This is the unpaid remaining amount. It will be recorded as a Salary Expense.` : ''}
         onConfirm={() => confirmStaff && handlePaySalary(confirmStaff)}
         confirmText="Pay Salary"
         cancelText="Cancel"
