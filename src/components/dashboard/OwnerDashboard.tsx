@@ -35,6 +35,8 @@ import LowStockItemsTable from './LowStockItemsTable';
 import SubscriptionPlanCard from '@/components/subscription/SubscriptionPlanCard';
 import { TelegramConnectionDialog } from '@/components/telegram/TelegramConnectionDialog';
 import { getCreditLimit, getCreditScoreLabel } from '@/hooks/useCreditScore';
+import { useSeasonalPerformance } from '@/hooks/useSeasonalPerformance';
+import SeasonalTrendsWidget from '@/components/smart-inventory/SeasonalTrendsWidget';
 
 interface DashboardStats {
   totalRevenue: number;
