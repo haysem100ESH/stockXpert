@@ -3,9 +3,11 @@ import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
 import { Badge } from '@/components/ui/badge';
+import { Button } from '@/components/ui/button';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@/components/ui/table';
-import { Calendar, CheckCircle2, Clock, XCircle, Users } from 'lucide-react';
+import { Dialog, DialogContent, DialogHeader, DialogTitle } from '@/components/ui/dialog';
+import { Calendar, CheckCircle2, Clock, XCircle, Users, ShieldCheck, ShieldAlert, Image, AlertTriangle } from 'lucide-react';
 import { supabase } from '@/lib/db';
 import { useAuth } from '@/hooks/useAuth';
 
@@ -17,8 +19,22 @@ interface AttendanceRecord {
   checkin_time: string | null;
   checkout_time: string | null;
   attendance_status: string;
+  checkin_face_verified: boolean | null;
+  checkout_face_verified: boolean | null;
+  checkin_photo: string | null;
+  checkout_photo: string | null;
+  verification_score: number | null;
   staff_name?: string;
   branch_name?: string;
+}
+
+interface SuspiciousAlert {
+  id: string;
+  staff_id: string;
+  alert_type: string;
+  description: string;
+  created_at: string;
+  staff_name?: string;
 }
 
 interface StaffOption { id: string; full_name: string; }
@@ -33,22 +49,25 @@ export default function AttendanceDashboard() {
   const [filterStaff, setFilterStaff] = useState<string>('all');
   const [filterDateFrom, setFilterDateFrom] = useState<string>('');
   const [filterDateTo, setFilterDateTo] = useState<string>('');
+  const [photoModal, setPhotoModal] = useState<{ url: string; title: string } | null>(null);
+  const [alerts, setAlerts] = useState<SuspiciousAlert[]>([]);
   const { profile, user } = useAuth();
   const isOwner = profile?.role === 'owner';
 
   useEffect(() => {
-    // Default to current month
     const now = new Date();
     const firstDay = new Date(now.getFullYear(), now.getMonth(), 1).toISOString().split('T')[0];
     const today = now.toISOString().split('T')[0];
     setFilterDateFrom(firstDay);
     setFilterDateTo(today);
-
     if (isOwner) fetchBranchesAndStaff();
   }, [profile]);
 
   useEffect(() => {
-    if (filterDateFrom && filterDateTo) fetchRecords();
+    if (filterDateFrom && filterDateTo) {
+      fetchRecords();
+      if (isOwner) fetchAlerts();
+    }
   }, [filterBranch, filterStaff, filterDateFrom, filterDateTo]);
 
   const fetchBranchesAndStaff = async () => {
@@ -71,16 +90,13 @@ export default function AttendanceDashboard() {
         .lte('date', filterDateTo)
         .order('date', { ascending: false });
 
-      if (!isOwner && user?.id) {
-        query = query.eq('staff_id', user.id);
-      }
+      if (!isOwner && user?.id) query = query.eq('staff_id', user.id);
       if (filterBranch !== 'all') query = query.eq('branch_id', filterBranch);
       if (filterStaff !== 'all') query = query.eq('staff_id', filterStaff);
 
       const { data, error } = await query;
       if (error) throw error;
 
-      // Enrich with names
       const staffIds = [...new Set((data || []).map((r: any) => r.staff_id))];
       const branchIds = [...new Set((data || []).map((r: any) => r.branch_id))];
 
@@ -108,7 +124,30 @@ export default function AttendanceDashboard() {
     }
   };
 
-  // Monthly summary stats
+  const fetchAlerts = async () => {
+    try {
+      let query = supabase
+        .from('attendance_suspicious_alerts')
+        .select('*')
+        .gte('created_at', `${filterDateFrom}T00:00:00`)
+        .lte('created_at', `${filterDateTo}T23:59:59`)
+        .order('created_at', { ascending: false })
+        .limit(20);
+
+      const { data } = await query;
+      if (data && data.length > 0) {
+        const staffIds = [...new Set(data.map((a: any) => a.staff_id))];
+        const { data: staffRes } = await supabase.from('profiles').select('id, full_name').in('id', staffIds);
+        const staffMap: Record<string, string> = {};
+        (staffRes || []).forEach((s: any) => { staffMap[s.id] = s.full_name; });
+
+        setAlerts(data.map((a: any) => ({ ...a, staff_name: staffMap[a.staff_id] || 'Unknown' })));
+      } else {
+        setAlerts([]);
+      }
+    } catch { setAlerts([]); }
+  };
+
   const presentCount = records.filter((r) => r.attendance_status === 'present').length;
   const lateCount = records.filter((r) => r.attendance_status === 'late').length;
   const absentCount = records.filter((r) => r.attendance_status === 'absent').length;
@@ -120,6 +159,12 @@ export default function AttendanceDashboard() {
       case 'absent': return <Badge variant="destructive">Absent</Badge>;
       default: return <Badge>{status}</Badge>;
     }
+  };
+
+  const faceBadge = (verified: boolean | null) => {
+    if (verified === true) return <Badge variant="outline" className="gap-1 text-xs"><ShieldCheck className="h-3 w-3" />Verified</Badge>;
+    if (verified === false) return <Badge variant="destructive" className="gap-1 text-xs"><ShieldAlert className="h-3 w-3" />Failed</Badge>;
+    return <span className="text-xs text-muted-foreground">—</span>;
   };
 
   return (
@@ -160,6 +205,33 @@ export default function AttendanceDashboard() {
           </CardContent>
         </Card>
       </div>
+
+      {/* Suspicious Activity Alerts */}
+      {isOwner && alerts.length > 0 && (
+        <Card className="border-destructive/30">
+          <CardHeader>
+            <CardTitle className="flex items-center gap-2 text-sm text-destructive">
+              <AlertTriangle className="h-4 w-4" />
+              Suspicious Activity Alerts ({alerts.length})
+            </CardTitle>
+          </CardHeader>
+          <CardContent>
+            <div className="space-y-2 max-h-48 overflow-y-auto">
+              {alerts.map((alert) => (
+                <div key={alert.id} className="flex items-start gap-2 p-2 rounded bg-destructive/5 text-sm">
+                  <ShieldAlert className="h-4 w-4 mt-0.5 text-destructive shrink-0" />
+                  <div>
+                    <span className="font-medium">{alert.staff_name}</span>
+                    <span className="text-muted-foreground"> — {alert.alert_type.replace(/_/g, ' ')}</span>
+                    <p className="text-xs text-muted-foreground">{alert.description}</p>
+                    <p className="text-xs text-muted-foreground">{new Date(alert.created_at).toLocaleString()}</p>
+                  </div>
+                </div>
+              ))}
+            </div>
+          </CardContent>
+        </Card>
+      )}
 
       {/* Filters */}
       <Card>
@@ -235,6 +307,10 @@ export default function AttendanceDashboard() {
                     <TableHead>Check-In</TableHead>
                     <TableHead>Check-Out</TableHead>
                     <TableHead>Status</TableHead>
+                    <TableHead>Face In</TableHead>
+                    <TableHead>Face Out</TableHead>
+                    <TableHead>Score</TableHead>
+                    {isOwner && <TableHead>Photos</TableHead>}
                   </TableRow>
                 </TableHeader>
                 <TableBody>
@@ -250,6 +326,39 @@ export default function AttendanceDashboard() {
                         {r.checkout_time ? new Date(r.checkout_time).toLocaleTimeString() : '—'}
                       </TableCell>
                       <TableCell>{statusBadge(r.attendance_status)}</TableCell>
+                      <TableCell>{faceBadge(r.checkin_face_verified)}</TableCell>
+                      <TableCell>{faceBadge(r.checkout_face_verified)}</TableCell>
+                      <TableCell>
+                        {r.verification_score != null ? `${r.verification_score}%` : '—'}
+                      </TableCell>
+                      {isOwner && (
+                        <TableCell>
+                          <div className="flex gap-1">
+                            {r.checkin_photo && (
+                              <Button
+                                variant="ghost"
+                                size="sm"
+                                className="h-7 px-2"
+                                onClick={() => setPhotoModal({ url: r.checkin_photo!, title: `Check-In Photo — ${r.staff_name}` })}
+                              >
+                                <Image className="h-3 w-3 mr-1" />
+                                In
+                              </Button>
+                            )}
+                            {r.checkout_photo && (
+                              <Button
+                                variant="ghost"
+                                size="sm"
+                                className="h-7 px-2"
+                                onClick={() => setPhotoModal({ url: r.checkout_photo!, title: `Check-Out Photo — ${r.staff_name}` })}
+                              >
+                                <Image className="h-3 w-3 mr-1" />
+                                Out
+                              </Button>
+                            )}
+                          </div>
+                        </TableCell>
+                      )}
                     </TableRow>
                   ))}
                 </TableBody>
@@ -258,6 +367,18 @@ export default function AttendanceDashboard() {
           )}
         </CardContent>
       </Card>
+
+      {/* Photo Preview Modal */}
+      <Dialog open={!!photoModal} onOpenChange={() => setPhotoModal(null)}>
+        <DialogContent className="max-w-md">
+          <DialogHeader>
+            <DialogTitle>{photoModal?.title}</DialogTitle>
+          </DialogHeader>
+          {photoModal?.url && (
+            <img src={photoModal.url} alt="Attendance photo" className="w-full rounded-lg" />
+          )}
+        </DialogContent>
+      </Dialog>
     </div>
   );
 }
