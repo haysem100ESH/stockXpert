@@ -128,7 +128,7 @@ export default function TransferRequestForm({ open, onOpenChange, onSuccess }: P
     setRequestingLocationId(''); setSourceLocationId(''); setNotes(''); setItems([]);
   };
 
-  const warehouses = locations.filter(l => l.type === 'warehouse');
+  const sourceBranches = locations.filter(l => l.id !== requestingLocationId);
 
   return (
     <Dialog open={open} onOpenChange={onOpenChange}>
@@ -136,9 +136,9 @@ export default function TransferRequestForm({ open, onOpenChange, onSuccess }: P
         <DialogHeader><DialogTitle>New Transfer Request</DialogTitle></DialogHeader>
         <div className="space-y-4">
           <div>
-            <Label>Requesting Location *</Label>
+            <Label>Requesting Branch *</Label>
             <Select value={requestingLocationId} onValueChange={setRequestingLocationId}>
-              <SelectTrigger><SelectValue placeholder="Select your location" /></SelectTrigger>
+              <SelectTrigger><SelectValue placeholder="Select your branch" /></SelectTrigger>
               <SelectContent>
                 {locations.map(l => <SelectItem key={l.id} value={l.id}>{l.name} ({l.type})</SelectItem>)}
               </SelectContent>
@@ -146,12 +146,12 @@ export default function TransferRequestForm({ open, onOpenChange, onSuccess }: P
           </div>
 
           <div>
-            <Label>Request From (Source)</Label>
-            <Select value={sourceLocationId || 'auto'} onValueChange={v => setSourceLocationId(v === 'auto' ? '' : v)}>
-              <SelectTrigger><SelectValue placeholder="Auto (nearest warehouse)" /></SelectTrigger>
+            <Label>Request From (Source Branch)</Label>
+            <Select value={sourceLocationId || 'none'} onValueChange={v => setSourceLocationId(v === 'none' ? '' : v)}>
+              <SelectTrigger><SelectValue placeholder="Select source branch" /></SelectTrigger>
               <SelectContent>
-                <SelectItem value="auto">Auto (nearest warehouse)</SelectItem>
-                {warehouses.map(l => <SelectItem key={l.id} value={l.id}>{l.name}</SelectItem>)}
+                <SelectItem value="none">— Not specified —</SelectItem>
+                {sourceBranches.map(l => <SelectItem key={l.id} value={l.id}>{l.name} ({l.type})</SelectItem>)}
               </SelectContent>
             </Select>
           </div>
