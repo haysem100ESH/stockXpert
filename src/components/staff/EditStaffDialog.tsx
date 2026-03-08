@@ -35,7 +35,8 @@ export default function EditStaffDialog({
       setFormData({
         full_name: staff.full_name,
         phone: staff.phone || '',
-        branch_id: staff.branch_id || ''
+        branch_id: staff.branch_id || '',
+        salary_percentage: String(staff.salary_percentage || 0)
       });
       fetchBranches();
     }
