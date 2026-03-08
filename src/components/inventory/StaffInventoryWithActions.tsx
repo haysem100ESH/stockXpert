@@ -471,29 +471,11 @@ export default function StaffInventoryWithActions() {
                     <div className="flex justify-between text-sm items-center">
                       <span>Stock:</span>
                       <div className="flex items-center space-x-2">
-                        {editingStock === medicine.id ? (
-                          <div className="flex items-center space-x-2">
-                            <Input
-                              type="number"
-                              value={tempStock}
-                              onChange={(e) => setTempStock(parseInt(e.target.value) || 0)}
-                              className="w-20 h-8"
-                            />
-                            <Button size="sm" onClick={() => handleStockUpdate(medicine.id)} className="h-8">Save</Button>
-                            <Button size="sm" variant="outline" onClick={() => setEditingStock(null)} className="h-8">Cancel</Button>
-                          </div>
-                        ) : (
-                          <div className="flex items-center space-x-2">
-                            <span className={(isLowStock(medicine) || isOutOfStock(medicine)) ? 'text-warning font-medium' : ''}>
-                              {medicine.stock_quantity}
-                            </span>
-                            <Button size="sm" variant="ghost" onClick={() => handleStockEdit(medicine.id, medicine.stock_quantity)} className="h-6 w-6 p-0">
-                              <Edit2 className="h-3 w-3" />
-                            </Button>
-                            {isOutOfStock(medicine) && <Badge variant="destructive" className="text-xs">Out of Stock</Badge>}
-                            {isLowStock(medicine) && <Badge variant="destructive" className="text-xs">Low Stock</Badge>}
-                          </div>
-                        )}
+                        <span className={(isLowStock(medicine) || isOutOfStock(medicine)) ? 'text-warning font-medium' : ''}>
+                          {medicine.stock_quantity}
+                        </span>
+                        {isOutOfStock(medicine) && <Badge variant="destructive" className="text-xs">Out of Stock</Badge>}
+                        {isLowStock(medicine) && <Badge variant="destructive" className="text-xs">Low Stock</Badge>}
                       </div>
                     </div>
                     {medicine.units_per_pack && (
