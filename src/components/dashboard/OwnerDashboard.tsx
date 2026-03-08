@@ -37,6 +37,8 @@ import { TelegramConnectionDialog } from '@/components/telegram/TelegramConnecti
 import { getCreditLimit, getCreditScoreLabel } from '@/hooks/useCreditScore';
 import { useSeasonalPerformance } from '@/hooks/useSeasonalPerformance';
 import SeasonalTrendsWidget from '@/components/smart-inventory/SeasonalTrendsWidget';
+import ScoreOverview from '@/components/smart-inventory/ScoreOverview';
+import { useSmartInventory } from '@/hooks/useSmartInventory';
 
 interface DashboardStats {
   totalRevenue: number;

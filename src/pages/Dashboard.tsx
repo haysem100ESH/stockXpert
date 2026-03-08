@@ -17,6 +17,8 @@ import { useToast } from '@/hooks/use-toast';
 import { TelegramConnectionDialog } from '@/components/telegram/TelegramConnectionDialog';
 import { useSeasonalPerformance } from '@/hooks/useSeasonalPerformance';
 import SeasonalTrendsWidget from '@/components/smart-inventory/SeasonalTrendsWidget';
+import ScoreOverview from '@/components/smart-inventory/ScoreOverview';
+import { useSmartInventory } from '@/hooks/useSmartInventory';
 interface DashboardStats {
   totalRevenue: number;
   totalProducts: number;
