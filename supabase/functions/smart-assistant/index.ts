@@ -230,6 +230,9 @@ ${profile.role === "staff" ? "Note: This user is staff with limited access. Do n
 
 Branch IDs being queried: ${branchIds?.length ? branchIds.map((id: string) => `${getBranchName(id)} (${id})`).join(", ") : "All branches"}
 
+🏪 ALL BRANCHES (${(branchesRes.data || []).length} total):
+${(branchesRes.data || []).map((b: any) => `  • ${b.name} (Type: ${b.branch_type}, Main: ${b.is_main_branch ? "Yes" : "No"}, ID: ${b.id})`).join("\n")}
+
 CURRENT SYSTEM DATA:
 ═══════════════════
 
