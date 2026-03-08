@@ -686,6 +686,13 @@ export default function OwnerDashboard() {
               isPharmacy={isPharmacy}
             />
 
+            {/* Health Score */}
+            <ScoreOverview
+              scoreDist={smartSummary.scoreDist}
+              avgScore={smartSummary.avgScore}
+              totalItems={smartSummary.totalItems}
+            />
+
             {/* Credit Score Overview */}
             <Card className="min-w-0">
               <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
