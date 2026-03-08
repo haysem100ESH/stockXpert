@@ -56,7 +56,7 @@ serve(async (req) => {
     ] = await Promise.all([
       branchFilter(db.from("medicines").select("id, name, quantity, category, selling_price, purchase_price, expiry_date, branch_id, strips_per_pack, tablets_per_strip"))
         .order("quantity", { ascending: true })
-        .limit(200),
+        .limit(1000),
 
       branchFilter(db.from("sales").select("id, total_amount, payment_method, created_at, branch_id"))
         .gte("created_at", `${today}T00:00:00`)
