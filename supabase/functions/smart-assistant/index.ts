@@ -107,7 +107,7 @@ CURRENT SYSTEM DATA:
 📦 INVENTORY SUMMARY:
 - Total ${ItemLabel}s: ${inventory.length}
 - Low Stock (≤10 units): ${lowStock.length}
-${lowStock.slice(0, 10).map((i: any) => `  • ${i.name}: ${i.quantity} units (Price: ${i.selling_price})`).join("\n")}
+${lowStock.length > 0 ? lowStock.slice(0, 20).map((i: any) => `  • ${i.name}: ${i.quantity} units (Price: ${i.selling_price}, Branch: ${i.branch_id})`).join("\n") : "  None"}
 - Out of Stock: ${outOfStock.length}
 ${outOfStock.slice(0, 5).map((i: any) => `  • ${i.name}`).join("\n")}
 
