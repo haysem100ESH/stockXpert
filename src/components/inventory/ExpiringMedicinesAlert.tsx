@@ -103,7 +103,7 @@ export default function ExpiringMedicinesAlert() {
   if (lowStockCount > 0) parts.push(`${lowStockCount} low stock`);
 
   const handleViewAlerts = () => {
-    navigate('/inventory?tab=alerts');
+    navigate('/smart-inventory');
   };
 
   return (

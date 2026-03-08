@@ -140,11 +140,11 @@ export default function InventoryDashboard() {
         med.stock_quantity <= med.minimum_stock_level
       ) || [];
 
-      // Only fetch expiry data for pharmacy branches
+      // Fetch expiry data
       let expiringDetails: ExpiringItem[] = [];
       let expiredDetails: ExpiredItem[] = [];
       
-      if (isPharmacy) {
+      {
         const thirtyDaysFromNow = new Date();
         thirtyDaysFromNow.setDate(thirtyDaysFromNow.getDate() + 30);
         const tomorrow = new Date();
@@ -306,7 +306,7 @@ export default function InventoryDashboard() {
       )}
 
       {/* Items Expiring Soon */}
-      {isPharmacy && expiringItems.length > 0 && (
+      {expiringItems.length > 0 && (
         <Card>
           <CardHeader>
             <CardTitle className="flex items-center space-x-2">
@@ -339,7 +339,7 @@ export default function InventoryDashboard() {
       )}
 
       {/* Expired Medicines */}
-      {isPharmacy && expiredItems.length > 0 && (
+      {expiredItems.length > 0 && (
         <Card>
           <CardHeader>
             <CardTitle className="flex items-center space-x-2">
@@ -387,7 +387,7 @@ export default function InventoryDashboard() {
             <Package className="h-12 w-12 text-muted-foreground mx-auto mb-4" />
             <h3 className="text-lg font-semibold mb-2">All Good!</h3>
             <p className="text-muted-foreground">
-              No inventory issues detected. All products are well-stocked{isPharmacy ? ' and within expiry dates' : ''}.
+              No inventory issues detected. All products are well-stocked and within expiry dates.
             </p>
           </CardContent>
         </Card>
