@@ -42,6 +42,7 @@ export default function FaceVerification({ staffId, onVerified, onFailed, onCanc
   const [phase, setPhase] = useState<'loading' | 'liveness' | 'verifying' | 'result'>('loading');
   const [feedback, setFeedback] = useState('');
   const [loadingProgress, setLoadingProgress] = useState('');
+  const [downloadPercent, setDownloadPercent] = useState(0);
   const [challenge, setChallenge] = useState(POSE_CHALLENGES[0]);
   const [livenessPassed, setLivenessPassed] = useState(false);
   const [attempts, setAttempts] = useState(0);
