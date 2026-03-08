@@ -113,28 +113,35 @@ export default function StockMovementForm({ open, onOpenChange, onSuccess }: Pro
 
       // For TRANSFER/SUPPLY: check if medicine exists at destination, otherwise create it
       if (toLocationId && (movementType === 'TRANSFER' || movementType === 'SUPPLY')) {
-        const destMed = medicines.find(m => m.name === selectedMedicine?.name && m.location_id === toLocationId);
+        // Get destination branch_id from location
+        const destBranchId = locationBranchMap[toLocationId] || null;
+        
+        // Find existing medicine at destination by name + (location or branch)
+        const destMed = medicines.find(m => 
+          m.name === selectedMedicine?.name && m.id !== selectedMedicine?.id && (
+            m.location_id === toLocationId || 
+            (destBranchId && m.branch_id === destBranchId)
+          )
+        );
+        
         if (destMed) {
           await supabase.from('medicines').update({
             stock_quantity: destMed.stock_quantity + qty
           }).eq('id', destMed.id);
         } else if (selectedMedicine) {
-          // Get the branch_id for the destination location
-          const destLoc = locations.find(l => l.id === toLocationId);
-          let destBranchId = null;
-          if (destLoc) {
-            const { data: locData } = await supabase.from('locations').select('branch_id').eq('id', toLocationId).single();
-            destBranchId = locData?.branch_id;
-          }
           // Clone the medicine to the destination
-          const { id, stock_quantity, location_id, branch_id, ...rest } = selectedMedicine as any;
-          await supabase.from('medicines').insert({
-            ...rest,
-            stock_quantity: qty,
-            location_id: toLocationId,
-            branch_id: destBranchId,
-            created_by: user?.id,
-          });
+          // Fetch full medicine data for cloning
+          const { data: fullMed } = await supabase.from('medicines').select('*').eq('id', selectedMedicine.id).single();
+          if (fullMed) {
+            const { id, stock_quantity, location_id, branch_id, created_at, updated_at, ...rest } = fullMed as any;
+            await supabase.from('medicines').insert({
+              ...rest,
+              stock_quantity: qty,
+              location_id: toLocationId,
+              branch_id: destBranchId,
+              created_by: user?.id,
+            });
+          }
         }
       }
 
