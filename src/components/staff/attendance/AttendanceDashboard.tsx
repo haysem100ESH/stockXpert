@@ -80,6 +80,46 @@ export default function AttendanceDashboard() {
     }
   }, [filterBranch, filterStaff, filterDateFrom, filterDateTo]);
 
+  const extractPhotoPath = (photoValue: string | null) => {
+    if (!photoValue) return null;
+
+    if (!photoValue.startsWith('http')) {
+      const normalized = photoValue.replace(/^\/+/, '');
+      return normalized.startsWith('attendance-photos/')
+        ? normalized.replace('attendance-photos/', '')
+        : normalized;
+    }
+
+    try {
+      const parsed = new URL(photoValue);
+      const marker = '/attendance-photos/';
+      const markerIndex = parsed.pathname.indexOf(marker);
+      if (markerIndex === -1) return null;
+      return decodeURIComponent(parsed.pathname.slice(markerIndex + marker.length));
+    } catch {
+      return null;
+    }
+  };
+
+  const getDisplayPhotoUrl = async (photoValue: string | null) => {
+    if (!photoValue) return null;
+
+    const photoPath = extractPhotoPath(photoValue);
+    if (!photoPath) return photoValue;
+
+    const { data, error } = await supabase.storage
+      .from('attendance-photos')
+      .createSignedUrl(photoPath, 60 * 60);
+
+    if (!error && data?.signedUrl) return data.signedUrl;
+
+    const { data: publicData } = supabase.storage
+      .from('attendance-photos')
+      .getPublicUrl(photoPath);
+
+    return publicData?.publicUrl || photoValue;
+  };
+
   const fetchBranchesAndStaff = async () => {
     if (!profile?.id) return;
     const [branchRes, staffRes] = await Promise.all([
@@ -126,7 +166,22 @@ export default function AttendanceDashboard() {
         branch_name: branchMap[r.branch_id] || 'Unknown',
       }));
 
-      setRecords(enriched);
+      const recordsWithPhotoUrls = await Promise.all(
+        enriched.map(async (record: any) => {
+          const [checkinPhoto, checkoutPhoto] = await Promise.all([
+            getDisplayPhotoUrl(record.checkin_photo),
+            getDisplayPhotoUrl(record.checkout_photo),
+          ]);
+
+          return {
+            ...record,
+            checkin_photo: checkinPhoto,
+            checkout_photo: checkoutPhoto,
+          };
+        })
+      );
+
+      setRecords(recordsWithPhotoUrls);
     } catch (error) {
       console.error('Failed to fetch attendance:', error);
     } finally {
