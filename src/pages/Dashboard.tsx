@@ -509,12 +509,12 @@ export default function Dashboard() {
       { width: 18 },
     ];
 
-    const headerFill: ExcelJS.Fill = { type: 'pattern', pattern: 'solid', fgColor: { argb: 'FF1E6F3E' } };
-    const headerFont: Partial<ExcelJS.Font> = { bold: true, color: { argb: 'FFFFFFFF' }, size: 11 };
-    const subHeaderFill: ExcelJS.Fill = { type: 'pattern', pattern: 'solid', fgColor: { argb: 'FF2D8B55' } };
-    const evenRowFill: ExcelJS.Fill = { type: 'pattern', pattern: 'solid', fgColor: { argb: 'FFF0F9F4' } };
-    const borderStyle: Partial<ExcelJS.Border> = { style: 'thin', color: { argb: 'FFD0D5DD' } };
-    const borders: Partial<ExcelJS.Borders> = { top: borderStyle, left: borderStyle, bottom: borderStyle, right: borderStyle };
+    const headerFill = { type: 'pattern' as const, pattern: 'solid' as const, fgColor: { argb: 'FF1E6F3E' } };
+    const headerFont = { bold: true, color: { argb: 'FFFFFFFF' }, size: 11 };
+    const subHeaderFill = { type: 'pattern' as const, pattern: 'solid' as const, fgColor: { argb: 'FF2D8B55' } };
+    const evenRowFill = { type: 'pattern' as const, pattern: 'solid' as const, fgColor: { argb: 'FFF0F9F4' } };
+    const borderStyle = { style: 'thin' as const, color: { argb: 'FFD0D5DD' } };
+    const borders = { top: borderStyle, left: borderStyle, bottom: borderStyle, right: borderStyle };
 
     // --- Title ---
     const titleRow = ws.addRow(['Dashboard Report']);
