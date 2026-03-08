@@ -51,8 +51,6 @@ export default function StaffInventoryWithActions() {
   const [filteredMedicines, setFilteredMedicines] = useState<Medicine[]>([]);
   const [searchTerm, setSearchTerm] = useState('');
   const [categoryFilter, setCategoryFilter] = useState('all');
-  const [editingStock, setEditingStock] = useState<string | null>(null);
-  const [tempStock, setTempStock] = useState<number>(0);
   const [loading, setLoading] = useState(true);
   const [showAddDialog, setShowAddDialog] = useState(false);
   const [showAddItemDialog, setShowAddItemDialog] = useState(false);
