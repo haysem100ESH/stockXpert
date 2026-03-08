@@ -49,11 +49,12 @@ export default function TransferRequestForm({ open, onOpenChange, onSuccess }: P
     setLocations((data || []).map((l: any) => ({ id: l.id, name: l.name, type: l.type })));
   };
 
-  const fetchMedicines = async (branchId?: string) => {
-    if (!branchId) { setMedicines([]); return; }
+  const fetchMedicines = async (locationId?: string) => {
+    if (!locationId) { setMedicines([]); return; }
+    // Medicines may use location_id - try both for compatibility
     const { data } = await supabase.from('medicines')
-      .select('id, name, stock_quantity')
-      .eq('branch_id', branchId)
+      .select('id, name, stock_quantity, location_id, branch_id')
+      .or(`location_id.eq.${locationId},branch_id.eq.${locationId}`)
       .gt('stock_quantity', 0)
       .order('name');
     setMedicines(data || []);
