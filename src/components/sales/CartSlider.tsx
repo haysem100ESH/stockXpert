@@ -277,12 +277,12 @@ export default function CartSlider({
                                 <input
                                   type="number"
                                   step="1"
-                                  min="1"
-                                  value={Math.max(1, Math.round(item.stripesCount ?? 1))}
+                                  min="0"
+                                  value={Math.max(0, Math.round(item.stripesCount ?? 1))}
                                   onChange={(e) => {
                                     const val = parseInt(e.target.value, 10);
-                                    if (!isNaN(val) && val > 0) {
-                                      const current = Math.max(1, Math.round(item.stripesCount ?? 1));
+                                    if (!isNaN(val) && val >= 0) {
+                                      const current = Math.max(0, Math.round(item.stripesCount ?? 1));
                                       const delta = val - current;
                                       if (delta !== 0) onUpdateQuantity(item.id, item.saleType, delta);
                                     }
