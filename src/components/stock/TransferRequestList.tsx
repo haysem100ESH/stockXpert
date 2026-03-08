@@ -47,14 +47,16 @@ export default function TransferRequestList() {
       const locIds = [...new Set(data.flatMap(r => [r.requesting_location_id, r.source_location_id]).filter(Boolean))];
       const userIds = [...new Set(data.flatMap(r => [r.created_by, r.approved_by]).filter(Boolean))];
 
-      const [itemsRes, branchesRes, usersRes] = await Promise.all([
+      const [itemsRes, locationsRes, branchesRes, usersRes] = await Promise.all([
         supabase.from('transfer_request_items').select('*').in('request_id', reqIds),
+        locIds.length ? supabase.from('locations').select('id, name').in('id', locIds) : { data: [] },
         locIds.length ? supabase.from('pharmacy_branches').select('id, name').in('id', locIds) : { data: [] },
         userIds.length ? supabase.from('profiles').select('id, full_name').in('id', userIds) : { data: [] },
       ]);
 
       const locMap: Record<string, string> = {};
-      (branchesRes.data || []).forEach((l: any) => { locMap[l.id] = l.name; });
+      (locationsRes.data || []).forEach((l: any) => { locMap[l.id] = l.name; });
+      (branchesRes.data || []).forEach((b: any) => { if (!locMap[b.id]) locMap[b.id] = b.name; });
       const userMap: Record<string, string> = {};
       (usersRes.data || []).forEach((u: any) => { userMap[u.id] = u.full_name; });
 
