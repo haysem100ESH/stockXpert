@@ -19,6 +19,7 @@ interface Props {
 
 export default function StockMovementForm({ open, onOpenChange, onSuccess }: Props) {
   const [branches, setBranches] = useState<{ id: string; name: string; type: string }[]>([]);
+  const [branchToLocationMap, setBranchToLocationMap] = useState<Record<string, string>>({});
   const [medicines, setMedicines] = useState<{ id: string; name: string; stock_quantity: number; branch_id?: string }[]>([]);
   const [fromBranchId, setFromBranchId] = useState('');
   const [toBranchId, setToBranchId] = useState('');
@@ -32,13 +33,40 @@ export default function StockMovementForm({ open, onOpenChange, onSuccess }: Pro
   const { profile, user } = useAuth();
 
   useEffect(() => {
-    if (open) { fetchBranches(); fetchMedicines(); setShowConfirmation(false); }
+    if (open) { fetchBranchesAndLocations(); fetchMedicines(); setShowConfirmation(false); }
   }, [open]);
 
-  const fetchBranches = async () => {
+  const fetchBranchesAndLocations = async () => {
     if (!profile?.id) return;
-    const { data } = await supabase.from('pharmacy_branches').select('id, name, branch_type').eq('pharmacy_owner_id', profile.id).order('name');
-    setBranches((data || []).map((b: any) => ({ id: b.id, name: b.name, type: b.branch_type })));
+    const ownerId = profile.role === 'owner' ? profile.id : undefined;
+    if (!ownerId) return;
+
+    const [branchRes, locRes] = await Promise.all([
+      supabase.from('pharmacy_branches').select('id, name, branch_type').eq('pharmacy_owner_id', ownerId).order('name'),
+      supabase.from('locations').select('id, branch_id').eq('pharmacy_owner_id', ownerId),
+    ]);
+
+    const branchRows = (branchRes.data || []).map((b: any) => ({ id: b.id, name: b.name, type: b.branch_type }));
+    setBranches(branchRows);
+
+    const locMap: Record<string, string> = {};
+    (locRes.data || []).forEach((l: any) => { if (l.branch_id) locMap[l.branch_id] = l.id; });
+
+    // Auto-sync: create missing location rows for branches
+    const missingBranches = branchRows.filter(b => !locMap[b.id]);
+    if (missingBranches.length > 0) {
+      const { data: inserted } = await supabase.from('locations').insert(
+        missingBranches.map(b => ({
+          pharmacy_owner_id: ownerId,
+          name: b.name,
+          type: b.type === 'pharmacy' ? 'pharmacy' : 'store',
+          branch_id: b.id,
+        }))
+      ).select('id, branch_id');
+      (inserted || []).forEach((l: any) => { if (l.branch_id) locMap[l.branch_id] = l.id; });
+    }
+
+    setBranchToLocationMap(locMap);
   };
 
   const fetchMedicines = async () => {
@@ -108,13 +136,26 @@ export default function StockMovementForm({ open, onOpenChange, onSuccess }: Pro
   const handleSubmit = async () => {
     if (!validateForm()) return;
 
+    // Resolve branch IDs to location IDs for the FK
+    const fromLocationId = fromBranchId ? branchToLocationMap[fromBranchId] : null;
+    const toLocationId = toBranchId ? branchToLocationMap[toBranchId] : null;
+
+    if (fromBranchId && !fromLocationId) {
+      toast({ title: 'Error', description: 'Source branch has no location entry. Please reopen the form to sync.', variant: 'destructive' });
+      return;
+    }
+    if (toBranchId && !toLocationId) {
+      toast({ title: 'Error', description: 'Destination branch has no location entry. Please reopen the form to sync.', variant: 'destructive' });
+      return;
+    }
+
     const qty = Number(quantity);
     setSaving(true);
     try {
       const { error: moveError } = await supabase.from('stock_movements').insert({
         medicine_id: medicineId,
-        from_location_id: fromBranchId || null,
-        to_location_id: toBranchId || null,
+        from_location_id: fromLocationId,
+        to_location_id: toLocationId,
         quantity: qty,
         movement_type: movementType,
         status: 'completed',
