@@ -43,35 +43,60 @@ export default function CreditHistoryTab({ customerId }: CreditHistoryTabProps) 
     return <div className="py-4 text-center text-muted-foreground text-sm">No credit score changes yet</div>;
   }
 
+  const ChangeIcon = ({ change }: { change: number }) => (
+    <span className={`inline-flex items-center gap-0.5 text-xs font-semibold ${
+      change > 0 ? 'text-green-600' : change < 0 ? 'text-destructive' : 'text-muted-foreground'
+    }`}>
+      {change > 0 ? <ArrowUp className="h-3 w-3" /> : change < 0 ? <ArrowDown className="h-3 w-3" /> : <Minus className="h-3 w-3" />}
+      {change > 0 ? '+' : ''}{change}
+    </span>
+  );
+
   return (
-    <Table>
-      <TableHeader>
-        <TableRow>
-          <TableHead>Date</TableHead>
-          <TableHead>Change</TableHead>
-          <TableHead>Score</TableHead>
-          <TableHead>Reason</TableHead>
-          <TableHead>Notes</TableHead>
-        </TableRow>
-      </TableHeader>
-      <TableBody>
+    <>
+      {/* Mobile card layout */}
+      <div className="space-y-2 sm:hidden">
         {logs.map(log => (
-          <TableRow key={log.id}>
-            <TableCell className="text-xs">{new Date(log.created_at).toLocaleDateString()}</TableCell>
-            <TableCell>
-              <span className={`inline-flex items-center gap-0.5 text-xs font-semibold ${
-                log.change_amount > 0 ? 'text-green-600' : log.change_amount < 0 ? 'text-red-600' : 'text-muted-foreground'
-              }`}>
-                {log.change_amount > 0 ? <ArrowUp className="h-3 w-3" /> : log.change_amount < 0 ? <ArrowDown className="h-3 w-3" /> : <Minus className="h-3 w-3" />}
-                {log.change_amount > 0 ? '+' : ''}{log.change_amount}
-              </span>
-            </TableCell>
-            <TableCell className="text-xs">{log.previous_score} → {log.new_score}</TableCell>
-            <TableCell className="text-xs">{log.reason}</TableCell>
-            <TableCell className="text-xs text-muted-foreground">{log.notes || '—'}</TableCell>
-          </TableRow>
+          <div key={log.id} className="border rounded-lg p-3 bg-card space-y-1.5">
+            <div className="flex items-center justify-between">
+              <span className="text-xs text-muted-foreground">{new Date(log.created_at).toLocaleDateString()}</span>
+              <ChangeIcon change={log.change_amount} />
+            </div>
+            <div className="flex justify-between text-sm">
+              <span className="text-muted-foreground">Score</span>
+              <span className="font-medium">{log.previous_score} → {log.new_score}</span>
+            </div>
+            <p className="text-xs text-muted-foreground leading-snug">{log.reason}</p>
+            {log.notes && <p className="text-xs text-muted-foreground/70">{log.notes}</p>}
+          </div>
         ))}
-      </TableBody>
-    </Table>
+      </div>
+
+      {/* Desktop table */}
+      <div className="hidden sm:block">
+        <Table>
+          <TableHeader>
+            <TableRow>
+              <TableHead>Date</TableHead>
+              <TableHead>Change</TableHead>
+              <TableHead>Score</TableHead>
+              <TableHead>Reason</TableHead>
+              <TableHead>Notes</TableHead>
+            </TableRow>
+          </TableHeader>
+          <TableBody>
+            {logs.map(log => (
+              <TableRow key={log.id}>
+                <TableCell className="text-xs">{new Date(log.created_at).toLocaleDateString()}</TableCell>
+                <TableCell><ChangeIcon change={log.change_amount} /></TableCell>
+                <TableCell className="text-xs">{log.previous_score} → {log.new_score}</TableCell>
+                <TableCell className="text-xs">{log.reason}</TableCell>
+                <TableCell className="text-xs text-muted-foreground">{log.notes || '—'}</TableCell>
+              </TableRow>
+            ))}
+          </TableBody>
+        </Table>
+      </div>
+    </>
   );
 }
