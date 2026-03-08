@@ -16,7 +16,7 @@ import { supabase } from '@/lib/db';
 import { useToast } from '@/hooks/use-toast';
 import { useAuth } from '@/hooks/useAuth';
 import { useBranchContext } from '@/hooks/useBranchContext';
-import MedicineTransfer from '@/components/inventory/MedicineTransfer';
+
 import DebtManagement from './DebtManagement';
 import SalaryHistory from '@/components/staff/SalaryHistory';
 import { BarChart, Bar, XAxis, YAxis, CartesianGrid, Tooltip, Legend, ResponsiveContainer } from 'recharts';
@@ -708,7 +708,7 @@ export default function FinanceManagement() {
           <TabsTrigger value="salaries">Salaries</TabsTrigger>
           <TabsTrigger value="debts">Debts</TabsTrigger>
           <TabsTrigger value="reports">Reports</TabsTrigger>
-          <TabsTrigger value="transfer">Transfer</TabsTrigger>
+          
         </TabsList>
 
         <TabsContent value="overview">
@@ -1122,9 +1122,6 @@ export default function FinanceManagement() {
           </Card>
         </TabsContent>
 
-        <TabsContent value="transfer">
-          <MedicineTransfer />
-        </TabsContent>
       </Tabs>
     </div>
   );
