@@ -13,8 +13,9 @@ import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@
 import {
   DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuTrigger,
 } from '@/components/ui/dropdown-menu';
+import { ConfirmationDialog } from '@/components/ui/confirmation-dialog';
 import { DataTable } from '@/components/ui/data-table';
-import { Building2, Plus, Edit, MapPin, Phone, MoreHorizontal } from 'lucide-react';
+import { Building2, Plus, Edit, MapPin, Phone, MoreHorizontal, Trash2 } from 'lucide-react';
 import { usePlanLimits } from '@/hooks/usePlanLimits';
 
 interface Branch {
@@ -85,6 +86,7 @@ export default function BranchManagement() {
   const [editingBranch, setEditingBranch] = useState<Branch | null>(null);
   const [showEditDialog, setShowEditDialog] = useState(false);
   const [saving, setSaving] = useState(false);
+  const [deletingBranch, setDeletingBranch] = useState<Branch | null>(null);
 
   const [branchName, setBranchName] = useState('');
   const [branchAddress, setBranchAddress] = useState('');
@@ -202,6 +204,25 @@ export default function BranchManagement() {
     }
   };
 
+  const handleDelete = async () => {
+    if (!deletingBranch) return;
+    setSaving(true);
+    try {
+      // Delete linked location first
+      await (supabase as any).from('locations').delete().eq('branch_id', deletingBranch.id);
+      const { error } = await (supabase as any).from('pharmacy_branches').delete().eq('id', deletingBranch.id);
+      if (error) throw error;
+      toast({ title: 'Success', description: 'Branch deleted successfully' });
+      setDeletingBranch(null);
+      fetchBranches(); refetchPlanLimits();
+      window.dispatchEvent(new Event('branches-updated'));
+    } catch (e: any) {
+      toast({ title: 'Error', description: e.message, variant: 'destructive' });
+    } finally {
+      setSaving(false);
+    }
+  };
+
   const startEdit = (branch: Branch) => {
     setEditingBranch(branch);
     setBranchName(branch.name);
@@ -259,6 +280,12 @@ export default function BranchManagement() {
           <DropdownMenuContent align="end">
             <DropdownMenuItem onClick={() => startEdit(row.original)}>
               <Edit className="mr-2 h-4 w-4" /> Edit Branch
+            </DropdownMenuItem>
+            <DropdownMenuItem
+              className="text-destructive focus:text-destructive"
+              onClick={() => setDeletingBranch(row.original)}
+            >
+              <Trash2 className="mr-2 h-4 w-4" /> Delete Branch
             </DropdownMenuItem>
           </DropdownMenuContent>
         </DropdownMenu>
@@ -340,6 +367,16 @@ export default function BranchManagement() {
           />
         </DialogContent>
       </Dialog>
+
+      {/* Delete Confirmation */}
+      <ConfirmationDialog
+        open={!!deletingBranch}
+        onOpenChange={(open) => { if (!open) setDeletingBranch(null); }}
+        onConfirm={handleDelete}
+        title="Delete Branch"
+        description={`Are you sure you want to delete "${deletingBranch?.name}"? This will remove all associated data (inventory, sales, staff assignments) and cannot be undone.`}
+        confirmText="Delete"
+      />
     </div>
   );
 }
