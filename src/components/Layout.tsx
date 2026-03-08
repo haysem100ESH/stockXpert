@@ -5,7 +5,7 @@ import { Button } from '@/components/ui/button';
 import { Avatar, AvatarFallback } from '@/components/ui/avatar';
 import { SidebarProvider, SidebarTrigger } from '@/components/ui/sidebar';
 import { AppSidebar } from '@/components/AppSidebar';
-import { LogOut, Settings } from 'lucide-react';
+import { LogOut, Settings, Sun, Moon } from 'lucide-react';
 import { Loader2 } from 'lucide-react';
 import { ConfirmationDialog } from '@/components/ui/confirmation-dialog';
 import SubscriptionStatus from '@/components/subscription/SubscriptionStatus';
@@ -16,6 +16,7 @@ import BranchSelector from '@/components/branch/BranchSelector';
 import { useBranchContext } from '@/hooks/useBranchContext';
 import { useBranding } from '@/hooks/useBranding';
 import { DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuLabel, DropdownMenuSeparator, DropdownMenuTrigger } from '@/components/ui/dropdown-menu';
+import { useTheme } from 'next-themes';
 
 interface LayoutProps {
   children: ReactNode;
@@ -83,6 +84,21 @@ export default function Layout({ children }: LayoutProps) {
   );
 }
 
+function ThemeToggle() {
+  const { theme, setTheme } = useTheme();
+  return (
+    <Button
+      variant="ghost"
+      size="icon"
+      onClick={() => setTheme(theme === 'dark' ? 'light' : 'dark')}
+      aria-label="Toggle theme"
+    >
+      <Sun className="h-5 w-5 rotate-0 scale-100 transition-all dark:-rotate-90 dark:scale-0" />
+      <Moon className="absolute h-5 w-5 rotate-90 scale-0 transition-all dark:rotate-0 dark:scale-100" />
+    </Button>
+  );
+}
+
 function LayoutHeader({ profile, user, onSignOut }: { profile: any, user: any, onSignOut: () => void }) {
   const { selectedBranch, setSelectedBranch } = useBranchContext();
   const branding = useBranding();
@@ -108,6 +124,7 @@ function LayoutHeader({ profile, user, onSignOut }: { profile: any, user: any, o
       </div>
       
       <div className="flex items-center space-x-4">
+        <ThemeToggle />
         <DropdownMenu>
           <DropdownMenuTrigger asChild>
             <button className="flex items-center space-x-2 cursor-pointer rounded-full hover:bg-muted p-1 transition-colors">
