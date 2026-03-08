@@ -197,15 +197,15 @@ export function useSmartInventory() {
         if (!salesMap[id]) salesMap[id] = { totalQty30: 0, totalQty60: 0, lastSaleDate: null };
 
         const qty = (sale.pack_quantity || 0) + (sale.strip_quantity || 0);
-        const saleDate = new Date(sale.created_at);
+        const saleDate = new Date(sale.sales.created_at);
 
         salesMap[id].totalQty60 += qty;
         if (saleDate >= thirtyDaysAgo) {
           salesMap[id].totalQty30 += qty;
         }
 
-        if (!salesMap[id].lastSaleDate || sale.created_at > salesMap[id].lastSaleDate!) {
-          salesMap[id].lastSaleDate = sale.created_at;
+        if (!salesMap[id].lastSaleDate || sale.sales.created_at > salesMap[id].lastSaleDate!) {
+          salesMap[id].lastSaleDate = sale.sales.created_at;
         }
       });
 

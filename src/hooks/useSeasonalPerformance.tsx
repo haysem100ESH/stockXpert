@@ -119,7 +119,7 @@ export function useSeasonalPerformance() {
 
       (salesData || []).forEach((sale: any) => {
         const id = sale.medicine_id;
-        const saleDate = new Date(sale.created_at);
+        const saleDate = new Date(sale.sales.created_at);
         const month = saleDate.getMonth() + 1; // 1-12
         const qty = (sale.pack_quantity || 0) + (sale.strip_quantity || 0);
 
