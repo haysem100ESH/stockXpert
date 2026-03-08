@@ -34,7 +34,7 @@ export default function TransferRequestForm({ open, onOpenChange, onSuccess }: P
   const { profile, user } = useAuth();
 
   useEffect(() => {
-    if (open) { fetchLocations(); setShowConfirmation && false; }
+    if (open) { fetchLocations(); }
   }, [open]);
 
   const fetchLocations = async () => {
