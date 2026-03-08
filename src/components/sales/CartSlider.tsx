@@ -277,12 +277,12 @@ export default function CartSlider({
                                 <input
                                   type="number"
                                   step="1"
-                                  min="1"
-                                  value={Math.max(1, Math.round(item.stripesCount ?? 1))}
+                                  min="0"
+                                  value={Math.max(0, Math.round(item.stripesCount ?? 1))}
                                   onChange={(e) => {
                                     const val = parseInt(e.target.value, 10);
-                                    if (!isNaN(val) && val > 0) {
-                                      const current = Math.max(1, Math.round(item.stripesCount ?? 1));
+                                    if (!isNaN(val) && val >= 0) {
+                                      const current = Math.max(0, Math.round(item.stripesCount ?? 1));
                                       const delta = val - current;
                                       if (delta !== 0) onUpdateQuantity(item.id, item.saleType, delta);
                                     }
@@ -319,7 +319,7 @@ export default function CartSlider({
                       </p>
 
                       {/* Leftover strip info for by_stripe sales */}
-                      {item.saleType === 'by_stripe' && item.units_per_pack && item.stripesCount && (() => {
+                      {item.saleType === 'by_stripe' && item.units_per_pack && (item.stripesCount !== undefined) && (() => {
                         // open_pack_units is already in real decimal units (normalized in fetchMedicines)
                         const openPack = item.open_pack_units || 0;
                         const uPP = item.units_per_pack;

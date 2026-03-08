@@ -336,7 +336,7 @@ export default function SalesManagement() {
           newCount = parseFloat((Math.max(0.25, currentCount + step)).toFixed(4));
         } else {
           const integerDelta = Number.isInteger(delta) ? delta : Math.round(delta);
-          newCount = Math.max(1, Math.round(currentCount + integerDelta));
+          newCount = Math.max(0, Math.round(currentCount + integerDelta));
         }
 
         if (newCount > totalAvailableStripes) return item;
@@ -428,6 +428,15 @@ export default function SalesManagement() {
     }
     if (cart.length === 0) {
       toast({ title: 'Error', description: 'Cart is empty', variant: 'destructive' });
+      return;
+    }
+    // Prevent selling items with 0 quantity
+    const zeroItem = cart.find(item => 
+      (item.saleType === 'by_stripe' && (item.stripesCount ?? 0) <= 0) ||
+      (item.saleType === 'full_pack' && item.quantity <= 0)
+    );
+    if (zeroItem) {
+      toast({ title: 'Invalid Quantity', description: `"${zeroItem.name}" has 0 quantity. Please set a valid amount or remove it.`, variant: 'destructive' });
       return;
     }
     const change = getChangeAmount();
