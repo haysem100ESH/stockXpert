@@ -118,18 +118,109 @@ export default function TransferRequestList() {
 
   const handleFulfill = async (request: RequestRow) => {
     try {
-      // Create stock movements for each item and update status to fulfilled
-      // This is a simplified version — in production you'd handle stock adjustment here
+      // 1. Fetch the full transfer request with location IDs
+      const { data: trReq, error: trErr } = await supabase
+        .from('transfer_requests')
+        .select('id, requesting_location_id, source_location_id')
+        .eq('id', request.id)
+        .single();
+      if (trErr || !trReq) throw trErr || new Error('Request not found');
+
+      // 2. Resolve location IDs to branch IDs
+      const locIds = [trReq.requesting_location_id, trReq.source_location_id].filter(Boolean);
+      const { data: locs } = await supabase.from('locations').select('id, branch_id').in('id', locIds);
+      const locToBranch: Record<string, string> = {};
+      (locs || []).forEach((l: any) => { if (l.branch_id) locToBranch[l.id] = l.branch_id; });
+
+      const destBranchId = locToBranch[trReq.requesting_location_id];
+      const sourceBranchId = trReq.source_location_id ? locToBranch[trReq.source_location_id] : null;
+
+      if (!destBranchId) throw new Error('Could not resolve destination branch');
+      if (!sourceBranchId) throw new Error('Could not resolve source branch');
+
+      // 3. Fetch approved items
+      const { data: items, error: itemsErr } = await supabase
+        .from('transfer_request_items')
+        .select('id, medicine_id, approved_quantity')
+        .eq('request_id', request.id);
+      if (itemsErr) throw itemsErr;
+      if (!items || items.length === 0) throw new Error('No items to fulfill');
+
+      // 4. Process each item: move stock + expenses
+      for (const item of items) {
+        const qty = Number(item.approved_quantity);
+        if (qty <= 0) continue;
+
+        // Get source medicine
+        const { data: sourceMed } = await supabase
+          .from('medicines')
+          .select('*')
+          .eq('id', item.medicine_id)
+          .single();
+        if (!sourceMed) continue;
+
+        // Deduct from source
+        await supabase.from('medicines').update({
+          stock_quantity: Math.max(0, sourceMed.stock_quantity - qty),
+        }).eq('id', sourceMed.id);
+
+        // Add to destination - find existing or clone
+        const { data: destMed } = await supabase
+          .from('medicines')
+          .select('*')
+          .eq('branch_id', destBranchId)
+          .eq('name', sourceMed.name)
+          .maybeSingle();
+
+        if (destMed) {
+          await supabase.from('medicines').update({
+            stock_quantity: destMed.stock_quantity + qty,
+          }).eq('id', destMed.id);
+        } else {
+          // Clone medicine to destination branch
+          const { id, stock_quantity, location_id, branch_id, created_at, updated_at, ...rest } = sourceMed as any;
+          await supabase.from('medicines').insert({
+            ...rest,
+            stock_quantity: qty,
+            branch_id: destBranchId,
+            created_by: user?.id,
+          });
+        }
+
+        // 5. Transfer expenses: deduct from source, add to destination
+        const expenseAmount = qty * (sourceMed.purchase_price || 0);
+        if (expenseAmount > 0) {
+          const unitLabel = (sourceMed.unit_label || 'unit').toUpperCase();
+          await supabase.from('expenses').insert([
+            {
+              description: `Transfer Out: ${sourceMed.name} (${qty} ${unitLabel}) to ${request.requesting_location}`,
+              amount: -expenseAmount,
+              branch_id: sourceBranchId,
+              category: 'Stock Transfer',
+              pharmacy_owner_id: profile?.id,
+            },
+            {
+              description: `Transfer In: ${sourceMed.name} (${qty} ${unitLabel}) from ${request.source_location}`,
+              amount: expenseAmount,
+              branch_id: destBranchId,
+              category: 'Stock Transfer',
+              pharmacy_owner_id: profile?.id,
+            },
+          ]);
+        }
+      }
+
+      // 6. Mark as fulfilled
       const { error } = await supabase.from('transfer_requests').update({
         status: 'fulfilled',
         updated_at: new Date().toISOString(),
       }).eq('id', request.id);
       if (error) throw error;
 
-      toast({ title: 'Success', description: 'Request marked as fulfilled' });
+      toast({ title: 'Success', description: 'Transfer fulfilled — stock and expenses updated' });
       fetchRequests();
-    } catch {
-      toast({ title: 'Error', description: 'Failed to fulfill request', variant: 'destructive' });
+    } catch (err: any) {
+      toast({ title: 'Error', description: err.message || 'Failed to fulfill request', variant: 'destructive' });
     }
   };
 
