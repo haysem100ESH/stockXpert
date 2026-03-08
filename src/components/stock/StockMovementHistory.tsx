@@ -53,9 +53,9 @@ export default function StockMovementHistory() {
       const locIds = [...new Set((data || []).flatMap(m => [m.from_location_id, m.to_location_id]).filter(Boolean))];
       const userIds = [...new Set((data || []).map(m => m.created_by).filter(Boolean))];
 
-      const [medsRes, locsRes, usersRes] = await Promise.all([
+      const [medsRes, branchesRes, usersRes] = await Promise.all([
         medIds.length ? supabase.from('medicines').select('id, name').in('id', medIds) : { data: [] },
-        locIds.length ? supabase.from('locations').select('id, name').in('id', locIds) : { data: [] },
+        locIds.length ? supabase.from('pharmacy_branches').select('id, name').in('id', locIds) : { data: [] },
         userIds.length ? supabase.from('profiles').select('id, full_name').in('id', userIds) : { data: [] },
       ]);
 
