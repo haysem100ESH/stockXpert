@@ -6,10 +6,13 @@ import { Badge } from '@/components/ui/badge';
 import { Button } from '@/components/ui/button';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@/components/ui/table';
-import { Dialog, DialogContent, DialogHeader, DialogTitle } from '@/components/ui/dialog';
-import { Calendar, CheckCircle2, Clock, XCircle, Users, ShieldCheck, ShieldAlert, Image, AlertTriangle } from 'lucide-react';
+import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogFooter, DialogDescription } from '@/components/ui/dialog';
+import { Textarea } from '@/components/ui/textarea';
+import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from '@/components/ui/tooltip';
+import { Calendar, CheckCircle2, Clock, XCircle, Users, ShieldCheck, ShieldAlert, AlertTriangle, Pencil, Info, Loader2 } from 'lucide-react';
 import { supabase } from '@/lib/db';
 import { useAuth } from '@/hooks/useAuth';
+import { useToast } from '@/hooks/use-toast';
 
 interface AttendanceRecord {
   id: string;
@@ -24,6 +27,8 @@ interface AttendanceRecord {
   checkin_photo: string | null;
   checkout_photo: string | null;
   verification_score: number | null;
+  status_override_reason: string | null;
+  status_overridden_at: string | null;
   staff_name?: string;
   branch_name?: string;
 }
@@ -51,7 +56,12 @@ export default function AttendanceDashboard() {
   const [filterDateTo, setFilterDateTo] = useState<string>('');
   const [photoModal, setPhotoModal] = useState<{ url: string; title: string } | null>(null);
   const [alerts, setAlerts] = useState<SuspiciousAlert[]>([]);
+  const [editRecord, setEditRecord] = useState<AttendanceRecord | null>(null);
+  const [editStatus, setEditStatus] = useState<string>('');
+  const [editReason, setEditReason] = useState<string>('');
+  const [saving, setSaving] = useState(false);
   const { profile, user } = useAuth();
+  const { toast } = useToast();
   const isOwner = profile?.role === 'owner';
 
   useEffect(() => {
@@ -146,6 +156,48 @@ export default function AttendanceDashboard() {
         setAlerts([]);
       }
     } catch { setAlerts([]); }
+  };
+
+  const openStatusEdit = (record: AttendanceRecord) => {
+    setEditRecord(record);
+    setEditStatus(record.attendance_status);
+    setEditReason(record.status_override_reason || '');
+  };
+
+  const closeStatusEdit = () => {
+    setEditRecord(null);
+    setEditStatus('');
+    setEditReason('');
+  };
+
+  const handleSaveStatus = async () => {
+    if (!editRecord || !editReason.trim()) {
+      toast({ title: 'Reason required', description: 'Please provide a reason for changing the status.', variant: 'destructive' });
+      return;
+    }
+
+    setSaving(true);
+    try {
+      const { error } = await supabase
+        .from('staff_attendance')
+        .update({
+          attendance_status: editStatus,
+          status_override_reason: editReason.trim(),
+          status_overridden_by: user?.id,
+          status_overridden_at: new Date().toISOString(),
+        })
+        .eq('id', editRecord.id);
+
+      if (error) throw error;
+
+      toast({ title: 'Status updated', description: `Attendance marked as ${editStatus}.` });
+      closeStatusEdit();
+      fetchRecords();
+    } catch (err: any) {
+      toast({ title: 'Error', description: err.message || 'Failed to update status', variant: 'destructive' });
+    } finally {
+      setSaving(false);
+    }
   };
 
   const presentCount = records.filter((r) => r.attendance_status === 'present').length;
@@ -325,7 +377,39 @@ export default function AttendanceDashboard() {
                       <TableCell>
                         {r.checkout_time ? new Date(r.checkout_time).toLocaleTimeString() : '—'}
                       </TableCell>
-                      <TableCell>{statusBadge(r.attendance_status)}</TableCell>
+                      <TableCell>
+                        <div className="flex items-center gap-1">
+                          {statusBadge(r.attendance_status)}
+                          {isOwner && (
+                            <Button
+                              variant="ghost"
+                              size="sm"
+                              className="h-6 w-6 p-0"
+                              onClick={() => openStatusEdit(r)}
+                            >
+                              <Pencil className="h-3 w-3" />
+                            </Button>
+                          )}
+                          {r.status_override_reason && (
+                            <TooltipProvider>
+                              <Tooltip>
+                                <TooltipTrigger>
+                                  <Info className="h-3 w-3 text-muted-foreground" />
+                                </TooltipTrigger>
+                                <TooltipContent className="max-w-xs">
+                                  <p className="text-xs font-medium">Override Reason:</p>
+                                  <p className="text-xs">{r.status_override_reason}</p>
+                                  {r.status_overridden_at && (
+                                    <p className="text-xs text-muted-foreground mt-1">
+                                      Changed: {new Date(r.status_overridden_at).toLocaleString()}
+                                    </p>
+                                  )}
+                                </TooltipContent>
+                              </Tooltip>
+                            </TooltipProvider>
+                          )}
+                        </div>
+                      </TableCell>
                       <TableCell>{faceBadge(r.checkin_face_verified)}</TableCell>
                       <TableCell>{faceBadge(r.checkout_face_verified)}</TableCell>
                       <TableCell>
@@ -333,28 +417,25 @@ export default function AttendanceDashboard() {
                       </TableCell>
                       {isOwner && (
                         <TableCell>
-                          <div className="flex gap-1">
+                          <div className="flex gap-2">
                             {r.checkin_photo && (
-                              <Button
-                                variant="ghost"
-                                size="sm"
-                                className="h-7 px-2"
-                                onClick={() => setPhotoModal({ url: r.checkin_photo!, title: `Check-In Photo — ${r.staff_name}` })}
-                              >
-                                <Image className="h-3 w-3 mr-1" />
-                                In
-                              </Button>
+                              <img
+                                src={r.checkin_photo}
+                                alt="Check-in"
+                                className="h-10 w-10 rounded object-cover cursor-pointer hover:opacity-80 border transition-opacity"
+                                onClick={() => setPhotoModal({ url: r.checkin_photo!, title: `Check-In — ${r.staff_name} (${new Date(r.date).toLocaleDateString()})` })}
+                              />
                             )}
                             {r.checkout_photo && (
-                              <Button
-                                variant="ghost"
-                                size="sm"
-                                className="h-7 px-2"
-                                onClick={() => setPhotoModal({ url: r.checkout_photo!, title: `Check-Out Photo — ${r.staff_name}` })}
-                              >
-                                <Image className="h-3 w-3 mr-1" />
-                                Out
-                              </Button>
+                              <img
+                                src={r.checkout_photo}
+                                alt="Check-out"
+                                className="h-10 w-10 rounded object-cover cursor-pointer hover:opacity-80 border transition-opacity"
+                                onClick={() => setPhotoModal({ url: r.checkout_photo!, title: `Check-Out — ${r.staff_name} (${new Date(r.date).toLocaleDateString()})` })}
+                              />
+                            )}
+                            {!r.checkin_photo && !r.checkout_photo && (
+                              <span className="text-xs text-muted-foreground">—</span>
                             )}
                           </div>
                         </TableCell>
@@ -377,6 +458,51 @@ export default function AttendanceDashboard() {
           {photoModal?.url && (
             <img src={photoModal.url} alt="Attendance photo" className="w-full rounded-lg" />
           )}
+        </DialogContent>
+      </Dialog>
+
+      {/* Status Edit Dialog */}
+      <Dialog open={!!editRecord} onOpenChange={(open) => !open && closeStatusEdit()}>
+        <DialogContent>
+          <DialogHeader>
+            <DialogTitle>Change Attendance Status</DialogTitle>
+            <DialogDescription>
+              Update the attendance status for {editRecord?.staff_name} on {editRecord ? new Date(editRecord.date).toLocaleDateString() : ''}.
+            </DialogDescription>
+          </DialogHeader>
+          <div className="space-y-4 py-4">
+            <div className="space-y-2">
+              <Label>New Status</Label>
+              <Select value={editStatus} onValueChange={setEditStatus}>
+                <SelectTrigger>
+                  <SelectValue />
+                </SelectTrigger>
+                <SelectContent>
+                  <SelectItem value="present">Present</SelectItem>
+                  <SelectItem value="late">Late</SelectItem>
+                  <SelectItem value="absent">Absent</SelectItem>
+                </SelectContent>
+              </Select>
+            </div>
+            <div className="space-y-2">
+              <Label>Reason for Change <span className="text-destructive">*</span></Label>
+              <Textarea
+                value={editReason}
+                onChange={(e) => setEditReason(e.target.value)}
+                placeholder="e.g., Staff had permission for late arrival, medical emergency, etc."
+                rows={3}
+              />
+            </div>
+          </div>
+          <DialogFooter>
+            <Button variant="outline" onClick={closeStatusEdit} disabled={saving}>
+              Cancel
+            </Button>
+            <Button onClick={handleSaveStatus} disabled={saving || !editReason.trim()}>
+              {saving && <Loader2 className="h-4 w-4 mr-2 animate-spin" />}
+              Save Changes
+            </Button>
+          </DialogFooter>
         </DialogContent>
       </Dialog>
     </div>
