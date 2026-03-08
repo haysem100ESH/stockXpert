@@ -174,6 +174,24 @@ export default function BranchManagement() {
         .update({ name: branchName, address: branchAddress || null, phone: branchPhone || null, branch_type: branchType, is_main_branch: isMainBranch })
         .eq('id', editingBranch.id);
       if (error) throw error;
+
+      // Auto-sync: create location entry if missing, or update name/type
+      const { data: existingLoc } = await (supabase as any)
+        .from('locations').select('id').eq('branch_id', editingBranch.id).maybeSingle();
+      if (existingLoc) {
+        await (supabase as any).from('locations').update({
+          name: branchName,
+          type: branchType === 'pharmacy' ? 'pharmacy' : 'store',
+        }).eq('id', existingLoc.id);
+      } else {
+        await (supabase as any).from('locations').insert({
+          pharmacy_owner_id: user!.id,
+          name: branchName,
+          type: branchType === 'pharmacy' ? 'pharmacy' : 'store',
+          branch_id: editingBranch.id,
+        });
+      }
+
       toast({ title: 'Success', description: 'Branch updated successfully' });
       setShowEditDialog(false); resetForm(); fetchBranches();
       window.dispatchEvent(new Event('branches-updated'));
