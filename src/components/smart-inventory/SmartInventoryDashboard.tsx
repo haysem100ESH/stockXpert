@@ -107,12 +107,21 @@ export default function SmartInventoryDashboard() {
         />
       </div>
 
-      {/* Score Overview */}
-      <ScoreOverview scoreDist={summary.scoreDist} avgScore={summary.avgScore} totalItems={summary.totalItems} />
+      {/* Score Overview + Seasonal Widget */}
+      <div className="grid grid-cols-1 lg:grid-cols-3 gap-4">
+        <div className="lg:col-span-2">
+          <ScoreOverview scoreDist={summary.scoreDist} avgScore={summary.avgScore} totalItems={summary.totalItems} />
+        </div>
+        <SeasonalTrendsWidget
+          topItems={seasonal.topSeasonalThisMonth}
+          currentMonthName={seasonal.currentMonthName}
+          isPharmacy={isPharmacy}
+        />
+      </div>
 
       {/* Tabbed Content */}
       <Tabs defaultValue="demand" className="space-y-4">
-        <TabsList className="grid w-full grid-cols-2 md:grid-cols-5 h-auto">
+        <TabsList className="grid w-full grid-cols-3 md:grid-cols-6 h-auto">
           <TabsTrigger value="demand" className="gap-1">
             <ShoppingCart className="h-4 w-4" />
             <span className="hidden sm:inline">Demand</span>
@@ -139,6 +148,10 @@ export default function SmartInventoryDashboard() {
             <Skull className="h-4 w-4" />
             <span className="hidden sm:inline">Dead Stock</span>
           </TabsTrigger>
+          <TabsTrigger value="seasonal" className="gap-1">
+            <Sun className="h-4 w-4" />
+            <span className="hidden sm:inline">Seasonal</span>
+          </TabsTrigger>
           {isPharmacy && (
             <TabsTrigger value="expiry" className="gap-1">
               <CalendarDays className="h-4 w-4" />
@@ -158,6 +171,16 @@ export default function SmartInventoryDashboard() {
         </TabsContent>
         <TabsContent value="deadstock">
           <DeadStockList items={summary.deadStock} isPharmacy={isPharmacy} />
+        </TabsContent>
+        <TabsContent value="seasonal" className="space-y-6">
+          <SeasonalInsights insights={seasonal.insights} currentMonthName={seasonal.currentMonthName} />
+          <SeasonalPerformance
+            items={seasonal.items}
+            isPharmacy={isPharmacy}
+            currentMonth={seasonal.currentMonth}
+            loading={seasonal.loading}
+            refetch={seasonal.refetch}
+          />
         </TabsContent>
         {isPharmacy && (
           <TabsContent value="expiry">
