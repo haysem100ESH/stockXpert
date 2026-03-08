@@ -496,25 +496,153 @@ export default function Dashboard() {
     }
   };
 
-  const exportToCSV = () => {
-    const csvContent = [
-      ['Metric', 'Value'],
+  const exportToExcel = async () => {
+    const ExcelJS = (await import('exceljs')).default;
+    const wb = new ExcelJS.Workbook();
+    wb.creator = 'StockXpert';
+    const ws = wb.addWorksheet('Dashboard Report');
+
+    // Column widths
+    ws.columns = [
+      { width: 22 },
+      { width: 18 },
+      { width: 18 },
+    ];
+
+    const headerFill = { type: 'pattern' as const, pattern: 'solid' as const, fgColor: { argb: 'FF1E6F3E' } };
+    const headerFont = { bold: true, color: { argb: 'FFFFFFFF' }, size: 11 };
+    const subHeaderFill = { type: 'pattern' as const, pattern: 'solid' as const, fgColor: { argb: 'FF2D8B55' } };
+    const evenRowFill = { type: 'pattern' as const, pattern: 'solid' as const, fgColor: { argb: 'FFF0F9F4' } };
+    const borderStyle = { style: 'thin' as const, color: { argb: 'FFD0D5DD' } };
+    const borders = { top: borderStyle, left: borderStyle, bottom: borderStyle, right: borderStyle };
+
+    // --- Title ---
+    const titleRow = ws.addRow(['Dashboard Report']);
+    titleRow.font = { bold: true, size: 14, color: { argb: 'FF1E6F3E' } };
+    ws.mergeCells('A1:C1');
+    titleRow.getCell(1).alignment = { horizontal: 'center' };
+
+    const dateRow = ws.addRow([`Generated: ${format(new Date(), 'MMMM d, yyyy')}`]);
+    dateRow.font = { italic: true, size: 10, color: { argb: 'FF6B7280' } };
+    ws.mergeCells('A2:C2');
+    dateRow.getCell(1).alignment = { horizontal: 'center' };
+
+    ws.addRow([]);
+
+    // --- Summary Metrics ---
+    const metricsHeader = ws.addRow(['Metric', 'Value']);
+    metricsHeader.eachCell(cell => {
+      cell.fill = headerFill;
+      cell.font = headerFont;
+      cell.border = borders;
+      cell.alignment = { horizontal: 'center' };
+    });
+
+    const metrics = [
       ['Total Revenue', `ETB ${stats.totalRevenue.toFixed(2)}`],
-      ['Total Products', stats.totalProducts.toString()],
-      ['Today\'s Sales', stats.todaySales.toString()],
-      ['Low Stock Items', stats.lowStockItems.toString()],
-      ['Out of Stock Items', stats.outOfStockItems.toString()],
-      [],
-      ['Top Products'],
-      ['Product Name', 'Sales Count', 'Revenue'],
-      ...productPerformance.map(p => [p.name, p.sales.toString(), `ETB ${p.revenue.toFixed(2)}`])
-    ].map(row => row.join(',')).join('\n');
-    
-    const blob = new Blob([csvContent], { type: 'text/csv' });
+      ['Total Products', stats.totalProducts],
+      [`${reportPeriod.charAt(0).toUpperCase() + reportPeriod.slice(1)} Sales`, stats.todaySales],
+      ['Low Stock Items', stats.lowStockItems],
+      ['Out of Stock Items', stats.outOfStockItems],
+    ];
+
+    metrics.forEach((row, i) => {
+      const r = ws.addRow(row);
+      r.eachCell(cell => {
+        cell.border = borders;
+        cell.alignment = { horizontal: 'center' };
+        if (i % 2 === 0) cell.fill = evenRowFill;
+      });
+      // Bold metric name
+      r.getCell(1).font = { bold: true, size: 10 };
+    });
+
+    ws.addRow([]);
+
+    // --- Category Sales ---
+    if (categorySales.length > 0) {
+      const catHeader = ws.addRow(['Category Sales']);
+      catHeader.font = { bold: true, size: 12, color: { argb: 'FF1E6F3E' } };
+      ws.mergeCells(`A${catHeader.number}:C${catHeader.number}`);
+
+      const catColHeader = ws.addRow(['Category', 'Units Sold', 'Revenue']);
+      catColHeader.eachCell(cell => {
+        cell.fill = subHeaderFill;
+        cell.font = headerFont;
+        cell.border = borders;
+        cell.alignment = { horizontal: 'center' };
+      });
+
+      categorySales.forEach((cat, i) => {
+        const r = ws.addRow([cat.category, cat.sales, `ETB ${cat.revenue.toFixed(2)}`]);
+        r.eachCell(cell => {
+          cell.border = borders;
+          cell.alignment = { horizontal: 'center' };
+          if (i % 2 === 0) cell.fill = evenRowFill;
+        });
+      });
+
+      ws.addRow([]);
+    }
+
+    // --- Top Products ---
+    if (productPerformance.length > 0) {
+      const prodTitle = ws.addRow(['Top Products']);
+      prodTitle.font = { bold: true, size: 12, color: { argb: 'FF1E6F3E' } };
+      ws.mergeCells(`A${prodTitle.number}:C${prodTitle.number}`);
+
+      const prodHeader = ws.addRow(['Product Name', 'Sales Count', 'Revenue']);
+      prodHeader.eachCell(cell => {
+        cell.fill = headerFill;
+        cell.font = headerFont;
+        cell.border = borders;
+        cell.alignment = { horizontal: 'center' };
+      });
+
+      productPerformance.forEach((p, i) => {
+        const r = ws.addRow([p.name, p.sales, `ETB ${p.revenue.toFixed(2)}`]);
+        r.eachCell(cell => {
+          cell.border = borders;
+          cell.alignment = { horizontal: 'center' };
+          if (i % 2 === 0) cell.fill = evenRowFill;
+        });
+        r.getCell(1).alignment = { horizontal: 'left' };
+      });
+
+      ws.addRow([]);
+    }
+
+    // --- Payment Methods ---
+    if (paymentMethodData.length > 0) {
+      const payTitle = ws.addRow(['Payment Methods']);
+      payTitle.font = { bold: true, size: 12, color: { argb: 'FF1E6F3E' } };
+      ws.mergeCells(`A${payTitle.number}:C${payTitle.number}`);
+
+      const payHeader = ws.addRow(['Method', 'Amount']);
+      payHeader.eachCell(cell => {
+        cell.fill = subHeaderFill;
+        cell.font = headerFont;
+        cell.border = borders;
+        cell.alignment = { horizontal: 'center' };
+      });
+
+      paymentMethodData.forEach((p, i) => {
+        const r = ws.addRow([p.method, `ETB ${p.amount.toFixed(2)}`]);
+        r.eachCell(cell => {
+          cell.border = borders;
+          cell.alignment = { horizontal: 'center' };
+          if (i % 2 === 0) cell.fill = evenRowFill;
+        });
+      });
+    }
+
+    // Generate and download
+    const buffer = await wb.xlsx.writeBuffer();
+    const blob = new Blob([buffer], { type: 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet' });
     const url = window.URL.createObjectURL(blob);
     const a = document.createElement('a');
     a.href = url;
-    a.download = `${isPharmacy ? 'pharmacy' : 'inventory'}-dashboard-${format(new Date(), 'yyyy-MM-dd')}.csv`;
+    a.download = `${isPharmacy ? 'pharmacy' : 'inventory'}-dashboard-${format(new Date(), 'yyyy-MM-dd')}.xlsx`;
     a.click();
     window.URL.revokeObjectURL(url);
   };
@@ -651,9 +779,9 @@ export default function Dashboard() {
             </PopoverContent>
           </Popover>
           
-          <Button onClick={exportToCSV} variant="outline" size="sm">
+          <Button onClick={exportToExcel} variant="outline" size="sm">
             <Download className="h-4 w-4 mr-1" />
-            CSV
+            Excel
           </Button>
         </div>
       </div>
