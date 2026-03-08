@@ -32,15 +32,21 @@ export default function StockMovementForm({ open, onOpenChange, onSuccess }: Pro
     if (open) { fetchLocations(); fetchMedicines(); }
   }, [open]);
 
+  // Build a map of location_id -> branch_id for filtering
+  const [locationBranchMap, setLocationBranchMap] = useState<Record<string, string>>({});
+
   const fetchLocations = async () => {
     if (!profile?.id) return;
-    const { data } = await supabase.from('locations').select('id, name, type').eq('pharmacy_owner_id', profile.id).order('name');
+    const { data } = await supabase.from('locations').select('id, name, type, branch_id').eq('pharmacy_owner_id', profile.id).order('name');
     setLocations(data || []);
+    // Build location->branch map
+    const map: Record<string, string> = {};
+    (data || []).forEach((l: any) => { if (l.branch_id) map[l.id] = l.branch_id; });
+    setLocationBranchMap(map);
   };
 
   const fetchMedicines = async () => {
     if (!profile?.id) return;
-    // Fetch all medicines across owner's branches
     const { data: branches } = await supabase.from('pharmacy_branches').select('id').eq('pharmacy_owner_id', profile.id);
     const branchIds = (branches || []).map((b: any) => b.id);
     if (branchIds.length === 0) return;
@@ -49,8 +55,13 @@ export default function StockMovementForm({ open, onOpenChange, onSuccess }: Pro
   };
 
   // Filter medicines based on selected source location
+  // Match by location_id directly OR by branch_id linked to the location
   const availableMedicines = fromLocationId
-    ? medicines.filter(m => m.location_id === fromLocationId)
+    ? medicines.filter(m => {
+        if (m.location_id === fromLocationId) return true;
+        const linkedBranch = locationBranchMap[fromLocationId];
+        return linkedBranch && m.branch_id === linkedBranch;
+      })
     : medicines;
 
   const selectedMedicine = medicines.find(m => m.id === medicineId);
