@@ -779,9 +779,9 @@ export default function Dashboard() {
             </PopoverContent>
           </Popover>
           
-          <Button onClick={exportToCSV} variant="outline" size="sm">
+          <Button onClick={exportToExcel} variant="outline" size="sm">
             <Download className="h-4 w-4 mr-1" />
-            CSV
+            Excel
           </Button>
         </div>
       </div>
