@@ -33,6 +33,7 @@ interface Props {
 export default function TransferRequestForm({ open, onOpenChange, onSuccess }: Props) {
   const [locations, setLocations] = useState<LocationOption[]>([]);
   const [medicines, setMedicines] = useState<{ id: string; name: string; stock_quantity: number }[]>([]);
+  const [ownerId, setOwnerId] = useState<string | null>(null);
   const [requestingLocationId, setRequestingLocationId] = useState('');
   const [sourceLocationId, setSourceLocationId] = useState('');
   const [notes, setNotes] = useState('');
@@ -48,16 +49,21 @@ export default function TransferRequestForm({ open, onOpenChange, onSuccess }: P
   const fetchLocations = async () => {
     if (!profile?.id) return;
 
-    let ownerId = profile.id;
+    let resolvedOwnerId = profile.id;
     if (profile.role === 'staff' && profile.branch_id) {
-      const { data: branch } = await supabase.from('pharmacy_branches').select('pharmacy_owner_id').eq('id', profile.branch_id).single();
-      if (branch) ownerId = branch.pharmacy_owner_id;
+      const { data: branch } = await supabase
+        .from('pharmacy_branches')
+        .select('pharmacy_owner_id')
+        .eq('id', profile.branch_id)
+        .maybeSingle();
+      if (branch?.pharmacy_owner_id) resolvedOwnerId = branch.pharmacy_owner_id;
     }
+    setOwnerId(resolvedOwnerId);
 
     // Fetch from both tables
     const [locationsRes, branchesRes] = await Promise.all([
-      supabase.from('locations').select('id, name, type, branch_id').eq('pharmacy_owner_id', ownerId).order('name'),
-      supabase.from('pharmacy_branches').select('id, name, branch_type').eq('pharmacy_owner_id', ownerId).order('name')
+      supabase.from('locations').select('id, name, type, branch_id').eq('pharmacy_owner_id', resolvedOwnerId).order('name'),
+      supabase.from('pharmacy_branches').select('id, name, branch_type').eq('pharmacy_owner_id', resolvedOwnerId).order('name')
     ]);
 
     let locationRows: any[] = locationsRes.data || [];
