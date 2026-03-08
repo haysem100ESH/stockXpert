@@ -5,7 +5,7 @@ import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
 import { Badge } from '@/components/ui/badge';
 import { Dialog, DialogContent, DialogDescription, DialogHeader, DialogTitle } from '@/components/ui/dialog';
-import { Plus, Users, Phone, Mail, Edit, Trash2, Search, KeyRound, MapPin, BarChart3 } from 'lucide-react';
+import { Plus, Users, Phone, Mail, Edit, Trash2, Search, KeyRound, MapPin, BarChart3, UserCircle2 } from 'lucide-react';
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
 import { supabase } from '@/lib/db';
 import { useToast } from '@/hooks/use-toast';
@@ -21,6 +21,7 @@ import AssignStoreLocation from './attendance/AssignStoreLocation';
 import RecordAttendance from './attendance/RecordAttendance';
 import AttendanceDashboard from './attendance/AttendanceDashboard';
 import PerformanceDashboard from './performance/PerformanceDashboard';
+import FaceRegistration from './face/FaceRegistration';
 
 interface StaffMember {
   id: string;
@@ -47,6 +48,7 @@ export default function StaffManagement() {
   const [selectedStaff, setSelectedStaff] = useState<StaffMember | null>(null);
   const [newPassword, setNewPassword] = useState('');
   const [resettingPassword, setResettingPassword] = useState(false);
+  const [faceRegStaff, setFaceRegStaff] = useState<StaffMember | null>(null);
   const { toast } = useToast();
   const { profile } = useAuth();
   const { selectedBranch } = useBranchContext();
@@ -373,10 +375,16 @@ export default function StaffManagement() {
           <TabsTrigger value="record-attendance">Record Attendance</TabsTrigger>
           <TabsTrigger value="attendance-dashboard">Attendance History</TabsTrigger>
           {profile?.role === 'owner' && (
-            <TabsTrigger value="performance">
-              <BarChart3 className="h-4 w-4 mr-1" />
-              Performance
-            </TabsTrigger>
+            <>
+              <TabsTrigger value="face-registration">
+                <UserCircle2 className="h-4 w-4 mr-1" />
+                Face Registration
+              </TabsTrigger>
+              <TabsTrigger value="performance">
+                <BarChart3 className="h-4 w-4 mr-1" />
+                Performance
+              </TabsTrigger>
+            </>
           )}
         </TabsList>
         {profile?.role === 'owner' && (
@@ -399,9 +407,40 @@ export default function StaffManagement() {
           <AttendanceDashboard />
         </TabsContent>
         {profile?.role === 'owner' && (
-          <TabsContent value="performance">
-            <PerformanceDashboard />
-          </TabsContent>
+          <>
+            <TabsContent value="face-registration">
+              <Card>
+                <CardHeader>
+                  <CardTitle>Select Staff for Face Registration</CardTitle>
+                  <CardDescription>Choose a staff member to register or update their face data</CardDescription>
+                </CardHeader>
+                <CardContent className="space-y-4">
+                  <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-3">
+                    {staff.map((member) => (
+                      <Button
+                        key={member.id}
+                        variant={faceRegStaff?.id === member.id ? 'default' : 'outline'}
+                        className="justify-start h-auto py-3"
+                        onClick={() => setFaceRegStaff(member)}
+                      >
+                        <UserCircle2 className="h-4 w-4 mr-2 shrink-0" />
+                        <span className="truncate">{member.full_name}</span>
+                      </Button>
+                    ))}
+                  </div>
+                  {faceRegStaff && (
+                    <FaceRegistration
+                      staffId={faceRegStaff.id}
+                      staffName={faceRegStaff.full_name}
+                    />
+                  )}
+                </CardContent>
+              </Card>
+            </TabsContent>
+            <TabsContent value="performance">
+              <PerformanceDashboard />
+            </TabsContent>
+          </>
         )}
       </Tabs>
 

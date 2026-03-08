@@ -1,13 +1,14 @@
-import { useState, useEffect } from 'react';
+import { useState, useEffect, useCallback } from 'react';
 import { Card, CardContent, CardHeader, CardTitle, CardDescription } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
 import { Badge } from '@/components/ui/badge';
-import { LogIn, LogOut, MapPin, Clock, AlertTriangle, CheckCircle2, Loader2 } from 'lucide-react';
+import { LogIn, LogOut, MapPin, Clock, AlertTriangle, CheckCircle2, Loader2, ShieldCheck } from 'lucide-react';
 import { supabase } from '@/lib/db';
 import { useToast } from '@/hooks/use-toast';
 import { useAuth } from '@/hooks/useAuth';
 import { useBranchContext } from '@/hooks/useBranchContext';
 import { haversineDistance } from '@/lib/haversine';
+import FaceVerification from '../face/FaceVerification';
 
 interface TodayRecord {
   id: string;
@@ -18,6 +19,9 @@ interface TodayRecord {
   checkout_lat: number | null;
   checkout_long: number | null;
   attendance_status: string;
+  checkin_face_verified: boolean | null;
+  checkout_face_verified: boolean | null;
+  verification_score: number | null;
 }
 
 interface BranchSettings {
@@ -36,6 +40,9 @@ export default function RecordAttendance() {
   const [loading, setLoading] = useState(true);
   const [recording, setRecording] = useState(false);
   const [currentTime, setCurrentTime] = useState(new Date());
+  const [showFaceVerify, setShowFaceVerify] = useState<'checkin' | 'checkout' | null>(null);
+  const [pendingLocation, setPendingLocation] = useState<{ lat: number; lng: number; distance: number } | null>(null);
+  const [hasFaceData, setHasFaceData] = useState<boolean>(false);
   const { toast } = useToast();
   const { user, profile } = useAuth();
   const { selectedBranch } = useBranchContext();
@@ -58,7 +65,7 @@ export default function RecordAttendance() {
     try {
       const today = new Date().toISOString().split('T')[0];
 
-      const [settingsRes, attendanceRes] = await Promise.all([
+      const [settingsRes, attendanceRes, faceRes] = await Promise.all([
         supabase
           .from('branch_attendance_settings')
           .select('latitude, longitude, radius_meters, work_start_time, late_start_time, absent_start_time, work_end_time')
@@ -66,14 +73,20 @@ export default function RecordAttendance() {
           .maybeSingle(),
         supabase
           .from('staff_attendance')
-          .select('id, checkin_time, checkout_time, attendance_status')
+          .select('id, checkin_time, checkout_time, attendance_status, checkin_face_verified, checkout_face_verified, verification_score')
           .eq('staff_id', user!.id)
           .eq('date', today)
+          .maybeSingle(),
+        supabase
+          .from('staff_face_data')
+          .select('id')
+          .eq('staff_id', user!.id)
           .maybeSingle(),
       ]);
 
       setBranchSettings(settingsRes.data || null);
       setTodayRecord(attendanceRes.data || null);
+      setHasFaceData(!!faceRes.data);
     } catch (error) {
       console.error('Failed to fetch attendance data:', error);
     } finally {
@@ -82,7 +95,7 @@ export default function RecordAttendance() {
   };
 
   const determineStatus = (checkinTime: Date, settings: BranchSettings): string => {
-    const timeStr = checkinTime.toTimeString().slice(0, 5); // HH:MM
+    const timeStr = checkinTime.toTimeString().slice(0, 5);
     if (timeStr <= settings.work_start_time) return 'present';
     if (timeStr <= settings.late_start_time) return 'present';
     if (timeStr <= settings.absent_start_time) return 'late';
@@ -102,7 +115,7 @@ export default function RecordAttendance() {
     });
   };
 
-  const handleCheckIn = async () => {
+  const startCheckIn = async () => {
     if (!branchSettings || !branchId || !user?.id) return;
     if (!branchSettings.latitude || !branchSettings.longitude) {
       toast({ title: 'Error', description: 'Store location has not been set. Contact your admin.', variant: 'destructive' });
@@ -120,37 +133,84 @@ export default function RecordAttendance() {
       if (distance > branchSettings.radius_meters) {
         toast({
           title: 'Outside Store Location',
-          description: `You are ${Math.round(distance)}m away from the store. You must be within ${branchSettings.radius_meters}m to check in.`,
+          description: `You are ${Math.round(distance)}m away. Must be within ${branchSettings.radius_meters}m.`,
           variant: 'destructive',
         });
+        setRecording(false);
         return;
       }
 
+      // If face data registered, require face verification
+      if (hasFaceData) {
+        setPendingLocation({ lat: pos.coords.latitude, lng: pos.coords.longitude, distance });
+        setShowFaceVerify('checkin');
+        setRecording(false);
+      } else {
+        // No face data — proceed without face verification
+        await completeCheckIn(pos.coords.latitude, pos.coords.longitude, distance, false, null, 0);
+      }
+    } catch (error: any) {
+      toast({ title: 'Error', description: error.message || 'Failed to check in', variant: 'destructive' });
+      setRecording(false);
+    }
+  };
+
+  const completeCheckIn = async (
+    lat: number, lng: number, distance: number,
+    faceVerified: boolean, photoBlob: Blob | null, score: number
+  ) => {
+    setRecording(true);
+    try {
       const now = new Date();
-      const status = determineStatus(now, branchSettings);
+      const status = determineStatus(now, branchSettings!);
       const today = now.toISOString().split('T')[0];
 
+      let checkinPhotoUrl: string | null = null;
+
+      // Upload photo if available
+      if (photoBlob) {
+        const fileName = `checkin_${user!.id}_${today}_${Date.now()}.jpg`;
+        const { error: uploadError } = await supabase.storage
+          .from('attendance-photos')
+          .upload(fileName, photoBlob, { contentType: 'image/jpeg' });
+
+        if (!uploadError) {
+          const { data: urlData } = supabase.storage
+            .from('attendance-photos')
+            .getPublicUrl(fileName);
+          checkinPhotoUrl = urlData?.publicUrl || null;
+        }
+      }
+
       const { error } = await supabase.from('staff_attendance').insert({
-        staff_id: user.id,
+        staff_id: user!.id,
         branch_id: branchId,
         date: today,
         checkin_time: now.toISOString(),
-        checkin_lat: pos.coords.latitude,
-        checkin_long: pos.coords.longitude,
+        checkin_lat: lat,
+        checkin_long: lng,
         attendance_status: status,
+        checkin_face_verified: faceVerified,
+        checkin_photo: checkinPhotoUrl,
+        verification_score: score,
       });
 
       if (error) throw error;
-      toast({ title: 'Checked In', description: `Status: ${status.charAt(0).toUpperCase() + status.slice(1)} (${Math.round(distance)}m from store)` });
+      toast({
+        title: 'Checked In',
+        description: `Status: ${status.charAt(0).toUpperCase() + status.slice(1)} (${Math.round(distance)}m from store)${faceVerified ? ' ✅ Face verified' : ''}`,
+      });
       fetchData();
     } catch (error: any) {
       toast({ title: 'Error', description: error.message || 'Failed to check in', variant: 'destructive' });
     } finally {
       setRecording(false);
+      setShowFaceVerify(null);
+      setPendingLocation(null);
     }
   };
 
-  const handleCheckOut = async () => {
+  const startCheckOut = async () => {
     if (!branchSettings || !todayRecord) return;
     if (!branchSettings.latitude || !branchSettings.longitude) {
       toast({ title: 'Error', description: 'Store location has not been set.', variant: 'destructive' });
@@ -168,29 +228,96 @@ export default function RecordAttendance() {
       if (distance > branchSettings.radius_meters) {
         toast({
           title: 'Outside Store Location',
-          description: `You are ${Math.round(distance)}m away from the store. You must be within ${branchSettings.radius_meters}m to check out.`,
+          description: `You are ${Math.round(distance)}m away. Must be within ${branchSettings.radius_meters}m.`,
           variant: 'destructive',
         });
+        setRecording(false);
         return;
+      }
+
+      if (hasFaceData) {
+        setPendingLocation({ lat: pos.coords.latitude, lng: pos.coords.longitude, distance });
+        setShowFaceVerify('checkout');
+        setRecording(false);
+      } else {
+        await completeCheckOut(pos.coords.latitude, pos.coords.longitude, false, null, 0);
+      }
+    } catch (error: any) {
+      toast({ title: 'Error', description: error.message || 'Failed to check out', variant: 'destructive' });
+      setRecording(false);
+    }
+  };
+
+  const completeCheckOut = async (
+    lat: number, lng: number,
+    faceVerified: boolean, photoBlob: Blob | null, score: number
+  ) => {
+    setRecording(true);
+    try {
+      let checkoutPhotoUrl: string | null = null;
+      const today = new Date().toISOString().split('T')[0];
+
+      if (photoBlob) {
+        const fileName = `checkout_${user!.id}_${today}_${Date.now()}.jpg`;
+        const { error: uploadError } = await supabase.storage
+          .from('attendance-photos')
+          .upload(fileName, photoBlob, { contentType: 'image/jpeg' });
+
+        if (!uploadError) {
+          const { data: urlData } = supabase.storage
+            .from('attendance-photos')
+            .getPublicUrl(fileName);
+          checkoutPhotoUrl = urlData?.publicUrl || null;
+        }
       }
 
       const { error } = await supabase
         .from('staff_attendance')
         .update({
           checkout_time: new Date().toISOString(),
-          checkout_lat: pos.coords.latitude,
-          checkout_long: pos.coords.longitude,
+          checkout_lat: lat,
+          checkout_long: lng,
+          checkout_face_verified: faceVerified,
+          checkout_photo: checkoutPhotoUrl,
+          verification_score: score,
         })
-        .eq('id', todayRecord.id);
+        .eq('id', todayRecord!.id);
 
       if (error) throw error;
-      toast({ title: 'Checked Out', description: 'Have a great rest of your day!' });
+      toast({ title: 'Checked Out', description: `Have a great rest of your day!${faceVerified ? ' ✅ Face verified' : ''}` });
       fetchData();
     } catch (error: any) {
       toast({ title: 'Error', description: error.message || 'Failed to check out', variant: 'destructive' });
     } finally {
       setRecording(false);
+      setShowFaceVerify(null);
+      setPendingLocation(null);
     }
+  };
+
+  const handleFaceVerified = (score: number, photoBlob: Blob) => {
+    if (showFaceVerify === 'checkin' && pendingLocation) {
+      completeCheckIn(pendingLocation.lat, pendingLocation.lng, pendingLocation.distance, true, photoBlob, score);
+    } else if (showFaceVerify === 'checkout' && pendingLocation) {
+      completeCheckOut(pendingLocation.lat, pendingLocation.lng, true, photoBlob, score);
+    }
+  };
+
+  const handleFaceFailed = (reason: string) => {
+    toast({ title: 'Face Verification Failed', description: reason, variant: 'destructive' });
+
+    // Log suspicious activity
+    if (user?.id) {
+      supabase.from('attendance_suspicious_alerts').insert({
+        staff_id: user.id,
+        branch_id: branchId,
+        alert_type: showFaceVerify === 'checkin' ? 'checkin_face_fail' : 'checkout_face_fail',
+        description: reason,
+      }).then(() => {});
+    }
+
+    setShowFaceVerify(null);
+    setPendingLocation(null);
   };
 
   if (loading) {
@@ -213,6 +340,21 @@ export default function RecordAttendance() {
     );
   }
 
+  // Show face verification modal
+  if (showFaceVerify && user?.id) {
+    return (
+      <FaceVerification
+        staffId={user.id}
+        onVerified={handleFaceVerified}
+        onFailed={handleFaceFailed}
+        onCancel={() => {
+          setShowFaceVerify(null);
+          setPendingLocation(null);
+        }}
+      />
+    );
+  }
+
   const hasCheckedIn = !!todayRecord?.checkin_time;
   const hasCheckedOut = !!todayRecord?.checkout_time;
 
@@ -224,6 +366,20 @@ export default function RecordAttendance() {
 
   return (
     <div className="space-y-6">
+      {/* Face verification status */}
+      {hasFaceData && (
+        <div className="flex items-center gap-2 p-3 rounded-lg border bg-muted/50 text-sm">
+          <ShieldCheck className="h-4 w-4 text-primary" />
+          <span>Face verification is <strong>enabled</strong> for your account</span>
+        </div>
+      )}
+      {!hasFaceData && (
+        <div className="flex items-center gap-2 p-3 rounded-lg border border-yellow-500/30 bg-yellow-500/5 text-sm">
+          <AlertTriangle className="h-4 w-4 text-yellow-600" />
+          <span>Face data not registered. Attendance will be recorded without face verification. Contact your admin.</span>
+        </div>
+      )}
+
       {/* Current Time Display */}
       <Card>
         <CardContent className="py-6">
@@ -240,9 +396,17 @@ export default function RecordAttendance() {
               </div>
             </div>
             {todayRecord && (
-              <Badge variant={statusColor} className="text-sm px-3 py-1">
-                {todayRecord.attendance_status.charAt(0).toUpperCase() + todayRecord.attendance_status.slice(1)}
-              </Badge>
+              <div className="flex items-center gap-2">
+                {todayRecord.checkin_face_verified && (
+                  <Badge variant="outline" className="gap-1">
+                    <ShieldCheck className="h-3 w-3" />
+                    Face ✓
+                  </Badge>
+                )}
+                <Badge variant={statusColor} className="text-sm px-3 py-1">
+                  {todayRecord.attendance_status.charAt(0).toUpperCase() + todayRecord.attendance_status.slice(1)}
+                </Badge>
+              </div>
             )}
           </div>
         </CardContent>
@@ -265,17 +429,17 @@ export default function RecordAttendance() {
                   <CheckCircle2 className="h-5 w-5" />
                   <span className="font-medium">Checked in at {new Date(todayRecord!.checkin_time!).toLocaleTimeString()}</span>
                 </div>
-                {todayRecord!.checkin_lat && (
+                {todayRecord!.checkin_face_verified && (
                   <div className="flex items-center gap-1 text-xs text-muted-foreground">
-                    <MapPin className="h-3 w-3" />
-                    {todayRecord!.checkin_lat.toFixed(4)}, {todayRecord!.checkin_long?.toFixed(4)}
+                    <ShieldCheck className="h-3 w-3" />
+                    Face verified ({todayRecord!.verification_score}% match)
                   </div>
                 )}
               </div>
             ) : (
-              <Button onClick={handleCheckIn} disabled={recording} className="w-full" size="lg">
+              <Button onClick={startCheckIn} disabled={recording} className="w-full" size="lg">
                 {recording ? <Loader2 className="h-4 w-4 mr-2 animate-spin" /> : <LogIn className="h-4 w-4 mr-2" />}
-                {recording ? 'Verifying Location...' : 'Record Check-In'}
+                {recording ? 'Verifying Location...' : hasFaceData ? 'Check-In (GPS + Face)' : 'Record Check-In'}
               </Button>
             )}
           </CardContent>
@@ -299,17 +463,17 @@ export default function RecordAttendance() {
                   <CheckCircle2 className="h-5 w-5" />
                   <span className="font-medium">Checked out at {new Date(todayRecord!.checkout_time!).toLocaleTimeString()}</span>
                 </div>
-                {todayRecord!.checkout_lat && (
+                {todayRecord!.checkout_face_verified && (
                   <div className="flex items-center gap-1 text-xs text-muted-foreground">
-                    <MapPin className="h-3 w-3" />
-                    {todayRecord!.checkout_lat.toFixed(4)}, {todayRecord!.checkout_long?.toFixed(4)}
+                    <ShieldCheck className="h-3 w-3" />
+                    Face verified
                   </div>
                 )}
               </div>
             ) : (
-              <Button onClick={handleCheckOut} disabled={recording} variant="secondary" className="w-full" size="lg">
+              <Button onClick={startCheckOut} disabled={recording} variant="secondary" className="w-full" size="lg">
                 {recording ? <Loader2 className="h-4 w-4 mr-2 animate-spin" /> : <LogOut className="h-4 w-4 mr-2" />}
-                {recording ? 'Verifying Location...' : 'Record Check-Out'}
+                {recording ? 'Verifying Location...' : hasFaceData ? 'Check-Out (GPS + Face)' : 'Record Check-Out'}
               </Button>
             )}
           </CardContent>
