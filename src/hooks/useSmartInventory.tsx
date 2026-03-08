@@ -2,6 +2,7 @@ import { useState, useEffect, useMemo } from 'react';
 import { supabase } from '@/lib/db';
 import { useAuth } from '@/hooks/useAuth';
 import { useBranchContext } from '@/hooks/useBranchContext';
+import { getSeasonalMultiplier } from '@/hooks/useSeasonalPerformance';
 
 export interface InventoryItem {
   id: string;
@@ -158,11 +159,31 @@ export function useSmartInventory() {
       const sixtyDaysAgo = new Date();
       sixtyDaysAgo.setDate(sixtyDaysAgo.getDate() - 60);
 
+      // Also fetch 12 months for seasonal multiplier
+      const oneYearAgo = new Date();
+      oneYearAgo.setFullYear(oneYearAgo.getFullYear() - 1);
+
       const { data: recentSales } = await supabase
         .from('sale_items')
         .select('medicine_id, pack_quantity, strip_quantity, created_at, sales!inner(branch_id)')
         .in('sales.branch_id', branchIds)
         .gte('created_at', sixtyDaysAgo.toISOString());
+
+      const { data: yearlySales } = await supabase
+        .from('sale_items')
+        .select('medicine_id, pack_quantity, strip_quantity, created_at, sales!inner(branch_id)')
+        .in('sales.branch_id', branchIds)
+        .gte('created_at', oneYearAgo.toISOString());
+
+      // Build monthly map for seasonal multiplier: medicine_id -> month(0-11) -> qty
+      const monthlyMap: Record<string, number[]> = {};
+      (yearlySales || []).forEach((sale: any) => {
+        const id = sale.medicine_id;
+        if (!monthlyMap[id]) monthlyMap[id] = new Array(12).fill(0);
+        const month = new Date(sale.created_at).getMonth();
+        const qty = (sale.pack_quantity || 0) + (sale.strip_quantity || 0);
+        monthlyMap[id][month] += qty;
+      });
 
       // Build sales map: medicine_id -> { totalQty30, totalQty60, lastSaleDate }
       const thirtyDaysAgo = new Date();
@@ -192,7 +213,11 @@ export function useSmartInventory() {
       const smartItems: SmartItem[] = medicines.map((med: any) => {
         const sales = salesMap[med.id] || { totalQty30: 0, totalQty60: 0, lastSaleDate: null };
         const adc = sales.totalQty30 / 30;
-        const predictedDemand14 = adc * 14;
+
+        // Apply seasonal multiplier to demand prediction
+        const seasonalMult = getSeasonalMultiplier(monthlyMap[med.id] || new Array(12).fill(0));
+        const predictedDemand14 = adc * 14 * seasonalMult;
+
         const safetyStock = predictedDemand14 * 0.2;
         const needsReorder = med.stock_quantity < predictedDemand14;
         const suggestedReorder = needsReorder
