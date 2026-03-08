@@ -84,9 +84,11 @@ export default function StaffInventoryWithActions() {
   }, [searchParams]);
 
   useEffect(() => {
-    fetchMedicines();
-    checkBranches();
-  }, [selectedBranch]);
+    if (profile) {
+      fetchMedicines();
+      checkBranches();
+    }
+  }, [selectedBranch, profile?.id]);
 
   const checkBranches = async () => {
     try {
