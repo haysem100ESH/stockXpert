@@ -14,7 +14,7 @@ import { ConfirmationDialog } from '@/components/ui/confirmation-dialog';
 import CartSlider from './CartSlider';
 import AddToCartDialog from './AddToCartDialog';
 import { useIsMobile } from '@/hooks/use-mobile';
-import { updateCreditScore } from '@/hooks/useCreditScore';
+import { updateCreditScore, getCreditLimit } from '@/hooks/useCreditScore';
 import { isMeasurable } from '@/lib/itemTypes';
 
 interface Medicine {
