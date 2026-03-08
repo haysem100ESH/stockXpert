@@ -38,7 +38,8 @@ export default function EditOwnerDialog({ owner, open, onOpenChange, onOwnerUpda
     phone: '',
     pharmacy_address: '',
     active: true,
-    subscription_plan_id: ''
+    subscription_plan_id: '',
+    gemini_api_key: ''
   });
   const [subscriptionPlans, setSubscriptionPlans] = useState<Array<{ id: string; name: string }>>([]);
   const { toast } = useToast();
@@ -49,13 +50,23 @@ export default function EditOwnerDialog({ owner, open, onOpenChange, onOwnerUpda
 
   useEffect(() => {
     if (owner) {
-      setFormData({
-        full_name: owner.full_name || '',
-        phone: owner.phone || '',
-        pharmacy_address: owner.pharmacy_address || '',
-        active: owner.active,
-        subscription_plan_id: owner.subscription?.plan_id || ''
-      });
+      // Fetch gemini_api_key for this owner
+      const fetchApiKey = async () => {
+        const { data } = await supabase
+          .from('profiles')
+          .select('gemini_api_key')
+          .eq('id', owner.id)
+          .single();
+        setFormData({
+          full_name: owner.full_name || '',
+          phone: owner.phone || '',
+          pharmacy_address: owner.pharmacy_address || '',
+          active: owner.active,
+          subscription_plan_id: owner.subscription?.plan_id || '',
+          gemini_api_key: data?.gemini_api_key || ''
+        });
+      };
+      fetchApiKey();
     }
   }, [owner]);
 
@@ -108,7 +119,8 @@ export default function EditOwnerDialog({ owner, open, onOpenChange, onOwnerUpda
         .update({
           full_name: formData.full_name,
           phone: formData.phone || null,
-          pharmacy_address: formData.pharmacy_address || null
+          pharmacy_address: formData.pharmacy_address || null,
+          gemini_api_key: formData.gemini_api_key || null
         })
         .eq('id', owner.id);
 
@@ -216,6 +228,20 @@ export default function EditOwnerDialog({ owner, open, onOpenChange, onOwnerUpda
                 ))}
               </SelectContent>
             </Select>
+          </div>
+
+          <div>
+            <Label htmlFor="gemini_api_key">Gemini API Key</Label>
+            <Input
+              id="gemini_api_key"
+              type="password"
+              value={formData.gemini_api_key}
+              onChange={(e) => handleInputChange('gemini_api_key', e.target.value)}
+              placeholder="AIzaSy..."
+            />
+            <p className="text-xs text-muted-foreground mt-1">
+              Owner's personal Gemini API key for StockXpert AI assistant
+            </p>
           </div>
 
           <DialogFooter>

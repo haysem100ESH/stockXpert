@@ -146,8 +146,13 @@ export default function SmartAssistant() {
     try {
       await streamChat(newMessages);
     } catch (e: any) {
-      toast({ title: 'AI Assistant Error', description: e.message, variant: 'destructive' });
-      setMessages(prev => [...prev, { role: 'assistant', content: `❌ ${e.message}` }]);
+      const msg = e.message || '';
+      const isRateLimit = msg.includes('429') || msg.toLowerCase().includes('rate') || msg.toLowerCase().includes('quota');
+      const friendlyMsg = isRateLimit
+        ? "🚫 Today's AI credit has been exhausted. Please try again later or contact your administrator to update your API key."
+        : `❌ ${msg}`;
+      toast({ title: isRateLimit ? 'AI Limit Reached' : 'AI Assistant Error', description: isRateLimit ? friendlyMsg : msg, variant: 'destructive' });
+      setMessages(prev => [...prev, { role: 'assistant', content: friendlyMsg }]);
     } finally {
       setIsLoading(false);
     }
