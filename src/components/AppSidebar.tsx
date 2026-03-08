@@ -11,7 +11,7 @@ import {
   Building2,
   Shield,
   UserCheck,
-  Warehouse,
+  
   ArrowRightLeft,
   ClipboardList,
   Globe,
@@ -57,7 +57,7 @@ export function AppSidebar() {
     { title: "Suppliers", url: "/suppliers", icon: Truck },
     { title: "Staff", url: "/staff", icon: Users },
     { title: "Branches", url: "/branches", icon: Building2 },
-    { title: "Locations", url: "/locations", icon: Warehouse },
+    
     { title: "Transfer Requests", url: "/transfer-requests", icon: ClipboardList },
     { title: "Account", url: "/account", icon: Settings },
   ];

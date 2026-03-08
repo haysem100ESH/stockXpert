@@ -8,10 +8,10 @@ import { supabase } from '@/lib/db';
 import { useToast } from '@/hooks/use-toast';
 import { useAuth } from '@/hooks/useAuth';
 
-interface LocationStock {
-  location_id: string;
-  location_name: string;
-  location_type: string;
+interface BranchStock {
+  branch_id: string;
+  branch_name: string;
+  branch_type: string;
   quantity: number;
 }
 
@@ -19,13 +19,12 @@ interface GlobalItem {
   name: string;
   category: string;
   minimum_stock_level: number;
-  locations: LocationStock[];
+  branches: BranchStock[];
   total: number;
 }
 
 export default function GlobalInventoryView() {
   const [items, setItems] = useState<GlobalItem[]>([]);
-  const [locationNames, setLocationNames] = useState<{ id: string; name: string; type: string }[]>([]);
   const [searchTerm, setSearchTerm] = useState('');
   const [loading, setLoading] = useState(true);
   const { toast } = useToast();
@@ -36,34 +35,18 @@ export default function GlobalInventoryView() {
   const fetchData = async () => {
     if (!profile?.id) return;
     try {
-      // Fetch locations
-      const { data: locs } = await supabase.from('locations').select('id, name, type').eq('pharmacy_owner_id', profile.id).order('name');
-      setLocationNames(locs || []);
-
-      // Fetch all medicines across owner's branches
-      const { data: branches } = await supabase.from('pharmacy_branches').select('id').eq('pharmacy_owner_id', profile.id);
+      // Fetch all branches for this owner
+      const { data: branches } = await supabase.from('pharmacy_branches').select('id, name, branch_type').eq('pharmacy_owner_id', profile.id).order('name');
       const branchIds = (branches || []).map((b: any) => b.id);
       if (branchIds.length === 0) { setLoading(false); return; }
 
+      const branchMap: Record<string, { name: string; type: string }> = {};
+      (branches || []).forEach((b: any) => { branchMap[b.id] = { name: b.name, type: b.branch_type }; });
+
       const { data: medicines } = await supabase.from('medicines')
-        .select('name, category, stock_quantity, minimum_stock_level, location_id, branch_id')
+        .select('name, category, stock_quantity, minimum_stock_level, branch_id')
         .in('branch_id', branchIds)
         .order('name');
-
-      // Also map branch_id to location via locations table
-      const locMap: Record<string, { id: string; name: string; type: string }> = {};
-      (locs || []).forEach(l => { locMap[l.id] = l; });
-
-      // Build branch-to-location mapping
-      const branchToLoc: Record<string, string> = {};
-      (locs || []).forEach((l: any) => {
-        // We need to fetch branch_id from locations
-      });
-      // Fetch locations with branch_id
-      const { data: locsWithBranch } = await supabase.from('locations').select('id, branch_id').eq('pharmacy_owner_id', profile.id);
-      (locsWithBranch || []).forEach((l: any) => {
-        if (l.branch_id) branchToLoc[l.branch_id] = l.id;
-      });
 
       // Group medicines by name
       const grouped = new Map<string, GlobalItem>();
@@ -74,38 +57,21 @@ export default function GlobalInventoryView() {
             name: med.name,
             category: med.category,
             minimum_stock_level: med.minimum_stock_level,
-            locations: [],
+            branches: [],
             total: 0,
           });
         }
         const item = grouped.get(key)!;
-        // Determine location
-        let locId = med.location_id;
-        if (!locId && med.branch_id) {
-          locId = branchToLoc[med.branch_id];
-        }
-        if (locId && locMap[locId]) {
-          const existing = item.locations.find(l => l.location_id === locId);
+        const branchInfo = branchMap[med.branch_id];
+        if (branchInfo) {
+          const existing = item.branches.find(b => b.branch_id === med.branch_id);
           if (existing) {
             existing.quantity += med.stock_quantity;
           } else {
-            item.locations.push({
-              location_id: locId,
-              location_name: locMap[locId].name,
-              location_type: locMap[locId].type,
-              quantity: med.stock_quantity,
-            });
-          }
-        } else {
-          // Unassigned location
-          const existing = item.locations.find(l => l.location_id === 'unassigned');
-          if (existing) {
-            existing.quantity += med.stock_quantity;
-          } else {
-            item.locations.push({
-              location_id: 'unassigned',
-              location_name: 'Unassigned',
-              location_type: 'unknown',
+            item.branches.push({
+              branch_id: med.branch_id,
+              branch_name: branchInfo.name,
+              branch_type: branchInfo.type,
               quantity: med.stock_quantity,
             });
           }
@@ -121,10 +87,10 @@ export default function GlobalInventoryView() {
     }
   };
 
-  const allLocIds = [...new Set(items.flatMap(i => i.locations.map(l => l.location_id)))];
-  const locColumns = allLocIds.map(id => {
-    const loc = items.flatMap(i => i.locations).find(l => l.location_id === id);
-    return { id, name: loc?.location_name || 'Unknown' };
+  const allBranchIds = [...new Set(items.flatMap(i => i.branches.map(b => b.branch_id)))];
+  const branchColumns = allBranchIds.map(id => {
+    const branch = items.flatMap(i => i.branches).find(b => b.branch_id === id);
+    return { id, name: branch?.branch_name || 'Unknown' };
   });
 
   const filtered = items.filter(i => i.name.toLowerCase().includes(searchTerm.toLowerCase()));
@@ -149,7 +115,7 @@ export default function GlobalInventoryView() {
           <CardContent className="py-12 text-center text-muted-foreground">
             <Globe className="h-12 w-12 mx-auto mb-4 opacity-50" />
             <p className="text-lg font-medium mb-2">No inventory data</p>
-            <p>Create locations and assign items to see the global view.</p>
+            <p>Create branches and add items to see the global view.</p>
           </CardContent>
         </Card>
       ) : (
@@ -161,7 +127,7 @@ export default function GlobalInventoryView() {
                   <TableRow>
                     <TableHead className="sticky left-0 bg-background z-10">Item</TableHead>
                     <TableHead>Category</TableHead>
-                    {locColumns.map(col => (
+                    {branchColumns.map(col => (
                       <TableHead key={col.id} className="text-center">{col.name}</TableHead>
                     ))}
                     <TableHead className="text-center font-bold">Total</TableHead>
@@ -176,11 +142,11 @@ export default function GlobalInventoryView() {
                       <TableRow key={item.name}>
                         <TableCell className="sticky left-0 bg-background z-10 font-medium">{item.name}</TableCell>
                         <TableCell><Badge variant="outline">{item.category}</Badge></TableCell>
-                        {locColumns.map(col => {
-                          const locStock = item.locations.find(l => l.location_id === col.id);
+                        {branchColumns.map(col => {
+                          const branchStock = item.branches.find(b => b.branch_id === col.id);
                           return (
                             <TableCell key={col.id} className="text-center">
-                              {locStock ? locStock.quantity : 0}
+                              {branchStock ? branchStock.quantity : 0}
                             </TableCell>
                           );
                         })}

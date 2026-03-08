@@ -24,7 +24,7 @@ interface Branch {
   phone?: string;
   manager_staff_id?: string;
   is_main_branch: boolean;
-  branch_type: 'pharmacy' | 'general';
+  branch_type: 'pharmacy' | 'general' | 'warehouse';
   created_at: string;
   manager_name?: string;
 }
@@ -47,11 +47,12 @@ function BranchForm({
       </div>
       <div>
         <Label>Branch Type *</Label>
-        <Select value={branchType} onValueChange={(v: 'pharmacy' | 'general') => setBranchType(v)}>
+        <Select value={branchType} onValueChange={(v: 'pharmacy' | 'general' | 'warehouse') => setBranchType(v)}>
           <SelectTrigger className="mt-2"><SelectValue /></SelectTrigger>
           <SelectContent>
             <SelectItem value="pharmacy">Pharmacy Branch</SelectItem>
             <SelectItem value="general">General Inventory Branch</SelectItem>
+            <SelectItem value="warehouse">Warehouse</SelectItem>
           </SelectContent>
         </Select>
       </div>
@@ -88,7 +89,7 @@ export default function BranchManagement() {
   const [branchName, setBranchName] = useState('');
   const [branchAddress, setBranchAddress] = useState('');
   const [branchPhone, setBranchPhone] = useState('');
-  const [branchType, setBranchType] = useState<'pharmacy' | 'general'>('general');
+  const [branchType, setBranchType] = useState<'pharmacy' | 'general' | 'warehouse'>('general');
   const [isMainBranch, setIsMainBranch] = useState(false);
 
   useEffect(() => {
@@ -211,8 +212,8 @@ export default function BranchManagement() {
       accessorKey: 'branch_type',
       header: 'Type',
       cell: ({ row }) => (
-        <Badge variant={row.original.branch_type === 'pharmacy' ? 'secondary' : 'outline'}>
-          {row.original.branch_type === 'pharmacy' ? '💊 Pharmacy' : '📦 General'}
+        <Badge variant={row.original.branch_type === 'pharmacy' ? 'secondary' : row.original.branch_type === 'warehouse' ? 'default' : 'outline'}>
+          {row.original.branch_type === 'pharmacy' ? '💊 Pharmacy' : row.original.branch_type === 'warehouse' ? '🏭 Warehouse' : '📦 General'}
         </Badge>
       ),
     },
