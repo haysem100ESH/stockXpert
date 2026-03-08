@@ -89,47 +89,74 @@ export default function TransferRequestForm({ open, onOpenChange, onSuccess }: P
     setSourceLocationId((prev) => (sorted.some((l) => l.id === prev) ? prev : ''));
   };
 
+  const fetchMedicines = async (branchId?: string) => {
+    if (!branchId) { setMedicines([]); return; }
+
+    const { data } = await supabase
+      .from('medicines')
+      .select('id, name, stock_quantity')
+      .eq('branch_id', branchId)
+      .gt('stock_quantity', 0)
+      .order('name');
+
+    setMedicines(data || []);
+  };
+
+  useEffect(() => {
+    if (sourceLocationId) {
+      fetchMedicines(sourceLocationId);
+      setItems([]);
+    } else {
+      setMedicines([]);
+    }
+  }, [sourceLocationId]);
+
+  const addItem = () => {
+    setItems((prev) => [...prev, { medicine_id: '', medicine_name: '', requested_quantity: 1 }]);
+  };
+
+  const removeItem = (idx: number) => {
+    setItems((prev) => prev.filter((_, i) => i !== idx));
+  };
+
+  const updateItem = (idx: number, field: string, value: any) => {
+    setItems((prev) => prev.map((item, i) => {
+      if (i !== idx) return item;
+      if (field === 'medicine_id') {
+        const med = medicines.find((m) => m.id === value);
+        return { ...item, medicine_id: value, medicine_name: med?.name || '' };
+      }
+      return { ...item, [field]: value };
+    }));
+  };
+
   const handleSubmit = async () => {
     if (!requestingLocationId) { toast({ title: 'Error', description: 'Select requesting branch', variant: 'destructive' }); return; }
     if (items.length === 0) { toast({ title: 'Error', description: 'Add at least one item', variant: 'destructive' }); return; }
-    const invalidItems = items.some(i => !i.medicine_id || i.requested_quantity <= 0);
+    const invalidItems = items.some((i) => !i.medicine_id || i.requested_quantity <= 0);
     if (invalidItems) { toast({ title: 'Error', description: 'Fill all item fields properly', variant: 'destructive' }); return; }
 
-    // Resolve locations.id for FK - transfer_requests references locations(id)
-    const requestingBranch = locations.find(l => l.id === requestingLocationId);
-    const sourceBranch = sourceLocationId ? locations.find(l => l.id === sourceLocationId) : null;
-
-    const requestingLocId = requestingBranch?.location_id || await ensureLocationIdForBranch(requestingLocationId);
-    const sourceLocId = sourceLocationId
-      ? (sourceBranch?.location_id || await ensureLocationIdForBranch(sourceLocationId))
-      : null;
-
-    if (!requestingLocId) {
-      toast({ title: 'Error', description: 'This branch is not linked to a location yet. Ask the owner to open Branches and save this branch once.', variant: 'destructive' });
+    if (profile?.role === 'staff' && profile.branch_id && requestingLocationId !== profile.branch_id) {
+      toast({ title: 'Error', description: 'Staff can only request for their assigned branch', variant: 'destructive' });
       return;
     }
 
     setSaving(true);
     try {
-      const { data: req, error: reqError } = await supabase.from('transfer_requests').insert({
-        requesting_location_id: requestingLocId,
-        source_location_id: sourceLocId,
-        notes: notes || null,
-        created_by: user?.id,
-      }).select().maybeSingle();
-      if (reqError) throw reqError;
-      if (!req?.id) {
-        throw new Error('Transfer request could not be confirmed. Please refresh and try again.');
-      }
+      const { data, error } = await supabase.functions.invoke('create-transfer-request', {
+        body: {
+          requestingBranchId: requestingLocationId,
+          sourceBranchId: sourceLocationId || null,
+          notes: notes || null,
+          items: items.map((i) => ({
+            medicine_id: i.medicine_id,
+            requested_quantity: i.requested_quantity,
+          })),
+        },
+      });
 
-      const { error: itemsError } = await supabase.from('transfer_request_items').insert(
-        items.map(i => ({
-          request_id: req.id,
-          medicine_id: i.medicine_id,
-          requested_quantity: i.requested_quantity,
-        }))
-      );
-      if (itemsError) throw itemsError;
+      if (error) throw error;
+      if (data?.error) throw new Error(data.error);
 
       toast({ title: 'Success', description: 'Transfer request submitted' });
       onSuccess?.();
