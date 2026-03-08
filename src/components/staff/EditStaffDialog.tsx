@@ -122,6 +122,21 @@ export default function EditStaffDialog({
             />
           </div>
 
+          <div className="space-y-2">
+            <Label htmlFor="salary_percentage">Salary Percentage (%)</Label>
+            <Input
+              id="salary_percentage"
+              type="number"
+              min="0"
+              max="100"
+              step="0.1"
+              value={formData.salary_percentage}
+              onChange={(e) => setFormData({ ...formData, salary_percentage: e.target.value })}
+              placeholder="e.g. 10"
+            />
+            <p className="text-xs text-muted-foreground">Percentage of monthly branch profit</p>
+          </div>
+
           {branches.length > 0 && (
             <div className="space-y-2">
               <Label htmlFor="branch_id">Assigned Branch</Label>

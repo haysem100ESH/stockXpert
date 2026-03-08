@@ -353,6 +353,22 @@ export default function StaffManagement() {
         </div>
       )}
 
+      {/* Salary Section - Owner only */}
+      {profile?.role === 'owner' && (
+        <Tabs defaultValue="salary-overview" className="space-y-4">
+          <TabsList>
+            <TabsTrigger value="salary-overview">Salary Overview</TabsTrigger>
+            <TabsTrigger value="salary-history">Salary History</TabsTrigger>
+          </TabsList>
+          <TabsContent value="salary-overview">
+            <SalaryOverview />
+          </TabsContent>
+          <TabsContent value="salary-history">
+            <SalaryHistory />
+          </TabsContent>
+        </Tabs>
+      )}
+
       <EditStaffDialog
         open={showEditDialog}
         onOpenChange={setShowEditDialog}
