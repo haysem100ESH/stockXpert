@@ -35,6 +35,8 @@ import LowStockItemsTable from './LowStockItemsTable';
 import SubscriptionPlanCard from '@/components/subscription/SubscriptionPlanCard';
 import { TelegramConnectionDialog } from '@/components/telegram/TelegramConnectionDialog';
 import { getCreditLimit, getCreditScoreLabel } from '@/hooks/useCreditScore';
+import { useSeasonalPerformance } from '@/hooks/useSeasonalPerformance';
+import SeasonalTrendsWidget from '@/components/smart-inventory/SeasonalTrendsWidget';
 
 interface DashboardStats {
   totalRevenue: number;
@@ -90,6 +92,7 @@ export default function OwnerDashboard() {
   const { selectedBranch, branchType } = useBranchContext();
   const { profile } = useAuth();
   const isPharmacy = branchType === 'pharmacy';
+  const { topSeasonalThisMonth, currentMonthName, isPharmacy: seasonalIsPharmacy } = useSeasonalPerformance();
 
   useEffect(() => {
     fetchDashboardStats();
@@ -672,6 +675,13 @@ export default function OwnerDashboard() {
                 </div>
               </CardContent>
             </Card>
+
+            {/* Seasonal Trends */}
+            <SeasonalTrendsWidget
+              topItems={topSeasonalThisMonth}
+              currentMonthName={currentMonthName}
+              isPharmacy={isPharmacy}
+            />
 
             {/* Credit Score Overview */}
             <Card className="min-w-0">
