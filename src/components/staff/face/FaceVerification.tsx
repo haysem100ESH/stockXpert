@@ -15,11 +15,16 @@ import {
 } from '@/lib/faceApi';
 import CameraCapture from './CameraCapture';
 
-const POSE_CHALLENGES = [
+interface PoseChallenge {
+  instruction: string;
+  check: (yaw: number) => boolean;
+}
+
+const POSE_CHALLENGES: PoseChallenge[] = [
   { instruction: 'Turn your head slightly to the LEFT', check: (yaw: number) => yaw < -0.15 },
   { instruction: 'Turn your head slightly to the RIGHT', check: (yaw: number) => yaw > 0.15 },
   { instruction: 'Look straight at the camera', check: (yaw: number) => Math.abs(yaw) < 0.12 },
-] as const;
+];
 
 const SIMILARITY_THRESHOLD = 55; // distance-to-similarity %. ~0.45 distance = 55%
 const MAX_ATTEMPTS = 3;
