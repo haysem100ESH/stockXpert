@@ -807,6 +807,13 @@ export default function Dashboard() {
                 </div>
           </CardContent>
         </Card>
+
+        {/* Seasonal Trends */}
+        <SeasonalTrendsWidget
+          topItems={topSeasonalThisMonth}
+          currentMonthName={currentMonthName}
+          isPharmacy={isPharmacy}
+        />
       </div>
 
       {/* Top Selling Products Chart - Moved Below */}
