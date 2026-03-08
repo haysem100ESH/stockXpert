@@ -140,11 +140,11 @@ export default function InventoryDashboard() {
         med.stock_quantity <= med.minimum_stock_level
       ) || [];
 
-      // Only fetch expiry data for pharmacy branches
+      // Fetch expiry data
       let expiringDetails: ExpiringItem[] = [];
       let expiredDetails: ExpiredItem[] = [];
       
-      if (isPharmacy) {
+      {
         const thirtyDaysFromNow = new Date();
         thirtyDaysFromNow.setDate(thirtyDaysFromNow.getDate() + 30);
         const tomorrow = new Date();
