@@ -23,7 +23,8 @@ export default function EditStaffDialog({
   const [formData, setFormData] = useState({
     full_name: '',
     phone: '',
-    branch_id: ''
+    branch_id: '',
+    salary_percentage: '0'
   });
   const [branches, setBranches] = useState<Array<{ id: string; name: string }>>([]);
   const [loading, setLoading] = useState(false);
@@ -34,7 +35,8 @@ export default function EditStaffDialog({
       setFormData({
         full_name: staff.full_name,
         phone: staff.phone || '',
-        branch_id: staff.branch_id || ''
+        branch_id: staff.branch_id || '',
+        salary_percentage: String(staff.salary_percentage || 0)
       });
       fetchBranches();
     }
@@ -66,7 +68,8 @@ export default function EditStaffDialog({
         .update({
           full_name: formData.full_name,
           phone: formData.phone || null,
-          branch_id: formData.branch_id || null
+          branch_id: formData.branch_id || null,
+          salary_percentage: parseFloat(formData.salary_percentage) || 0
         })
         .eq('id', staff.id);
 
@@ -117,6 +120,21 @@ export default function EditStaffDialog({
               value={formData.phone}
               onChange={(e) => setFormData({ ...formData, phone: e.target.value })}
             />
+          </div>
+
+          <div className="space-y-2">
+            <Label htmlFor="salary_percentage">Salary Percentage (%)</Label>
+            <Input
+              id="salary_percentage"
+              type="number"
+              min="0"
+              max="100"
+              step="0.1"
+              value={formData.salary_percentage}
+              onChange={(e) => setFormData({ ...formData, salary_percentage: e.target.value })}
+              placeholder="e.g. 10"
+            />
+            <p className="text-xs text-muted-foreground">Percentage of monthly branch profit</p>
           </div>
 
           {branches.length > 0 && (

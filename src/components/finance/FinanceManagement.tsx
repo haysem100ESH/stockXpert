@@ -18,6 +18,7 @@ import { useAuth } from '@/hooks/useAuth';
 import { useBranchContext } from '@/hooks/useBranchContext';
 import MedicineTransfer from '@/components/inventory/MedicineTransfer';
 import DebtManagement from './DebtManagement';
+import SalaryHistory from '@/components/staff/SalaryHistory';
 import { BarChart, Bar, XAxis, YAxis, CartesianGrid, Tooltip, Legend, ResponsiveContainer } from 'recharts';
 
 interface FinanceStats {
@@ -704,6 +705,7 @@ export default function FinanceManagement() {
           <TabsTrigger value="overview">Overview</TabsTrigger>
           <TabsTrigger value="income">Income</TabsTrigger>
           <TabsTrigger value="expenses">Expenses</TabsTrigger>
+          <TabsTrigger value="salaries">Salaries</TabsTrigger>
           <TabsTrigger value="debts">Debts</TabsTrigger>
           <TabsTrigger value="reports">Reports</TabsTrigger>
           <TabsTrigger value="transfer">Transfer</TabsTrigger>
@@ -1007,6 +1009,10 @@ export default function FinanceManagement() {
               )}
             </CardContent>
           </Card>
+        </TabsContent>
+
+        <TabsContent value="salaries">
+          <SalaryHistory />
         </TabsContent>
 
         <TabsContent value="debts">

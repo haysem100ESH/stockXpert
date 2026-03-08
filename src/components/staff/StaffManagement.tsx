@@ -6,6 +6,7 @@ import { Label } from '@/components/ui/label';
 import { Badge } from '@/components/ui/badge';
 import { Dialog, DialogContent, DialogDescription, DialogHeader, DialogTitle } from '@/components/ui/dialog';
 import { Plus, Users, Phone, Mail, Edit, Trash2, Search, KeyRound } from 'lucide-react';
+import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
 import { supabase } from '@/lib/db';
 import { useToast } from '@/hooks/use-toast';
 import { useAuth } from '@/hooks/useAuth';
@@ -14,6 +15,8 @@ import { ConfirmationDialog } from '@/components/ui/confirmation-dialog';
 import EditStaffDialog from './EditStaffDialog';
 import CreateStaffDialog from './CreateStaffDialog';
 import { usePlanLimits } from '@/hooks/usePlanLimits';
+import SalaryOverview from './SalaryOverview';
+import SalaryHistory from './SalaryHistory';
 
 interface StaffMember {
   id: string;
@@ -348,6 +351,22 @@ export default function StaffManagement() {
           <Users className="h-12 w-12 text-muted-foreground mx-auto mb-4" />
           <p className="text-muted-foreground">No staff members found.</p>
         </div>
+      )}
+
+      {/* Salary Section - Owner only */}
+      {profile?.role === 'owner' && (
+        <Tabs defaultValue="salary-overview" className="space-y-4">
+          <TabsList>
+            <TabsTrigger value="salary-overview">Salary Overview</TabsTrigger>
+            <TabsTrigger value="salary-history">Salary History</TabsTrigger>
+          </TabsList>
+          <TabsContent value="salary-overview">
+            <SalaryOverview />
+          </TabsContent>
+          <TabsContent value="salary-history">
+            <SalaryHistory />
+          </TabsContent>
+        </Tabs>
       )}
 
       <EditStaffDialog
