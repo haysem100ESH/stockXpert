@@ -47,11 +47,12 @@ function BranchForm({
       </div>
       <div>
         <Label>Branch Type *</Label>
-        <Select value={branchType} onValueChange={(v: 'pharmacy' | 'general') => setBranchType(v)}>
+        <Select value={branchType} onValueChange={(v: 'pharmacy' | 'general' | 'warehouse') => setBranchType(v)}>
           <SelectTrigger className="mt-2"><SelectValue /></SelectTrigger>
           <SelectContent>
             <SelectItem value="pharmacy">Pharmacy Branch</SelectItem>
             <SelectItem value="general">General Inventory Branch</SelectItem>
+            <SelectItem value="warehouse">Warehouse</SelectItem>
           </SelectContent>
         </Select>
       </div>
