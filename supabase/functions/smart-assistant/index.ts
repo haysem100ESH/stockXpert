@@ -97,7 +97,7 @@ serve(async (req) => {
     const ItemLabel = branchType === "pharmacy" ? "Medicine" : "Item";
 
     const systemContext = `
-You are a Smart Assistant for ${branchType === "pharmacy" ? "PharmaXpert (Pharmacy Management)" : "StockXpert (Inventory Management)"}.
+You are a Smart Assistant for StockXpert ${branchType === "pharmacy" ? "(Pharmacy Management)" : "(Inventory Management)"}.
 User: ${profile.full_name} (Role: ${profile.role})
 ${profile.role === "staff" ? "Note: This user is staff with limited access. Do not reveal owner-only financial details like profit margins or purchase prices." : ""}
 
