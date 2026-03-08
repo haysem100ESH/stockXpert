@@ -1,54 +1,96 @@
 import * as ort from 'onnxruntime-web';
 
-// Use HuggingFace CDN - model is cached by browser after first download (~30MB)
 const MODEL_URL = 'https://huggingface.co/garavv/arcface-onnx/resolve/main/arc.onnx';
+const IDB_DB_NAME = 'arcface-cache';
+const IDB_STORE = 'models';
+const IDB_KEY = 'arcface-v1';
 
-// Set WASM paths to CDN for onnxruntime-web
 ort.env.wasm.wasmPaths = 'https://cdn.jsdelivr.net/npm/onnxruntime-web/dist/';
 
 let session: ort.InferenceSession | null = null;
 let loading = false;
+
+/** Open (or create) the IndexedDB database for model caching */
+function openModelDB(): Promise<IDBDatabase> {
+  return new Promise((resolve, reject) => {
+    const req = indexedDB.open(IDB_DB_NAME, 1);
+    req.onupgradeneeded = () => req.result.createObjectStore(IDB_STORE);
+    req.onsuccess = () => resolve(req.result);
+    req.onerror = () => reject(req.error);
+  });
+}
+
+async function getCachedModel(): Promise<ArrayBuffer | null> {
+  try {
+    const db = await openModelDB();
+    return new Promise((resolve) => {
+      const tx = db.transaction(IDB_STORE, 'readonly');
+      const store = tx.objectStore(IDB_STORE);
+      const req = store.get(IDB_KEY);
+      req.onsuccess = () => resolve(req.result ?? null);
+      req.onerror = () => resolve(null);
+    });
+  } catch { return null; }
+}
+
+async function cacheModel(buffer: ArrayBuffer): Promise<void> {
+  try {
+    const db = await openModelDB();
+    const tx = db.transaction(IDB_STORE, 'readwrite');
+    tx.objectStore(IDB_STORE).put(buffer, IDB_KEY);
+  } catch (e) {
+    console.warn('[ArcFace] Failed to cache model in IndexedDB:', e);
+  }
+}
 
 export async function loadArcFaceModel(
   onProgress?: (percent: number) => void
 ): Promise<void> {
   if (session) { onProgress?.(100); return; }
   if (loading) {
-    while (loading) {
-      await new Promise((r) => setTimeout(r, 200));
-    }
+    while (loading) await new Promise((r) => setTimeout(r, 200));
     onProgress?.(100);
     return;
   }
 
   loading = true;
   try {
-    // Fetch model with progress tracking
-    const response = await fetch(MODEL_URL);
-    const contentLength = Number(response.headers.get('content-length') || 0);
-    const reader = response.body!.getReader();
-    const chunks: Uint8Array[] = [];
-    let received = 0;
+    // Try loading from IndexedDB cache first
+    let buffer = await getCachedModel();
 
-    while (true) {
-      const { done, value } = await reader.read();
-      if (done) break;
-      chunks.push(value);
-      received += value.length;
-      if (contentLength > 0) {
-        onProgress?.(Math.round((received / contentLength) * 90)); // 0-90% for download
+    if (buffer) {
+      console.log('[ArcFace] Loaded model from IndexedDB cache');
+      onProgress?.(90);
+    } else {
+      // Download with progress
+      const response = await fetch(MODEL_URL);
+      const contentLength = Number(response.headers.get('content-length') || 0);
+      const reader = response.body!.getReader();
+      const chunks: Uint8Array[] = [];
+      let received = 0;
+
+      while (true) {
+        const { done, value } = await reader.read();
+        if (done) break;
+        chunks.push(value);
+        received += value.length;
+        if (contentLength > 0) {
+          onProgress?.(Math.round((received / contentLength) * 90));
+        }
       }
+
+      const uint8 = new Uint8Array(received);
+      let offset = 0;
+      for (const chunk of chunks) { uint8.set(chunk, offset); offset += chunk.length; }
+      buffer = uint8.buffer;
+
+      // Cache in IndexedDB for future use
+      await cacheModel(buffer);
+      console.log('[ArcFace] Model downloaded and cached in IndexedDB');
     }
 
-    const buffer = new Uint8Array(received);
-    let offset = 0;
-    for (const chunk of chunks) {
-      buffer.set(chunk, offset);
-      offset += chunk.length;
-    }
-
-    onProgress?.(95); // Loading into ONNX runtime
-    session = await ort.InferenceSession.create(buffer.buffer, {
+    onProgress?.(95);
+    session = await ort.InferenceSession.create(buffer, {
       executionProviders: ['wasm'],
     });
     onProgress?.(100);
