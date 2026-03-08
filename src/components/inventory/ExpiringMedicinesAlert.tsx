@@ -33,10 +33,30 @@ export default function ExpiringMedicinesAlert() {
       thirtyDaysFromNow.setDate(thirtyDaysFromNow.getDate() + 30);
       const thirtyDaysStr = thirtyDaysFromNow.toISOString().split('T')[0];
 
+      // Get owner's branch IDs when viewing "All Branches"
+      let ownerBranchIds: string[] = [];
+      if (!effectiveBranchId && profile?.role === 'owner' && profile?.id) {
+        const { data: ownerBranches } = await supabase
+          .from('pharmacy_branches')
+          .select('id')
+          .eq('pharmacy_owner_id', profile.id);
+        ownerBranchIds = (ownerBranches || []).map((b: any) => b.id);
+        
+        // If owner has no branches, show no alerts
+        if (ownerBranchIds.length === 0) {
+          setExpiringCount(0);
+          setExpiredCount(0);
+          setOutOfStockCount(0);
+          setLowStockCount(0);
+          return;
+        }
+      }
+
       // Build base filter
       const addBranchFilter = (q: any) => {
         if (profile?.role === 'staff') return q.eq('branch_id', userBranch || profile?.branch_id);
         if (effectiveBranchId) return q.eq('branch_id', effectiveBranchId);
+        if (ownerBranchIds.length > 0) return q.in('branch_id', ownerBranchIds);
         return q;
       };
 
