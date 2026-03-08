@@ -60,22 +60,39 @@ export default function TransferRequestForm({ open, onOpenChange, onSuccess }: P
       supabase.from('pharmacy_branches').select('id, name, branch_type').eq('pharmacy_owner_id', ownerId).order('name')
     ]);
 
-    const locationRows: any[] = locationsRes.data || [];
+    let locationRows: any[] = locationsRes.data || [];
     const branchRows: any[] = branchesRes.data || [];
 
-    // Build a map: branch_id -> location_id for branches that have a matching location
+    // Build a map: branch_id -> location_id
     const branchToLocationMap: Record<string, string> = {};
     locationRows.forEach((l) => {
       if (l.branch_id) branchToLocationMap[l.branch_id] = l.id;
     });
 
-    // For display, use pharmacy_branches (user-friendly) but track the location_id for submission
+    // Auto-create missing location entries (only owners can insert)
+    const missingBranches = branchRows.filter((b) => !branchToLocationMap[b.id]);
+    if (missingBranches.length > 0 && profile.role === 'owner') {
+      const { data: created } = await supabase
+        .from('locations')
+        .insert(missingBranches.map((b) => ({
+          pharmacy_owner_id: ownerId,
+          name: b.name,
+          type: b.branch_type === 'pharmacy' ? 'pharmacy' : 'store',
+          branch_id: b.id,
+        })))
+        .select('id, name, type, branch_id');
+      if (created) {
+        created.forEach((l: any) => { branchToLocationMap[l.branch_id] = l.id; });
+      }
+    }
+
+    // Use pharmacy_branches for display, but track the location_id for FK submission
     const options: LocationOption[] = branchRows.map((b) => ({
-      id: b.id,                                         // pharmacy_branch id (for display/selection)
+      id: b.id,
       name: b.name,
       type: b.branch_type,
       branch_id: b.id,
-      location_id: branchToLocationMap[b.id] || null,   // the matching locations.id for FK
+      location_id: branchToLocationMap[b.id] || null,
     }));
 
     setLocations(options.sort((a, b) => a.name.localeCompare(b.name)));
