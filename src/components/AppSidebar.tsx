@@ -10,7 +10,11 @@ import {
   Settings,
   Building2,
   Shield,
-  UserCheck
+  UserCheck,
+  Warehouse,
+  ArrowRightLeft,
+  ClipboardList,
+  Globe
 } from "lucide-react";
 
 import {
@@ -44,12 +48,15 @@ export function AppSidebar() {
   const ownerNavItems = [
     { title: "Overview", url: "/", icon: LayoutDashboard },
     { title: isPharmacy ? "Inventory" : "Stock", url: "/inventory", icon: Package },
+    { title: "Global Inventory", url: "/stock-movements", icon: Globe },
     { title: "Sales", url: "/sales", icon: ShoppingCart },
     { title: "Finance", url: "/finance", icon: DollarSign },
     { title: "Customers", url: "/customers", icon: UserCheck },
     { title: "Suppliers", url: "/suppliers", icon: Truck },
     { title: "Staff", url: "/staff", icon: Users },
     { title: "Branches", url: "/branches", icon: Building2 },
+    { title: "Locations", url: "/locations", icon: Warehouse },
+    { title: "Transfer Requests", url: "/transfer-requests", icon: ClipboardList },
     { title: "Account", url: "/account", icon: Settings },
   ];
 
@@ -58,6 +65,7 @@ export function AppSidebar() {
     { title: "Sales", url: "/sales", icon: ShoppingCart },
     { title: isPharmacy ? "Inventory" : "Stock", url: "/inventory", icon: Package },
     { title: "Customers", url: "/customers", icon: UserCheck },
+    { title: "Transfer Requests", url: "/transfer-requests", icon: ClipboardList },
     { title: "Account", url: "/account", icon: Settings },
   ];
 
