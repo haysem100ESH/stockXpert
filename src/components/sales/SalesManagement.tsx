@@ -195,21 +195,28 @@ export default function SalesManagement() {
 
       // Fetch debt from customer_credits table for fast lookup
       const customerIds = rawCustomers.map(c => c.id);
-      const { data: creditsData } = await (supabase as any)
-        .from('customer_credits')
-        .select('customer_id, total_debt')
-        .in('customer_id', customerIds);
+      const [creditsRes, creditLogsRes] = await Promise.all([
+        (supabase as any).from('customer_credits').select('customer_id, total_debt').in('customer_id', customerIds),
+        (supabase as any).from('credit_logs').select('customer_id, new_score, created_at').in('customer_id', customerIds).order('created_at', { ascending: false }),
+      ]);
 
       const debtMap: Record<string, number> = {};
-      for (const credit of creditsData || []) {
+      for (const credit of creditsRes.data || []) {
         debtMap[credit.customer_id] = Math.max(0, Number(credit.total_debt) || 0);
+      }
+
+      const latestScoreMap: Record<string, number> = {};
+      for (const log of creditLogsRes.data || []) {
+        if (!latestScoreMap[log.customer_id]) {
+          latestScoreMap[log.customer_id] = log.new_score;
+        }
       }
 
       setCustomers(rawCustomers.map(c => ({
         ...c,
         computed_debt: Math.max(0, debtMap[c.id] || 0),
-        credit_score: c.credit_score ?? 50,
-        max_credit_limit: c.max_credit_limit ?? getCreditLimit(c.credit_score ?? 50),
+        credit_score: latestScoreMap[c.id] ?? c.credit_score ?? 50,
+        max_credit_limit: c.max_credit_limit ?? getCreditLimit(latestScoreMap[c.id] ?? c.credit_score ?? 50),
       })));
     } catch (err) {
       console.error('Error fetching customers:', err);
