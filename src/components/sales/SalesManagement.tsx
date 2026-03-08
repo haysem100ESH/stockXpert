@@ -430,6 +430,15 @@ export default function SalesManagement() {
       toast({ title: 'Error', description: 'Cart is empty', variant: 'destructive' });
       return;
     }
+    // Prevent selling items with 0 quantity
+    const zeroItem = cart.find(item => 
+      (item.saleType === 'by_stripe' && (item.stripesCount ?? 0) <= 0) ||
+      (item.saleType === 'full_pack' && item.quantity <= 0)
+    );
+    if (zeroItem) {
+      toast({ title: 'Invalid Quantity', description: `"${zeroItem.name}" has 0 quantity. Please set a valid amount or remove it.`, variant: 'destructive' });
+      return;
+    }
     const change = getChangeAmount();
     if (change > 0.001 && !changeAction) {
       toast({ title: 'Action Required', description: 'Please select Keep Change or Give Change before checkout', variant: 'destructive' });
