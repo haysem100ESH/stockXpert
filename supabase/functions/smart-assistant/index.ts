@@ -92,7 +92,7 @@ serve(async (req) => {
 
     const todayRevenue = todaySales.reduce((s: number, sale: any) => s + Number(sale.total_amount || 0), 0);
     const monthlyRevenue = recentSales.reduce((s: number, sale: any) => s + Number(sale.total_amount || 0), 0);
-    const totalDebt = debtors.reduce((s: number, c: any) => s + Number(c.total_amount || 0), 0);
+    const totalDebt = debtors.reduce((s: number, c: any) => s + Number(c.total_debt || 0), 0);
 
     const ItemLabel = branchType === "pharmacy" ? "Medicine" : "Item";
 
