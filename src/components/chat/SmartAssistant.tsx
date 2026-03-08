@@ -1,11 +1,11 @@
 import { useState, useRef, useEffect } from 'react';
-import { MessageCircle, X, Send, Loader2, Sparkles, Trash2 } from 'lucide-react';
+import { X, Send, Loader2, Sparkles, Trash2 } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
-import { ScrollArea } from '@/components/ui/scroll-area';
 import { useAuth } from '@/hooks/useAuth';
 import { useBranchContext } from '@/hooks/useBranchContext';
 import { useBranding } from '@/hooks/useBranding';
+import { supabase } from '@/lib/db';
 import ReactMarkdown from 'react-markdown';
 import { useToast } from '@/hooks/use-toast';
 
@@ -28,10 +28,11 @@ export default function SmartAssistant() {
   const [messages, setMessages] = useState<Msg[]>([]);
   const [input, setInput] = useState('');
   const [isLoading, setIsLoading] = useState(false);
+  const [branchIds, setBranchIds] = useState<string[]>([]);
   const scrollRef = useRef<HTMLDivElement>(null);
   const inputRef = useRef<HTMLInputElement>(null);
   const { user, profile } = useAuth();
-  const { selectedBranch, branchType, branches } = useBranchContext();
+  const { selectedBranch, branchType } = useBranchContext();
   const branding = useBranding();
   const { toast } = useToast();
 
