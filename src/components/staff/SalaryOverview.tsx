@@ -33,6 +33,22 @@ export default function SalaryOverview() {
 
   useEffect(() => {
     fetchStaffSalaries();
+
+    // Real-time subscription: auto-refresh when sales change
+    const salesSubscription = supabase
+      .channel('salary-sales-changes')
+      .on('postgres_changes', 
+        { event: '*', schema: 'public', table: 'sales' },
+        () => {
+          fetchStaffSalaries();
+          refetchProfit();
+        }
+      )
+      .subscribe();
+
+    return () => {
+      supabase.removeChannel(salesSubscription);
+    };
   }, [selectedBranch, profile]);
 
   useEffect(() => {
