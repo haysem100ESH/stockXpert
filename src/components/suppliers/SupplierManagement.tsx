@@ -128,6 +128,10 @@ export default function SupplierManagement() {
           <TabsTrigger value="suppliers">Suppliers</TabsTrigger>
           <TabsTrigger value="creditors">Creditors</TabsTrigger>
           <TabsTrigger value="analytics">Analytics</TabsTrigger>
+          <TabsTrigger value="intelligence" className="gap-1">
+            <Brain className="h-4 w-4" />
+            Intelligence
+          </TabsTrigger>
         </TabsList>
 
         <TabsContent value="suppliers" className="space-y-4 mt-4">
