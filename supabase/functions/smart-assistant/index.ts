@@ -495,7 +495,6 @@ serve(async (req) => {
 
     // Reuse owner ID already resolved for API key lookup
     const pharmacyOwnerId = ownerIdForKey;
-    }
 
     // Branch map (owner-filtered)
     const { data: branches } = await db
