@@ -246,6 +246,10 @@ export default function SupplierManagement() {
         <TabsContent value="analytics" className="mt-4">
           <SupplierAnalytics />
         </TabsContent>
+
+        <TabsContent value="intelligence" className="mt-4">
+          <SupplierIntelligenceDashboard />
+        </TabsContent>
       </Tabs>
 
       <AddSupplierDialog open={showAddDialog} onOpenChange={setShowAddDialog} onSupplierAdded={handleSupplierAdded} />
