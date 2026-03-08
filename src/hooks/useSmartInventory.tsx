@@ -2,6 +2,7 @@ import { useState, useEffect, useMemo } from 'react';
 import { supabase } from '@/lib/db';
 import { useAuth } from '@/hooks/useAuth';
 import { useBranchContext } from '@/hooks/useBranchContext';
+import { getSeasonalMultiplier } from '@/hooks/useSeasonalPerformance';
 
 export interface InventoryItem {
   id: string;
