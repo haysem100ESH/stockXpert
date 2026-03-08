@@ -37,6 +37,17 @@ serve(async (req) => {
 
     const db = createClient(supabaseUrl, supabaseServiceKey);
 
+    // Determine the pharmacy owner ID for branch fetching
+    let pharmacyOwnerId = user.id;
+    if (profile.role === 'staff' && profile.branch_id) {
+      const { data: ownerBranch } = await db
+        .from("pharmacy_branches")
+        .select("pharmacy_owner_id")
+        .eq("id", profile.branch_id)
+        .single();
+      if (ownerBranch) pharmacyOwnerId = ownerBranch.pharmacy_owner_id;
+    }
+
     const branchFilter = branchIds?.length
       ? (query: any) => query.in("branch_id", branchIds)
       : (query: any) => query;
@@ -48,8 +59,8 @@ serve(async (req) => {
     const thirtyDaysFromNow = new Date(now.getTime() + 30 * 24 * 60 * 60 * 1000);
     const today = now.toISOString().split("T")[0];
 
-    // Fetch branch names for mapping
-    const branchesRes = await db.from("pharmacy_branches").select("id, name, branch_type, is_main_branch");
+    // Fetch branch names for mapping - filtered by owner
+    const branchesRes = await db.from("pharmacy_branches").select("id, name, branch_type, is_main_branch").eq("pharmacy_owner_id", pharmacyOwnerId);
     const branchMap: Record<string, string> = {};
     for (const b of (branchesRes.data || [])) {
       branchMap[b.id] = b.name;
