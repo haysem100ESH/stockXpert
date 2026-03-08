@@ -329,7 +329,12 @@ export default function StaffInventoryWithActions() {
   };
 
   if (loading) {
-    return <div>Loading {isPharmacy ? 'medicines' : 'items'}...</div>;
+    return (
+      <div className="flex items-center justify-center py-12 gap-3">
+        <div className="h-6 w-6 animate-spin rounded-full border-2 border-primary border-t-transparent" />
+        <span className="text-muted-foreground">Loading {isPharmacy ? 'medicines' : 'items'}...</span>
+      </div>
+    );
   }
 
   return (
