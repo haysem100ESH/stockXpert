@@ -11,6 +11,67 @@ import { cn } from '@/lib/utils';
 import CreditScoreBadge from '@/components/customers/CreditScoreBadge';
 import DebtProgressBar from '@/components/customers/DebtProgressBar';
 
+// Free-form measurable quantity input with validation
+function MeasurableQtyInput({ value, max, unit, onChange }: { value: number; max: number; unit: string; onChange: (qty: number) => void }) {
+  const [inputVal, setInputVal] = useState(String(value));
+  const [error, setError] = useState('');
+
+  useEffect(() => {
+    setInputVal(String(value));
+  }, [value]);
+
+  const validate = (raw: string) => {
+    const num = parseFloat(raw);
+    if (raw.trim() === '' || isNaN(num)) return 'Enter a valid number';
+    if (num <= 0) return 'Must be greater than 0';
+    if (num > max) return `Exceeds stock (${max} ${unit})`;
+    return '';
+  };
+
+  const handleChange = (e: React.ChangeEvent<HTMLInputElement>) => {
+    const raw = e.target.value;
+    setInputVal(raw);
+    const err = validate(raw);
+    setError(err);
+    if (!err) {
+      onChange(parseFloat(parseFloat(raw).toFixed(2)));
+    }
+  };
+
+  const handleBlur = () => {
+    const num = parseFloat(inputVal);
+    if (isNaN(num) || num <= 0) {
+      setInputVal(String(value));
+      setError('');
+    } else if (num > max) {
+      const clamped = max;
+      setInputVal(String(clamped));
+      setError('');
+      onChange(clamped);
+    }
+  };
+
+  return (
+    <div className="flex flex-col gap-0.5">
+      <div className="flex items-center gap-1">
+        <input
+          type="number"
+          step="any"
+          value={inputVal}
+          onChange={handleChange}
+          onBlur={handleBlur}
+          className={cn(
+            "w-20 text-sm font-medium text-center border rounded-md h-7 bg-background px-1 focus:outline-none focus:ring-1 focus:ring-ring",
+            error && "border-destructive focus:ring-destructive"
+          )}
+        />
+        <span className="text-xs text-muted-foreground">{unit}</span>
+      </div>
+      {error && <span className="text-[10px] text-destructive leading-tight">{error}</span>}
+    </div>
+  );
+}
+
 interface CartItem {
   id: string;
   name: string;
