@@ -165,6 +165,13 @@ export default function DeveloperDashboard() {
             .select('id', { count: 'exact' })
             .eq('pharmacy_owner_id', profile.id);
 
+          // Get gemini_api_key status
+          const { data: profileExtra } = await supabase
+            .from('profiles')
+            .select('gemini_api_key')
+            .eq('id', profile.id)
+            .single();
+
           return {
             id: profile.id,
             full_name: profile.full_name,
@@ -175,6 +182,7 @@ export default function DeveloperDashboard() {
             pharmacy_address: profile.pharmacy_address || 'N/A',
             active: profile.active,
             manually_deactivated: profile.manually_deactivated,
+            has_gemini_api_key: !!profileExtra?.gemini_api_key,
             subscription: subscription ? {
               subscription_credit: subscription.subscription_credit,
               status: subscription.status,
