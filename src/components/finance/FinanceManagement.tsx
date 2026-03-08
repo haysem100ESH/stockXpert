@@ -1011,6 +1011,10 @@ export default function FinanceManagement() {
           </Card>
         </TabsContent>
 
+        <TabsContent value="salaries">
+          <SalaryHistory />
+        </TabsContent>
+
         <TabsContent value="debts">
           <DebtManagement />
         </TabsContent>
