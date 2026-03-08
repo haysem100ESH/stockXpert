@@ -2,17 +2,16 @@ import { useState, useRef, useCallback, useEffect } from 'react';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
 import { Badge } from '@/components/ui/badge';
-import { AlertTriangle, Camera, CheckCircle2, Loader2, ShieldAlert, RotateCcw, Eye } from 'lucide-react';
+import { AlertTriangle, Camera, CheckCircle2, Loader2, ShieldAlert, Eye } from 'lucide-react';
 import { supabase } from '@/lib/db';
 import { useToast } from '@/hooks/use-toast';
 import {
   loadFaceModels,
   detectSingleFace,
   detectFaceCount,
-  faceDistance,
-  distanceToSimilarity,
   estimateHeadYaw,
 } from '@/lib/faceApi';
+import { cosineSimilarity, similarityToPercent } from '@/lib/arcface';
 import CameraCapture from './CameraCapture';
 
 interface PoseChallenge {
@@ -26,7 +25,9 @@ const POSE_CHALLENGES: PoseChallenge[] = [
   { instruction: 'Look straight at the camera', check: (yaw: number) => Math.abs(yaw) < 0.12 },
 ];
 
-const SIMILARITY_THRESHOLD = 55; // distance-to-similarity %. ~0.45 distance = 55%
+// ArcFace cosine similarity threshold. 0.3+ is good match, 0.4+ is strong match.
+// We use 70% (mapped from cosine sim) which corresponds to ~0.4 cosine similarity.
+const SIMILARITY_THRESHOLD = 70;
 const MAX_ATTEMPTS = 3;
 
 interface FaceVerificationProps {
@@ -39,6 +40,7 @@ interface FaceVerificationProps {
 export default function FaceVerification({ staffId, onVerified, onFailed, onCancel }: FaceVerificationProps) {
   const [phase, setPhase] = useState<'loading' | 'liveness' | 'verifying' | 'result'>('loading');
   const [feedback, setFeedback] = useState('');
+  const [loadingProgress, setLoadingProgress] = useState('');
   const [challenge, setChallenge] = useState(POSE_CHALLENGES[0]);
   const [livenessPassed, setLivenessPassed] = useState(false);
   const [attempts, setAttempts] = useState(0);
@@ -54,9 +56,10 @@ export default function FaceVerification({ staffId, onVerified, onFailed, onCanc
 
   const init = async () => {
     setPhase('loading');
-    setFeedback('Loading face recognition models...');
+    setLoadingProgress('Loading AI face recognition models (first time may take ~30s)...');
     try {
       await loadFaceModels();
+      setLoadingProgress('Models loaded. Fetching your face data...');
 
       // Fetch stored face embeddings
       const { data, error } = await supabase
@@ -87,7 +90,6 @@ export default function FaceVerification({ staffId, onVerified, onFailed, onCanc
     async (video: HTMLVideoElement) => {
       if (phase !== 'liveness' || livenessPassed) return;
 
-      // Check for multiple faces
       const count = await detectFaceCount(video);
       if (count > 1) {
         setFeedback('⚠️ Multiple faces detected! Only your face should be visible.');
@@ -98,7 +100,6 @@ export default function FaceVerification({ staffId, onVerified, onFailed, onCanc
         return;
       }
 
-      // Check pose
       const result = await detectSingleFace(video);
       if (!result) return;
 
@@ -115,9 +116,8 @@ export default function FaceVerification({ staffId, onVerified, onFailed, onCanc
 
   const handleVerify = async (_blob: Blob, video: HTMLVideoElement) => {
     setPhase('verifying');
-    setFeedback('Verifying face...');
+    setFeedback('Analyzing face with ArcFace AI...');
 
-    // Check multiple faces
     const count = await detectFaceCount(video);
     if (count > 1) {
       const newAttempts = attempts + 1;
@@ -144,18 +144,18 @@ export default function FaceVerification({ staffId, onVerified, onFailed, onCanc
       return;
     }
 
-    // Compare with stored embeddings - find best match
-    let bestSimilarity = 0;
+    // Compare with stored embeddings using cosine similarity
+    let bestScore = 0;
     for (const stored of storedEmbeddings.current) {
       const storedArr = new Float32Array(stored);
-      const dist = faceDistance(result.descriptor, storedArr);
-      const sim = distanceToSimilarity(dist);
-      if (sim > bestSimilarity) bestSimilarity = sim;
+      const cosSim = cosineSimilarity(result.descriptor, storedArr);
+      const percent = similarityToPercent(cosSim);
+      if (percent > bestScore) bestScore = percent;
     }
 
-    setResultScore(Math.round(bestSimilarity));
+    setResultScore(Math.round(bestScore));
 
-    if (bestSimilarity >= SIMILARITY_THRESHOLD) {
+    if (bestScore >= SIMILARITY_THRESHOLD) {
       setResultSuccess(true);
       setPhase('result');
       setFeedback('Face verified successfully!');
@@ -170,7 +170,7 @@ export default function FaceVerification({ staffId, onVerified, onFailed, onCanc
       ctx.drawImage(video, 0, 0);
       canvas.toBlob(
         (blob) => {
-          if (blob) onVerified(Math.round(bestSimilarity), blob);
+          if (blob) onVerified(Math.round(bestScore), blob);
         },
         'image/jpeg',
         0.8
@@ -181,13 +181,13 @@ export default function FaceVerification({ staffId, onVerified, onFailed, onCanc
       if (newAttempts >= MAX_ATTEMPTS) {
         setResultSuccess(false);
         setPhase('result');
-        onFailed(`Face verification failed after ${MAX_ATTEMPTS} attempts. Score: ${Math.round(bestSimilarity)}%`);
+        onFailed(`Face verification failed after ${MAX_ATTEMPTS} attempts. Score: ${Math.round(bestScore)}%`);
       } else {
         setPhase('liveness');
         setLivenessPassed(false);
         const idx = Math.floor(Math.random() * POSE_CHALLENGES.length);
         setChallenge(POSE_CHALLENGES[idx]);
-        setFeedback(`Face mismatch (${Math.round(bestSimilarity)}%). ${POSE_CHALLENGES[idx].instruction}`);
+        setFeedback(`Face mismatch (${Math.round(bestScore)}%). ${POSE_CHALLENGES[idx].instruction}`);
       }
     }
   };
@@ -197,7 +197,7 @@ export default function FaceVerification({ staffId, onVerified, onFailed, onCanc
       <CardHeader>
         <CardTitle className="flex items-center gap-2">
           <ShieldAlert className="h-5 w-5" />
-          Face Verification
+          Face Verification (ArcFace AI)
           {attempts > 0 && (
             <Badge variant="secondary" className="ml-auto">
               Attempt {attempts + 1}/{MAX_ATTEMPTS}
@@ -207,9 +207,12 @@ export default function FaceVerification({ staffId, onVerified, onFailed, onCanc
       </CardHeader>
       <CardContent className="space-y-4">
         {phase === 'loading' && (
-          <div className="flex items-center justify-center py-8 gap-2 text-muted-foreground">
-            <Loader2 className="h-5 w-5 animate-spin" />
-            <span>{feedback}</span>
+          <div className="flex flex-col items-center justify-center py-8 gap-3 text-muted-foreground">
+            <Loader2 className="h-6 w-6 animate-spin" />
+            <span className="text-sm text-center">{loadingProgress}</span>
+            <p className="text-xs text-muted-foreground/70">
+              Powered by ArcFace (512-dim embeddings) + ONNX Runtime
+            </p>
           </div>
         )}
 
@@ -253,6 +256,7 @@ export default function FaceVerification({ staffId, onVerified, onFailed, onCanc
               <>
                 <CheckCircle2 className="h-12 w-12 text-green-600 mx-auto mb-2" />
                 <p className="font-medium">Verified — {resultScore}% match</p>
+                <p className="text-xs text-muted-foreground mt-1">ArcFace 512-d embedding verification</p>
               </>
             ) : (
               <>
