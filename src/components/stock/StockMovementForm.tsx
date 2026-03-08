@@ -103,12 +103,11 @@ export default function StockMovementForm({ open, onOpenChange, onSuccess }: Pro
 
       // Adjust stock: deduct from source
       if (fromLocationId && (movementType === 'TRANSFER' || movementType === 'RETURN')) {
-        // Find the medicine at source location
-        const sourceMed = medicines.find(m => m.id === medicineId && m.location_id === fromLocationId);
-        if (sourceMed) {
+        // Use the selected medicine directly (already validated)
+        if (selectedMedicine) {
           await supabase.from('medicines').update({
-            stock_quantity: sourceMed.stock_quantity - qty
-          }).eq('id', sourceMed.id);
+            stock_quantity: selectedMedicine.stock_quantity - qty
+          }).eq('id', selectedMedicine.id);
         }
       }
 
