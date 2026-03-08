@@ -6,6 +6,7 @@ import { Label } from '@/components/ui/label';
 import { Badge } from '@/components/ui/badge';
 import { Dialog, DialogContent, DialogDescription, DialogHeader, DialogTitle } from '@/components/ui/dialog';
 import { Plus, Users, Phone, Mail, Edit, Trash2, Search, KeyRound } from 'lucide-react';
+import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
 import { supabase } from '@/lib/db';
 import { useToast } from '@/hooks/use-toast';
 import { useAuth } from '@/hooks/useAuth';
@@ -14,6 +15,8 @@ import { ConfirmationDialog } from '@/components/ui/confirmation-dialog';
 import EditStaffDialog from './EditStaffDialog';
 import CreateStaffDialog from './CreateStaffDialog';
 import { usePlanLimits } from '@/hooks/usePlanLimits';
+import SalaryOverview from './SalaryOverview';
+import SalaryHistory from './SalaryHistory';
 
 interface StaffMember {
   id: string;
