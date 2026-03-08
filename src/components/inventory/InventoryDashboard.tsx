@@ -339,7 +339,7 @@ export default function InventoryDashboard() {
       )}
 
       {/* Expired Medicines */}
-      {isPharmacy && expiredItems.length > 0 && (
+      {expiredItems.length > 0 && (
         <Card>
           <CardHeader>
             <CardTitle className="flex items-center space-x-2">
