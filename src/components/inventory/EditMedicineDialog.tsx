@@ -332,8 +332,9 @@ export default function EditMedicineDialog({
 
           <div className="grid grid-cols-2 gap-4">
             <div className="space-y-2">
-              <Label htmlFor="stock_quantity">Stock Quantity *</Label>
-              <Input id="stock_quantity" type="number" step={medicineData.item_type === 'measurable' ? '0.01' : '1'} value={medicineData.stock_quantity} onChange={(e) => setMedicineData({ ...medicineData, stock_quantity: e.target.value })} required />
+              <Label htmlFor="stock_quantity">Stock Quantity</Label>
+              <Input id="stock_quantity" type="number" value={medicineData.stock_quantity} disabled className="opacity-60 cursor-not-allowed" />
+              <p className="text-xs text-muted-foreground">Use "Adjust Stock" to change quantity</p>
             </div>
             <div className="space-y-2">
               <Label htmlFor="minimum_stock_level">Minimum Stock Level(for alert!) *</Label>
