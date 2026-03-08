@@ -13,8 +13,9 @@ import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@
 import {
   DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuTrigger,
 } from '@/components/ui/dropdown-menu';
+import { ConfirmationDialog } from '@/components/ui/confirmation-dialog';
 import { DataTable } from '@/components/ui/data-table';
-import { Building2, Plus, Edit, MapPin, Phone, MoreHorizontal } from 'lucide-react';
+import { Building2, Plus, Edit, MapPin, Phone, MoreHorizontal, Trash2 } from 'lucide-react';
 import { usePlanLimits } from '@/hooks/usePlanLimits';
 
 interface Branch {
