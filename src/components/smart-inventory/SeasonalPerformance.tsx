@@ -5,8 +5,11 @@ import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@
 import { Input } from '@/components/ui/input';
 import { Button } from '@/components/ui/button';
 import { SeasonalItem } from '@/hooks/useSeasonalPerformance';
-import { Search, Sun, RefreshCw } from 'lucide-react';
+import { Search, Sun, RefreshCw, Download } from 'lucide-react';
 import SeasonalItemChart from './SeasonalItemChart';
+import jsPDF from 'jspdf';
+import autoTable from 'jspdf-autotable';
+import ExcelJS from 'exceljs';
 
 interface SeasonalPerformanceProps {
   items: SeasonalItem[];
