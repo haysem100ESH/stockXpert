@@ -25,6 +25,7 @@ interface PharmacyOwner {
   pharmacy_address?: string;
   active: boolean;
   manually_deactivated?: boolean;
+  has_gemini_api_key: boolean;
   subscription: {
     subscription_credit: number;
     status: string;
