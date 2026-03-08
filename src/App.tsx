@@ -73,6 +73,7 @@ const App = () => {
               <Route path="/locations" element={<Layout><SubscriptionGuard><LocationsPage /></SubscriptionGuard></Layout>} />
               <Route path="/stock-movements" element={<Layout><SubscriptionGuard><StockMovementsPage /></SubscriptionGuard></Layout>} />
               <Route path="/transfer-requests" element={<Layout><SubscriptionGuard><TransferRequestsPage /></SubscriptionGuard></Layout>} />
+              <Route path="/smart-inventory" element={<Layout><SubscriptionGuard><SmartInventoryPage /></SubscriptionGuard></Layout>} />
               <Route path="/developer" element={<Layout><DeveloperPage /></Layout>} />
               <Route path="/account" element={<Layout><AccountPage /></Layout>} />
               {/* ADD ALL CUSTOM ROUTES ABOVE THE CATCH-ALL "*" ROUTE */}
