@@ -14,7 +14,8 @@ import {
   Warehouse,
   ArrowRightLeft,
   ClipboardList,
-  Globe
+  Globe,
+  Brain
 } from "lucide-react";
 
 import {
@@ -49,6 +50,7 @@ export function AppSidebar() {
     { title: "Overview", url: "/", icon: LayoutDashboard },
     { title: isPharmacy ? "Inventory" : "Stock", url: "/inventory", icon: Package },
     { title: "Global Inventory", url: "/stock-movements", icon: Globe },
+    { title: "Smart Inventory", url: "/smart-inventory", icon: Brain },
     { title: "Sales", url: "/sales", icon: ShoppingCart },
     { title: "Finance", url: "/finance", icon: DollarSign },
     { title: "Customers", url: "/customers", icon: UserCheck },
