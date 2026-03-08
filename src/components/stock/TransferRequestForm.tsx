@@ -57,177 +57,36 @@ export default function TransferRequestForm({ open, onOpenChange, onSuccess }: P
         .maybeSingle();
       if (branch?.pharmacy_owner_id) resolvedOwnerId = branch.pharmacy_owner_id;
     }
-    setOwnerId(resolvedOwnerId);
 
-    // Fetch from both tables
-    const [locationsRes, branchesRes] = await Promise.all([
-      supabase.from('locations').select('id, name, type, branch_id').eq('pharmacy_owner_id', resolvedOwnerId).order('name'),
-      supabase.from('pharmacy_branches').select('id, name, branch_type').eq('pharmacy_owner_id', resolvedOwnerId).order('name')
-    ]);
+    const { data: branchRows, error } = await supabase
+      .from('pharmacy_branches')
+      .select('id, name, branch_type')
+      .eq('pharmacy_owner_id', resolvedOwnerId)
+      .order('name');
 
-    let locationRows: any[] = locationsRes.data || [];
-    const branchRows: any[] = branchesRes.data || [];
-
-    // Build a map: branch_id -> location_id
-    const branchToLocationMap: Record<string, string> = {};
-    locationRows.forEach((l) => {
-      if (l.branch_id) branchToLocationMap[l.branch_id] = l.id;
-    });
-
-    // Legacy fallback: resolve by name/type when branch_id link is missing
-    const normalize = (value: string) => value.trim().toLowerCase();
-    const legacyByNameType: Record<string, string> = {};
-    locationRows.forEach((l) => {
-      if (!l.branch_id && l.name && l.type) {
-        const key = `${normalize(l.name)}::${l.type}`;
-        if (!legacyByNameType[key]) legacyByNameType[key] = l.id;
-      }
-    });
-
-    const matchedLegacyLinks: { locationId: string; branchId: string }[] = [];
-    branchRows.forEach((b) => {
-      if (branchToLocationMap[b.id]) return;
-      const expectedType = b.branch_type === 'pharmacy' ? 'pharmacy' : 'store';
-      const legacyKey = `${normalize(b.name)}::${expectedType}`;
-      const legacyLocationId = legacyByNameType[legacyKey];
-      if (legacyLocationId) {
-        branchToLocationMap[b.id] = legacyLocationId;
-        matchedLegacyLinks.push({ locationId: legacyLocationId, branchId: b.id });
-      }
-    });
-
-    // Persist recovered legacy links when owner opens the form
-    if (matchedLegacyLinks.length > 0 && profile.role === 'owner') {
-      await Promise.all(
-        matchedLegacyLinks.map(({ locationId, branchId }) =>
-          supabase.from('locations').update({ branch_id: branchId }).eq('id', locationId)
-        )
-      );
-      locationRows = locationRows.map((l) => {
-        const match = matchedLegacyLinks.find((m) => m.locationId === l.id);
-        return match ? { ...l, branch_id: match.branchId } : l;
-      });
+    if (error) {
+      toast({ title: 'Error', description: 'Failed to load branches', variant: 'destructive' });
+      return;
     }
 
-    // Auto-create missing location entries (best effort; may be blocked by RLS)
-    const missingBranches = branchRows.filter((b) => !branchToLocationMap[b.id]);
-    if (missingBranches.length > 0) {
-      const { data: created } = await supabase
-        .from('locations')
-        .insert(missingBranches.map((b) => ({
-          pharmacy_owner_id: resolvedOwnerId,
-          name: b.name,
-          type: b.branch_type === 'pharmacy' ? 'pharmacy' : 'store',
-          branch_id: b.id,
-        })))
-        .select('id, name, type, branch_id');
-
-      if (created) {
-        created.forEach((l: any) => { branchToLocationMap[l.branch_id] = l.id; });
-      }
-
-      // Re-check in case rows existed but were not initially visible/linked
-      const { data: refreshed } = await supabase
-        .from('locations')
-        .select('id, branch_id')
-        .in('branch_id', missingBranches.map((b) => b.id));
-      (refreshed || []).forEach((l: any) => {
-        if (l.branch_id && !branchToLocationMap[l.branch_id]) branchToLocationMap[l.branch_id] = l.id;
-      });
-    }
-
-    // Use pharmacy_branches for display, but track the location_id for FK submission
-    const options: LocationOption[] = branchRows.map((b) => ({
+    const options: LocationOption[] = (branchRows || []).map((b: any) => ({
       id: b.id,
       name: b.name,
       type: b.branch_type,
       branch_id: b.id,
-      location_id: branchToLocationMap[b.id] || null,
+      location_id: null,
     }));
 
-    setLocations(options.sort((a, b) => a.name.localeCompare(b.name)));
-  };
+    const sorted = options.sort((a, b) => a.name.localeCompare(b.name));
+    setLocations(sorted);
 
-  const fetchMedicines = async (branchId?: string) => {
-    if (!branchId) { setMedicines([]); return; }
-
-    const { data } = await supabase
-      .from('medicines')
-      .select('id, name, stock_quantity')
-      .eq('branch_id', branchId)
-      .gt('stock_quantity', 0)
-      .order('name');
-
-    setMedicines(data || []);
-  };
-
-  // Re-fetch medicines when source branch changes
-  useEffect(() => {
-    if (sourceLocationId) {
-      fetchMedicines(sourceLocationId);
-      // Clear selected items when source changes
-      setItems([]);
+    if (profile.role === 'staff' && profile.branch_id) {
+      setRequestingLocationId(profile.branch_id);
     } else {
-      setMedicines([]);
-    }
-  }, [sourceLocationId, locations]);
-
-  const addItem = () => {
-    setItems(prev => [...prev, { medicine_id: '', medicine_name: '', requested_quantity: 1 }]);
-  };
-
-  const removeItem = (idx: number) => {
-    setItems(prev => prev.filter((_, i) => i !== idx));
-  };
-
-  const updateItem = (idx: number, field: string, value: any) => {
-    setItems(prev => prev.map((item, i) => {
-      if (i !== idx) return item;
-      if (field === 'medicine_id') {
-        const med = medicines.find(m => m.id === value);
-        return { ...item, medicine_id: value, medicine_name: med?.name || '' };
-      }
-      return { ...item, [field]: value };
-    }));
-  };
-
-  const ensureLocationIdForBranch = async (branchId: string): Promise<string | null> => {
-    if (!branchId) return null;
-
-    const fromState = locations.find((l) => l.id === branchId)?.location_id;
-    if (fromState) return fromState;
-
-    const { data: existing } = await supabase
-      .from('locations')
-      .select('id')
-      .eq('branch_id', branchId)
-      .maybeSingle();
-
-    if (existing?.id) {
-      setLocations((prev) => prev.map((l) => (l.id === branchId ? { ...l, location_id: existing.id } : l)));
-      return existing.id;
+      setRequestingLocationId((prev) => (sorted.some((l) => l.id === prev) ? prev : ''));
     }
 
-    const branch = locations.find((l) => l.id === branchId);
-    if (!branch || !ownerId) return null;
-
-    const { data: created } = await supabase
-      .from('locations')
-      .insert({
-        pharmacy_owner_id: ownerId,
-        name: branch.name,
-        type: branch.type === 'pharmacy' ? 'pharmacy' : 'store',
-        branch_id: branchId,
-      })
-      .select('id')
-      .maybeSingle();
-
-    if (created?.id) {
-      setLocations((prev) => prev.map((l) => (l.id === branchId ? { ...l, location_id: created.id } : l)));
-      return created.id;
-    }
-
-    return null;
+    setSourceLocationId((prev) => (sorted.some((l) => l.id === prev) ? prev : ''));
   };
 
   const handleSubmit = async () => {
