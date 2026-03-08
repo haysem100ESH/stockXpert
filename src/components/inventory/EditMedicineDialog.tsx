@@ -165,7 +165,7 @@ export default function EditMedicineDialog({
         country_name: medicineData.country_name || null,
         purchase_price: parseFloat(medicineData.purchase_price),
         selling_price: parseFloat(medicineData.selling_price),
-        stock_quantity: isMeas ? parseFloat(medicineData.stock_quantity) : parseInt(medicineData.stock_quantity),
+        
         minimum_stock_level: parseInt(medicineData.minimum_stock_level),
         units_per_pack: !isMeas && medicineData.units_per_pack ? parseInt(medicineData.units_per_pack) : null,
         unit_label: unitLabel,
