@@ -166,6 +166,9 @@ export default function SmartInventoryDashboard() {
           )}
         </TabsList>
 
+        <TabsContent value="alerts">
+          <InventoryDashboard />
+        </TabsContent>
         <TabsContent value="demand">
           <DemandTable items={summary.topDemand} allItems={items} isPharmacy={isPharmacy} />
         </TabsContent>

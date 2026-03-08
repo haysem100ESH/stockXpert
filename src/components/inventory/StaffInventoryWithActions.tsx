@@ -554,17 +554,6 @@ export default function StaffInventoryWithActions() {
           )}
         </TabsContent>
 
-        <TabsContent value="alerts">
-          <InventoryDashboard />
-        </TabsContent>
-
-        <TabsContent value="transfer">
-          <MedicineTransfer onTransferComplete={fetchMedicines} />
-        </TabsContent>
-
-        <TabsContent value="history">
-          <StockEditHistory />
-        </TabsContent>
 
         <TabsContent value="categories">
           <CategoryManagement />
