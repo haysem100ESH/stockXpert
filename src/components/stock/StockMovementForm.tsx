@@ -39,10 +39,32 @@ export default function StockMovementForm({ open, onOpenChange, onSuccess }: Pro
 
   const fetchLocations = async () => {
     if (!profile?.id) return;
-    const { data } = await supabase.from('locations').select('id, name, type, branch_id').eq('pharmacy_owner_id', profile.id).order('name');
-    setLocations(data || []);
+    // Fetch locations
+    const { data: locs } = await supabase.from('locations').select('id, name, type, branch_id').eq('pharmacy_owner_id', profile.id).order('name');
+    // Fetch branches as well
+    const { data: branches } = await supabase.from('pharmacy_branches').select('id, name, branch_type').eq('pharmacy_owner_id', profile.id).order('name');
+    
     const map: Record<string, string> = {};
-    (data || []).forEach((l: any) => { if (l.branch_id) map[l.id] = l.branch_id; });
+    const combined: { id: string; name: string; type: string }[] = [];
+    const branchIdsFromLocations = new Set<string>();
+    
+    (locs || []).forEach((l: any) => {
+      combined.push({ id: l.id, name: l.name, type: l.type });
+      if (l.branch_id) {
+        map[l.id] = l.branch_id;
+        branchIdsFromLocations.add(l.branch_id);
+      }
+    });
+    
+    // Add branches that don't already have a location entry
+    (branches || []).forEach((b: any) => {
+      if (!branchIdsFromLocations.has(b.id)) {
+        combined.push({ id: b.id, name: b.name, type: b.branch_type === 'pharmacy' ? 'pharmacy' : 'store' });
+        map[b.id] = b.id; // branch maps to itself
+      }
+    });
+    
+    setLocations(combined);
     setLocationBranchMap(map);
   };
 
