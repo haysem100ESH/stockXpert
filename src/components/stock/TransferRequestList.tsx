@@ -47,16 +47,25 @@ export default function TransferRequestList() {
       const locIds = [...new Set(data.flatMap(r => [r.requesting_location_id, r.source_location_id]).filter(Boolean))];
       const userIds = [...new Set(data.flatMap(r => [r.created_by, r.approved_by]).filter(Boolean))];
 
-      const [itemsRes, locationsRes, branchesRes, usersRes] = await Promise.all([
+      const [itemsRes, locationsRes, usersRes] = await Promise.all([
         supabase.from('transfer_request_items').select('*').in('request_id', reqIds),
-        locIds.length ? supabase.from('locations').select('id, name').in('id', locIds) : { data: [] },
-        locIds.length ? supabase.from('pharmacy_branches').select('id, name').in('id', locIds) : { data: [] },
+        locIds.length ? supabase.from('locations').select('id, name, branch_id').in('id', locIds) : { data: [] },
         userIds.length ? supabase.from('profiles').select('id, full_name').in('id', userIds) : { data: [] },
       ]);
 
+      // Resolve location → branch → name
       const locMap: Record<string, string> = {};
-      (locationsRes.data || []).forEach((l: any) => { locMap[l.id] = l.name; });
-      (branchesRes.data || []).forEach((b: any) => { if (!locMap[b.id]) locMap[b.id] = b.name; });
+      const locBranchIds = (locationsRes.data || []).map((l: any) => l.branch_id).filter(Boolean);
+      if (locBranchIds.length) {
+        const { data: branches } = await supabase.from('pharmacy_branches').select('id, name').in('id', locBranchIds);
+        const branchMap: Record<string, string> = {};
+        (branches || []).forEach((b: any) => { branchMap[b.id] = b.name; });
+        (locationsRes.data || []).forEach((l: any) => {
+          locMap[l.id] = (l.branch_id && branchMap[l.branch_id]) || l.name;
+        });
+      } else {
+        (locationsRes.data || []).forEach((l: any) => { locMap[l.id] = l.name; });
+      }
       const userMap: Record<string, string> = {};
       (usersRes.data || []).forEach((u: any) => { userMap[u.id] = u.full_name; });
 
