@@ -492,6 +492,136 @@ export default function FinanceManagement() {
     }
   };
 
+  const exportReportExcel = async () => {
+    const wb = new ExcelJS.Workbook();
+    const ws = wb.addWorksheet('Financial Report');
+    const headerFill: ExcelJS.Fill = { type: 'pattern', pattern: 'solid', fgColor: { argb: 'FF1E6F3E' } };
+    const evenRowFill: ExcelJS.Fill = { type: 'pattern', pattern: 'solid', fgColor: { argb: 'FFF0F9F4' } };
+    const border: Partial<ExcelJS.Borders> = {
+      top: { style: 'thin', color: { argb: 'FFD0D5DD' } }, bottom: { style: 'thin', color: { argb: 'FFD0D5DD' } },
+      left: { style: 'thin', color: { argb: 'FFD0D5DD' } }, right: { style: 'thin', color: { argb: 'FFD0D5DD' } },
+    };
+    ws.mergeCells('A1:G1');
+    const titleCell = ws.getCell('A1');
+    titleCell.value = 'Financial Report';
+    titleCell.font = { size: 18, bold: true, color: { argb: 'FF1E6F3E' } };
+    titleCell.alignment = { horizontal: 'center' };
+    ws.mergeCells('A2:G2');
+    const subCell = ws.getCell('A2');
+    subCell.value = `Period: ${period.charAt(0).toUpperCase() + period.slice(1)} | Generated: ${new Date().toLocaleDateString()}`;
+    subCell.font = { size: 10, color: { argb: 'FF666666' } };
+    subCell.alignment = { horizontal: 'center' };
+    const sRow = 4;
+    ws.getRow(sRow).values = ['', 'Total Income', 'Total Expenses', 'Net Profit', 'Profit Margin', 'Transactions', 'Avg. Sale'];
+    ws.getRow(sRow).eachCell((cell) => {
+      cell.font = { bold: true, size: 9, color: { argb: 'FF555555' } };
+      cell.alignment = { horizontal: 'center' };
+      cell.border = border;
+      cell.fill = { type: 'pattern', pattern: 'solid', fgColor: { argb: 'FFE8F5E9' } };
+    });
+    ws.getRow(sRow + 1).values = [
+      '', `ETB ${stats.totalIncome.toFixed(2)}`, `ETB ${stats.totalExpenses.toFixed(2)}`,
+      `ETB ${stats.netProfit.toFixed(2)}`, `${stats.profitMargin.toFixed(1)}%`,
+      sales.length.toString(), `ETB ${sales.length > 0 ? (stats.totalIncome / sales.length).toFixed(2) : '0.00'}`,
+    ];
+    ws.getRow(sRow + 1).eachCell((cell, colNum) => {
+      cell.font = { bold: true, size: 11 };
+      cell.alignment = { horizontal: 'center' };
+      cell.border = border;
+      if (colNum === 2) cell.font = { bold: true, size: 11, color: { argb: 'FF16A34A' } };
+      if (colNum === 3) cell.font = { bold: true, size: 11, color: { argb: 'FFDC2626' } };
+      if (colNum === 4) cell.font = { bold: true, size: 11, color: { argb: stats.netProfit >= 0 ? 'FF16A34A' : 'FFDC2626' } };
+    });
+    const txH = 8;
+    ws.mergeCells('A7:G7');
+    ws.getCell('A7').value = 'All Transactions';
+    ws.getCell('A7').font = { size: 12, bold: true, color: { argb: 'FF1E6F3E' } };
+    ws.getRow(txH).values = ['Date & Time', 'Items', 'Sold By', 'Payment', 'Discount', 'Amount', 'Status'];
+    ws.getRow(txH).eachCell((cell) => {
+      cell.fill = headerFill;
+      cell.font = { bold: true, color: { argb: 'FFFFFFFF' }, size: 10 };
+      cell.alignment = { horizontal: 'center' };
+      cell.border = border;
+    });
+    sales.forEach((sale, i) => {
+      const row = ws.getRow(txH + 1 + i);
+      const itemNames = sale.sale_items?.map(si => {
+        const nm = si.medicines?.name || 'Unknown';
+        if (si.sale_type === 'by_stripe' && si.stripes_sold) { const q = si.stripes_sold / 1000; return `${nm} (${q % 1 === 0 ? q.toFixed(0) : q} ${si.medicines?.unit_label || 'unit'})`; }
+        if (si.quantity > 0) return `${nm} ×${si.quantity}`;
+        return nm;
+      }).join(', ') || '—';
+      const isPaid = Number(sale.total_amount) <= ((sale as any).amount_paid || 0);
+      const isPartial = !isPaid && ((sale as any).amount_paid || 0) > 0;
+      row.values = [
+        new Date(sale.created_at).toLocaleString(), itemNames,
+        sale.seller ? `${sale.seller.role === 'owner' ? 'Owner' : 'Staff'} (${sale.seller.full_name})` : '—',
+        (sale as any).payment_method || '—',
+        Number(sale.discount_amount) > 0 ? Number(sale.discount_amount) : '',
+        Number(sale.total_amount),
+        isPaid ? 'Paid' : isPartial ? 'Partial' : 'Unpaid',
+      ];
+      row.eachCell((cell, colNum) => {
+        cell.border = border;
+        if (i % 2 === 0) cell.fill = evenRowFill;
+        if (colNum === 5 && Number(sale.discount_amount) > 0) { cell.font = { color: { argb: 'FF16A34A' } }; cell.numFmt = '#,##0.00'; }
+        if (colNum === 6) { cell.font = { bold: true }; cell.numFmt = '#,##0.00'; cell.alignment = { horizontal: 'right' }; }
+        if (colNum === 7) { cell.font = { bold: true, color: { argb: isPaid ? 'FF16A34A' : isPartial ? 'FFCA8A04' : 'FFDC2626' } }; cell.alignment = { horizontal: 'center' }; }
+      });
+    });
+    ws.columns = [{ width: 20 }, { width: 35 }, { width: 20 }, { width: 12 }, { width: 12 }, { width: 14 }, { width: 10 }];
+    const buf = await wb.xlsx.writeBuffer();
+    const blob = new Blob([buf], { type: 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet' });
+    const a = document.createElement('a'); a.href = URL.createObjectURL(blob);
+    a.download = `Financial_Report_${period}_${new Date().toISOString().slice(0, 10)}.xlsx`; a.click();
+  };
+
+  const exportReportPDF = () => {
+    const doc = new jsPDF();
+    doc.setFillColor(30, 111, 62); doc.rect(0, 0, 210, 26, 'F');
+    doc.setTextColor(255, 255, 255); doc.setFontSize(18); doc.text('Financial Report', 14, 13);
+    doc.setFontSize(10); doc.text(`Period: ${period.charAt(0).toUpperCase() + period.slice(1)} | Generated: ${new Date().toLocaleDateString()}`, 14, 21);
+    const sy = 34; const bw = 44;
+    ([
+      { label: 'Total Income', value: `ETB ${stats.totalIncome.toFixed(2)}`, color: [22, 163, 74] },
+      { label: 'Total Expenses', value: `ETB ${stats.totalExpenses.toFixed(2)}`, color: [220, 38, 38] },
+      { label: 'Net Profit', value: `ETB ${stats.netProfit.toFixed(2)}`, color: stats.netProfit >= 0 ? [22, 163, 74] : [220, 38, 38] },
+      { label: 'Profit Margin', value: `${stats.profitMargin.toFixed(1)}%`, color: stats.profitMargin >= 0 ? [22, 163, 74] : [220, 38, 38] },
+    ] as { label: string; value: string; color: [number, number, number] }[]).forEach((item, i) => {
+      const x = 14 + i * (bw + 3);
+      doc.setFillColor(240, 249, 244); doc.roundedRect(x, sy, bw, 16, 2, 2, 'F');
+      doc.setTextColor(100, 100, 100); doc.setFontSize(7); doc.text(item.label, x + 3, sy + 6);
+      doc.setTextColor(item.color[0], item.color[1], item.color[2]); doc.setFontSize(10); doc.text(item.value, x + 3, sy + 13);
+    });
+    autoTable(doc, {
+      startY: 56,
+      head: [['Date', 'Items', 'Sold By', 'Payment', 'Discount', 'Amount', 'Status']],
+      body: sales.map(sale => {
+        const itemNames = sale.sale_items?.map(si => {
+          const nm = si.medicines?.name || 'Unknown';
+          if (si.sale_type === 'by_stripe' && si.stripes_sold) { const q = si.stripes_sold / 1000; return `${nm} (${q % 1 === 0 ? q.toFixed(0) : q} ${si.medicines?.unit_label || 'unit'})`; }
+          if (si.quantity > 0) return `${nm} ×${si.quantity}`;
+          return nm;
+        }).join(', ') || '—';
+        const isPaid = Number(sale.total_amount) <= ((sale as any).amount_paid || 0);
+        const isPartial = !isPaid && ((sale as any).amount_paid || 0) > 0;
+        return [
+          new Date(sale.created_at).toLocaleDateString(), itemNames,
+          sale.seller ? `${sale.seller.role === 'owner' ? 'Owner' : 'Staff'} (${sale.seller.full_name})` : '—',
+          (sale as any).payment_method || '—',
+          Number(sale.discount_amount) > 0 ? `−ETB ${Number(sale.discount_amount).toFixed(2)}` : '',
+          `ETB ${Number(sale.total_amount).toFixed(2)}`,
+          isPaid ? 'Paid' : isPartial ? 'Partial' : 'Unpaid',
+        ];
+      }),
+      styles: { fontSize: 7, cellPadding: 2 },
+      headStyles: { fillColor: [30, 111, 62], textColor: 255, fontStyle: 'bold' },
+      alternateRowStyles: { fillColor: [240, 249, 244] },
+      columnStyles: { 4: { halign: 'right', textColor: [22, 163, 74] }, 5: { halign: 'right', fontStyle: 'bold' }, 6: { halign: 'center' } },
+    });
+    doc.save(`Financial_Report_${period}_${new Date().toISOString().slice(0, 10)}.pdf`);
+  };
+
   const renderPagination = (currentPage: number, totalItems: number, setPage: (p: number) => void) => {
     const totalPages = Math.ceil(totalItems / itemsPerPage);
     if (totalPages <= 1) return null;
