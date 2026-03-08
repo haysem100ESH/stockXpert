@@ -204,6 +204,25 @@ export default function BranchManagement() {
     }
   };
 
+  const handleDelete = async () => {
+    if (!deletingBranch) return;
+    setSaving(true);
+    try {
+      // Delete linked location first
+      await (supabase as any).from('locations').delete().eq('branch_id', deletingBranch.id);
+      const { error } = await (supabase as any).from('pharmacy_branches').delete().eq('id', deletingBranch.id);
+      if (error) throw error;
+      toast({ title: 'Success', description: 'Branch deleted successfully' });
+      setDeletingBranch(null);
+      fetchBranches(); refetchPlanLimits();
+      window.dispatchEvent(new Event('branches-updated'));
+    } catch (e: any) {
+      toast({ title: 'Error', description: e.message, variant: 'destructive' });
+    } finally {
+      setSaving(false);
+    }
+  };
+
   const startEdit = (branch: Branch) => {
     setEditingBranch(branch);
     setBranchName(branch.name);
