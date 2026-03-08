@@ -62,7 +62,7 @@ export default function StockMovementHistory() {
       const medMap: Record<string, string> = {};
       (medsRes.data || []).forEach((m: any) => { medMap[m.id] = m.name; });
       const locMap: Record<string, string> = {};
-      (locsRes.data || []).forEach((l: any) => { locMap[l.id] = l.name; });
+      (branchesRes.data || []).forEach((l: any) => { locMap[l.id] = l.name; });
       const userMap: Record<string, string> = {};
       (usersRes.data || []).forEach((u: any) => { userMap[u.id] = u.full_name; });
 

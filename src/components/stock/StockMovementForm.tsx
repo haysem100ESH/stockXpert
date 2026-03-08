@@ -18,10 +18,10 @@ interface Props {
 }
 
 export default function StockMovementForm({ open, onOpenChange, onSuccess }: Props) {
-  const [locations, setLocations] = useState<{ id: string; name: string; type: string }[]>([]);
-  const [medicines, setMedicines] = useState<{ id: string; name: string; stock_quantity: number; location_id?: string; branch_id?: string }[]>([]);
-  const [fromLocationId, setFromLocationId] = useState('');
-  const [toLocationId, setToLocationId] = useState('');
+  const [branches, setBranches] = useState<{ id: string; name: string; type: string }[]>([]);
+  const [medicines, setMedicines] = useState<{ id: string; name: string; stock_quantity: number; branch_id?: string }[]>([]);
+  const [fromBranchId, setFromBranchId] = useState('');
+  const [toBranchId, setToBranchId] = useState('');
   const [medicineId, setMedicineId] = useState('');
   const [quantity, setQuantity] = useState('');
   const [movementType, setMovementType] = useState('TRANSFER');
@@ -32,80 +32,44 @@ export default function StockMovementForm({ open, onOpenChange, onSuccess }: Pro
   const { profile, user } = useAuth();
 
   useEffect(() => {
-    if (open) { fetchLocations(); fetchMedicines(); setShowConfirmation(false); }
+    if (open) { fetchBranches(); fetchMedicines(); setShowConfirmation(false); }
   }, [open]);
 
-  const [locationBranchMap, setLocationBranchMap] = useState<Record<string, string>>({});
-
-  const fetchLocations = async () => {
+  const fetchBranches = async () => {
     if (!profile?.id) return;
-    // Fetch locations
-    const { data: locs } = await supabase.from('locations').select('id, name, type, branch_id').eq('pharmacy_owner_id', profile.id).order('name');
-    // Fetch branches as well
-    const { data: branches } = await supabase.from('pharmacy_branches').select('id, name, branch_type').eq('pharmacy_owner_id', profile.id).order('name');
-    
-    const map: Record<string, string> = {};
-    const combined: { id: string; name: string; type: string }[] = [];
-    const branchIdsFromLocations = new Set<string>();
-    
-    (locs || []).forEach((l: any) => {
-      combined.push({ id: l.id, name: l.name, type: l.type });
-      if (l.branch_id) {
-        map[l.id] = l.branch_id;
-        branchIdsFromLocations.add(l.branch_id);
-      }
-    });
-    
-    // Add branches that don't already have a location entry
-    (branches || []).forEach((b: any) => {
-      if (!branchIdsFromLocations.has(b.id)) {
-        combined.push({ id: b.id, name: b.name, type: b.branch_type === 'pharmacy' ? 'pharmacy' : 'store' });
-        map[b.id] = b.id; // branch maps to itself
-      }
-    });
-    
-    setLocations(combined);
-    setLocationBranchMap(map);
+    const { data } = await supabase.from('pharmacy_branches').select('id, name, branch_type').eq('pharmacy_owner_id', profile.id).order('name');
+    setBranches((data || []).map((b: any) => ({ id: b.id, name: b.name, type: b.branch_type })));
   };
 
   const fetchMedicines = async () => {
     if (!profile?.id) return;
-    const { data: branches } = await supabase.from('pharmacy_branches').select('id').eq('pharmacy_owner_id', profile.id);
-    const branchIds = (branches || []).map((b: any) => b.id);
+    const { data: branchData } = await supabase.from('pharmacy_branches').select('id').eq('pharmacy_owner_id', profile.id);
+    const branchIds = (branchData || []).map((b: any) => b.id);
     if (branchIds.length === 0) return;
-    const { data } = await supabase.from('medicines').select('id, name, stock_quantity, location_id, branch_id').in('branch_id', branchIds).order('name');
+    const { data } = await supabase.from('medicines').select('id, name, stock_quantity, branch_id').in('branch_id', branchIds).order('name');
     setMedicines(data || []);
   };
 
-  const availableMedicines = fromLocationId
-    ? medicines.filter(m => {
-        if (m.location_id === fromLocationId) return true;
-        const linkedBranch = locationBranchMap[fromLocationId];
-        return linkedBranch && m.branch_id === linkedBranch;
-      })
+  const availableMedicines = fromBranchId
+    ? medicines.filter(m => m.branch_id === fromBranchId)
     : medicines;
 
   const selectedMedicine = medicines.find(m => m.id === medicineId);
 
-  // Compute confirmation summary
   const summary = useMemo(() => {
     if (!selectedMedicine || !quantity || Number(quantity) <= 0) return null;
     const qty = Number(quantity);
-    const fromLoc = locations.find(l => l.id === fromLocationId);
-    const toLoc = locations.find(l => l.id === toLocationId);
-    const destBranchId = toLocationId ? locationBranchMap[toLocationId] : null;
+    const fromBranch = branches.find(b => b.id === fromBranchId);
+    const toBranch = branches.find(b => b.id === toBranchId);
     const destMed = medicines.find(m =>
-      m.name === selectedMedicine.name && m.id !== selectedMedicine.id && (
-        m.location_id === toLocationId ||
-        (destBranchId && m.branch_id === destBranchId)
-      )
+      m.name === selectedMedicine.name && m.id !== selectedMedicine.id && m.branch_id === toBranchId
     );
 
     return {
       itemName: selectedMedicine.name,
       qty,
-      sourceName: fromLoc?.name || '—',
-      destName: toLoc?.name || '—',
+      sourceName: fromBranch?.name || '—',
+      destName: toBranch?.name || '—',
       sourceBefore: selectedMedicine.stock_quantity,
       sourceAfter: (movementType === 'TRANSFER' || movementType === 'RETURN')
         ? selectedMedicine.stock_quantity - qty
@@ -114,18 +78,18 @@ export default function StockMovementForm({ open, onOpenChange, onSuccess }: Pro
       destAfter: (destMed?.stock_quantity ?? 0) + qty,
       isNewAtDest: !destMed,
     };
-  }, [selectedMedicine, quantity, fromLocationId, toLocationId, movementType, medicines, locations, locationBranchMap]);
+  }, [selectedMedicine, quantity, fromBranchId, toBranchId, movementType, medicines, branches]);
 
   const validateForm = () => {
     if (!medicineId || !quantity || Number(quantity) <= 0) {
       toast({ title: 'Error', description: 'Please fill all required fields', variant: 'destructive' });
       return false;
     }
-    if (movementType === 'TRANSFER' && (!fromLocationId || !toLocationId)) {
+    if (movementType === 'TRANSFER' && (!fromBranchId || !toBranchId)) {
       toast({ title: 'Error', description: 'Select both source and destination', variant: 'destructive' });
       return false;
     }
-    if (fromLocationId === toLocationId && movementType === 'TRANSFER') {
+    if (fromBranchId === toBranchId && movementType === 'TRANSFER') {
       toast({ title: 'Error', description: 'Source and destination must be different', variant: 'destructive' });
       return false;
     }
@@ -149,8 +113,8 @@ export default function StockMovementForm({ open, onOpenChange, onSuccess }: Pro
     try {
       const { error: moveError } = await supabase.from('stock_movements').insert({
         medicine_id: medicineId,
-        from_location_id: fromLocationId || null,
-        to_location_id: toLocationId || null,
+        from_location_id: fromBranchId || null,
+        to_location_id: toBranchId || null,
         quantity: qty,
         movement_type: movementType,
         status: 'completed',
@@ -159,7 +123,7 @@ export default function StockMovementForm({ open, onOpenChange, onSuccess }: Pro
       });
       if (moveError) throw moveError;
 
-      if (fromLocationId && (movementType === 'TRANSFER' || movementType === 'RETURN')) {
+      if (fromBranchId && (movementType === 'TRANSFER' || movementType === 'RETURN')) {
         if (selectedMedicine) {
           await supabase.from('medicines').update({
             stock_quantity: selectedMedicine.stock_quantity - qty
@@ -167,13 +131,9 @@ export default function StockMovementForm({ open, onOpenChange, onSuccess }: Pro
         }
       }
 
-      if (toLocationId && (movementType === 'TRANSFER' || movementType === 'SUPPLY')) {
-        const destBranchId = locationBranchMap[toLocationId] || null;
+      if (toBranchId && (movementType === 'TRANSFER' || movementType === 'SUPPLY')) {
         const destMed = medicines.find(m =>
-          m.name === selectedMedicine?.name && m.id !== selectedMedicine?.id && (
-            m.location_id === toLocationId ||
-            (destBranchId && m.branch_id === destBranchId)
-          )
+          m.name === selectedMedicine?.name && m.id !== selectedMedicine?.id && m.branch_id === toBranchId
         );
 
         if (destMed) {
@@ -187,8 +147,7 @@ export default function StockMovementForm({ open, onOpenChange, onSuccess }: Pro
             await supabase.from('medicines').insert({
               ...rest,
               stock_quantity: qty,
-              location_id: toLocationId,
-              branch_id: destBranchId,
+              branch_id: toBranchId,
               created_by: user?.id,
             });
           }
@@ -207,7 +166,7 @@ export default function StockMovementForm({ open, onOpenChange, onSuccess }: Pro
   };
 
   const resetForm = () => {
-    setFromLocationId(''); setToLocationId(''); setMedicineId('');
+    setFromBranchId(''); setToBranchId(''); setMedicineId('');
     setQuantity(''); setMovementType('TRANSFER'); setNotes('');
     setShowConfirmation(false);
   };
@@ -285,11 +244,11 @@ export default function StockMovementForm({ open, onOpenChange, onSuccess }: Pro
 
               {(movementType === 'TRANSFER' || movementType === 'RETURN') && (
                 <div>
-                  <Label>From Location *</Label>
-                  <Select value={fromLocationId} onValueChange={setFromLocationId}>
+                  <Label>From Branch *</Label>
+                  <Select value={fromBranchId} onValueChange={setFromBranchId}>
                     <SelectTrigger><SelectValue placeholder="Select source" /></SelectTrigger>
                     <SelectContent>
-                      {locations.map(l => <SelectItem key={l.id} value={l.id}>{l.name} ({l.type})</SelectItem>)}
+                      {branches.map(b => <SelectItem key={b.id} value={b.id}>{b.name} ({b.type})</SelectItem>)}
                     </SelectContent>
                   </Select>
                 </div>
@@ -297,11 +256,11 @@ export default function StockMovementForm({ open, onOpenChange, onSuccess }: Pro
 
               {(movementType === 'TRANSFER' || movementType === 'SUPPLY') && (
                 <div>
-                  <Label>To Location *</Label>
-                  <Select value={toLocationId} onValueChange={setToLocationId}>
+                  <Label>To Branch *</Label>
+                  <Select value={toBranchId} onValueChange={setToBranchId}>
                     <SelectTrigger><SelectValue placeholder="Select destination" /></SelectTrigger>
                     <SelectContent>
-                      {locations.filter(l => l.id !== fromLocationId).map(l => <SelectItem key={l.id} value={l.id}>{l.name} ({l.type})</SelectItem>)}
+                      {branches.filter(b => b.id !== fromBranchId).map(b => <SelectItem key={b.id} value={b.id}>{b.name} ({b.type})</SelectItem>)}
                     </SelectContent>
                   </Select>
                 </div>
@@ -312,7 +271,7 @@ export default function StockMovementForm({ open, onOpenChange, onSuccess }: Pro
                 <Select value={medicineId} onValueChange={setMedicineId}>
                   <SelectTrigger><SelectValue placeholder="Select item" /></SelectTrigger>
                   <SelectContent>
-                    {(fromLocationId ? availableMedicines : medicines).map(m => (
+                    {(fromBranchId ? availableMedicines : medicines).map(m => (
                       <SelectItem key={m.id} value={m.id}>{m.name} (Stock: {m.stock_quantity})</SelectItem>
                     ))}
                   </SelectContent>
