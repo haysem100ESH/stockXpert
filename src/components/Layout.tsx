@@ -109,6 +109,7 @@ function LayoutHeader({ profile, user, onSignOut }: { profile: any, user: any, o
       </div>
       
       <div className="flex items-center space-x-4">
+        <ThemeToggle />
         <DropdownMenu>
           <DropdownMenuTrigger asChild>
             <button className="flex items-center space-x-2 cursor-pointer rounded-full hover:bg-muted p-1 transition-colors">
