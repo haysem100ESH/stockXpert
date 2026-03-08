@@ -457,8 +457,6 @@ serve(async (req) => {
 
     const supabaseUrl = Deno.env.get("SUPABASE_URL")!;
     const supabaseServiceKey = Deno.env.get("SUPABASE_SERVICE_ROLE_KEY")!;
-    const geminiApiKey = Deno.env.get("GEMINI_API_KEY");
-    if (!geminiApiKey) throw new Error("GEMINI_API_KEY is not configured");
 
     const supabaseAuth = createClient(supabaseUrl, supabaseServiceKey);
     const token = authHeader.replace("Bearer ", "");
@@ -467,19 +465,36 @@ serve(async (req) => {
 
     const { data: profile } = await supabaseAuth
       .from("profiles")
-      .select("role, branch_id, full_name")
+      .select("role, branch_id, full_name, gemini_api_key")
       .eq("id", user.id)
       .single();
     if (!profile) throw new Error("Profile not found");
 
+    // Determine pharmacy owner to fetch their API key
+    let ownerIdForKey = user.id;
+    if (profile.role === "staff" && profile.branch_id) {
+      const { data: ob } = await supabaseAuth.from("pharmacy_branches").select("pharmacy_owner_id").eq("id", profile.branch_id).single();
+      if (ob) ownerIdForKey = ob.pharmacy_owner_id;
+    }
+
+    // Prioritize owner's profile API key, then fall back to env variable
+    let geminiApiKey = profile.gemini_api_key;
+    if (!geminiApiKey && ownerIdForKey !== user.id) {
+      const { data: ownerProfile } = await supabaseAuth
+        .from("profiles")
+        .select("gemini_api_key")
+        .eq("id", ownerIdForKey)
+        .single();
+      geminiApiKey = ownerProfile?.gemini_api_key;
+    }
+    if (!geminiApiKey) geminiApiKey = Deno.env.get("GEMINI_API_KEY");
+    if (!geminiApiKey) throw new Error("GEMINI_API_KEY is not configured. Please add your Gemini API key in settings.");
+
     const { messages, branchIds, branchType } = await req.json();
     const db = createClient(supabaseUrl, supabaseServiceKey);
 
-    // Determine pharmacy owner
-    let pharmacyOwnerId = user.id;
-    if (profile.role === "staff" && profile.branch_id) {
-      const { data: ob } = await db.from("pharmacy_branches").select("pharmacy_owner_id").eq("id", profile.branch_id).single();
-      if (ob) pharmacyOwnerId = ob.pharmacy_owner_id;
+    // Reuse owner ID already resolved for API key lookup
+    const pharmacyOwnerId = ownerIdForKey;
     }
 
     // Branch map (owner-filtered)
