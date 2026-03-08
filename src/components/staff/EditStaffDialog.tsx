@@ -68,7 +68,8 @@ export default function EditStaffDialog({
         .update({
           full_name: formData.full_name,
           phone: formData.phone || null,
-          branch_id: formData.branch_id || null
+          branch_id: formData.branch_id || null,
+          salary_percentage: parseFloat(formData.salary_percentage) || 0
         })
         .eq('id', staff.id);
 
