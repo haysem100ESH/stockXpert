@@ -306,7 +306,7 @@ export default function InventoryDashboard() {
       )}
 
       {/* Items Expiring Soon */}
-      {isPharmacy && expiringItems.length > 0 && (
+      {expiringItems.length > 0 && (
         <Card>
           <CardHeader>
             <CardTitle className="flex items-center space-x-2">
