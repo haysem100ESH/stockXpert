@@ -17,6 +17,10 @@ import CreateStaffDialog from './CreateStaffDialog';
 import { usePlanLimits } from '@/hooks/usePlanLimits';
 import SalaryOverview from './SalaryOverview';
 import SalaryHistory from './SalaryHistory';
+import AssignStoreLocation from './attendance/AssignStoreLocation';
+import RecordAttendance from './attendance/RecordAttendance';
+import AttendanceDashboard from './attendance/AttendanceDashboard';
+import PerformanceDashboard from './performance/PerformanceDashboard';
 
 interface StaffMember {
   id: string;
