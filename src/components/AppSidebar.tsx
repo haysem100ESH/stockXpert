@@ -10,7 +10,11 @@ import {
   Settings,
   Building2,
   Shield,
-  UserCheck
+  UserCheck,
+  Warehouse,
+  ArrowRightLeft,
+  ClipboardList,
+  Globe
 } from "lucide-react";
 
 import {
