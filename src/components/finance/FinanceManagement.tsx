@@ -1025,8 +1025,20 @@ export default function FinanceManagement() {
         <TabsContent value="reports">
           <Card>
             <CardHeader>
-              <CardTitle>Financial Report</CardTitle>
-              <CardDescription>Detailed transaction report for the selected period</CardDescription>
+              <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3">
+                <div>
+                  <CardTitle>Financial Report</CardTitle>
+                  <CardDescription>Detailed transaction report for the selected period</CardDescription>
+                </div>
+                <div className="flex gap-1">
+                  <Button size="sm" variant="outline" onClick={exportReportExcel} disabled={sales.length === 0}>
+                    <Download className="h-3 w-3 mr-1" /> Excel
+                  </Button>
+                  <Button size="sm" variant="outline" onClick={exportReportPDF} disabled={sales.length === 0}>
+                    <Download className="h-3 w-3 mr-1" /> PDF
+                  </Button>
+                </div>
+              </div>
             </CardHeader>
             <CardContent>
               <div className="space-y-6">
