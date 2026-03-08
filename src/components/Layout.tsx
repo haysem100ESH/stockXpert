@@ -11,6 +11,7 @@ import { ConfirmationDialog } from '@/components/ui/confirmation-dialog';
 import SubscriptionStatus from '@/components/subscription/SubscriptionStatus';
 import ExpiringMedicinesAlert from '@/components/inventory/ExpiringMedicinesAlert';
 import { BranchProvider } from '@/hooks/useBranchContext';
+import SmartAssistant from '@/components/chat/SmartAssistant';
 import BranchSelector from '@/components/branch/BranchSelector';
 import { useBranchContext } from '@/hooks/useBranchContext';
 import { useBranding } from '@/hooks/useBranding';
@@ -63,6 +64,9 @@ export default function Layout({ children }: LayoutProps) {
               <ExpiringMedicinesAlert />
               {children}
             </main>
+            
+            {/* AI Smart Assistant */}
+            {profile?.role !== 'developer' && <SmartAssistant />}
           </div>
         </div>
         

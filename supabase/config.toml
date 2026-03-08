@@ -88,3 +88,6 @@ verify_jwt = false
 
 [functions.get-staff-emails]
 verify_jwt = false
+
+[functions.smart-assistant]
+verify_jwt = false
