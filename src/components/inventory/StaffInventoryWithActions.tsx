@@ -542,6 +542,10 @@ export default function StaffInventoryWithActions() {
         </TabsContent>
 
 
+        <TabsContent value="stock-history">
+          <StockEditHistory />
+        </TabsContent>
+
         <TabsContent value="categories">
           <CategoryManagement />
         </TabsContent>
