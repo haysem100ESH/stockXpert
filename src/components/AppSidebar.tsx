@@ -11,7 +11,7 @@ import {
   Building2,
   Shield,
   UserCheck,
-  
+  MapPin,
   ArrowRightLeft,
   ClipboardList,
   Globe,
@@ -68,6 +68,7 @@ export function AppSidebar() {
     { title: isPharmacy ? "Inventory" : "Stock", url: "/inventory", icon: Package },
     { title: "Smart Inventory", url: "/smart-inventory", icon: Brain },
     { title: "Customers", url: "/customers", icon: UserCheck },
+    { title: "Attendance", url: "/staff", icon: MapPin },
     { title: "Transfer Requests", url: "/transfer-requests", icon: ClipboardList },
     { title: "Account", url: "/account", icon: Settings },
   ];
