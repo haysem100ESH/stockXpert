@@ -336,7 +336,7 @@ export default function SalesManagement() {
           newCount = parseFloat((Math.max(0.25, currentCount + step)).toFixed(4));
         } else {
           const integerDelta = Number.isInteger(delta) ? delta : Math.round(delta);
-          newCount = Math.max(1, Math.round(currentCount + integerDelta));
+          newCount = Math.max(0, Math.round(currentCount + integerDelta));
         }
 
         if (newCount > totalAvailableStripes) return item;
