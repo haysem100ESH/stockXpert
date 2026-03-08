@@ -6,7 +6,7 @@ import { Input } from '@/components/ui/input';
 import { Badge } from '@/components/ui/badge';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
-import { Search, Edit2, Plus, Trash2, Filter, Settings2, Recycle, SlidersHorizontal } from 'lucide-react';
+import { Search, Edit2, Plus, Trash2, Filter, Settings2, Recycle, SlidersHorizontal, History } from 'lucide-react';
 import { supabase } from '@/lib/db';
 import { useToast } from '@/hooks/use-toast';
 import { useAuth } from '@/hooks/useAuth';
@@ -17,6 +17,7 @@ import { ConfirmationDialog } from '@/components/ui/confirmation-dialog';
 import CategoryManagement from './CategoryManagement';
 import OpenPackAdjustmentDialog from './OpenPackAdjustmentDialog';
 import StockAdjustmentDialog from './StockAdjustmentDialog';
+import StockEditHistory from './StockEditHistory';
 
 interface Medicine {
   id: string;
@@ -50,8 +51,6 @@ export default function StaffInventoryWithActions() {
   const [filteredMedicines, setFilteredMedicines] = useState<Medicine[]>([]);
   const [searchTerm, setSearchTerm] = useState('');
   const [categoryFilter, setCategoryFilter] = useState('all');
-  const [editingStock, setEditingStock] = useState<string | null>(null);
-  const [tempStock, setTempStock] = useState<number>(0);
   const [loading, setLoading] = useState(true);
   const [showAddDialog, setShowAddDialog] = useState(false);
   const [showAddItemDialog, setShowAddItemDialog] = useState(false);
@@ -203,38 +202,7 @@ export default function StaffInventoryWithActions() {
     }
   };
 
-  const handleStockEdit = (medicineId: string, currentStock: number) => {
-    setEditingStock(medicineId);
-    setTempStock(currentStock);
-  };
-
-  const handleStockUpdate = async (medicineId: string) => {
-    try {
-      const { error } = await supabase
-        .from('medicines')
-        .update({ stock_quantity: tempStock })
-        .eq('id', medicineId);
-
-      if (error) throw error;
-
-      setMedicines(medicines.map(med => 
-        med.id === medicineId ? { ...med, stock_quantity: tempStock } : med
-      ));
-
-      toast({
-        title: "Success",
-        description: "Stock updated successfully"
-      });
-
-      setEditingStock(null);
-    } catch (error) {
-      toast({
-        title: "Error",
-        description: "Failed to update stock",
-        variant: "destructive"
-      });
-    }
-  };
+  // Stock editing removed - use Adjust Stock workflow instead
 
   const handleMedicineAdded = () => {
     fetchMedicines();
@@ -371,8 +339,12 @@ export default function StaffInventoryWithActions() {
       </div>
 
       <Tabs value={activeTab} onValueChange={setActiveTab} className="space-y-4">
-        <TabsList className="grid w-full grid-cols-2 h-auto">
+        <TabsList className="grid w-full grid-cols-3 h-auto">
           <TabsTrigger value="inventory" className="text-xs sm:text-sm">{isPharmacy ? 'Medicines & Items' : 'Items'}</TabsTrigger>
+          <TabsTrigger value="stock-history" className="text-xs sm:text-sm">
+            <History className="h-3.5 w-3.5 mr-1" />
+            Stock History
+          </TabsTrigger>
           <TabsTrigger value="categories" className="text-xs sm:text-sm">Categories</TabsTrigger>
         </TabsList>
 
@@ -471,29 +443,11 @@ export default function StaffInventoryWithActions() {
                     <div className="flex justify-between text-sm items-center">
                       <span>Stock:</span>
                       <div className="flex items-center space-x-2">
-                        {editingStock === medicine.id ? (
-                          <div className="flex items-center space-x-2">
-                            <Input
-                              type="number"
-                              value={tempStock}
-                              onChange={(e) => setTempStock(parseInt(e.target.value) || 0)}
-                              className="w-20 h-8"
-                            />
-                            <Button size="sm" onClick={() => handleStockUpdate(medicine.id)} className="h-8">Save</Button>
-                            <Button size="sm" variant="outline" onClick={() => setEditingStock(null)} className="h-8">Cancel</Button>
-                          </div>
-                        ) : (
-                          <div className="flex items-center space-x-2">
-                            <span className={(isLowStock(medicine) || isOutOfStock(medicine)) ? 'text-warning font-medium' : ''}>
-                              {medicine.stock_quantity}
-                            </span>
-                            <Button size="sm" variant="ghost" onClick={() => handleStockEdit(medicine.id, medicine.stock_quantity)} className="h-6 w-6 p-0">
-                              <Edit2 className="h-3 w-3" />
-                            </Button>
-                            {isOutOfStock(medicine) && <Badge variant="destructive" className="text-xs">Out of Stock</Badge>}
-                            {isLowStock(medicine) && <Badge variant="destructive" className="text-xs">Low Stock</Badge>}
-                          </div>
-                        )}
+                        <span className={(isLowStock(medicine) || isOutOfStock(medicine)) ? 'text-warning font-medium' : ''}>
+                          {medicine.stock_quantity}
+                        </span>
+                        {isOutOfStock(medicine) && <Badge variant="destructive" className="text-xs">Out of Stock</Badge>}
+                        {isLowStock(medicine) && <Badge variant="destructive" className="text-xs">Low Stock</Badge>}
                       </div>
                     </div>
                     {medicine.units_per_pack && (
@@ -554,6 +508,10 @@ export default function StaffInventoryWithActions() {
           )}
         </TabsContent>
 
+
+        <TabsContent value="stock-history">
+          <StockEditHistory />
+        </TabsContent>
 
         <TabsContent value="categories">
           <CategoryManagement />
