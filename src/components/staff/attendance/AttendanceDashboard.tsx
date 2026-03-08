@@ -80,6 +80,41 @@ export default function AttendanceDashboard() {
     }
   }, [filterBranch, filterStaff, filterDateFrom, filterDateTo]);
 
+  const extractPhotoPath = (photoValue: string | null) => {
+    if (!photoValue) return null;
+
+    if (!photoValue.startsWith('http')) {
+      const normalized = photoValue.replace(/^\/+/, '');
+      return normalized.startsWith('attendance-photos/')
+        ? normalized.replace('attendance-photos/', '')
+        : normalized;
+    }
+
+    try {
+      const parsed = new URL(photoValue);
+      const marker = '/attendance-photos/';
+      const markerIndex = parsed.pathname.indexOf(marker);
+      if (markerIndex === -1) return null;
+      return decodeURIComponent(parsed.pathname.slice(markerIndex + marker.length));
+    } catch {
+      return null;
+    }
+  };
+
+  const getDisplayPhotoUrl = async (photoValue: string | null) => {
+    if (!photoValue) return null;
+
+    const photoPath = extractPhotoPath(photoValue);
+    if (!photoPath) return photoValue;
+
+    const { data, error } = await supabase.storage
+      .from('attendance-photos')
+      .createSignedUrl(photoPath, 60 * 60);
+
+    if (error || !data?.signedUrl) return photoValue;
+    return data.signedUrl;
+  };
+
   const fetchBranchesAndStaff = async () => {
     if (!profile?.id) return;
     const [branchRes, staffRes] = await Promise.all([
