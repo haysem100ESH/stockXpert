@@ -218,8 +218,11 @@ export default function FaceVerification({ staffId, onVerified, onFailed, onCanc
           <div className="flex flex-col items-center justify-center py-8 gap-3 text-muted-foreground">
             <Loader2 className="h-6 w-6 animate-spin" />
             <span className="text-sm text-center">{loadingProgress}</span>
+            <Progress value={downloadPercent} className="w-full max-w-xs" />
             <p className="text-xs text-muted-foreground/70">
-              Powered by ArcFace (512-dim embeddings) + ONNX Runtime
+              {downloadPercent < 90
+                ? 'Downloading ArcFace model (~30MB, cached after first use)'
+                : 'Preparing ONNX runtime...'}
             </p>
           </div>
         )}
