@@ -315,7 +315,18 @@ async function executeTool(db: any, name: string, args: any, ctx: ToolContext) {
       const limit = args?.limit || 10;
       const since = new Date(Date.now() - days * 86400000).toISOString();
       const { data } = await db.from("sale_items").select("medicine_id, quantity, total_price").gte("created_at", since).limit(2000);
-      const mMap = await buildNameMap(db, "medicines", branchIds);
+
+      // Collect unique medicine IDs and fetch names directly (not filtered by branch)
+      const uniqueMedIds = [...new Set((data || []).map((si: any) => si.medicine_id).filter(Boolean))];
+      const mMap: Record<string, string> = {};
+      if (uniqueMedIds.length > 0) {
+        // Fetch in batches of 200 to avoid query limits
+        for (let i = 0; i < uniqueMedIds.length; i += 200) {
+          const batch = uniqueMedIds.slice(i, i + 200);
+          const { data: meds } = await db.from("medicines").select("id, name").in("id", batch);
+          for (const m of meds || []) mMap[m.id] = m.name;
+        }
+      }
 
       const stats: Record<string, { name: string; qty: number; revenue: number }> = {};
       for (const si of data || []) {
