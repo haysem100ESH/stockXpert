@@ -184,7 +184,7 @@ export default function TransferRequestForm({ open, onOpenChange, onSuccess }: P
                 <Button type="button" variant="ghost" size="sm" onClick={() => removeItem(idx)}><Trash2 className="h-4 w-4 text-destructive" /></Button>
               </div>
             ))}
-            {items.length === 0 && <p className="text-sm text-muted-foreground text-center py-4">Click "Add Item" to request items</p>}
+            {items.length === 0 && <p className="text-sm text-muted-foreground text-center py-4">{sourceLocationId ? 'Click "Add Item" to request items' : 'Select a source branch first to see available items'}</p>}
           </div>
         </div>
         <DialogFooter>
