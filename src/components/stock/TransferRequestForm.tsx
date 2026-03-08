@@ -69,6 +69,41 @@ export default function TransferRequestForm({ open, onOpenChange, onSuccess }: P
       if (l.branch_id) branchToLocationMap[l.branch_id] = l.id;
     });
 
+    // Legacy fallback: resolve by name/type when branch_id link is missing
+    const normalize = (value: string) => value.trim().toLowerCase();
+    const legacyByNameType: Record<string, string> = {};
+    locationRows.forEach((l) => {
+      if (!l.branch_id && l.name && l.type) {
+        const key = `${normalize(l.name)}::${l.type}`;
+        if (!legacyByNameType[key]) legacyByNameType[key] = l.id;
+      }
+    });
+
+    const matchedLegacyLinks: { locationId: string; branchId: string }[] = [];
+    branchRows.forEach((b) => {
+      if (branchToLocationMap[b.id]) return;
+      const expectedType = b.branch_type === 'pharmacy' ? 'pharmacy' : 'store';
+      const legacyKey = `${normalize(b.name)}::${expectedType}`;
+      const legacyLocationId = legacyByNameType[legacyKey];
+      if (legacyLocationId) {
+        branchToLocationMap[b.id] = legacyLocationId;
+        matchedLegacyLinks.push({ locationId: legacyLocationId, branchId: b.id });
+      }
+    });
+
+    // Persist recovered legacy links when owner opens the form
+    if (matchedLegacyLinks.length > 0 && profile.role === 'owner') {
+      await Promise.all(
+        matchedLegacyLinks.map(({ locationId, branchId }) =>
+          supabase.from('locations').update({ branch_id: branchId }).eq('id', locationId)
+        )
+      );
+      locationRows = locationRows.map((l) => {
+        const match = matchedLegacyLinks.find((m) => m.locationId === l.id);
+        return match ? { ...l, branch_id: match.branchId } : l;
+      });
+    }
+
     // Auto-create missing location entries (only owners can insert)
     const missingBranches = branchRows.filter((b) => !branchToLocationMap[b.id]);
     if (missingBranches.length > 0 && profile.role === 'owner') {
