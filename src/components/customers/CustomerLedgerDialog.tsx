@@ -199,7 +199,7 @@ export default function CustomerLedgerDialog({ open, onOpenChange, customerId, c
   };
 
   const filtered = useMemo(() => {
-    return entries.filter(e => {
+    const result = entries.filter(e => {
       if (dateFrom && new Date(e.date) < dateFrom) return false;
       if (dateTo) {
         const end = new Date(dateTo);
@@ -213,6 +213,8 @@ export default function CustomerLedgerDialog({ open, onOpenChange, customerId, c
       if (branchFilter !== 'all' && e.branchId !== branchFilter) return false;
       return true;
     });
+    // Display latest first
+    return [...result].reverse();
   }, [entries, dateFrom, dateTo, typeFilter, branchFilter]);
 
   // Summary from filtered
