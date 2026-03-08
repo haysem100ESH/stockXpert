@@ -125,18 +125,28 @@ export default function TransferRequestForm({ open, onOpenChange, onSuccess }: P
   };
 
   const handleSubmit = async () => {
-    if (!requestingLocationId) { toast({ title: 'Error', description: 'Select requesting location', variant: 'destructive' }); return; }
-    if (!locations.some((l) => l.id === requestingLocationId)) { toast({ title: 'Error', description: 'Selected requesting location is invalid', variant: 'destructive' }); return; }
-    if (sourceLocationId && !locations.some((l) => l.id === sourceLocationId)) { toast({ title: 'Error', description: 'Selected source location is invalid', variant: 'destructive' }); return; }
+    if (!requestingLocationId) { toast({ title: 'Error', description: 'Select requesting branch', variant: 'destructive' }); return; }
     if (items.length === 0) { toast({ title: 'Error', description: 'Add at least one item', variant: 'destructive' }); return; }
     const invalidItems = items.some(i => !i.medicine_id || i.requested_quantity <= 0);
     if (invalidItems) { toast({ title: 'Error', description: 'Fill all item fields properly', variant: 'destructive' }); return; }
 
+    // Resolve locations.id for FK - transfer_requests references locations(id)
+    const requestingBranch = locations.find(l => l.id === requestingLocationId);
+    const sourceBranch = sourceLocationId ? locations.find(l => l.id === sourceLocationId) : null;
+
+    const requestingLocId = requestingBranch?.location_id;
+    const sourceLocId = sourceBranch?.location_id || null;
+
+    if (!requestingLocId) {
+      toast({ title: 'Error', description: 'This branch has no matching location entry. Please ask the owner to set up locations in Stock Movements.', variant: 'destructive' });
+      return;
+    }
+
     setSaving(true);
     try {
       const { data: req, error: reqError } = await supabase.from('transfer_requests').insert({
-        requesting_location_id: requestingLocationId,
-        source_location_id: sourceLocationId || null,
+        requesting_location_id: requestingLocId,
+        source_location_id: sourceLocId,
         notes: notes || null,
         created_by: user?.id,
       }).select().single();
