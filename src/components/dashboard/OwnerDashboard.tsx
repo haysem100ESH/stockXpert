@@ -676,6 +676,13 @@ export default function OwnerDashboard() {
               </CardContent>
             </Card>
 
+            {/* Seasonal Trends */}
+            <SeasonalTrendsWidget
+              topItems={topSeasonalThisMonth}
+              currentMonthName={currentMonthName}
+              isPharmacy={isPharmacy}
+            />
+
             {/* Credit Score Overview */}
             <Card className="min-w-0">
               <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
