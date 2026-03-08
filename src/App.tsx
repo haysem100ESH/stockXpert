@@ -17,6 +17,9 @@ import AccountPage from "./pages/AccountPage";
 import DeveloperPage from "./pages/DeveloperPage";
 import BranchPage from "./pages/BranchPage";
 import CustomersPage from "./pages/CustomersPage";
+import LocationsPage from "./pages/LocationsPage";
+import StockMovementsPage from "./pages/StockMovementsPage";
+import TransferRequestsPage from "./pages/TransferRequestsPage";
 import Auth from "./pages/Auth";
 import NotFound from "./pages/NotFound";
 
