@@ -270,7 +270,7 @@ export default function AttendanceDashboard() {
           <CardContent>
             <div className="space-y-2 max-h-48 overflow-y-auto">
               {alerts.map((alert) => (
-                <div key={alert.id} className="flex items-start gap-2 p-2 rounded bg-destructive/5 text-sm">
+                <div key={alert.id} className="flex items-start gap-2 p-2 rounded bg-destructive/10 text-sm">
                   <ShieldAlert className="h-4 w-4 mt-0.5 text-destructive shrink-0" />
                   <div>
                     <span className="font-medium">{alert.staff_name}</span>
