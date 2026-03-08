@@ -263,7 +263,7 @@ export default function CartSlider({
                                 onChange={(qty) => onSetMeasurableQuantity?.(item.id, qty)}
                               />
                             );
-                          })() :
+                          })() : (
                             <>
                               <Button
                                 size="icon"
