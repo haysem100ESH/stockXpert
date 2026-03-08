@@ -81,7 +81,8 @@ export default function TransferRequestForm({ open, onOpenChange, onSuccess }: P
     setLocations(sorted);
 
     if (profile.role === 'staff' && profile.branch_id) {
-      setRequestingLocationId(profile.branch_id);
+      const staffBranchExists = sorted.some((l) => l.id === profile.branch_id);
+      setRequestingLocationId(staffBranchExists ? profile.branch_id : '');
     } else {
       setRequestingLocationId((prev) => (sorted.some((l) => l.id === prev) ? prev : ''));
     }
