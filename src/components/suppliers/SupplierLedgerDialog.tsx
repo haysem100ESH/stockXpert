@@ -14,6 +14,7 @@ import { Download, FileText, Loader2, CalendarIcon } from 'lucide-react';
 import { format } from 'date-fns';
 import jsPDF from 'jspdf';
 import autoTable from 'jspdf-autotable';
+import ExcelJS from 'exceljs';
 
 interface SupplierLedgerDialogProps {
   open: boolean;
