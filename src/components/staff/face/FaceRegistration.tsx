@@ -21,6 +21,7 @@ export default function FaceRegistration({ staffId, staffName, onComplete }: Fac
   const [samples, setSamples] = useState<Float32Array[]>([]);
   const [feedback, setFeedback] = useState('');
   const [loadingProgress, setLoadingProgress] = useState('');
+  const [downloadPercent, setDownloadPercent] = useState(0);
   const [hasRegistered, setHasRegistered] = useState<boolean | null>(null);
   const videoRef = useRef<HTMLVideoElement>(null);
   const { toast } = useToast();
@@ -41,9 +42,15 @@ export default function FaceRegistration({ staffId, staffName, onComplete }: Fac
 
   const startRegistration = async () => {
     setPhase('loading');
-    setLoadingProgress('Loading AI face recognition models (first time may take ~30s)...');
+    setDownloadPercent(0);
+    setLoadingProgress('Loading AI face recognition models...');
     try {
-      await loadFaceModels();
+      await loadFaceModels((percent) => {
+        setDownloadPercent(percent);
+        if (percent < 90) setLoadingProgress(`Downloading ArcFace model... ${percent}%`);
+        else if (percent < 100) setLoadingProgress('Initializing model...');
+        else setLoadingProgress('Models ready!');
+      });
       setPhase('capturing');
       setSamples([]);
       setFeedback(`Look at the camera. We need ${REQUIRED_SAMPLES} captures from slightly different angles.`);
@@ -157,8 +164,11 @@ export default function FaceRegistration({ staffId, staffName, onComplete }: Fac
           <div className="flex flex-col items-center justify-center py-8 gap-3 text-muted-foreground">
             <Loader2 className="h-6 w-6 animate-spin" />
             <span className="text-sm text-center">{loadingProgress}</span>
+            <Progress value={downloadPercent} className="w-full max-w-xs" />
             <p className="text-xs text-muted-foreground/70">
-              Downloading ArcFace model (~30MB, cached after first use)
+              {downloadPercent < 90
+                ? `Downloading ArcFace model (~30MB, cached after first use)`
+                : 'Preparing ONNX runtime...'}
             </p>
           </div>
         )}

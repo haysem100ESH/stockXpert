@@ -10,15 +10,17 @@ let detectionModelsLoaded = false;
  * face-api.js is used ONLY for face detection and landmarks.
  * ArcFace is used for high-quality 512-d face embeddings.
  */
-export async function loadFaceModels(): Promise<void> {
+export async function loadFaceModels(
+  onArcFaceProgress?: (percent: number) => void
+): Promise<void> {
   const promises: Promise<void>[] = [];
 
   // Load face-api.js for detection + landmarks only
   if (!detectionModelsLoaded) {
     promises.push(
       Promise.all([
-        faceapi.nets.ssdMobilenetv1.loadFromUri(MODEL_URL), // More accurate than TinyFaceDetector
-        faceapi.nets.faceLandmark68Net.loadFromUri(MODEL_URL), // Full landmarks (not tiny)
+        faceapi.nets.ssdMobilenetv1.loadFromUri(MODEL_URL),
+        faceapi.nets.faceLandmark68Net.loadFromUri(MODEL_URL),
       ]).then(() => {
         detectionModelsLoaded = true;
         console.log('[FaceApi] Detection models loaded');
@@ -28,7 +30,9 @@ export async function loadFaceModels(): Promise<void> {
 
   // Load ArcFace ONNX model for embeddings
   if (!isArcFaceLoaded()) {
-    promises.push(loadArcFaceModel());
+    promises.push(loadArcFaceModel(onArcFaceProgress));
+  } else {
+    onArcFaceProgress?.(100);
   }
 
   await Promise.all(promises);

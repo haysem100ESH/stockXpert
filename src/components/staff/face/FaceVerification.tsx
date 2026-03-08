@@ -2,6 +2,7 @@ import { useState, useRef, useCallback, useEffect } from 'react';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
 import { Badge } from '@/components/ui/badge';
+import { Progress } from '@/components/ui/progress';
 import { AlertTriangle, Camera, CheckCircle2, Loader2, ShieldAlert, Eye } from 'lucide-react';
 import { supabase } from '@/lib/db';
 import { useToast } from '@/hooks/use-toast';
@@ -41,6 +42,7 @@ export default function FaceVerification({ staffId, onVerified, onFailed, onCanc
   const [phase, setPhase] = useState<'loading' | 'liveness' | 'verifying' | 'result'>('loading');
   const [feedback, setFeedback] = useState('');
   const [loadingProgress, setLoadingProgress] = useState('');
+  const [downloadPercent, setDownloadPercent] = useState(0);
   const [challenge, setChallenge] = useState(POSE_CHALLENGES[0]);
   const [livenessPassed, setLivenessPassed] = useState(false);
   const [attempts, setAttempts] = useState(0);
@@ -56,9 +58,15 @@ export default function FaceVerification({ staffId, onVerified, onFailed, onCanc
 
   const init = async () => {
     setPhase('loading');
-    setLoadingProgress('Loading AI face recognition models (first time may take ~30s)...');
+    setDownloadPercent(0);
+    setLoadingProgress('Loading AI face recognition models...');
     try {
-      await loadFaceModels();
+      await loadFaceModels((percent) => {
+        setDownloadPercent(percent);
+        if (percent < 90) setLoadingProgress(`Downloading ArcFace model... ${percent}%`);
+        else if (percent < 100) setLoadingProgress('Initializing model...');
+        else setLoadingProgress('Models ready!');
+      });
       setLoadingProgress('Models loaded. Fetching your face data...');
 
       // Fetch stored face embeddings
@@ -210,8 +218,11 @@ export default function FaceVerification({ staffId, onVerified, onFailed, onCanc
           <div className="flex flex-col items-center justify-center py-8 gap-3 text-muted-foreground">
             <Loader2 className="h-6 w-6 animate-spin" />
             <span className="text-sm text-center">{loadingProgress}</span>
+            <Progress value={downloadPercent} className="w-full max-w-xs" />
             <p className="text-xs text-muted-foreground/70">
-              Powered by ArcFace (512-dim embeddings) + ONNX Runtime
+              {downloadPercent < 90
+                ? 'Downloading ArcFace model (~30MB, cached after first use)'
+                : 'Preparing ONNX runtime...'}
             </p>
           </div>
         )}

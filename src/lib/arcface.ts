@@ -9,21 +9,49 @@ ort.env.wasm.wasmPaths = 'https://cdn.jsdelivr.net/npm/onnxruntime-web/dist/';
 let session: ort.InferenceSession | null = null;
 let loading = false;
 
-export async function loadArcFaceModel(): Promise<void> {
-  if (session) return;
+export async function loadArcFaceModel(
+  onProgress?: (percent: number) => void
+): Promise<void> {
+  if (session) { onProgress?.(100); return; }
   if (loading) {
-    // Wait for in-progress load
     while (loading) {
       await new Promise((r) => setTimeout(r, 200));
     }
+    onProgress?.(100);
     return;
   }
 
   loading = true;
   try {
-    session = await ort.InferenceSession.create(MODEL_URL, {
+    // Fetch model with progress tracking
+    const response = await fetch(MODEL_URL);
+    const contentLength = Number(response.headers.get('content-length') || 0);
+    const reader = response.body!.getReader();
+    const chunks: Uint8Array[] = [];
+    let received = 0;
+
+    while (true) {
+      const { done, value } = await reader.read();
+      if (done) break;
+      chunks.push(value);
+      received += value.length;
+      if (contentLength > 0) {
+        onProgress?.(Math.round((received / contentLength) * 90)); // 0-90% for download
+      }
+    }
+
+    const buffer = new Uint8Array(received);
+    let offset = 0;
+    for (const chunk of chunks) {
+      buffer.set(chunk, offset);
+      offset += chunk.length;
+    }
+
+    onProgress?.(95); // Loading into ONNX runtime
+    session = await ort.InferenceSession.create(buffer.buffer, {
       executionProviders: ['wasm'],
     });
+    onProgress?.(100);
     console.log('[ArcFace] Model loaded successfully');
   } catch (err) {
     console.error('[ArcFace] Failed to load model:', err);
