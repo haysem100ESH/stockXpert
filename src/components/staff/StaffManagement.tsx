@@ -48,6 +48,7 @@ export default function StaffManagement() {
   const [selectedStaff, setSelectedStaff] = useState<StaffMember | null>(null);
   const [newPassword, setNewPassword] = useState('');
   const [resettingPassword, setResettingPassword] = useState(false);
+  const [faceRegStaff, setFaceRegStaff] = useState<StaffMember | null>(null);
   const { toast } = useToast();
   const { profile } = useAuth();
   const { selectedBranch } = useBranchContext();
