@@ -1,4 +1,5 @@
 import { useSmartInventory } from '@/hooks/useSmartInventory';
+import { useSeasonalPerformance } from '@/hooks/useSeasonalPerformance';
 import { useBranchContext } from '@/hooks/useBranchContext';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
 import { Badge } from '@/components/ui/badge';
@@ -14,6 +15,7 @@ import {
   CalendarDays,
   BarChart3,
   RefreshCw,
+  Sun,
 } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import ScoreOverview from './ScoreOverview';
@@ -22,6 +24,9 @@ import ReorderSuggestions from './ReorderSuggestions';
 import StockOutAlerts from './StockOutAlerts';
 import DeadStockList from './DeadStockList';
 import ExpiryRiskPanel from './ExpiryRiskPanel';
+import SeasonalPerformance from './SeasonalPerformance';
+import SeasonalInsights from './SeasonalInsights';
+import SeasonalTrendsWidget from './SeasonalTrendsWidget';
 
 export default function SmartInventoryDashboard() {
   const { items, summary, loading, isPharmacy, refetch } = useSmartInventory();
