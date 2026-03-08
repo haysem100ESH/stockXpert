@@ -213,7 +213,11 @@ export function useSmartInventory() {
       const smartItems: SmartItem[] = medicines.map((med: any) => {
         const sales = salesMap[med.id] || { totalQty30: 0, totalQty60: 0, lastSaleDate: null };
         const adc = sales.totalQty30 / 30;
-        const predictedDemand14 = adc * 14;
+
+        // Apply seasonal multiplier to demand prediction
+        const seasonalMult = getSeasonalMultiplier(monthlyMap[med.id] || new Array(12).fill(0));
+        const predictedDemand14 = adc * 14 * seasonalMult;
+
         const safetyStock = predictedDemand14 * 0.2;
         const needsReorder = med.stock_quantity < predictedDemand14;
         const suggestedReorder = needsReorder
