@@ -27,6 +27,107 @@ export default function SupplierIntelligenceDashboard() {
 
   const label = isPharmacy ? 'Medicine' : 'Item';
 
+  const exportScoresExcel = async () => {
+    if (supplierScores.length === 0) return;
+    const wb = new ExcelJS.Workbook();
+    const ws = wb.addWorksheet('Supplier Scores');
+    const hFill: ExcelJS.Fill = { type: 'pattern', pattern: 'solid', fgColor: { argb: 'FF1E6F3E' } };
+    const eFill: ExcelJS.Fill = { type: 'pattern', pattern: 'solid', fgColor: { argb: 'FFF0F9F4' } };
+    const border: Partial<ExcelJS.Borders> = {
+      top: { style: 'thin', color: { argb: 'FFD0D5DD' } }, bottom: { style: 'thin', color: { argb: 'FFD0D5DD' } },
+      left: { style: 'thin', color: { argb: 'FFD0D5DD' } }, right: { style: 'thin', color: { argb: 'FFD0D5DD' } },
+    };
+
+    ws.mergeCells('A1:I1');
+    const t = ws.getCell('A1');
+    t.value = 'Supplier Intelligence — Performance Scores';
+    t.font = { size: 16, bold: true, color: { argb: 'FF1E6F3E' } };
+    t.alignment = { horizontal: 'center' };
+    ws.mergeCells('A2:I2');
+    const sub = ws.getCell('A2');
+    sub.value = `Generated: ${new Date().toLocaleDateString()} | ${supplierScores.length} suppliers | Avg Score: ${avgScore}%`;
+    sub.font = { size: 10, color: { argb: 'FF666666' } };
+    sub.alignment = { horizontal: 'center' };
+
+    const hr = 4;
+    const headers = ['Supplier', 'Overall Score', 'Level', 'Price (30%)', 'Delivery (25%)', 'Accuracy (25%)', 'Availability (20%)', 'Orders', 'Total Spent', 'Share %'];
+    ws.getRow(hr).values = headers;
+    ws.getRow(hr).eachCell((cell) => {
+      cell.fill = hFill;
+      cell.font = { bold: true, color: { argb: 'FFFFFFFF' }, size: 10 };
+      cell.alignment = { horizontal: 'center' };
+      cell.border = border;
+    });
+
+    supplierScores.forEach((s, i) => {
+      const row = ws.getRow(hr + 1 + i);
+      row.values = [s.name, s.overallScore, s.scoreLevel.charAt(0).toUpperCase() + s.scoreLevel.slice(1), s.priceScore, s.deliveryScore, s.accuracyScore, s.availabilityScore, s.totalPurchases, s.totalSpent, s.purchaseShare];
+      row.eachCell((cell, colNum) => {
+        cell.border = border;
+        cell.alignment = { horizontal: colNum === 1 ? 'left' : 'center' };
+        if (i % 2 === 0) cell.fill = eFill;
+        if (colNum === 2) {
+          const score = s.overallScore;
+          cell.font = { bold: true, color: { argb: score >= 75 ? 'FF16A34A' : score >= 50 ? 'FF2563EB' : score >= 30 ? 'FFCA8A04' : 'FFDC2626' } };
+        }
+        if (colNum === 9) cell.numFmt = '#,##0';
+        if (colNum === 10) cell.numFmt = '0"%"';
+      });
+    });
+
+    ws.columns = [{ width: 22 }, { width: 14 }, { width: 12 }, { width: 12 }, { width: 14 }, { width: 14 }, { width: 16 }, { width: 10 }, { width: 14 }, { width: 10 }];
+
+    const buf = await wb.xlsx.writeBuffer();
+    const blob = new Blob([buf], { type: 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet' });
+    const a = document.createElement('a'); a.href = URL.createObjectURL(blob);
+    a.download = `Supplier_Scores_${new Date().toISOString().slice(0, 10)}.xlsx`; a.click();
+  };
+
+  const exportScoresPDF = () => {
+    if (supplierScores.length === 0) return;
+    const doc = new jsPDF('landscape');
+    doc.setFillColor(30, 111, 62); doc.rect(0, 0, 297, 22, 'F');
+    doc.setTextColor(255, 255, 255); doc.setFontSize(16);
+    doc.text('Supplier Intelligence — Performance Scores', 14, 14);
+    doc.setTextColor(80, 80, 80); doc.setFontSize(9);
+    doc.text(`Generated: ${new Date().toLocaleDateString()} | ${supplierScores.length} suppliers | Avg Score: ${avgScore}%`, 14, 28);
+
+    // Summary boxes
+    const sy = 32; const bw = 50;
+    ([
+      { label: 'Total Suppliers', value: supplierScores.length.toString() },
+      { label: 'Avg Performance', value: `${avgScore}%` },
+      { label: 'Items Priced', value: priceComparisons.length.toString() },
+      { label: 'Risk Alerts', value: (riskySuppliers.length + dependenceRisks.length).toString() },
+    ]).forEach((item, i) => {
+      const x = 14 + i * (bw + 4);
+      doc.setFillColor(240, 249, 244); doc.roundedRect(x, sy, bw, 14, 2, 2, 'F');
+      doc.setTextColor(100, 100, 100); doc.setFontSize(7); doc.text(item.label, x + 3, sy + 5);
+      doc.setTextColor(30, 111, 62); doc.setFontSize(11); doc.text(item.value, x + 3, sy + 12);
+    });
+
+    autoTable(doc, {
+      startY: 52,
+      head: [['Supplier', 'Score', 'Level', 'Price (30%)', 'Delivery (25%)', 'Accuracy (25%)', 'Availability (20%)', 'Orders', 'Total Spent', 'Share']],
+      body: supplierScores.map(s => [
+        s.name, s.overallScore.toString(),
+        s.scoreLevel.charAt(0).toUpperCase() + s.scoreLevel.slice(1),
+        s.priceScore.toString(), s.deliveryScore.toString(), s.accuracyScore.toString(), s.availabilityScore.toString(),
+        s.totalPurchases.toString(), s.totalSpent.toLocaleString(), `${s.purchaseShare}%`,
+      ]),
+      styles: { fontSize: 8, cellPadding: 2.5 },
+      headStyles: { fillColor: [30, 111, 62], textColor: 255, fontStyle: 'bold' },
+      alternateRowStyles: { fillColor: [240, 249, 244] },
+      columnStyles: {
+        1: { halign: 'center', fontStyle: 'bold' },
+        2: { halign: 'center' },
+        3: { halign: 'center' }, 4: { halign: 'center' }, 5: { halign: 'center' }, 6: { halign: 'center' },
+        7: { halign: 'center' }, 8: { halign: 'right' }, 9: { halign: 'center' },
+      },
+    });
+    doc.save(`Supplier_Scores_${new Date().toISOString().slice(0, 10)}.pdf`);
+  };
+
   if (loading) {
     return (
       <div className="flex items-center justify-center py-20 gap-3">
