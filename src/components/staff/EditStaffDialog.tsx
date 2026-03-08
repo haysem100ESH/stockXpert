@@ -23,7 +23,8 @@ export default function EditStaffDialog({
   const [formData, setFormData] = useState({
     full_name: '',
     phone: '',
-    branch_id: ''
+    branch_id: '',
+    salary_percentage: '0'
   });
   const [branches, setBranches] = useState<Array<{ id: string; name: string }>>([]);
   const [loading, setLoading] = useState(false);
