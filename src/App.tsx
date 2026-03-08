@@ -20,6 +20,7 @@ import CustomersPage from "./pages/CustomersPage";
 import LocationsPage from "./pages/LocationsPage";
 import StockMovementsPage from "./pages/StockMovementsPage";
 import TransferRequestsPage from "./pages/TransferRequestsPage";
+import SmartInventoryPage from "./pages/SmartInventoryPage";
 import Auth from "./pages/Auth";
 import NotFound from "./pages/NotFound";
 
