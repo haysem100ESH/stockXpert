@@ -21,6 +21,7 @@ import AssignStoreLocation from './attendance/AssignStoreLocation';
 import RecordAttendance from './attendance/RecordAttendance';
 import AttendanceDashboard from './attendance/AttendanceDashboard';
 import PerformanceDashboard from './performance/PerformanceDashboard';
+import FaceRegistration from './face/FaceRegistration';
 
 interface StaffMember {
   id: string;
