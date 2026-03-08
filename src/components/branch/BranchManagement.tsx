@@ -89,7 +89,7 @@ export default function BranchManagement() {
   const [branchName, setBranchName] = useState('');
   const [branchAddress, setBranchAddress] = useState('');
   const [branchPhone, setBranchPhone] = useState('');
-  const [branchType, setBranchType] = useState<'pharmacy' | 'general'>('general');
+  const [branchType, setBranchType] = useState<'pharmacy' | 'general' | 'warehouse'>('general');
   const [isMainBranch, setIsMainBranch] = useState(false);
 
   useEffect(() => {
