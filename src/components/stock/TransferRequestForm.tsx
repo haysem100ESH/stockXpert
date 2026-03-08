@@ -216,7 +216,7 @@ export default function TransferRequestForm({ open, onOpenChange, onSuccess }: P
               <div key={idx} className="flex items-end gap-2 p-3 border rounded-md bg-muted/30">
                 <div className="flex-1">
                   <Label className="text-xs">Item</Label>
-                  <Select value={item.medicine_id} onValueChange={v => updateItem(idx, 'medicine_id', v)}>
+                  <Select value={item.medicine_id || undefined} onValueChange={v => updateItem(idx, 'medicine_id', v)}>
                     <SelectTrigger><SelectValue placeholder="Select" /></SelectTrigger>
                     <SelectContent>
                       {medicines.map(m => <SelectItem key={m.id} value={m.id}>{m.name} (Stock: {m.stock_quantity})</SelectItem>)}
