@@ -121,7 +121,7 @@ export default function TransferRequestForm({ open, onOpenChange, onSuccess }: P
     } else {
       setMedicines([]);
     }
-  }, [sourceLocationId]);
+  }, [sourceLocationId, locations]);
 
   const addItem = () => {
     setItems(prev => [...prev, { medicine_id: '', medicine_name: '', requested_quantity: 1 }]);
