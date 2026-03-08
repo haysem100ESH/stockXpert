@@ -183,7 +183,7 @@ export default function TransferRequestForm({ open, onOpenChange, onSuccess }: P
         <div className="space-y-4">
           <div>
             <Label>Requesting Branch *</Label>
-            <Select value={requestingLocationId} onValueChange={setRequestingLocationId} disabled={profile?.role === 'staff'}>
+            <Select value={requestingLocationId || undefined} onValueChange={setRequestingLocationId} disabled={profile?.role === 'staff'}>
               <SelectTrigger><SelectValue placeholder="Select your branch" /></SelectTrigger>
               <SelectContent>
                 {locations.map(l => <SelectItem key={l.id} value={l.id}>{l.name} ({l.type})</SelectItem>)}
