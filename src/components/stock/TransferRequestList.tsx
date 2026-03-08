@@ -90,29 +90,16 @@ export default function TransferRequestList() {
 
   const handleUpdateStatus = async (requestId: string, newStatus: 'approved' | 'rejected') => {
     try {
-      const { error } = await supabase.from('transfer_requests').update({
-        status: newStatus,
-        approved_by: user?.id,
-        updated_at: new Date().toISOString(),
-      }).eq('id', requestId);
+      const { data, error } = await supabase.functions.invoke('manage-transfer-request', {
+        body: { action: newStatus === 'approved' ? 'approve' : 'reject', requestId },
+      });
       if (error) throw error;
-
-      // If approved, update approved_quantity to match requested_quantity
-      if (newStatus === 'approved') {
-        const { data: items } = await supabase.from('transfer_request_items').select('*').eq('request_id', requestId);
-        if (items) {
-          for (const item of items) {
-            await supabase.from('transfer_request_items').update({
-              approved_quantity: item.requested_quantity
-            }).eq('id', item.id);
-          }
-        }
-      }
+      if (data?.error) throw new Error(data.error);
 
       toast({ title: 'Success', description: `Request ${newStatus}` });
       fetchRequests();
-    } catch {
-      toast({ title: 'Error', description: 'Failed to update request', variant: 'destructive' });
+    } catch (err: any) {
+      toast({ title: 'Error', description: err.message || 'Failed to update request', variant: 'destructive' });
     }
   };
 
