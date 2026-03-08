@@ -16,6 +16,13 @@ interface RequestItem {
   requested_quantity: number;
 }
 
+interface LocationOption {
+  id: string;
+  name: string;
+  type: string;
+  branch_id?: string | null;
+}
+
 interface Props {
   open: boolean;
   onOpenChange: (open: boolean) => void;
@@ -23,7 +30,7 @@ interface Props {
 }
 
 export default function TransferRequestForm({ open, onOpenChange, onSuccess }: Props) {
-  const [locations, setLocations] = useState<{ id: string; name: string; type: string }[]>([]);
+  const [locations, setLocations] = useState<LocationOption[]>([]);
   const [medicines, setMedicines] = useState<{ id: string; name: string; stock_quantity: number }[]>([]);
   const [requestingLocationId, setRequestingLocationId] = useState('');
   const [sourceLocationId, setSourceLocationId] = useState('');
@@ -37,42 +44,71 @@ export default function TransferRequestForm({ open, onOpenChange, onSuccess }: P
     if (open) { fetchLocations(); }
   }, [open]);
 
+  const mapBranchTypeToLocationType = (branchType?: string) => {
+    if (branchType === 'pharmacy') return 'pharmacy';
+    return 'store';
+  };
+
   const fetchLocations = async () => {
     if (!profile?.id) return;
+
     let ownerId = profile.id;
     if (profile.role === 'staff' && profile.branch_id) {
       const { data: branch } = await supabase.from('pharmacy_branches').select('pharmacy_owner_id').eq('id', profile.branch_id).single();
       if (branch) ownerId = branch.pharmacy_owner_id;
     }
-    
-    // Fetch from both locations and pharmacy_branches tables
+
     const [locationsRes, branchesRes] = await Promise.all([
-      supabase.from('locations').select('id, name, type').eq('pharmacy_owner_id', ownerId).order('name'),
+      supabase.from('locations').select('id, name, type, branch_id').eq('pharmacy_owner_id', ownerId).order('name'),
       supabase.from('pharmacy_branches').select('id, name, branch_type').eq('pharmacy_owner_id', ownerId).order('name')
     ]);
-    
-    const locationsData = (locationsRes.data || []).map((l: any) => ({ id: l.id, name: l.name, type: l.type, source: 'locations' }));
-    const branchesData = (branchesRes.data || []).map((b: any) => ({ id: b.id, name: b.name, type: b.branch_type, source: 'branches' }));
-    
-    // Merge and dedupe by id
-    const merged = [...locationsData];
-    branchesData.forEach((b: any) => {
-      if (!merged.find(l => l.id === b.id)) {
-        merged.push(b);
+
+    let locationRows: any[] = locationsRes.data || [];
+    const branchRows: any[] = branchesRes.data || [];
+
+    const existingBranchIds = new Set(locationRows.map((l) => l.branch_id).filter(Boolean));
+    const missingBranchRows = branchRows.filter((b) => !existingBranchIds.has(b.id));
+
+    if (missingBranchRows.length > 0) {
+      const { data: insertedLocations } = await supabase
+        .from('locations')
+        .insert(
+          missingBranchRows.map((b) => ({
+            pharmacy_owner_id: ownerId,
+            name: b.name,
+            type: mapBranchTypeToLocationType(b.branch_type),
+            branch_id: b.id,
+          }))
+        )
+        .select('id, name, type, branch_id');
+
+      if (insertedLocations?.length) {
+        locationRows = [...locationRows, ...insertedLocations];
       }
-    });
-    
-    setLocations(merged.sort((a, b) => a.name.localeCompare(b.name)));
+    }
+
+    setLocations(
+      locationRows
+        .map((l) => ({ id: l.id, name: l.name, type: l.type, branch_id: l.branch_id }))
+        .sort((a, b) => a.name.localeCompare(b.name))
+    );
   };
 
   const fetchMedicines = async (locationId?: string) => {
     if (!locationId) { setMedicines([]); return; }
-    // Medicines may use location_id - try both for compatibility
-    const { data } = await supabase.from('medicines')
-      .select('id, name, stock_quantity, location_id, branch_id')
-      .or(`location_id.eq.${locationId},branch_id.eq.${locationId}`)
+
+    const selectedLocation = locations.find((l) => l.id === locationId);
+    const locationFilter = selectedLocation?.branch_id
+      ? `location_id.eq.${locationId},branch_id.eq.${selectedLocation.branch_id}`
+      : `location_id.eq.${locationId}`;
+
+    const { data } = await supabase
+      .from('medicines')
+      .select('id, name, stock_quantity')
+      .or(locationFilter)
       .gt('stock_quantity', 0)
       .order('name');
+
     setMedicines(data || []);
   };
 
