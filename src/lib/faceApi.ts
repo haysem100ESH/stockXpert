@@ -1,34 +1,88 @@
 import * as faceapi from '@vladmandic/face-api';
+import { loadArcFaceModel, extractArcFaceEmbedding, isArcFaceLoaded } from './arcface';
 
 const MODEL_URL = 'https://cdn.jsdelivr.net/npm/@vladmandic/face-api/model';
 
-let modelsLoaded = false;
+let detectionModelsLoaded = false;
 
+/**
+ * Load face-api.js detection/landmark models + ArcFace ONNX embedding model.
+ * face-api.js is used ONLY for face detection and landmarks.
+ * ArcFace is used for high-quality 512-d face embeddings.
+ */
 export async function loadFaceModels(): Promise<void> {
-  if (modelsLoaded) return;
-  await Promise.all([
-    faceapi.nets.tinyFaceDetector.loadFromUri(MODEL_URL),
-    faceapi.nets.faceLandmark68TinyNet.loadFromUri(MODEL_URL),
-    faceapi.nets.faceRecognitionNet.loadFromUri(MODEL_URL),
-  ]);
-  modelsLoaded = true;
+  const promises: Promise<void>[] = [];
+
+  // Load face-api.js for detection + landmarks only
+  if (!detectionModelsLoaded) {
+    promises.push(
+      Promise.all([
+        faceapi.nets.ssdMobilenetv1.loadFromUri(MODEL_URL), // More accurate than TinyFaceDetector
+        faceapi.nets.faceLandmark68Net.loadFromUri(MODEL_URL), // Full landmarks (not tiny)
+      ]).then(() => {
+        detectionModelsLoaded = true;
+        console.log('[FaceApi] Detection models loaded');
+      })
+    );
+  }
+
+  // Load ArcFace ONNX model for embeddings
+  if (!isArcFaceLoaded()) {
+    promises.push(loadArcFaceModel());
+  }
+
+  await Promise.all(promises);
 }
 
 export function areModelsLoaded(): boolean {
-  return modelsLoaded;
+  return detectionModelsLoaded && isArcFaceLoaded();
 }
 
-/** Detect a single face and return its 128-d descriptor. Returns null when no face or >1 face detected. */
+interface FaceDetection {
+  box: { x: number; y: number; width: number; height: number };
+  landmarks: faceapi.FaceLandmarks68;
+}
+
+/** Detect all faces and return their bounding boxes + landmarks */
+export async function detectFaces(
+  input: HTMLVideoElement | HTMLCanvasElement | HTMLImageElement
+): Promise<FaceDetection[]> {
+  const detections = await faceapi
+    .detectAllFaces(input, new faceapi.SsdMobilenetv1Options({ minConfidence: 0.5 }))
+    .withFaceLandmarks();
+
+  return detections.map((d) => ({
+    box: {
+      x: d.detection.box.x,
+      y: d.detection.box.y,
+      width: d.detection.box.width,
+      height: d.detection.box.height,
+    },
+    landmarks: d.landmarks,
+  }));
+}
+
+/**
+ * Detect a single face and extract its 512-d ArcFace embedding.
+ * Returns null when no face or >1 face detected.
+ */
 export async function detectSingleFace(
   input: HTMLVideoElement | HTMLCanvasElement | HTMLImageElement
-): Promise<{ descriptor: Float32Array; landmarks: faceapi.FaceLandmarks68 } | null> {
-  const detections = await faceapi
-    .detectAllFaces(input, new faceapi.TinyFaceDetectorOptions({ scoreThreshold: 0.5 }))
-    .withFaceLandmarks(true)
-    .withFaceDescriptors();
+): Promise<{ descriptor: Float32Array; landmarks: faceapi.FaceLandmarks68; box: { x: number; y: number; width: number; height: number } } | null> {
+  const faces = await detectFaces(input);
 
-  if (detections.length !== 1) return null;
-  return { descriptor: detections[0].descriptor, landmarks: detections[0].landmarks };
+  if (faces.length !== 1) return null;
+
+  const face = faces[0];
+
+  // Extract 512-d embedding using ArcFace ONNX
+  const descriptor = await extractArcFaceEmbedding(input, face.box);
+
+  return {
+    descriptor,
+    landmarks: face.landmarks,
+    box: face.box,
+  };
 }
 
 /** Detect all faces - returns count */
@@ -37,12 +91,12 @@ export async function detectFaceCount(
 ): Promise<number> {
   const detections = await faceapi.detectAllFaces(
     input,
-    new faceapi.TinyFaceDetectorOptions({ scoreThreshold: 0.5 })
+    new faceapi.SsdMobilenetv1Options({ minConfidence: 0.5 })
   );
   return detections.length;
 }
 
-/** Euclidean distance between two face descriptors. Lower = more similar. Threshold ~0.6 is good match. */
+/** Euclidean distance between two face descriptors (kept for backward compat) */
 export function faceDistance(d1: Float32Array, d2: Float32Array): number {
   return faceapi.euclideanDistance(Array.from(d1), Array.from(d2));
 }
