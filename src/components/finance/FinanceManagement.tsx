@@ -1122,9 +1122,6 @@ export default function FinanceManagement() {
           </Card>
         </TabsContent>
 
-        <TabsContent value="transfer">
-          <MedicineTransfer />
-        </TabsContent>
       </Tabs>
     </div>
   );
