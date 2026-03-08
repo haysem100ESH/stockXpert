@@ -47,14 +47,20 @@ export default function TransferRequestList() {
       const locIds = [...new Set(data.flatMap(r => [r.requesting_location_id, r.source_location_id]).filter(Boolean))];
       const userIds = [...new Set(data.flatMap(r => [r.created_by, r.approved_by]).filter(Boolean))];
 
-      const [itemsRes, locationsRes, usersRes] = await Promise.all([
+      const [itemsRes, locationsRes, usersRes, branchesRes] = await Promise.all([
         supabase.from('transfer_request_items').select('*').in('request_id', reqIds),
         locIds.length ? supabase.from('locations').select('id, name, branch_id').in('id', locIds) : { data: [] },
         userIds.length ? supabase.from('profiles').select('id, full_name').in('id', userIds) : { data: [] },
+        locIds.length ? supabase.from('pharmacy_branches').select('id, name').in('id', locIds) : { data: [] },
       ]);
 
       // Resolve location → branch → name
       const locMap: Record<string, string> = {};
+
+      // First, map any direct branch matches
+      (branchesRes.data || []).forEach((b: any) => { locMap[b.id] = b.name; });
+
+      // Then, resolve locations table entries (with branch name fallback)
       const locBranchIds = (locationsRes.data || []).map((l: any) => l.branch_id).filter(Boolean);
       if (locBranchIds.length) {
         const { data: branches } = await supabase.from('pharmacy_branches').select('id, name').in('id', locBranchIds);
@@ -64,7 +70,9 @@ export default function TransferRequestList() {
           locMap[l.id] = (l.branch_id && branchMap[l.branch_id]) || l.name;
         });
       } else {
-        (locationsRes.data || []).forEach((l: any) => { locMap[l.id] = l.name; });
+        (locationsRes.data || []).forEach((l: any) => {
+          if (!locMap[l.id]) locMap[l.id] = l.name;
+        });
       }
       const userMap: Record<string, string> = {};
       (usersRes.data || []).forEach((u: any) => { userMap[u.id] = u.full_name; });
