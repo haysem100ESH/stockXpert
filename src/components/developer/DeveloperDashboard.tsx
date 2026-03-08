@@ -9,7 +9,7 @@ import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
 import { useToast } from '@/hooks/use-toast';
-import { Users, Building, CreditCard, AlertTriangle, Edit, UserX, UserCheck, DollarSign, Calendar, TrendingUp, Send } from 'lucide-react';
+import { Users, Building, CreditCard, AlertTriangle, Edit, UserX, UserCheck, DollarSign, Calendar, TrendingUp, Send, Key } from 'lucide-react';
 import CreateOwnerDialog from './CreateOwnerDialog';
 import EditOwnerDialog from './EditOwnerDialog';
 import CreditSetupSection from './CreditSetupSection';
