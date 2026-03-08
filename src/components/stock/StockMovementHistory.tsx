@@ -9,6 +9,7 @@ import { format } from 'date-fns';
 import { supabase } from '@/lib/db';
 import { useToast } from '@/hooks/use-toast';
 import { useAuth } from '@/hooks/useAuth';
+import { useBranchContext } from '@/hooks/useBranchContext';
 import StockMovementForm from './StockMovementForm';
 
 interface Movement {
