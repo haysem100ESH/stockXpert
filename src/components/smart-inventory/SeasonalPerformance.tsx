@@ -41,6 +41,99 @@ export default function SeasonalPerformance({ items, isPharmacy, currentMonth, l
 
   const itemsWithSales = filtered.filter(i => i.yearlyTotal > 0);
 
+  const exportExcel = async () => {
+    const data = itemsWithSales;
+    if (data.length === 0) return;
+    const wb = new ExcelJS.Workbook();
+    const ws = wb.addWorksheet('Seasonal Breakdown');
+    const hFill: ExcelJS.Fill = { type: 'pattern', pattern: 'solid', fgColor: { argb: 'FF1E6F3E' } };
+    const eFill: ExcelJS.Fill = { type: 'pattern', pattern: 'solid', fgColor: { argb: 'FFF0F9F4' } };
+    const border: Partial<ExcelJS.Borders> = {
+      top: { style: 'thin', color: { argb: 'FFD0D5DD' } }, bottom: { style: 'thin', color: { argb: 'FFD0D5DD' } },
+      left: { style: 'thin', color: { argb: 'FFD0D5DD' } }, right: { style: 'thin', color: { argb: 'FFD0D5DD' } },
+    };
+    ws.mergeCells('A1:O1');
+    const t = ws.getCell('A1');
+    t.value = 'Seasonal Performance — Monthly Sales Breakdown';
+    t.font = { size: 16, bold: true, color: { argb: 'FF1E6F3E' } };
+    t.alignment = { horizontal: 'center' };
+    ws.mergeCells('A2:O2');
+    const sub = ws.getCell('A2');
+    sub.value = `Generated: ${new Date().toLocaleDateString()} | ${data.length} items with sales`;
+    sub.font = { size: 10, color: { argb: 'FF666666' } };
+    sub.alignment = { horizontal: 'center' };
+
+    const hr = 4;
+    const headers = [label + ' Name', ...SHORT_MONTHS, 'Peak Month', 'Total'];
+    ws.getRow(hr).values = headers;
+    ws.getRow(hr).eachCell((cell) => {
+      cell.fill = hFill;
+      cell.font = { bold: true, color: { argb: 'FFFFFFFF' }, size: 10 };
+      cell.alignment = { horizontal: 'center' };
+      cell.border = border;
+    });
+    // Highlight current month header
+    const cmCell = ws.getRow(hr).getCell(currentMonth + 1);
+    cmCell.fill = { type: 'pattern', pattern: 'solid', fgColor: { argb: 'FF2E8B57' } };
+
+    data.forEach((item, i) => {
+      const row = ws.getRow(hr + 1 + i);
+      row.values = [
+        item.name,
+        ...item.monthly.map(m => m.quantity || ''),
+        item.peakMonthName,
+        item.yearlyTotal,
+      ];
+      row.eachCell((cell, colNum) => {
+        cell.border = border;
+        cell.alignment = { horizontal: colNum === 1 ? 'left' : 'center' };
+        if (i % 2 === 0) cell.fill = eFill;
+        // Bold peak month cell
+        if (colNum >= 2 && colNum <= 13) {
+          const mIdx = colNum - 2;
+          if (item.monthly[mIdx]?.month === item.peakMonth && item.monthly[mIdx]?.quantity > 0) {
+            cell.font = { bold: true, color: { argb: 'FF1E6F3E' } };
+          }
+        }
+        if (colNum === 15) cell.font = { bold: true };
+      });
+    });
+
+    ws.columns = [{ width: 22 }, ...Array(12).fill({ width: 8 }), { width: 12 }, { width: 10 }];
+
+    const buf = await wb.xlsx.writeBuffer();
+    const blob = new Blob([buf], { type: 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet' });
+    const a = document.createElement('a'); a.href = URL.createObjectURL(blob);
+    a.download = `Seasonal_Breakdown_${new Date().toISOString().slice(0, 10)}.xlsx`; a.click();
+  };
+
+  const exportPDF = () => {
+    const data = itemsWithSales;
+    if (data.length === 0) return;
+    const doc = new jsPDF('landscape');
+    doc.setFillColor(30, 111, 62); doc.rect(0, 0, 297, 22, 'F');
+    doc.setTextColor(255, 255, 255); doc.setFontSize(16);
+    doc.text('Seasonal Performance — Monthly Sales Breakdown', 14, 14);
+    doc.setTextColor(80, 80, 80); doc.setFontSize(9);
+    doc.text(`Generated: ${new Date().toLocaleDateString()} | ${data.length} items`, 14, 28);
+
+    autoTable(doc, {
+      startY: 34,
+      head: [[label + ' Name', ...SHORT_MONTHS, 'Peak', 'Total']],
+      body: data.map(item => [
+        item.name,
+        ...item.monthly.map(m => m.quantity > 0 ? m.quantity.toString() : '—'),
+        item.peakMonthName,
+        item.yearlyTotal.toString(),
+      ]),
+      styles: { fontSize: 7, cellPadding: 2, halign: 'center' },
+      headStyles: { fillColor: [30, 111, 62], textColor: 255, fontStyle: 'bold' },
+      alternateRowStyles: { fillColor: [240, 249, 244] },
+      columnStyles: { 0: { halign: 'left', cellWidth: 40 }, 14: { fontStyle: 'bold' } },
+    });
+    doc.save(`Seasonal_Breakdown_${new Date().toISOString().slice(0, 10)}.pdf`);
+  };
+
   if (loading) {
     return (
       <div className="flex items-center justify-center py-20 gap-3">
