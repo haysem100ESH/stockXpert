@@ -180,7 +180,7 @@ export default function CartSlider({
           // Mobile: fixed right-side drawer
           'fixed top-0 right-0 h-full z-50 w-[90vw] max-w-sm bg-background shadow-2xl flex flex-col',
           'transition-transform duration-300 ease-in-out',
-          'lg:relative lg:top-auto lg:right-auto lg:h-auto lg:z-auto lg:w-auto lg:max-w-none lg:shadow-none',
+          'lg:sticky lg:top-0 lg:h-screen lg:z-auto lg:w-auto lg:max-w-none lg:shadow-none',
           'lg:translate-x-0', // always visible on desktop
           open ? 'translate-x-0' : 'translate-x-full lg:translate-x-0'
         )}
