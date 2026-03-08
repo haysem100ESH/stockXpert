@@ -328,7 +328,7 @@ export default function SalesManagement() {
         // For countable strip items, quantity must always be whole numbers.
         // Measurable items can still use fractional strip quantities.
         const isMeasurableItem = item.item_type === 'measurable' || isMeasurable(item.unit_label);
-        const currentCount = item.stripesCount || 1;
+        const currentCount = item.stripesCount ?? 1;
 
         let newCount: number;
         if (isMeasurableItem) {
