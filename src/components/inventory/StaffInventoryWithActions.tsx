@@ -14,10 +14,7 @@ import { useBranchContext } from '@/hooks/useBranchContext';
 import AddMedicineDialog from './AddMedicineDialog';
 import EditMedicineDialog from './EditMedicineDialog';
 import { ConfirmationDialog } from '@/components/ui/confirmation-dialog';
-import InventoryDashboard from './InventoryDashboard';
-import MedicineTransfer from './MedicineTransfer';
 import CategoryManagement from './CategoryManagement';
-import StockEditHistory from './StockEditHistory';
 import OpenPackAdjustmentDialog from './OpenPackAdjustmentDialog';
 import StockAdjustmentDialog from './StockAdjustmentDialog';
 
@@ -374,11 +371,8 @@ export default function StaffInventoryWithActions() {
       </div>
 
       <Tabs value={activeTab} onValueChange={setActiveTab} className="space-y-4">
-        <TabsList className="grid w-full grid-cols-2 sm:grid-cols-5 h-auto">
+        <TabsList className="grid w-full grid-cols-2 h-auto">
           <TabsTrigger value="inventory" className="text-xs sm:text-sm">{isPharmacy ? 'Medicines & Items' : 'Items'}</TabsTrigger>
-          <TabsTrigger value="alerts" className="text-xs sm:text-sm">{isPharmacy ? 'Inventory Alerts' : 'Stock Alerts'}</TabsTrigger>
-          <TabsTrigger value="transfer" className="text-xs sm:text-sm">{isPharmacy ? 'Transfer Medicine' : 'Transfer Items'}</TabsTrigger>
-          <TabsTrigger value="history" className="text-xs sm:text-sm">Stock History</TabsTrigger>
           <TabsTrigger value="categories" className="text-xs sm:text-sm">Categories</TabsTrigger>
         </TabsList>
 
@@ -560,17 +554,6 @@ export default function StaffInventoryWithActions() {
           )}
         </TabsContent>
 
-        <TabsContent value="alerts">
-          <InventoryDashboard />
-        </TabsContent>
-
-        <TabsContent value="transfer">
-          <MedicineTransfer onTransferComplete={fetchMedicines} />
-        </TabsContent>
-
-        <TabsContent value="history">
-          <StockEditHistory />
-        </TabsContent>
 
         <TabsContent value="categories">
           <CategoryManagement />

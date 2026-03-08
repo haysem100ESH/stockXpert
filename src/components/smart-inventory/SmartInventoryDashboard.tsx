@@ -16,6 +16,7 @@ import {
   BarChart3,
   RefreshCw,
   Sun,
+  Bell,
 } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import ScoreOverview from './ScoreOverview';
@@ -27,6 +28,7 @@ import ExpiryRiskPanel from './ExpiryRiskPanel';
 import SeasonalPerformance from './SeasonalPerformance';
 import SeasonalInsights from './SeasonalInsights';
 import SeasonalTrendsWidget from './SeasonalTrendsWidget';
+import InventoryDashboard from '@/components/inventory/InventoryDashboard';
 
 export default function SmartInventoryDashboard() {
   const { items, summary, loading, isPharmacy, refetch } = useSmartInventory();
@@ -120,8 +122,12 @@ export default function SmartInventoryDashboard() {
       </div>
 
       {/* Tabbed Content */}
-      <Tabs defaultValue="demand" className="space-y-4">
-        <TabsList className="grid w-full grid-cols-3 md:grid-cols-6 h-auto">
+      <Tabs defaultValue="alerts" className="space-y-4">
+        <TabsList className="grid w-full grid-cols-3 md:grid-cols-7 h-auto">
+          <TabsTrigger value="alerts" className="gap-1">
+            <Bell className="h-4 w-4" />
+            <span className="hidden sm:inline">Alerts</span>
+          </TabsTrigger>
           <TabsTrigger value="demand" className="gap-1">
             <ShoppingCart className="h-4 w-4" />
             <span className="hidden sm:inline">Demand</span>
@@ -160,6 +166,9 @@ export default function SmartInventoryDashboard() {
           )}
         </TabsList>
 
+        <TabsContent value="alerts">
+          <InventoryDashboard />
+        </TabsContent>
         <TabsContent value="demand">
           <DemandTable items={summary.topDemand} allItems={items} isPharmacy={isPharmacy} />
         </TabsContent>
