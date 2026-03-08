@@ -104,6 +104,19 @@ export default function CustomerManagement() {
 
         allSalesData = (salesData || []).filter((s: any) => s.customer_id !== null);
       }
+      // Fetch latest credit scores from credit_logs as source of truth
+      const { data: creditLogs } = await (supabase as any)
+        .from('credit_logs')
+        .select('customer_id, new_score, created_at')
+        .in('customer_id', customerIds)
+        .order('created_at', { ascending: false });
+
+      const latestScoreMap: Record<string, number> = {};
+      for (const log of creditLogs || []) {
+        if (!latestScoreMap[log.customer_id]) {
+          latestScoreMap[log.customer_id] = log.new_score;
+        }
+      }
 
       const enriched: Customer[] = (customersData || []).map((c: any) => {
         const custSales = allSalesData.filter((s: any) => s.customer_id === c.id);
@@ -111,7 +124,7 @@ export default function CustomerManagement() {
         const lastPurchaseDate = custSales[0]?.created_at;
         const totalDebt = debtMap[c.id] || 0;
         const totalPaid = Math.max(0, totalPurchases - totalDebt);
-        const creditScore = c.credit_score ?? 50;
+        const creditScore = latestScoreMap[c.id] ?? c.credit_score ?? 50;
         const maxCreditLimit = c.max_credit_limit ?? getCreditLimit(creditScore);
         return { ...c, totalPurchases, totalPaid, totalDebt, lastPurchaseDate, credit_score: creditScore, max_credit_limit: maxCreditLimit };
       });
