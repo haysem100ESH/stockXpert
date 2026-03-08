@@ -817,6 +817,13 @@ export default function Dashboard() {
           currentMonthName={currentMonthName}
           isPharmacy={isPharmacy}
         />
+
+        {/* Health Score */}
+        <ScoreOverview
+          scoreDist={smartSummary.scoreDist}
+          avgScore={smartSummary.avgScore}
+          totalItems={smartSummary.totalItems}
+        />
       </div>
 
       {/* Top Selling Products Chart - Moved Below */}
