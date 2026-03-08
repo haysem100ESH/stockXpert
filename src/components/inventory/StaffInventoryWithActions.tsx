@@ -14,10 +14,7 @@ import { useBranchContext } from '@/hooks/useBranchContext';
 import AddMedicineDialog from './AddMedicineDialog';
 import EditMedicineDialog from './EditMedicineDialog';
 import { ConfirmationDialog } from '@/components/ui/confirmation-dialog';
-import InventoryDashboard from './InventoryDashboard';
-import MedicineTransfer from './MedicineTransfer';
 import CategoryManagement from './CategoryManagement';
-import StockEditHistory from './StockEditHistory';
 import OpenPackAdjustmentDialog from './OpenPackAdjustmentDialog';
 import StockAdjustmentDialog from './StockAdjustmentDialog';
 
