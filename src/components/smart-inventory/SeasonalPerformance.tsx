@@ -157,10 +157,18 @@ export default function SeasonalPerformance({ items, isPharmacy, currentMonth, l
             </p>
           </div>
         </div>
-        <Button variant="outline" size="sm" onClick={refetch}>
-          <RefreshCw className="h-4 w-4 mr-2" />
-          Refresh
-        </Button>
+        <div className="flex gap-1">
+          <Button variant="outline" size="sm" onClick={exportExcel} disabled={itemsWithSales.length === 0}>
+            <Download className="h-3 w-3 mr-1" /> Excel
+          </Button>
+          <Button variant="outline" size="sm" onClick={exportPDF} disabled={itemsWithSales.length === 0}>
+            <Download className="h-3 w-3 mr-1" /> PDF
+          </Button>
+          <Button variant="outline" size="sm" onClick={refetch}>
+            <RefreshCw className="h-4 w-4 mr-2" />
+            Refresh
+          </Button>
+        </div>
       </div>
 
       {/* Search */}
