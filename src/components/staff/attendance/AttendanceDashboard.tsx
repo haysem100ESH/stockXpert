@@ -237,7 +237,7 @@ export default function AttendanceDashboard() {
         <Card>
           <CardContent className="pt-6">
             <div className="flex items-center gap-3">
-              <Clock className="h-8 w-8 text-yellow-600" />
+              <Clock className="h-8 w-8 text-amber-500" />
               <div>
                 <p className="text-2xl font-bold">{lateCount}</p>
                 <p className="text-sm text-muted-foreground">Late Days</p>
