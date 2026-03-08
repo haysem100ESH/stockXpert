@@ -847,6 +847,7 @@ export default function DeveloperDashboard() {
               <TableRow>
                 <TableHead>Owner Name</TableHead>
                 <TableHead>Pharmacy Name</TableHead>
+                <TableHead>AI Key</TableHead>
                 <TableHead>Account Status</TableHead>
                 <TableHead>Subscription</TableHead>
                 <TableHead>Subscription Plan</TableHead>
