@@ -49,16 +49,20 @@ export default function CustomerDetailDialog({ open, onOpenChange, customerId, c
 
   const fetchData = async () => {
     setLoading(true);
-    const [salesRes, paymentsRes, customerRes] = await Promise.all([
+    const [salesRes, paymentsRes, customerRes, latestCreditLog] = await Promise.all([
       supabase.from('sales').select('id, total_amount, amount_paid, payment_status, payment_method, created_at').eq('customer_id', customerId).order('created_at', { ascending: false }),
       supabase.from('customer_payments').select('id, amount, payment_method, notes, created_at').eq('customer_id', customerId).order('created_at', { ascending: false }),
       supabase.from('customers').select('credit_score, max_credit_limit').eq('id', customerId).single(),
+      (supabase as any).from('credit_logs').select('new_score').eq('customer_id', customerId).order('created_at', { ascending: false }).limit(1).maybeSingle(),
     ]);
     const salesData = (salesRes.data as any[]) || [];
     setSales(salesData);
     setPayments(paymentsRes.data || []);
 
-    const score = (customerRes as any).data?.credit_score ?? 50;
+    // Use latest credit_log score as source of truth (fallback to customers table)
+    const logScore = latestCreditLog?.data?.new_score;
+    const tableScore = (customerRes as any).data?.credit_score;
+    const score = logScore ?? tableScore ?? 50;
     setCreditScore(score);
     setMaxCreditLimit((customerRes as any).data?.max_credit_limit ?? getCreditLimit(score));
 
