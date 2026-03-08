@@ -17,6 +17,8 @@ import { useToast } from '@/hooks/use-toast';
 import { TelegramConnectionDialog } from '@/components/telegram/TelegramConnectionDialog';
 import { useSeasonalPerformance } from '@/hooks/useSeasonalPerformance';
 import SeasonalTrendsWidget from '@/components/smart-inventory/SeasonalTrendsWidget';
+import ScoreOverview from '@/components/smart-inventory/ScoreOverview';
+import { useSmartInventory } from '@/hooks/useSmartInventory';
 interface DashboardStats {
   totalRevenue: number;
   totalProducts: number;
@@ -84,6 +86,7 @@ export default function Dashboard() {
   const isPharmacy = branchType === 'pharmacy';
   const { toast } = useToast();
   const { topSeasonalThisMonth, currentMonthName } = useSeasonalPerformance();
+  const { summary: smartSummary } = useSmartInventory();
   const [stats, setStats] = useState<DashboardStats>({
     totalRevenue: 0,
     totalProducts: 0,
@@ -813,6 +816,13 @@ export default function Dashboard() {
           topItems={topSeasonalThisMonth}
           currentMonthName={currentMonthName}
           isPharmacy={isPharmacy}
+        />
+
+        {/* Health Score */}
+        <ScoreOverview
+          scoreDist={smartSummary.scoreDist}
+          avgScore={smartSummary.avgScore}
+          totalItems={smartSummary.totalItems}
         />
       </div>
 
