@@ -58,9 +58,15 @@ export default function FaceVerification({ staffId, onVerified, onFailed, onCanc
 
   const init = async () => {
     setPhase('loading');
-    setLoadingProgress('Loading AI face recognition models (first time may take ~30s)...');
+    setDownloadPercent(0);
+    setLoadingProgress('Loading AI face recognition models...');
     try {
-      await loadFaceModels();
+      await loadFaceModels((percent) => {
+        setDownloadPercent(percent);
+        if (percent < 90) setLoadingProgress(`Downloading ArcFace model... ${percent}%`);
+        else if (percent < 100) setLoadingProgress('Initializing model...');
+        else setLoadingProgress('Models ready!');
+      });
       setLoadingProgress('Models loaded. Fetching your face data...');
 
       // Fetch stored face embeddings
