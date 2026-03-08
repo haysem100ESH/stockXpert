@@ -114,27 +114,21 @@ export default function EditOwnerDialog({ owner, open, onOpenChange, onOwnerUpda
     setLoading(true);
 
     try {
-      const { error } = await supabase
-        .from('profiles')
-        .update({
+      const { data, error } = await supabase.functions.invoke('update-owner-profile', {
+        body: {
+          owner_id: owner.id,
           full_name: formData.full_name,
-          phone: formData.phone || null,
-          pharmacy_address: formData.pharmacy_address || null,
-          gemini_api_key: formData.gemini_api_key || null
-        })
-        .eq('id', owner.id);
+          phone: formData.phone,
+          pharmacy_address: formData.pharmacy_address,
+          gemini_api_key: formData.gemini_api_key,
+          subscription_plan_id: formData.subscription_plan_id && formData.subscription_plan_id !== owner.subscription?.plan_id
+            ? formData.subscription_plan_id
+            : undefined
+        }
+      });
 
       if (error) throw error;
-
-      // Update subscription plan if changed
-      if (formData.subscription_plan_id && formData.subscription_plan_id !== owner.subscription?.plan_id) {
-        const { error: subError } = await supabase
-          .from('pharmacy_subscriptions')
-          .update({ plan_id: formData.subscription_plan_id })
-          .eq('pharmacy_owner_id', owner.id);
-
-        if (subError) throw subError;
-      }
+      if (data?.error) throw new Error(data.error);
 
       toast({
         title: "Success",
