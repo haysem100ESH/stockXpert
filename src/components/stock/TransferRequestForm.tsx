@@ -44,11 +44,6 @@ export default function TransferRequestForm({ open, onOpenChange, onSuccess }: P
     if (open) { fetchLocations(); }
   }, [open]);
 
-  const mapBranchTypeToLocationType = (branchType?: string) => {
-    if (branchType === 'pharmacy') return 'pharmacy';
-    return 'store';
-  };
-
   const fetchLocations = async () => {
     if (!profile?.id) return;
 
@@ -58,48 +53,31 @@ export default function TransferRequestForm({ open, onOpenChange, onSuccess }: P
       if (branch) ownerId = branch.pharmacy_owner_id;
     }
 
+    // Fetch from both tables
     const [locationsRes, branchesRes] = await Promise.all([
       supabase.from('locations').select('id, name, type, branch_id').eq('pharmacy_owner_id', ownerId).order('name'),
       supabase.from('pharmacy_branches').select('id, name, branch_type').eq('pharmacy_owner_id', ownerId).order('name')
     ]);
 
-    let locationRows: any[] = locationsRes.data || [];
+    const locationRows: any[] = locationsRes.data || [];
     const branchRows: any[] = branchesRes.data || [];
 
-    const existingBranchIds = new Set(locationRows.map((l) => l.branch_id).filter(Boolean));
-    const missingBranchRows = branchRows.filter((b) => !existingBranchIds.has(b.id));
+    // Build a map: branch_id -> location_id for branches that have a matching location
+    const branchToLocationMap: Record<string, string> = {};
+    locationRows.forEach((l) => {
+      if (l.branch_id) branchToLocationMap[l.branch_id] = l.id;
+    });
 
-    if (missingBranchRows.length > 0) {
-      const { data: insertedLocations, error: insertLocationsError } = await supabase
-        .from('locations')
-        .insert(
-          missingBranchRows.map((b) => ({
-            pharmacy_owner_id: ownerId,
-            name: b.name,
-            type: mapBranchTypeToLocationType(b.branch_type),
-            branch_id: b.id,
-          }))
-        )
-        .select('id, name, type, branch_id');
+    // For display, use pharmacy_branches (user-friendly) but track the location_id for submission
+    const options: LocationOption[] = branchRows.map((b) => ({
+      id: b.id,                                         // pharmacy_branch id (for display/selection)
+      name: b.name,
+      type: b.branch_type,
+      branch_id: b.id,
+      location_id: branchToLocationMap[b.id] || null,   // the matching locations.id for FK
+    }));
 
-      if (insertLocationsError) {
-        toast({ title: 'Error', description: 'Locations are not synced for these branches yet.', variant: 'destructive' });
-      }
-
-      if (insertedLocations?.length) {
-        locationRows = [...locationRows, ...insertedLocations];
-      }
-    }
-
-    const normalizedLocations = locationRows
-      .map((l) => ({ id: l.id, name: l.name, type: l.type, branch_id: l.branch_id }))
-      .sort((a, b) => a.name.localeCompare(b.name));
-
-    setLocations(normalizedLocations);
-
-    const locationIds = new Set(normalizedLocations.map((l) => l.id));
-    if (requestingLocationId && !locationIds.has(requestingLocationId)) setRequestingLocationId('');
-    if (sourceLocationId && !locationIds.has(sourceLocationId)) setSourceLocationId('');
+    setLocations(options.sort((a, b) => a.name.localeCompare(b.name)));
   };
 
   const fetchMedicines = async (locationId?: string) => {
