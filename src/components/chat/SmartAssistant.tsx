@@ -181,7 +181,7 @@ export default function SmartAssistant() {
             <div className="flex items-center gap-2">
               <Sparkles className="h-5 w-5" />
               <div>
-                <p className="font-semibold text-sm">{branding.systemName} AI</p>
+                <p className="font-semibold text-sm">StockXpert AI</p>
                 <p className="text-xs opacity-80">Smart Assistant</p>
               </div>
             </div>

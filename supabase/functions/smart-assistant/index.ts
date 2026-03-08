@@ -109,7 +109,7 @@ CURRENT SYSTEM DATA:
 - Low Stock (≤10 units): ${lowStock.length}
 ${lowStock.length > 0 ? lowStock.slice(0, 20).map((i: any) => `  • ${i.name}: ${i.quantity} units (Price: ${i.selling_price}, Branch: ${i.branch_id})`).join("\n") : "  None"}
 - Out of Stock: ${outOfStock.length}
-${outOfStock.slice(0, 5).map((i: any) => `  • ${i.name}`).join("\n")}
+${outOfStock.length > 0 ? outOfStock.slice(0, 15).map((i: any) => `  • ${i.name} (Branch: ${i.branch_id})`).join("\n") : "  None"}
 
 💰 SALES:
 - Today's Sales: ${todaySales.length} transactions, Revenue: ${todayRevenue.toFixed(2)}
