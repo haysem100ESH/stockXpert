@@ -14,7 +14,8 @@ import {
   Warehouse,
   ArrowRightLeft,
   ClipboardList,
-  Globe
+  Globe,
+  Brain
 } from "lucide-react";
 
 import {
