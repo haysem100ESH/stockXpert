@@ -3,7 +3,7 @@ import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
 import { Badge } from '@/components/ui/badge';
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@/components/ui/table';
-import { DollarSign, TrendingUp, Banknote } from 'lucide-react';
+import { DollarSign, TrendingUp, Banknote, RefreshCw } from 'lucide-react';
 import { supabase } from '@/lib/db';
 import { useToast } from '@/hooks/use-toast';
 import { useAuth } from '@/hooks/useAuth';
@@ -17,6 +17,7 @@ interface StaffSalaryInfo {
   salary_percentage: number;
   branch_id: string | null;
   branch_name?: string;
+  individualSales: number;
 }
 
 export default function SalaryOverview() {
@@ -67,10 +68,39 @@ export default function SalaryOverview() {
       return;
     }
 
+    // Fetch individual sales for each staff member this month
+    const now = new Date();
+    const startOfMonth = new Date(now.getFullYear(), now.getMonth(), 1).toISOString();
+    const endOfMonth = new Date(now.getFullYear(), now.getMonth() + 1, 0, 23, 59, 59).toISOString();
+
+    const staffIds = (data || []).map((s: any) => s.id);
+    let salesMap: Record<string, number> = {};
+
+    if (staffIds.length > 0) {
+      let salesQuery = supabase
+        .from('sales')
+        .select('sold_by, total_amount')
+        .in('sold_by', staffIds)
+        .gte('created_at', startOfMonth)
+        .lte('created_at', endOfMonth);
+
+      if (selectedBranch) {
+        salesQuery = salesQuery.eq('branch_id', selectedBranch);
+      } else {
+        salesQuery = salesQuery.in('branch_id', branchIds);
+      }
+
+      const { data: salesData } = await salesQuery;
+      (salesData || []).forEach((sale: any) => {
+        salesMap[sale.sold_by] = (salesMap[sale.sold_by] || 0) + Number(sale.total_amount);
+      });
+    }
+
     setStaffList((data || []).map((s: any) => ({
       ...s,
       salary_percentage: Number(s.salary_percentage) || 0,
       branch_name: s.branch_id ? branchMap.get(s.branch_id) : undefined,
+      individualSales: salesMap[s.id] || 0,
     })));
     setLoading(false);
   };
@@ -91,14 +121,22 @@ export default function SalaryOverview() {
     setPaidMap(map);
   };
 
+  const handleRefresh = () => {
+    fetchStaffSalaries();
+    refetchProfit();
+  };
+
+  const calculateSalary = (staff: StaffSalaryInfo) => {
+    return (staff.individualSales * staff.salary_percentage) / 100;
+  };
+
   const handlePaySalary = async (staff: StaffSalaryInfo) => {
     if (!profile) return;
     setPaying(staff.id);
 
-    const salaryAmount = (profit * staff.salary_percentage) / 100;
+    const salaryAmount = calculateSalary(staff);
 
     try {
-      // 1. Insert salary_expenses record
       const { error: salaryError } = await supabase
         .from('salary_expenses')
         .insert({
@@ -111,16 +149,15 @@ export default function SalaryOverview() {
           created_by: profile.id,
           month,
           year,
-          notes: `Salary for ${staff.full_name} - ${month}/${year}`,
+          notes: `Salary for ${staff.full_name} - ${month}/${year} (Individual sales: ETB ${staff.individualSales.toFixed(2)})`,
         });
 
       if (salaryError) throw salaryError;
 
-      // 2. Create expense record in Finance
       const { error: expenseError } = await supabase
         .from('expenses')
         .insert({
-          description: `Salary Payment - ${staff.full_name} (${staff.salary_percentage}% of profit)`,
+          description: `Salary Payment - ${staff.full_name} (${staff.salary_percentage}% of ETB ${staff.individualSales.toFixed(2)} sales)`,
           amount: salaryAmount,
           category: 'Salary Expense',
           branch_id: staff.branch_id || selectedBranch,
@@ -184,10 +221,19 @@ export default function SalaryOverview() {
       {/* Staff Salary Table */}
       <Card>
         <CardHeader>
-          <CardTitle className="flex items-center gap-2">
-            <Banknote className="h-5 w-5" />
-            Staff Salary Overview
-          </CardTitle>
+          <div className="flex items-center justify-between">
+            <CardTitle className="flex items-center gap-2">
+              <Banknote className="h-5 w-5" />
+              Staff Salary Overview
+            </CardTitle>
+            <Button variant="outline" size="sm" onClick={handleRefresh}>
+              <RefreshCw className="h-4 w-4 mr-1" />
+              Refresh
+            </Button>
+          </div>
+          <p className="text-xs text-muted-foreground">
+            Salary is calculated as: Staff's Individual Sales × Salary Percentage
+          </p>
         </CardHeader>
         <CardContent>
           {staffList.length === 0 ? (
@@ -198,6 +244,7 @@ export default function SalaryOverview() {
                 <TableRow>
                   <TableHead>Staff Name</TableHead>
                   <TableHead>Branch</TableHead>
+                  <TableHead className="text-right">Sales This Month</TableHead>
                   <TableHead className="text-right">Salary %</TableHead>
                   <TableHead className="text-right">Calculated Salary</TableHead>
                   <TableHead>Status</TableHead>
@@ -206,12 +253,13 @@ export default function SalaryOverview() {
               </TableHeader>
               <TableBody>
                 {staffList.map(staff => {
-                  const salary = (profit * staff.salary_percentage) / 100;
+                  const salary = calculateSalary(staff);
                   const isPaid = paidMap[staff.id] || false;
                   return (
                     <TableRow key={staff.id}>
                       <TableCell className="font-medium">{staff.full_name}</TableCell>
                       <TableCell>{staff.branch_name || '—'}</TableCell>
+                      <TableCell className="text-right">ETB {staff.individualSales.toFixed(2)}</TableCell>
                       <TableCell className="text-right">{staff.salary_percentage}%</TableCell>
                       <TableCell className="text-right font-medium">ETB {salary.toFixed(2)}</TableCell>
                       <TableCell>
@@ -241,7 +289,7 @@ export default function SalaryOverview() {
         open={!!confirmStaff}
         onOpenChange={(open) => { if (!open) setConfirmStaff(null); }}
         title="Confirm Salary Payment"
-        description={confirmStaff ? `Pay ETB ${((profit * confirmStaff.salary_percentage) / 100).toFixed(2)} to ${confirmStaff.full_name}? This will be recorded as a Salary Expense.` : ''}
+        description={confirmStaff ? `Pay ETB ${calculateSalary(confirmStaff).toFixed(2)} to ${confirmStaff.full_name}? (${confirmStaff.salary_percentage}% of ETB ${confirmStaff.individualSales.toFixed(2)} sales). This will be recorded as a Salary Expense.` : ''}
         onConfirm={() => confirmStaff && handlePaySalary(confirmStaff)}
         confirmText="Pay Salary"
         cancelText="Cancel"
