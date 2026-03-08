@@ -367,6 +367,17 @@ export default function BranchManagement() {
           />
         </DialogContent>
       </Dialog>
+
+      {/* Delete Confirmation */}
+      <ConfirmationDialog
+        open={!!deletingBranch}
+        onOpenChange={(open) => { if (!open) setDeletingBranch(null); }}
+        onConfirm={handleDelete}
+        title="Delete Branch"
+        description={`Are you sure you want to delete "${deletingBranch?.name}"? This will remove all associated data (inventory, sales, staff assignments) and cannot be undone.`}
+        confirmText="Delete"
+        variant="destructive"
+      />
     </div>
   );
 }
