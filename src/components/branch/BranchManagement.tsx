@@ -86,6 +86,7 @@ export default function BranchManagement() {
   const [editingBranch, setEditingBranch] = useState<Branch | null>(null);
   const [showEditDialog, setShowEditDialog] = useState(false);
   const [saving, setSaving] = useState(false);
+  const [deletingBranch, setDeletingBranch] = useState<Branch | null>(null);
 
   const [branchName, setBranchName] = useState('');
   const [branchAddress, setBranchAddress] = useState('');
