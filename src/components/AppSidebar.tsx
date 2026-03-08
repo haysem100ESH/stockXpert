@@ -11,7 +11,7 @@ import {
   Building2,
   Shield,
   UserCheck,
-  
+  MapPin,
   ArrowRightLeft,
   ClipboardList,
   Globe,
