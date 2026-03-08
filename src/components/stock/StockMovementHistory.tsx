@@ -32,15 +32,50 @@ export default function StockMovementHistory() {
   const [showForm, setShowForm] = useState(false);
   const { toast } = useToast();
   const { profile } = useAuth();
+  const { selectedBranch } = useBranchContext();
 
-  useEffect(() => { fetchMovements(); }, [typeFilter]);
+  useEffect(() => { fetchMovements(); }, [typeFilter, selectedBranch]);
 
   const fetchMovements = async () => {
     if (!profile?.id) return;
     try {
+      // Get the owner's location IDs to scope movements
+      const ownerId = profile.role === 'owner' ? profile.id : undefined;
+      let ownerLocationIds: string[] = [];
+
+      if (ownerId) {
+        // Owner: get locations belonging to this owner
+        const { data: locs } = await supabase
+          .from('locations')
+          .select('id, branch_id')
+          .eq('pharmacy_owner_id', ownerId);
+        ownerLocationIds = (locs || []).map((l: any) => l.id);
+
+        // If a specific branch is selected, narrow to that branch's locations
+        if (selectedBranch) {
+          const branchLocIds = (locs || []).filter((l: any) => l.branch_id === selectedBranch).map((l: any) => l.id);
+          ownerLocationIds = branchLocIds;
+        }
+      } else if (profile.branch_id) {
+        // Staff: get locations for their branch
+        const { data: locs } = await supabase
+          .from('locations')
+          .select('id')
+          .eq('branch_id', profile.branch_id);
+        ownerLocationIds = (locs || []).map((l: any) => l.id);
+      }
+
+      if (ownerLocationIds.length === 0) {
+        setMovements([]);
+        setLoading(false);
+        return;
+      }
+
+      // Fetch movements where from or to location belongs to the owner's locations
       let query = supabase
         .from('stock_movements')
         .select('*')
+        .or(`from_location_id.in.(${ownerLocationIds.join(',')}),to_location_id.in.(${ownerLocationIds.join(',')})`)
         .order('created_at', { ascending: false })
         .limit(100);
 
