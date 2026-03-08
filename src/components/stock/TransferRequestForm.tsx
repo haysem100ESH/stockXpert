@@ -48,26 +48,26 @@ export default function TransferRequestForm({ open, onOpenChange, onSuccess }: P
     setLocations((data || []).map((b: any) => ({ id: b.id, name: b.name, type: b.branch_type })));
   };
 
-  const fetchMedicines = async () => {
-    if (!profile?.id) return;
-    let ownerId = profile.id;
-    if (profile.role === 'staff' && profile.branch_id) {
-      const { data: branch } = await supabase.from('pharmacy_branches').select('pharmacy_owner_id').eq('id', profile.branch_id).single();
-      if (branch) ownerId = branch.pharmacy_owner_id;
-    }
-    const { data: branches } = await supabase.from('pharmacy_branches').select('id').eq('pharmacy_owner_id', ownerId);
-    const branchIds = (branches || []).map((b: any) => b.id);
-    if (branchIds.length === 0) return;
-    const { data } = await supabase.from('medicines').select('id, name').in('branch_id', branchIds).order('name');
-    // Deduplicate by name
-    const seen = new Set<string>();
-    const unique = (data || []).filter(m => {
-      if (seen.has(m.name)) return false;
-      seen.add(m.name);
-      return true;
-    });
-    setMedicines(unique);
+  const fetchMedicines = async (branchId?: string) => {
+    if (!branchId) { setMedicines([]); return; }
+    const { data } = await supabase.from('medicines')
+      .select('id, name, stock_quantity')
+      .eq('branch_id', branchId)
+      .gt('stock_quantity', 0)
+      .order('name');
+    setMedicines(data || []);
   };
+
+  // Re-fetch medicines when source branch changes
+  useEffect(() => {
+    if (sourceLocationId) {
+      fetchMedicines(sourceLocationId);
+      // Clear selected items when source changes
+      setItems([]);
+    } else {
+      setMedicines([]);
+    }
+  }, [sourceLocationId]);
 
   const addItem = () => {
     setItems(prev => [...prev, { medicine_id: '', medicine_name: '', requested_quantity: 1 }]);
