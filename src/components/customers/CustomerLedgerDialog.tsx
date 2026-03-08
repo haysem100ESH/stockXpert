@@ -446,11 +446,11 @@ export default function CustomerLedgerDialog({ open, onOpenChange, customerId, c
               </div>
             )}
             <div className="flex gap-1 ml-auto">
-              <Button size="sm" variant="outline" onClick={exportCSV} disabled={filtered.length === 0} className="text-xs px-2">
-                <Download className="h-3 w-3 sm:mr-1" /> <span className="hidden sm:inline">CSV</span>
+              <Button size="sm" variant="outline" onClick={exportExcel} disabled={filtered.length === 0} className="text-xs px-2">
+                <Download className="h-3 w-3 mr-1" /> Excel
               </Button>
               <Button size="sm" variant="outline" onClick={exportPDF} disabled={filtered.length === 0} className="text-xs px-2">
-                <Download className="h-3 w-3 sm:mr-1" /> <span className="hidden sm:inline">PDF</span>
+                <Download className="h-3 w-3 mr-1" /> PDF
               </Button>
             </div>
           </div>

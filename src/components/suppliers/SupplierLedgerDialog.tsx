@@ -243,7 +243,7 @@ export default function SupplierLedgerDialog({ open, onOpenChange, supplierId, s
               </Select>
             </div>
             <div className="flex gap-1 ml-auto">
-              <Button size="sm" variant="outline" onClick={exportCSV} disabled={filtered.length === 0}><Download className="h-3 w-3 mr-1" /> CSV</Button>
+              <Button size="sm" variant="outline" onClick={exportExcel} disabled={filtered.length === 0}><Download className="h-3 w-3 mr-1" /> Excel</Button>
               <Button size="sm" variant="outline" onClick={exportPDF} disabled={filtered.length === 0}><Download className="h-3 w-3 mr-1" /> PDF</Button>
             </div>
           </div>
