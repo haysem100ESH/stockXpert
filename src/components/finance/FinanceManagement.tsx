@@ -705,6 +705,7 @@ export default function FinanceManagement() {
           <TabsTrigger value="overview">Overview</TabsTrigger>
           <TabsTrigger value="income">Income</TabsTrigger>
           <TabsTrigger value="expenses">Expenses</TabsTrigger>
+          <TabsTrigger value="salaries">Salaries</TabsTrigger>
           <TabsTrigger value="debts">Debts</TabsTrigger>
           <TabsTrigger value="reports">Reports</TabsTrigger>
           <TabsTrigger value="transfer">Transfer</TabsTrigger>
