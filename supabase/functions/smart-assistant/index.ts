@@ -493,11 +493,8 @@ serve(async (req) => {
     const { messages, branchIds, branchType } = await req.json();
     const db = createClient(supabaseUrl, supabaseServiceKey);
 
-    // Determine pharmacy owner
-    let pharmacyOwnerId = user.id;
-    if (profile.role === "staff" && profile.branch_id) {
-      const { data: ob } = await db.from("pharmacy_branches").select("pharmacy_owner_id").eq("id", profile.branch_id).single();
-      if (ob) pharmacyOwnerId = ob.pharmacy_owner_id;
+    // Reuse owner ID already resolved for API key lookup
+    const pharmacyOwnerId = ownerIdForKey;
     }
 
     // Branch map (owner-filtered)
