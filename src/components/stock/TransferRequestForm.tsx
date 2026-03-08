@@ -179,7 +179,7 @@ export default function TransferRequestForm({ open, onOpenChange, onSuccess }: P
   return (
     <Dialog open={open} onOpenChange={onOpenChange}>
       <DialogContent className="max-w-lg max-h-[90vh] overflow-y-auto">
-        <DialogHeader><DialogTitle>New Transfer Request</DialogTitle></DialogHeader>
+        <DialogHeader><DialogTitle>New Transfer Request</DialogTitle><DialogDescription>Create a stock request between branches.</DialogDescription></DialogHeader>
         <div className="space-y-4">
           <div>
             <Label>Requesting Branch *</Label>
