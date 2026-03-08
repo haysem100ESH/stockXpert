@@ -122,8 +122,12 @@ export default function SmartInventoryDashboard() {
       </div>
 
       {/* Tabbed Content */}
-      <Tabs defaultValue="demand" className="space-y-4">
-        <TabsList className="grid w-full grid-cols-3 md:grid-cols-6 h-auto">
+      <Tabs defaultValue="alerts" className="space-y-4">
+        <TabsList className="grid w-full grid-cols-3 md:grid-cols-7 h-auto">
+          <TabsTrigger value="alerts" className="gap-1">
+            <Bell className="h-4 w-4" />
+            <span className="hidden sm:inline">Alerts</span>
+          </TabsTrigger>
           <TabsTrigger value="demand" className="gap-1">
             <ShoppingCart className="h-4 w-4" />
             <span className="hidden sm:inline">Demand</span>
