@@ -15,6 +15,8 @@ import { supabase } from '@/lib/db';
 import { useBranchContext } from '@/hooks/useBranchContext';
 import { useToast } from '@/hooks/use-toast';
 import { TelegramConnectionDialog } from '@/components/telegram/TelegramConnectionDialog';
+import { useSeasonalPerformance } from '@/hooks/useSeasonalPerformance';
+import SeasonalTrendsWidget from '@/components/smart-inventory/SeasonalTrendsWidget';
 interface DashboardStats {
   totalRevenue: number;
   totalProducts: number;
@@ -81,6 +83,7 @@ export default function Dashboard() {
   const { selectedBranch, userBranch, branchType } = useBranchContext();
   const isPharmacy = branchType === 'pharmacy';
   const { toast } = useToast();
+  const { topSeasonalThisMonth, currentMonthName } = useSeasonalPerformance();
   const [stats, setStats] = useState<DashboardStats>({
     totalRevenue: 0,
     totalProducts: 0,
@@ -804,6 +807,13 @@ export default function Dashboard() {
                 </div>
           </CardContent>
         </Card>
+
+        {/* Seasonal Trends */}
+        <SeasonalTrendsWidget
+          topItems={topSeasonalThisMonth}
+          currentMonthName={currentMonthName}
+          isPharmacy={isPharmacy}
+        />
       </div>
 
       {/* Top Selling Products Chart - Moved Below */}
