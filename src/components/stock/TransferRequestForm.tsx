@@ -39,14 +39,13 @@ export default function TransferRequestForm({ open, onOpenChange, onSuccess }: P
 
   const fetchLocations = async () => {
     if (!profile?.id) return;
-    // For staff, get owner via branch
     let ownerId = profile.id;
     if (profile.role === 'staff' && profile.branch_id) {
       const { data: branch } = await supabase.from('pharmacy_branches').select('pharmacy_owner_id').eq('id', profile.branch_id).single();
       if (branch) ownerId = branch.pharmacy_owner_id;
     }
-    const { data } = await supabase.from('locations').select('id, name, type').eq('pharmacy_owner_id', ownerId).order('name');
-    setLocations(data || []);
+    const { data } = await supabase.from('pharmacy_branches').select('id, name, branch_type').eq('pharmacy_owner_id', ownerId).order('name');
+    setLocations((data || []).map((b: any) => ({ id: b.id, name: b.name, type: b.branch_type })));
   };
 
   const fetchMedicines = async () => {
