@@ -16,6 +16,7 @@ import { Calendar } from '@/components/ui/calendar';
 import { format } from 'date-fns';
 import jsPDF from 'jspdf';
 import autoTable from 'jspdf-autotable';
+import ExcelJS from 'exceljs';
 
 interface CustomerLedgerDialogProps {
   open: boolean;
