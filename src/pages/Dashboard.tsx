@@ -86,6 +86,7 @@ export default function Dashboard() {
   const isPharmacy = branchType === 'pharmacy';
   const { toast } = useToast();
   const { topSeasonalThisMonth, currentMonthName } = useSeasonalPerformance();
+  const { summary: smartSummary } = useSmartInventory();
   const [stats, setStats] = useState<DashboardStats>({
     totalRevenue: 0,
     totalProducts: 0,
