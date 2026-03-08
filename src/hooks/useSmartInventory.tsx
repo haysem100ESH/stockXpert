@@ -165,15 +165,15 @@ export function useSmartInventory() {
 
       const { data: recentSales } = await supabase
         .from('sale_items')
-        .select('medicine_id, pack_quantity, strip_quantity, created_at, sales!inner(branch_id)')
+        .select('medicine_id, pack_quantity, strip_quantity, sales!inner(branch_id, created_at)')
         .in('sales.branch_id', branchIds)
-        .gte('created_at', sixtyDaysAgo.toISOString());
+        .gte('sales.created_at', sixtyDaysAgo.toISOString());
 
       const { data: yearlySales } = await supabase
         .from('sale_items')
-        .select('medicine_id, pack_quantity, strip_quantity, created_at, sales!inner(branch_id)')
+        .select('medicine_id, pack_quantity, strip_quantity, sales!inner(branch_id, created_at)')
         .in('sales.branch_id', branchIds)
-        .gte('created_at', oneYearAgo.toISOString());
+        .gte('sales.created_at', oneYearAgo.toISOString());
 
       // Build monthly map for seasonal multiplier: medicine_id -> month(0-11) -> qty
       const monthlyMap: Record<string, number[]> = {};

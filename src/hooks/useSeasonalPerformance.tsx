@@ -110,9 +110,9 @@ export function useSeasonalPerformance() {
 
       const { data: salesData } = await supabase
         .from('sale_items')
-        .select('medicine_id, pack_quantity, strip_quantity, created_at, sales!inner(branch_id)')
+        .select('medicine_id, pack_quantity, strip_quantity, sales!inner(branch_id, created_at)')
         .in('sales.branch_id', branchIds)
-        .gte('created_at', oneYearAgo.toISOString());
+        .gte('sales.created_at', oneYearAgo.toISOString());
 
       // Build monthly sales map: medicine_id -> month -> { qty, freq }
       const monthlyMap: Record<string, Record<number, { qty: number; freq: number }>> = {};
