@@ -164,8 +164,11 @@ export default function FaceRegistration({ staffId, staffName, onComplete }: Fac
           <div className="flex flex-col items-center justify-center py-8 gap-3 text-muted-foreground">
             <Loader2 className="h-6 w-6 animate-spin" />
             <span className="text-sm text-center">{loadingProgress}</span>
+            <Progress value={downloadPercent} className="w-full max-w-xs" />
             <p className="text-xs text-muted-foreground/70">
-              Downloading ArcFace model (~30MB, cached after first use)
+              {downloadPercent < 90
+                ? `Downloading ArcFace model (~30MB, cached after first use)`
+                : 'Preparing ONNX runtime...'}
             </p>
           </div>
         )}
