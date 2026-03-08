@@ -152,6 +152,8 @@ export default function TransferRequestForm({ open, onOpenChange, onSuccess }: P
 
   const handleSubmit = async () => {
     if (!requestingLocationId) { toast({ title: 'Error', description: 'Select requesting location', variant: 'destructive' }); return; }
+    if (!locations.some((l) => l.id === requestingLocationId)) { toast({ title: 'Error', description: 'Selected requesting location is invalid', variant: 'destructive' }); return; }
+    if (sourceLocationId && !locations.some((l) => l.id === sourceLocationId)) { toast({ title: 'Error', description: 'Selected source location is invalid', variant: 'destructive' }); return; }
     if (items.length === 0) { toast({ title: 'Error', description: 'Add at least one item', variant: 'destructive' }); return; }
     const invalidItems = items.some(i => !i.medicine_id || i.requested_quantity <= 0);
     if (invalidItems) { toast({ title: 'Error', description: 'Fill all item fields properly', variant: 'destructive' }); return; }
