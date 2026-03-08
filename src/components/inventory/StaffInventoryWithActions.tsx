@@ -17,6 +17,7 @@ import { ConfirmationDialog } from '@/components/ui/confirmation-dialog';
 import CategoryManagement from './CategoryManagement';
 import OpenPackAdjustmentDialog from './OpenPackAdjustmentDialog';
 import StockAdjustmentDialog from './StockAdjustmentDialog';
+import StockEditHistory from './StockEditHistory';
 
 interface Medicine {
   id: string;
