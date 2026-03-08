@@ -80,7 +80,7 @@ export default function SmartAssistant() {
       },
       body: JSON.stringify({
         messages: allMessages,
-        branchIds: getBranchIds(),
+        branchIds: getActiveBranchIds(),
         branchType,
       }),
     });
