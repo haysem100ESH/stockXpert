@@ -226,7 +226,7 @@ export default function AttendanceDashboard() {
         <Card>
           <CardContent className="pt-6">
             <div className="flex items-center gap-3">
-              <CheckCircle2 className="h-8 w-8 text-green-600" />
+              <CheckCircle2 className="h-8 w-8 text-emerald-500" />
               <div>
                 <p className="text-2xl font-bold">{presentCount}</p>
                 <p className="text-sm text-muted-foreground">Present Days</p>
