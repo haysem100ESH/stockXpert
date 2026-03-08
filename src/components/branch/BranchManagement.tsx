@@ -281,6 +281,12 @@ export default function BranchManagement() {
             <DropdownMenuItem onClick={() => startEdit(row.original)}>
               <Edit className="mr-2 h-4 w-4" /> Edit Branch
             </DropdownMenuItem>
+            <DropdownMenuItem
+              className="text-destructive focus:text-destructive"
+              onClick={() => setDeletingBranch(row.original)}
+            >
+              <Trash2 className="mr-2 h-4 w-4" /> Delete Branch
+            </DropdownMenuItem>
           </DropdownMenuContent>
         </DropdownMenu>
       ),
