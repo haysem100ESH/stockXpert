@@ -192,6 +192,45 @@ export default function TransferRequestForm({ open, onOpenChange, onSuccess }: P
     }));
   };
 
+  const ensureLocationIdForBranch = async (branchId: string): Promise<string | null> => {
+    if (!branchId) return null;
+
+    const fromState = locations.find((l) => l.id === branchId)?.location_id;
+    if (fromState) return fromState;
+
+    const { data: existing } = await supabase
+      .from('locations')
+      .select('id')
+      .eq('branch_id', branchId)
+      .maybeSingle();
+
+    if (existing?.id) {
+      setLocations((prev) => prev.map((l) => (l.id === branchId ? { ...l, location_id: existing.id } : l)));
+      return existing.id;
+    }
+
+    const branch = locations.find((l) => l.id === branchId);
+    if (!branch || !ownerId) return null;
+
+    const { data: created } = await supabase
+      .from('locations')
+      .insert({
+        pharmacy_owner_id: ownerId,
+        name: branch.name,
+        type: branch.type === 'pharmacy' ? 'pharmacy' : 'store',
+        branch_id: branchId,
+      })
+      .select('id')
+      .maybeSingle();
+
+    if (created?.id) {
+      setLocations((prev) => prev.map((l) => (l.id === branchId ? { ...l, location_id: created.id } : l)));
+      return created.id;
+    }
+
+    return null;
+  };
+
   const handleSubmit = async () => {
     if (!requestingLocationId) { toast({ title: 'Error', description: 'Select requesting branch', variant: 'destructive' }); return; }
     if (items.length === 0) { toast({ title: 'Error', description: 'Add at least one item', variant: 'destructive' }); return; }
@@ -202,11 +241,13 @@ export default function TransferRequestForm({ open, onOpenChange, onSuccess }: P
     const requestingBranch = locations.find(l => l.id === requestingLocationId);
     const sourceBranch = sourceLocationId ? locations.find(l => l.id === sourceLocationId) : null;
 
-    const requestingLocId = requestingBranch?.location_id;
-    const sourceLocId = sourceBranch?.location_id || null;
+    const requestingLocId = requestingBranch?.location_id || await ensureLocationIdForBranch(requestingLocationId);
+    const sourceLocId = sourceLocationId
+      ? (sourceBranch?.location_id || await ensureLocationIdForBranch(sourceLocationId))
+      : null;
 
     if (!requestingLocId) {
-      toast({ title: 'Error', description: 'This branch has no matching location entry. Please ask the owner to set up locations in Stock Movements.', variant: 'destructive' });
+      toast({ title: 'Error', description: 'This branch is not linked to a location yet. Ask the owner to open Branches and save this branch once.', variant: 'destructive' });
       return;
     }
 
