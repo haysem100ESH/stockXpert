@@ -212,8 +212,8 @@ export default function BranchManagement() {
       accessorKey: 'branch_type',
       header: 'Type',
       cell: ({ row }) => (
-        <Badge variant={row.original.branch_type === 'pharmacy' ? 'secondary' : 'outline'}>
-          {row.original.branch_type === 'pharmacy' ? '💊 Pharmacy' : '📦 General'}
+        <Badge variant={row.original.branch_type === 'pharmacy' ? 'secondary' : row.original.branch_type === 'warehouse' ? 'default' : 'outline'}>
+          {row.original.branch_type === 'pharmacy' ? '💊 Pharmacy' : row.original.branch_type === 'warehouse' ? '🏭 Warehouse' : '📦 General'}
         </Badge>
       ),
     },
