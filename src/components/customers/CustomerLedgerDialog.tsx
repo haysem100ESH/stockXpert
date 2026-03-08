@@ -209,47 +209,143 @@ export default function CustomerLedgerDialog({ open, onOpenChange, customerId, c
   const totalPayments = filtered.reduce((s, e) => s + e.credit, 0);
   const outstandingBalance = entries.length > 0 ? entries[entries.length - 1].balance : 0;
 
-  const exportCSV = () => {
+  const exportExcel = async () => {
+    const wb = new ExcelJS.Workbook();
+    const ws = wb.addWorksheet('Ledger');
+
+    const headerFill: ExcelJS.Fill = { type: 'pattern', pattern: 'solid', fgColor: { argb: 'FF1E6F3E' } };
+    const evenRowFill: ExcelJS.Fill = { type: 'pattern', pattern: 'solid', fgColor: { argb: 'FFF0F9F4' } };
+    const border: Partial<ExcelJS.Borders> = {
+      top: { style: 'thin', color: { argb: 'FFD0D5DD' } },
+      bottom: { style: 'thin', color: { argb: 'FFD0D5DD' } },
+      left: { style: 'thin', color: { argb: 'FFD0D5DD' } },
+      right: { style: 'thin', color: { argb: 'FFD0D5DD' } },
+    };
+
+    // Title
+    ws.mergeCells('A1:F1');
+    const titleCell = ws.getCell('A1');
+    titleCell.value = `Customer Ledger — ${customerName}`;
+    titleCell.font = { size: 16, bold: true, color: { argb: 'FF1E6F3E' } };
+    titleCell.alignment = { horizontal: 'center' };
+
+    ws.mergeCells('A2:F2');
+    const dateCell = ws.getCell('A2');
+    dateCell.value = `Generated: ${new Date().toLocaleDateString()} | Outstanding Balance: ETB ${outstandingBalance.toFixed(2)}`;
+    dateCell.font = { size: 10, color: { argb: 'FF666666' } };
+    dateCell.alignment = { horizontal: 'center' };
+
+    // Summary row
+    ws.getRow(4).values = ['', 'Total Purchases (Debit)', '', 'Total Payments (Credit)', '', 'Outstanding Balance'];
+    ws.getRow(5).values = ['', `ETB ${totalPurchases.toFixed(2)}`, '', `ETB ${totalPayments.toFixed(2)}`, '', `ETB ${outstandingBalance.toFixed(2)}`];
+    [4, 5].forEach(r => {
+      ws.getRow(r).eachCell((cell) => {
+        cell.font = r === 4 ? { bold: true, size: 9, color: { argb: 'FF555555' } } : { bold: true, size: 11 };
+        cell.alignment = { horizontal: 'center' };
+      });
+    });
+
+    // Headers
+    const headerRow = 7;
     const headers = ['Date', 'Reference', 'Description', 'Debit (ETB)', 'Credit (ETB)', 'Balance (ETB)'];
-    const rows = filtered.map(e => [
-      new Date(e.date).toLocaleDateString(),
-      e.referenceId,
-      e.description,
-      e.debit > 0 ? e.debit.toFixed(2) : '',
-      e.credit > 0 ? e.credit.toFixed(2) : '',
-      e.balance.toFixed(2),
-    ]);
-    const csv = [headers.join(','), ...rows.map(r => r.map(c => `\"${c}\"`).join(','))].join('\n');
-    const blob = new Blob([csv], { type: 'text/csv' });
-    const url = URL.createObjectURL(blob);
+    ws.getRow(headerRow).values = headers;
+    ws.getRow(headerRow).eachCell((cell) => {
+      cell.fill = headerFill;
+      cell.font = { bold: true, color: { argb: 'FFFFFFFF' }, size: 10 };
+      cell.alignment = { horizontal: 'center' };
+      cell.border = border;
+    });
+
+    // Data
+    filtered.forEach((e, i) => {
+      const row = ws.getRow(headerRow + 1 + i);
+      row.values = [
+        new Date(e.date).toLocaleDateString('en-GB', { day: '2-digit', month: 'short', year: 'numeric' }),
+        e.referenceId,
+        e.description + (e.branchName ? ` (${e.branchName})` : ''),
+        e.debit > 0 ? e.debit : '',
+        e.credit > 0 ? e.credit : '',
+        e.balance,
+      ];
+      row.eachCell((cell, colNum) => {
+        cell.border = border;
+        cell.alignment = { horizontal: colNum >= 4 ? 'right' : 'left' };
+        if (i % 2 === 0) cell.fill = evenRowFill;
+        if (colNum === 4 && e.debit > 0) cell.font = { color: { argb: 'FFDC2626' } };
+        if (colNum === 5 && e.credit > 0) cell.font = { color: { argb: 'FF16A34A' } };
+        if (colNum === 6) cell.font = { bold: true };
+        if (colNum >= 4) cell.numFmt = '#,##0.00';
+      });
+    });
+
+    ws.columns = [
+      { width: 16 }, { width: 12 }, { width: 40 }, { width: 15 }, { width: 15 }, { width: 15 },
+    ];
+
+    const buf = await wb.xlsx.writeBuffer();
+    const blob = new Blob([buf], { type: 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet' });
     const a = document.createElement('a');
-    a.href = url;
-    a.download = `Ledger_${customerName.replace(/\s+/g, '_')}_${new Date().toISOString().slice(0, 10)}.csv`;
+    a.href = URL.createObjectURL(blob);
+    a.download = `Ledger_${customerName.replace(/\s+/g, '_')}_${new Date().toISOString().slice(0, 10)}.xlsx`;
     a.click();
-    URL.revokeObjectURL(url);
   };
 
   const exportPDF = () => {
     const doc = new jsPDF();
-    doc.setFontSize(16);
-    doc.text(`Customer Ledger — ${customerName}`, 14, 20);
-    doc.setFontSize(10);
-    doc.text(`Generated: ${new Date().toLocaleDateString()}`, 14, 28);
-    doc.text(`Outstanding Balance: ETB ${outstandingBalance.toFixed(2)}`, 14, 34);
+
+    // Title bar
+    doc.setFillColor(30, 111, 62);
+    doc.rect(0, 0, 210, 28, 'F');
+    doc.setTextColor(255, 255, 255);
+    doc.setFontSize(18);
+    doc.text(`Customer Ledger`, 14, 14);
+    doc.setFontSize(12);
+    doc.text(customerName, 14, 22);
+
+    // Info line
+    doc.setTextColor(80, 80, 80);
+    doc.setFontSize(9);
+    doc.text(`Generated: ${new Date().toLocaleDateString()}`, 14, 36);
+    doc.text(`Outstanding Balance: ETB ${outstandingBalance.toFixed(2)}`, 120, 36);
+
+    // Summary boxes
+    const summaryY = 42;
+    const boxW = 58;
+    [
+      { label: 'Total Purchases', value: `ETB ${totalPurchases.toFixed(2)}`, color: [220, 38, 38] },
+      { label: 'Total Payments', value: `ETB ${totalPayments.toFixed(2)}`, color: [22, 163, 74] },
+      { label: 'Outstanding Balance', value: `ETB ${outstandingBalance.toFixed(2)}`, color: outstandingBalance > 0 ? [220, 38, 38] : [22, 163, 74] },
+    ].forEach((item, i) => {
+      const x = 14 + i * (boxW + 4);
+      doc.setFillColor(240, 249, 244);
+      doc.roundedRect(x, summaryY, boxW, 18, 2, 2, 'F');
+      doc.setTextColor(100, 100, 100);
+      doc.setFontSize(8);
+      doc.text(item.label, x + 4, summaryY + 7);
+      doc.setTextColor(item.color[0], item.color[1], item.color[2]);
+      doc.setFontSize(11);
+      doc.text(item.value, x + 4, summaryY + 14);
+    });
 
     autoTable(doc, {
-      startY: 42,
-      head: [['Date', 'Ref', 'Description', 'Debit', 'Credit', 'Balance']],
+      startY: 66,
+      head: [['Date', 'Ref', 'Description', 'Debit (ETB)', 'Credit (ETB)', 'Balance (ETB)']],
       body: filtered.map(e => [
-        new Date(e.date).toLocaleDateString(),
+        new Date(e.date).toLocaleDateString('en-GB', { day: '2-digit', month: 'short', year: 'numeric' }),
         e.referenceId,
-        e.description,
-        e.debit > 0 ? `ETB ${e.debit.toFixed(2)}` : '',
-        e.credit > 0 ? `ETB ${e.credit.toFixed(2)}` : '',
-        `ETB ${e.balance.toFixed(2)}`,
+        e.description + (e.branchName ? ` (${e.branchName})` : ''),
+        e.debit > 0 ? e.debit.toFixed(2) : '',
+        e.credit > 0 ? e.credit.toFixed(2) : '',
+        e.balance.toFixed(2),
       ]),
-      styles: { fontSize: 8 },
-      headStyles: { fillColor: [59, 130, 246] },
+      styles: { fontSize: 8, cellPadding: 3 },
+      headStyles: { fillColor: [30, 111, 62], textColor: 255, fontStyle: 'bold' },
+      alternateRowStyles: { fillColor: [240, 249, 244] },
+      columnStyles: {
+        3: { halign: 'right', textColor: [220, 38, 38] },
+        4: { halign: 'right', textColor: [22, 163, 74] },
+        5: { halign: 'right', fontStyle: 'bold' },
+      },
     });
 
     doc.save(`Ledger_${customerName.replace(/\s+/g, '_')}_${new Date().toISOString().slice(0, 10)}.pdf`);
