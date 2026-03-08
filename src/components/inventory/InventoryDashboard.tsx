@@ -387,7 +387,7 @@ export default function InventoryDashboard() {
             <Package className="h-12 w-12 text-muted-foreground mx-auto mb-4" />
             <h3 className="text-lg font-semibold mb-2">All Good!</h3>
             <p className="text-muted-foreground">
-              No inventory issues detected. All products are well-stocked{isPharmacy ? ' and within expiry dates' : ''}.
+              No inventory issues detected. All products are well-stocked and within expiry dates.
             </p>
           </CardContent>
         </Card>
