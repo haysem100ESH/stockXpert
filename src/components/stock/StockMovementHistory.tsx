@@ -91,7 +91,7 @@ export default function StockMovementHistory() {
 
       const [medsRes, branchesRes, usersRes] = await Promise.all([
         medIds.length ? supabase.from('medicines').select('id, name').in('id', medIds) : { data: [] },
-        locIds.length ? supabase.from('pharmacy_branches').select('id, name').in('id', locIds) : { data: [] },
+        locIds.length ? supabase.from('locations').select('id, name').in('id', locIds) : { data: [] },
         userIds.length ? supabase.from('profiles').select('id, full_name').in('id', userIds) : { data: [] },
       ]);
 
