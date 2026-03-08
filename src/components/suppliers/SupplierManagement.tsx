@@ -6,7 +6,7 @@ import { Badge } from '@/components/ui/badge';
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
 import { Pagination, PaginationContent, PaginationItem, PaginationLink, PaginationNext, PaginationPrevious } from '@/components/ui/pagination';
 import { DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuTrigger } from '@/components/ui/dropdown-menu';
-import { Plus, Search, Edit, Trash2, Truck, Phone, Mail, MapPin, User, MoreVertical, ShoppingCart, FileText, CreditCard } from 'lucide-react';
+import { Plus, Search, Edit, Trash2, Truck, Phone, Mail, MapPin, User, MoreVertical, ShoppingCart, FileText, CreditCard, Brain } from 'lucide-react';
 import { supabase } from '@/lib/db';
 import { useToast } from '@/hooks/use-toast';
 import { useAuth } from '@/hooks/useAuth';
