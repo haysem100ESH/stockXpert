@@ -81,18 +81,13 @@ export default function TransferRequestForm({ open, onOpenChange, onSuccess }: P
     setLocations(options.sort((a, b) => a.name.localeCompare(b.name)));
   };
 
-  const fetchMedicines = async (locationId?: string) => {
-    if (!locationId) { setMedicines([]); return; }
-
-    const selectedLocation = locations.find((l) => l.id === locationId);
-    const locationFilter = selectedLocation?.branch_id
-      ? `location_id.eq.${locationId},branch_id.eq.${selectedLocation.branch_id}`
-      : `location_id.eq.${locationId}`;
+  const fetchMedicines = async (branchId?: string) => {
+    if (!branchId) { setMedicines([]); return; }
 
     const { data } = await supabase
       .from('medicines')
       .select('id, name, stock_quantity')
-      .or(locationFilter)
+      .eq('branch_id', branchId)
       .gt('stock_quantity', 0)
       .order('name');
 
