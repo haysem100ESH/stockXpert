@@ -202,38 +202,7 @@ export default function StaffInventoryWithActions() {
     }
   };
 
-  const handleStockEdit = (medicineId: string, currentStock: number) => {
-    setEditingStock(medicineId);
-    setTempStock(currentStock);
-  };
-
-  const handleStockUpdate = async (medicineId: string) => {
-    try {
-      const { error } = await supabase
-        .from('medicines')
-        .update({ stock_quantity: tempStock })
-        .eq('id', medicineId);
-
-      if (error) throw error;
-
-      setMedicines(medicines.map(med => 
-        med.id === medicineId ? { ...med, stock_quantity: tempStock } : med
-      ));
-
-      toast({
-        title: "Success",
-        description: "Stock updated successfully"
-      });
-
-      setEditingStock(null);
-    } catch (error) {
-      toast({
-        title: "Error",
-        description: "Failed to update stock",
-        variant: "destructive"
-      });
-    }
-  };
+  // Stock editing removed - use Adjust Stock workflow instead
 
   const handleMedicineAdded = () => {
     fetchMedicines();
