@@ -161,7 +161,22 @@ export default function AttendanceDashboard() {
         branch_name: branchMap[r.branch_id] || 'Unknown',
       }));
 
-      setRecords(enriched);
+      const recordsWithPhotoUrls = await Promise.all(
+        enriched.map(async (record: any) => {
+          const [checkinPhoto, checkoutPhoto] = await Promise.all([
+            getDisplayPhotoUrl(record.checkin_photo),
+            getDisplayPhotoUrl(record.checkout_photo),
+          ]);
+
+          return {
+            ...record,
+            checkin_photo: checkinPhoto,
+            checkout_photo: checkoutPhoto,
+          };
+        })
+      );
+
+      setRecords(recordsWithPhotoUrls);
     } catch (error) {
       console.error('Failed to fetch attendance:', error);
     } finally {
