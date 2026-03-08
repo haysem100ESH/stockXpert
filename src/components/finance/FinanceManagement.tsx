@@ -1012,7 +1012,7 @@ export default function FinanceManagement() {
                           <div className="text-xs text-muted-foreground">
                             {new Date(sale.created_at).toLocaleDateString()} · {new Date(sale.created_at).toLocaleTimeString()}
                           </div>
-                          {sale.discount_amount && Number(sale.discount_amount) > 0 && (
+                          {Number(sale.discount_amount || 0) > 0 && (
                             <div className="text-xs text-muted-foreground">
                               Discount: ETB {Number(sale.discount_amount).toFixed(2)}
                             </div>
