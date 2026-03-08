@@ -543,8 +543,9 @@ RULES:
     if (!step1.ok) {
       const err = await step1.text();
       console.error("Gemini step 1 error:", step1.status, err);
-      return new Response(JSON.stringify({ error: `AI error: ${step1.status}` }), {
-        status: 500,
+      const isRateLimit = step1.status === 429;
+      return new Response(JSON.stringify({ error: isRateLimit ? "Rate limit exceeded. Please try again later." : `AI error: ${step1.status}` }), {
+        status: isRateLimit ? 429 : 500,
         headers: { ...corsHeaders, "Content-Type": "application/json" },
       });
     }
@@ -598,8 +599,9 @@ RULES:
     if (!step3.ok) {
       const err = await step3.text();
       console.error("Gemini step 3 error:", step3.status, err);
-      return new Response(JSON.stringify({ error: `AI error: ${step3.status}` }), {
-        status: 500,
+      const isRateLimit = step3.status === 429;
+      return new Response(JSON.stringify({ error: isRateLimit ? "Rate limit exceeded. Please try again later." : `AI error: ${step3.status}` }), {
+        status: isRateLimit ? 429 : 500,
         headers: { ...corsHeaders, "Content-Type": "application/json" },
       });
     }
