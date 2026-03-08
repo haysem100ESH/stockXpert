@@ -18,6 +18,7 @@ import { useAuth } from '@/hooks/useAuth';
 import { useBranchContext } from '@/hooks/useBranchContext';
 import MedicineTransfer from '@/components/inventory/MedicineTransfer';
 import DebtManagement from './DebtManagement';
+import SalaryHistory from '@/components/staff/SalaryHistory';
 import { BarChart, Bar, XAxis, YAxis, CartesianGrid, Tooltip, Legend, ResponsiveContainer } from 'recharts';
 
 interface FinanceStats {
