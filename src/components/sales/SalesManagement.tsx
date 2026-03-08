@@ -177,7 +177,7 @@ export default function SalesManagement() {
 
       let query = (supabase as any)
         .from('customers')
-        .select('id, name, phone, credit_score')
+        .select('id, name, phone, credit_score, max_credit_limit')
         .order('name');
       if (selectedBranch) {
         query = query.eq('branch_id', selectedBranch);
