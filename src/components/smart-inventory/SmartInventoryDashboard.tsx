@@ -16,6 +16,7 @@ import {
   BarChart3,
   RefreshCw,
   Sun,
+  Bell,
 } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import ScoreOverview from './ScoreOverview';
@@ -27,6 +28,7 @@ import ExpiryRiskPanel from './ExpiryRiskPanel';
 import SeasonalPerformance from './SeasonalPerformance';
 import SeasonalInsights from './SeasonalInsights';
 import SeasonalTrendsWidget from './SeasonalTrendsWidget';
+import InventoryDashboard from '@/components/inventory/InventoryDashboard';
 
 export default function SmartInventoryDashboard() {
   const { items, summary, loading, isPharmacy, refetch } = useSmartInventory();
