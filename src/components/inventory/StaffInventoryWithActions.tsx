@@ -371,11 +371,8 @@ export default function StaffInventoryWithActions() {
       </div>
 
       <Tabs value={activeTab} onValueChange={setActiveTab} className="space-y-4">
-        <TabsList className="grid w-full grid-cols-2 sm:grid-cols-5 h-auto">
+        <TabsList className="grid w-full grid-cols-2 h-auto">
           <TabsTrigger value="inventory" className="text-xs sm:text-sm">{isPharmacy ? 'Medicines & Items' : 'Items'}</TabsTrigger>
-          <TabsTrigger value="alerts" className="text-xs sm:text-sm">{isPharmacy ? 'Inventory Alerts' : 'Stock Alerts'}</TabsTrigger>
-          <TabsTrigger value="transfer" className="text-xs sm:text-sm">{isPharmacy ? 'Transfer Medicine' : 'Transfer Items'}</TabsTrigger>
-          <TabsTrigger value="history" className="text-xs sm:text-sm">Stock History</TabsTrigger>
           <TabsTrigger value="categories" className="text-xs sm:text-sm">Categories</TabsTrigger>
         </TabsList>
 
