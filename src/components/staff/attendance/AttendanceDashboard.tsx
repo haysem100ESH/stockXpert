@@ -111,8 +111,13 @@ export default function AttendanceDashboard() {
       .from('attendance-photos')
       .createSignedUrl(photoPath, 60 * 60);
 
-    if (error || !data?.signedUrl) return photoValue;
-    return data.signedUrl;
+    if (!error && data?.signedUrl) return data.signedUrl;
+
+    const { data: publicData } = supabase.storage
+      .from('attendance-photos')
+      .getPublicUrl(photoPath);
+
+    return publicData?.publicUrl || photoValue;
   };
 
   const fetchBranchesAndStaff = async () => {
