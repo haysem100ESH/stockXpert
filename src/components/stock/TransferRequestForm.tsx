@@ -39,7 +39,7 @@ export default function TransferRequestForm({ open, onOpenChange, onSuccess }: P
   const [items, setItems] = useState<RequestItem[]>([]);
   const [saving, setSaving] = useState(false);
   const { toast } = useToast();
-  const { profile, user } = useAuth();
+  const { profile } = useAuth();
 
   useEffect(() => {
     if (open) { fetchLocations(); }
