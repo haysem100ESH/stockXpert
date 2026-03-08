@@ -70,7 +70,7 @@ const App = () => {
               <Route path="/customers" element={<Layout><SubscriptionGuard><CustomersPage /></SubscriptionGuard></Layout>} />
               <Route path="/staff" element={<Layout><SubscriptionGuard><StaffPage /></SubscriptionGuard></Layout>} />
               <Route path="/branches" element={<Layout><SubscriptionGuard><BranchPage /></SubscriptionGuard></Layout>} />
-              <Route path="/locations" element={<Layout><SubscriptionGuard><LocationsPage /></SubscriptionGuard></Layout>} />
+              
               <Route path="/stock-movements" element={<Layout><SubscriptionGuard><StockMovementsPage /></SubscriptionGuard></Layout>} />
               <Route path="/transfer-requests" element={<Layout><SubscriptionGuard><TransferRequestsPage /></SubscriptionGuard></Layout>} />
               <Route path="/smart-inventory" element={<Layout><SubscriptionGuard><SmartInventoryPage /></SubscriptionGuard></Layout>} />
