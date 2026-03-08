@@ -97,3 +97,6 @@ verify_jwt = false
 
 [functions.manage-transfer-request]
 verify_jwt = false
+
+[functions.update-owner-profile]
+verify_jwt = false
