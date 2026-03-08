@@ -64,6 +64,9 @@ export default function Layout({ children }: LayoutProps) {
               <ExpiringMedicinesAlert />
               {children}
             </main>
+            
+            {/* AI Smart Assistant */}
+            {profile?.role !== 'developer' && <SmartAssistant />}
           </div>
         </div>
         
