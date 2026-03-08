@@ -24,7 +24,7 @@ interface Branch {
   phone?: string;
   manager_staff_id?: string;
   is_main_branch: boolean;
-  branch_type: 'pharmacy' | 'general';
+  branch_type: 'pharmacy' | 'general' | 'warehouse';
   created_at: string;
   manager_name?: string;
 }
