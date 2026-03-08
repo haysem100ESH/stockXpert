@@ -9,7 +9,7 @@ import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
 import { useToast } from '@/hooks/use-toast';
-import { Users, Building, CreditCard, AlertTriangle, Edit, UserX, UserCheck, DollarSign, Calendar, TrendingUp, Send } from 'lucide-react';
+import { Users, Building, CreditCard, AlertTriangle, Edit, UserX, UserCheck, DollarSign, Calendar, TrendingUp, Send, Key } from 'lucide-react';
 import CreateOwnerDialog from './CreateOwnerDialog';
 import EditOwnerDialog from './EditOwnerDialog';
 import CreditSetupSection from './CreditSetupSection';
@@ -25,6 +25,7 @@ interface PharmacyOwner {
   pharmacy_address?: string;
   active: boolean;
   manually_deactivated?: boolean;
+  has_gemini_api_key: boolean;
   subscription: {
     subscription_credit: number;
     status: string;
@@ -164,6 +165,13 @@ export default function DeveloperDashboard() {
             .select('id', { count: 'exact' })
             .eq('pharmacy_owner_id', profile.id);
 
+          // Get gemini_api_key status
+          const { data: profileExtra } = await supabase
+            .from('profiles')
+            .select('gemini_api_key')
+            .eq('id', profile.id)
+            .single();
+
           return {
             id: profile.id,
             full_name: profile.full_name,
@@ -174,6 +182,7 @@ export default function DeveloperDashboard() {
             pharmacy_address: profile.pharmacy_address || 'N/A',
             active: profile.active,
             manually_deactivated: profile.manually_deactivated,
+            has_gemini_api_key: !!profileExtra?.gemini_api_key,
             subscription: subscription ? {
               subscription_credit: subscription.subscription_credit,
               status: subscription.status,
@@ -838,6 +847,7 @@ export default function DeveloperDashboard() {
               <TableRow>
                 <TableHead>Owner Name</TableHead>
                 <TableHead>Pharmacy Name</TableHead>
+                <TableHead>AI Key</TableHead>
                 <TableHead>Account Status</TableHead>
                 <TableHead>Subscription</TableHead>
                 <TableHead>Subscription Plan</TableHead>
@@ -869,6 +879,11 @@ export default function DeveloperDashboard() {
                   </TableCell>
                   <TableCell>
                     <div className="font-medium">{owner.pharmacy_name || 'N/A'}</div>
+                  </TableCell>
+                  <TableCell>
+                    <div className="flex items-center justify-center" title={owner.has_gemini_api_key ? 'API key configured' : 'No API key'}>
+                      <Key className={`h-4 w-4 ${owner.has_gemini_api_key ? 'text-green-500' : 'text-red-400'}`} />
+                    </div>
                   </TableCell>
                   <TableCell>
                     <Select 
