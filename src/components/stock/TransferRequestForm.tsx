@@ -258,8 +258,11 @@ export default function TransferRequestForm({ open, onOpenChange, onSuccess }: P
         source_location_id: sourceLocId,
         notes: notes || null,
         created_by: user?.id,
-      }).select().single();
+      }).select().maybeSingle();
       if (reqError) throw reqError;
+      if (!req?.id) {
+        throw new Error('Transfer request could not be confirmed. Please refresh and try again.');
+      }
 
       const { error: itemsError } = await supabase.from('transfer_request_items').insert(
         items.map(i => ({
