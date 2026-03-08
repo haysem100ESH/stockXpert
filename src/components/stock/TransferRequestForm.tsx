@@ -110,21 +110,31 @@ export default function TransferRequestForm({ open, onOpenChange, onSuccess }: P
       });
     }
 
-    // Auto-create missing location entries (only owners can insert)
+    // Auto-create missing location entries (best effort; may be blocked by RLS)
     const missingBranches = branchRows.filter((b) => !branchToLocationMap[b.id]);
-    if (missingBranches.length > 0 && profile.role === 'owner') {
+    if (missingBranches.length > 0) {
       const { data: created } = await supabase
         .from('locations')
         .insert(missingBranches.map((b) => ({
-          pharmacy_owner_id: ownerId,
+          pharmacy_owner_id: resolvedOwnerId,
           name: b.name,
           type: b.branch_type === 'pharmacy' ? 'pharmacy' : 'store',
           branch_id: b.id,
         })))
         .select('id, name, type, branch_id');
+
       if (created) {
         created.forEach((l: any) => { branchToLocationMap[l.branch_id] = l.id; });
       }
+
+      // Re-check in case rows existed but were not initially visible/linked
+      const { data: refreshed } = await supabase
+        .from('locations')
+        .select('id, branch_id')
+        .in('branch_id', missingBranches.map((b) => b.id));
+      (refreshed || []).forEach((l: any) => {
+        if (l.branch_id && !branchToLocationMap[l.branch_id]) branchToLocationMap[l.branch_id] = l.id;
+      });
     }
 
     // Use pharmacy_branches for display, but track the location_id for FK submission
