@@ -56,7 +56,7 @@ serve(async (req) => {
     ] = await Promise.all([
       branchFilter(db.from("medicines").select("id, name, quantity, category, selling_price, purchase_price, expiry_date, branch_id, strips_per_pack, tablets_per_strip"))
         .order("quantity", { ascending: true })
-        .limit(200),
+        .limit(1000),
 
       branchFilter(db.from("sales").select("id, total_amount, payment_method, created_at, branch_id"))
         .gte("created_at", `${today}T00:00:00`)
@@ -92,12 +92,12 @@ serve(async (req) => {
 
     const todayRevenue = todaySales.reduce((s: number, sale: any) => s + Number(sale.total_amount || 0), 0);
     const monthlyRevenue = recentSales.reduce((s: number, sale: any) => s + Number(sale.total_amount || 0), 0);
-    const totalDebt = debtors.reduce((s: number, c: any) => s + Number(c.total_amount || 0), 0);
+    const totalDebt = debtors.reduce((s: number, c: any) => s + Number(c.total_debt || 0), 0);
 
     const ItemLabel = branchType === "pharmacy" ? "Medicine" : "Item";
 
     const systemContext = `
-You are a Smart Assistant for ${branchType === "pharmacy" ? "PharmaXpert (Pharmacy Management)" : "StockXpert (Inventory Management)"}.
+You are a Smart Assistant for StockXpert ${branchType === "pharmacy" ? "(Pharmacy Management)" : "(Inventory Management)"}.
 User: ${profile.full_name} (Role: ${profile.role})
 ${profile.role === "staff" ? "Note: This user is staff with limited access. Do not reveal owner-only financial details like profit margins or purchase prices." : ""}
 
@@ -107,9 +107,9 @@ CURRENT SYSTEM DATA:
 📦 INVENTORY SUMMARY:
 - Total ${ItemLabel}s: ${inventory.length}
 - Low Stock (≤10 units): ${lowStock.length}
-${lowStock.slice(0, 10).map((i: any) => `  • ${i.name}: ${i.quantity} units (Price: ${i.selling_price})`).join("\n")}
+${lowStock.length > 0 ? lowStock.slice(0, 20).map((i: any) => `  • ${i.name}: ${i.quantity} units (Price: ${i.selling_price}, Branch: ${i.branch_id})`).join("\n") : "  None"}
 - Out of Stock: ${outOfStock.length}
-${outOfStock.slice(0, 5).map((i: any) => `  • ${i.name}`).join("\n")}
+${outOfStock.length > 0 ? outOfStock.slice(0, 15).map((i: any) => `  • ${i.name} (Branch: ${i.branch_id})`).join("\n") : "  None"}
 
 💰 SALES:
 - Today's Sales: ${todaySales.length} transactions, Revenue: ${todayRevenue.toFixed(2)}
