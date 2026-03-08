@@ -254,44 +254,16 @@ export default function CartSlider({
                         <div className="flex items-center gap-2">
                           {item.item_type === 'measurable' ? (() => {
                             const currentQty = item.saleType === 'by_stripe' ? (item.stripesCount ?? 1) : item.quantity;
-                            const wholePart = Math.floor(currentQty);
-                            const decPart = Math.round((currentQty - wholePart) * 100);
                             const measurableUnit = item.unit_label || 'unit';
                             return (
-                              <div className="flex items-center gap-1">
-                                <input
-                                  type="number"
-                                  min="0"
-                                  value={wholePart}
-                                  onChange={(e) => {
-                                    const w = parseInt(e.target.value) || 0;
-                                    const newQty = parseFloat((w + decPart / 100).toFixed(2));
-                                    if (newQty > 0 && onSetMeasurableQuantity) {
-                                      onSetMeasurableQuantity(item.id, newQty);
-                                    }
-                                  }}
-                                  className="w-14 text-sm font-medium text-center border rounded-md h-7 bg-background px-1 focus:outline-none focus:ring-1 focus:ring-ring"
-                                />
-                                <span className="text-sm font-bold">.</span>
-                                <input
-                                  type="text"
-                                  inputMode="numeric"
-                                  maxLength={2}
-                                  value={decPart.toString().padStart(2, '0')}
-                                  onChange={(e) => {
-                                    const val = e.target.value.replace(/[^0-9]/g, '').slice(0, 2);
-                                    const d = parseInt(val || '0');
-                                    const newQty = parseFloat((wholePart + d / 100).toFixed(2));
-                                    if (newQty > 0 && onSetMeasurableQuantity) {
-                                      onSetMeasurableQuantity(item.id, newQty);
-                                    }
-                                  }}
-                                  className="w-10 text-sm font-medium text-center border rounded-md h-7 bg-background px-1 focus:outline-none focus:ring-1 focus:ring-ring"
-                                />
-                                <span className="text-xs text-muted-foreground">{measurableUnit}</span>
-                              </div>
+                              <MeasurableQtyInput
+                                value={currentQty}
+                                max={item.stock_quantity}
+                                unit={measurableUnit}
+                                onChange={(qty) => onSetMeasurableQuantity?.(item.id, qty)}
+                              />
                             );
-                          })() : (
+                          })() :
                             <>
                               <Button
                                 size="icon"
