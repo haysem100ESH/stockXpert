@@ -2,7 +2,8 @@ import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/com
 import { Badge } from '@/components/ui/badge';
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@/components/ui/table';
 import { SmartItem } from '@/hooks/useSmartInventory';
-import { ShoppingCart } from 'lucide-react';
+import { useSupplierIntelligence } from '@/hooks/useSupplierIntelligence';
+import { ShoppingCart, Truck } from 'lucide-react';
 
 interface ReorderSuggestionsProps {
   items: SmartItem[];
@@ -10,6 +11,7 @@ interface ReorderSuggestionsProps {
 }
 
 export default function ReorderSuggestions({ items, isPharmacy }: ReorderSuggestionsProps) {
+  const { getBestSupplierForItem, priceComparisons } = useSupplierIntelligence();
   const sorted = [...items].sort((a, b) => b.suggestedReorder - a.suggestedReorder);
 
   return (
@@ -20,7 +22,7 @@ export default function ReorderSuggestions({ items, isPharmacy }: ReorderSuggest
           Smart Reorder Suggestions
         </CardTitle>
         <CardDescription>
-          {isPharmacy ? 'Medicines' : 'Items'} where current stock is below predicted 14-day demand
+          {isPharmacy ? 'Medicines' : 'Items'} where current stock is below predicted 14-day demand. Best supplier recommendations included.
         </CardDescription>
       </CardHeader>
       <CardContent>
@@ -41,6 +43,8 @@ export default function ReorderSuggestions({ items, isPharmacy }: ReorderSuggest
                     <span className="text-amber-600 font-semibold">Suggested Reorder</span>
                   </TableHead>
                   <TableHead>Urgency</TableHead>
+                  <TableHead>Best Supplier</TableHead>
+                  <TableHead className="text-right">Est. Cost</TableHead>
                 </TableRow>
               </TableHeader>
               <TableBody>
@@ -50,6 +54,9 @@ export default function ReorderSuggestions({ items, isPharmacy }: ReorderSuggest
                     : item.daysRemaining !== null && item.daysRemaining < 7
                     ? 'high'
                     : 'medium';
+
+                  const bestSupplier = getBestSupplierForItem(item.id);
+                  const estCost = bestSupplier ? bestSupplier.price * item.suggestedReorder : null;
 
                   return (
                     <TableRow key={item.id}>
@@ -64,6 +71,24 @@ export default function ReorderSuggestions({ items, isPharmacy }: ReorderSuggest
                         <Badge variant={urgency === 'critical' ? 'destructive' : urgency === 'high' ? 'secondary' : 'outline'}>
                           {urgency}
                         </Badge>
+                      </TableCell>
+                      <TableCell>
+                        {bestSupplier ? (
+                          <div className="flex items-center gap-1">
+                            <Truck className="h-3 w-3 text-muted-foreground" />
+                            <span className="text-sm">{bestSupplier.supplierName}</span>
+                            <Badge variant="outline" className="text-xs ml-1">{bestSupplier.score}</Badge>
+                          </div>
+                        ) : (
+                          <span className="text-muted-foreground text-xs">No pricing data</span>
+                        )}
+                      </TableCell>
+                      <TableCell className="text-right">
+                        {estCost !== null ? (
+                          <span className="font-medium">{estCost.toLocaleString()}</span>
+                        ) : (
+                          <span className="text-muted-foreground">—</span>
+                        )}
                       </TableCell>
                     </TableRow>
                   );

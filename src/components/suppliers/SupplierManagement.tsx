@@ -6,7 +6,7 @@ import { Badge } from '@/components/ui/badge';
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
 import { Pagination, PaginationContent, PaginationItem, PaginationLink, PaginationNext, PaginationPrevious } from '@/components/ui/pagination';
 import { DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuTrigger } from '@/components/ui/dropdown-menu';
-import { Plus, Search, Edit, Trash2, Truck, Phone, Mail, MapPin, User, MoreVertical, ShoppingCart, FileText, CreditCard } from 'lucide-react';
+import { Plus, Search, Edit, Trash2, Truck, Phone, Mail, MapPin, User, MoreVertical, ShoppingCart, FileText, CreditCard, Brain } from 'lucide-react';
 import { supabase } from '@/lib/db';
 import { useToast } from '@/hooks/use-toast';
 import { useAuth } from '@/hooks/useAuth';
@@ -18,6 +18,7 @@ import RecordSupplierPaymentDialog from './RecordSupplierPaymentDialog';
 import SupplierLedgerDialog from './SupplierLedgerDialog';
 import SupplierCreditors from './SupplierCreditors';
 import SupplierAnalytics from './SupplierAnalytics';
+import SupplierIntelligenceDashboard from './SupplierIntelligenceDashboard';
 import { ConfirmationDialog } from '@/components/ui/confirmation-dialog';
 
 interface Supplier {
@@ -127,6 +128,10 @@ export default function SupplierManagement() {
           <TabsTrigger value="suppliers">Suppliers</TabsTrigger>
           <TabsTrigger value="creditors">Creditors</TabsTrigger>
           <TabsTrigger value="analytics">Analytics</TabsTrigger>
+          <TabsTrigger value="intelligence" className="gap-1">
+            <Brain className="h-4 w-4" />
+            Intelligence
+          </TabsTrigger>
         </TabsList>
 
         <TabsContent value="suppliers" className="space-y-4 mt-4">
@@ -240,6 +245,10 @@ export default function SupplierManagement() {
 
         <TabsContent value="analytics" className="mt-4">
           <SupplierAnalytics />
+        </TabsContent>
+
+        <TabsContent value="intelligence" className="mt-4">
+          <SupplierIntelligenceDashboard />
         </TabsContent>
       </Tabs>
 
