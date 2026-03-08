@@ -85,6 +85,7 @@ export default function StaffInventoryWithActions() {
 
   useEffect(() => {
     if (profile) {
+      setLoading(true);
       fetchMedicines();
       checkBranches();
     }
