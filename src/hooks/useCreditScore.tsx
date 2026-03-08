@@ -49,7 +49,15 @@ interface ScoreUpdateParams {
 export async function updateCreditScore({
   customerId, currentScore, changeAmount, reason, notes, createdBy, branchId
 }: ScoreUpdateParams) {
-  const newScore = clampScore(currentScore + changeAmount);
+  // Always fetch the latest score from DB to avoid stale values
+  const { data: freshCustomer } = await (supabase as any)
+    .from('customers')
+    .select('credit_score')
+    .eq('id', customerId)
+    .single();
+
+  const actualCurrentScore = freshCustomer?.credit_score ?? currentScore;
+  const newScore = clampScore(actualCurrentScore + changeAmount);
   const newLimit = getCreditLimit(newScore);
 
   // Update customer score and limit
@@ -61,7 +69,7 @@ export async function updateCreditScore({
   // Log the change
   await (supabase as any).from('credit_logs').insert({
     customer_id: customerId,
-    previous_score: currentScore,
+    previous_score: actualCurrentScore,
     new_score: newScore,
     change_amount: changeAmount,
     reason,

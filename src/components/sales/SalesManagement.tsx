@@ -14,7 +14,7 @@ import { ConfirmationDialog } from '@/components/ui/confirmation-dialog';
 import CartSlider from './CartSlider';
 import AddToCartDialog from './AddToCartDialog';
 import { useIsMobile } from '@/hooks/use-mobile';
-import { updateCreditScore } from '@/hooks/useCreditScore';
+import { updateCreditScore, getCreditLimit } from '@/hooks/useCreditScore';
 import { isMeasurable } from '@/lib/itemTypes';
 
 interface Medicine {
@@ -177,7 +177,7 @@ export default function SalesManagement() {
 
       let query = (supabase as any)
         .from('customers')
-        .select('id, name, phone, credit_score')
+        .select('id, name, phone, credit_score, max_credit_limit')
         .order('name');
       if (selectedBranch) {
         query = query.eq('branch_id', selectedBranch);
@@ -209,7 +209,7 @@ export default function SalesManagement() {
         ...c,
         computed_debt: Math.max(0, debtMap[c.id] || 0),
         credit_score: c.credit_score ?? 50,
-        max_credit_limit: c.max_credit_limit ?? 5000,
+        max_credit_limit: c.max_credit_limit ?? getCreditLimit(c.credit_score ?? 50),
       })));
     } catch (err) {
       console.error('Error fetching customers:', err);
