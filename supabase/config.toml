@@ -91,3 +91,6 @@ verify_jwt = false
 
 [functions.smart-assistant]
 verify_jwt = false
+
+[functions.create-transfer-request]
+verify_jwt = false
