@@ -21,6 +21,7 @@ export default function FaceRegistration({ staffId, staffName, onComplete }: Fac
   const [samples, setSamples] = useState<Float32Array[]>([]);
   const [feedback, setFeedback] = useState('');
   const [loadingProgress, setLoadingProgress] = useState('');
+  const [downloadPercent, setDownloadPercent] = useState(0);
   const [hasRegistered, setHasRegistered] = useState<boolean | null>(null);
   const videoRef = useRef<HTMLVideoElement>(null);
   const { toast } = useToast();
