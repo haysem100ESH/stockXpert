@@ -13,6 +13,10 @@ interface TodayRecord {
   id: string;
   checkin_time: string | null;
   checkout_time: string | null;
+  checkin_lat: number | null;
+  checkin_long: number | null;
+  checkout_lat: number | null;
+  checkout_long: number | null;
   attendance_status: string;
 }
 
