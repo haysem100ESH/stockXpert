@@ -17,10 +17,11 @@ interface RequestItem {
 }
 
 interface LocationOption {
-  id: string;
+  id: string;           // pharmacy_branch id
   name: string;
   type: string;
   branch_id?: string | null;
+  location_id?: string | null;  // matching locations.id for FK
 }
 
 interface Props {
