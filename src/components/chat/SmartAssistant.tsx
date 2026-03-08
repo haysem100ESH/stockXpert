@@ -36,6 +36,22 @@ export default function SmartAssistant() {
   const branding = useBranding();
   const { toast } = useToast();
 
+  // Fetch branch IDs for owner
+  useEffect(() => {
+    const fetchBranches = async () => {
+      if (profile?.role === 'owner' && profile?.id) {
+        const { data } = await supabase
+          .from('pharmacy_branches')
+          .select('id')
+          .eq('pharmacy_owner_id', profile.id);
+        setBranchIds((data || []).map((b: any) => b.id));
+      } else if (profile?.branch_id) {
+        setBranchIds([profile.branch_id]);
+      }
+    };
+    fetchBranches();
+  }, [profile]);
+
   useEffect(() => {
     if (open && inputRef.current) inputRef.current.focus();
   }, [open]);
@@ -46,14 +62,14 @@ export default function SmartAssistant() {
     }
   }, [messages]);
 
-  const getBranchIds = (): string[] => {
-    if (selectedBranch === 'all') return branches.map((b: any) => b.id);
-    return selectedBranch ? [selectedBranch] : [];
+  const getActiveBranchIds = (): string[] => {
+    if (!selectedBranch || selectedBranch === 'all') return branchIds;
+    return [selectedBranch];
   };
 
   const streamChat = async (allMessages: Msg[]) => {
     const url = `https://tcqlsxmgazrftpbumauk.supabase.co/functions/v1/smart-assistant`;
-    const session = (await (await import('@/lib/db')).supabase.auth.getSession()).data.session;
+    const session = (await supabase.auth.getSession()).data.session;
     if (!session) throw new Error('Not authenticated');
 
     const resp = await fetch(url, {
