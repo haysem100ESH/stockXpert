@@ -180,7 +180,7 @@ export function useSmartInventory() {
       (yearlySales || []).forEach((sale: any) => {
         const id = sale.medicine_id;
         if (!monthlyMap[id]) monthlyMap[id] = new Array(12).fill(0);
-        const month = new Date(sale.created_at).getMonth();
+        const month = new Date(sale.sales.created_at).getMonth();
         const qty = (sale.pack_quantity || 0) + (sale.strip_quantity || 0);
         monthlyMap[id][month] += qty;
       });
