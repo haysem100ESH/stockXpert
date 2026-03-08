@@ -881,6 +881,11 @@ export default function DeveloperDashboard() {
                     <div className="font-medium">{owner.pharmacy_name || 'N/A'}</div>
                   </TableCell>
                   <TableCell>
+                    <div className="flex items-center justify-center" title={owner.has_gemini_api_key ? 'API key configured' : 'No API key'}>
+                      <Key className={`h-4 w-4 ${owner.has_gemini_api_key ? 'text-green-500' : 'text-red-400'}`} />
+                    </div>
+                  </TableCell>
+                  <TableCell>
                     <Select 
                       value={owner.active ? "active" : "inactive"} 
                       onValueChange={(value) => handleAccountStatusChange(owner.id, value)}
