@@ -70,7 +70,7 @@ export default function TransferRequestForm({ open, onOpenChange, onSuccess }: P
     const missingBranchRows = branchRows.filter((b) => !existingBranchIds.has(b.id));
 
     if (missingBranchRows.length > 0) {
-      const { data: insertedLocations } = await supabase
+      const { data: insertedLocations, error: insertLocationsError } = await supabase
         .from('locations')
         .insert(
           missingBranchRows.map((b) => ({
@@ -82,16 +82,24 @@ export default function TransferRequestForm({ open, onOpenChange, onSuccess }: P
         )
         .select('id, name, type, branch_id');
 
+      if (insertLocationsError) {
+        toast({ title: 'Error', description: 'Locations are not synced for these branches yet.', variant: 'destructive' });
+      }
+
       if (insertedLocations?.length) {
         locationRows = [...locationRows, ...insertedLocations];
       }
     }
 
-    setLocations(
-      locationRows
-        .map((l) => ({ id: l.id, name: l.name, type: l.type, branch_id: l.branch_id }))
-        .sort((a, b) => a.name.localeCompare(b.name))
-    );
+    const normalizedLocations = locationRows
+      .map((l) => ({ id: l.id, name: l.name, type: l.type, branch_id: l.branch_id }))
+      .sort((a, b) => a.name.localeCompare(b.name));
+
+    setLocations(normalizedLocations);
+
+    const locationIds = new Set(normalizedLocations.map((l) => l.id));
+    if (requestingLocationId && !locationIds.has(requestingLocationId)) setRequestingLocationId('');
+    if (sourceLocationId && !locationIds.has(sourceLocationId)) setSourceLocationId('');
   };
 
   const fetchMedicines = async (locationId?: string) => {
