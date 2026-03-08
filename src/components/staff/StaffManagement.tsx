@@ -357,21 +357,53 @@ export default function StaffManagement() {
         </div>
       )}
 
-      {/* Salary Section - Owner only */}
-      {profile?.role === 'owner' && (
-        <Tabs defaultValue="salary-overview" className="space-y-4">
-          <TabsList>
-            <TabsTrigger value="salary-overview">Salary Overview</TabsTrigger>
-            <TabsTrigger value="salary-history">Salary History</TabsTrigger>
-          </TabsList>
-          <TabsContent value="salary-overview">
-            <SalaryOverview />
+      {/* Salary, Attendance & Performance Section */}
+      <Tabs defaultValue={profile?.role === 'staff' ? 'record-attendance' : 'salary-overview'} className="space-y-4">
+        <TabsList className="flex-wrap h-auto gap-1">
+          {profile?.role === 'owner' && (
+            <>
+              <TabsTrigger value="salary-overview">Salary Overview</TabsTrigger>
+              <TabsTrigger value="salary-history">Salary History</TabsTrigger>
+              <TabsTrigger value="store-location">
+                <MapPin className="h-4 w-4 mr-1" />
+                Store Location
+              </TabsTrigger>
+            </>
+          )}
+          <TabsTrigger value="record-attendance">Record Attendance</TabsTrigger>
+          <TabsTrigger value="attendance-dashboard">Attendance History</TabsTrigger>
+          {profile?.role === 'owner' && (
+            <TabsTrigger value="performance">
+              <BarChart3 className="h-4 w-4 mr-1" />
+              Performance
+            </TabsTrigger>
+          )}
+        </TabsList>
+        {profile?.role === 'owner' && (
+          <>
+            <TabsContent value="salary-overview">
+              <SalaryOverview />
+            </TabsContent>
+            <TabsContent value="salary-history">
+              <SalaryHistory />
+            </TabsContent>
+            <TabsContent value="store-location">
+              <AssignStoreLocation />
+            </TabsContent>
+          </>
+        )}
+        <TabsContent value="record-attendance">
+          <RecordAttendance />
+        </TabsContent>
+        <TabsContent value="attendance-dashboard">
+          <AttendanceDashboard />
+        </TabsContent>
+        {profile?.role === 'owner' && (
+          <TabsContent value="performance">
+            <PerformanceDashboard />
           </TabsContent>
-          <TabsContent value="salary-history">
-            <SalaryHistory />
-          </TabsContent>
-        </Tabs>
-      )}
+        )}
+      </Tabs>
 
       <EditStaffDialog
         open={showEditDialog}
