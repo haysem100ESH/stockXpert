@@ -84,23 +84,19 @@ export default function AddMedicineDialog({ open, onOpenChange, onMedicineAdded,
       
       const { data: profile } = await supabase
         .from('profiles')
-        .select('role, pharmacy_owner_id')
+        .select('role')
         .eq('id', user.id)
         .single();
       
       if (profile) {
         setUserRole(profile.role as 'owner' | 'staff');
-        const ownerId = profile.role === 'owner' ? user.id : profile.pharmacy_owner_id;
         
-        // Fetch suppliers
-        if (ownerId) {
-          const { data: suppliersData } = await supabase
-            .from('suppliers')
-            .select('id, name')
-            .eq('pharmacy_owner_id', ownerId)
-            .order('name');
-          if (suppliersData) setSuppliers(suppliersData);
-        }
+        // Fetch all suppliers
+        const { data: suppliersData } = await supabase
+          .from('suppliers')
+          .select('id, name')
+          .order('name');
+        if (suppliersData) setSuppliers(suppliersData);
         
         if (profile.role === 'owner') {
           const { data: branchesData } = await supabase
