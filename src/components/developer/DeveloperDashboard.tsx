@@ -570,31 +570,31 @@ export default function DeveloperDashboard() {
   const getStatusBadge = (status: string | null) => {
     switch (status) {
       case 'active':
-        return <Badge className="bg-green-100 text-green-800">Active</Badge>;
+        return <Badge className="bg-green-500/15 text-green-500 border-green-500/30">Active</Badge>;
       case 'expiring_soon':
-        return <Badge className="bg-yellow-100 text-yellow-800">Expiring Soon</Badge>;
+        return <Badge className="bg-yellow-500/15 text-yellow-500 border-yellow-500/30">Expiring Soon</Badge>;
       case 'expired':
-        return <Badge className="bg-red-100 text-red-800">Expired</Badge>;
+        return <Badge className="bg-red-500/15 text-red-500 border-red-500/30">Expired</Badge>;
       case 'inactive':
-        return <Badge className="bg-gray-100 text-gray-800">Inactive</Badge>;
+        return <Badge className="bg-muted text-muted-foreground">Inactive</Badge>;
       default:
-        return <Badge className="bg-gray-100 text-gray-800">No Subscription</Badge>;
+        return <Badge className="bg-muted text-muted-foreground">No Subscription</Badge>;
     }
   };
 
   const getAccountStatusBadge = (active: boolean, manuallyDeactivated?: boolean, subscriptionStatus?: string) => {
     if (!active) {
       if (subscriptionStatus === 'inactive') {
-        return <Badge className="bg-gray-100 text-gray-800">Inactive</Badge>;
+        return <Badge className="bg-muted text-muted-foreground">Inactive</Badge>;
       } else if (manuallyDeactivated) {
-        return <Badge className="bg-red-100 text-red-800">Deactivated</Badge>;
+        return <Badge className="bg-red-500/15 text-red-500 border-red-500/30">Deactivated</Badge>;
       } else if (subscriptionStatus === 'expired') {
-        return <Badge className="bg-orange-100 text-orange-800">Expired</Badge>;
+        return <Badge className="bg-orange-500/15 text-orange-500 border-orange-500/30">Expired</Badge>;
       } else {
-        return <Badge className="bg-red-100 text-red-800">Deactivated</Badge>;
+        return <Badge className="bg-red-500/15 text-red-500 border-red-500/30">Deactivated</Badge>;
       }
     }
-    return <Badge className="bg-green-100 text-green-800">Active</Badge>;
+    return <Badge className="bg-green-500/15 text-green-500 border-green-500/30">Active</Badge>;
   };
 
   if (loading) {
