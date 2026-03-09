@@ -254,18 +254,83 @@ export default function AttendanceDashboard() {
     }
   };
 
-  // Fetch a photo URL and convert it to a base64 data URL for embedding in exports
-  const fetchImageAsBase64 = async (url: string): Promise<string | null> => {
+  // Load attendance photos (stored in Supabase Storage) in a way that works for PDF/Excel embedding.
+  // - Prefer Storage.download() (avoids CORS/auth edge cases)
+  // - Normalize to JPEG/PNG (jsPDF/exceljs don't support WebP)
+  // - Downscale large images to keep exports fast/stable
+  type SupportedExportMime = 'image/jpeg' | 'image/png';
+
+  const blobToDataUrl = (blob: Blob): Promise<string> =>
+    new Promise((resolve) => {
+      const reader = new FileReader();
+      reader.onloadend = () => resolve(reader.result as string);
+      reader.onerror = () => resolve('');
+      reader.readAsDataURL(blob);
+    });
+
+  const canvasToBlob = (canvas: HTMLCanvasElement, mime: SupportedExportMime, quality = 0.82) =>
+    new Promise<Blob | null>((resolve) => canvas.toBlob(resolve, mime, quality));
+
+  const normalizeImageForExport = async (
+    inputBlob: Blob,
+    opts?: { maxDimension?: number; preferredMime?: SupportedExportMime }
+  ): Promise<{ dataUrl: string; mime: SupportedExportMime } | null> => {
+    const maxDimension = opts?.maxDimension ?? 1600;
+
+    const isSupported = inputBlob.type === 'image/jpeg' || inputBlob.type === 'image/png';
+    const targetMime: SupportedExportMime = opts?.preferredMime ?? (isSupported ? (inputBlob.type as SupportedExportMime) : 'image/jpeg');
+
+    // If we can't decode/resize, fall back to direct dataURL for supported types.
     try {
-      const response = await fetch(url);
+      // createImageBitmap supports jpeg/png/webp in modern browsers.
+      const bitmap = await createImageBitmap(inputBlob);
+
+      let { width, height } = bitmap;
+      const scale = Math.min(1, maxDimension / Math.max(width, height));
+      width = Math.max(1, Math.round(width * scale));
+      height = Math.max(1, Math.round(height * scale));
+
+      const canvas = document.createElement('canvas');
+      canvas.width = width;
+      canvas.height = height;
+      const ctx = canvas.getContext('2d');
+      if (!ctx) return null;
+      ctx.drawImage(bitmap, 0, 0, width, height);
+
+      const outBlob = await canvasToBlob(canvas, targetMime, targetMime === 'image/jpeg' ? 0.82 : 1);
+      if (!outBlob) return null;
+
+      const dataUrl = await blobToDataUrl(outBlob);
+      if (!dataUrl) return null;
+      return { dataUrl, mime: targetMime };
+    } catch {
+      // Fallback: only safe for jpeg/png
+      if (!isSupported) return null;
+      const dataUrl = await blobToDataUrl(inputBlob);
+      if (!dataUrl) return null;
+      return { dataUrl, mime: inputBlob.type as SupportedExportMime };
+    }
+  };
+
+  const fetchPhotoForExport = async (
+    photoValue: string,
+    opts?: { maxDimension?: number; preferredMime?: SupportedExportMime }
+  ): Promise<{ dataUrl: string; mime: SupportedExportMime } | null> => {
+    try {
+      // First try download via Supabase Storage (best for private buckets / strict CORS)
+      const photoPath = extractPhotoPath(photoValue);
+      if (photoPath) {
+        const { data, error } = await supabase.storage.from('attendance-photos').download(photoPath);
+        if (!error && data) {
+          return await normalizeImageForExport(data, opts);
+        }
+      }
+
+      // Fallback to fetch (works for public URLs)
+      const response = await fetch(photoValue);
       if (!response.ok) return null;
       const blob = await response.blob();
-      return new Promise((resolve) => {
-        const reader = new FileReader();
-        reader.onloadend = () => resolve(reader.result as string);
-        reader.onerror = () => resolve(null);
-        reader.readAsDataURL(blob);
-      });
+      return await normalizeImageForExport(blob, opts);
     } catch {
       return null;
     }
@@ -354,15 +419,10 @@ export default function AttendanceDashboard() {
 
         // Embed check-in photo
         if (checkinPhotoUrl) {
-          const b64 = await fetchImageAsBase64(checkinPhotoUrl);
-          if (b64) {
-            const mimeMatch = b64.match(/^data:(image\/\w+);base64,/);
-            let extension: 'jpeg' | 'png' | 'gif' = 'jpeg';
-            if (mimeMatch) {
-              const ext = mimeMatch[1].split('/')[1];
-              if (ext === 'png' || ext === 'gif') extension = ext;
-            }
-            const base64Data = b64.split(',')[1];
+          const img = await fetchPhotoForExport(checkinPhotoUrl, { maxDimension: 900, preferredMime: 'image/jpeg' });
+          if (img) {
+            const base64Data = img.dataUrl.split(',')[1];
+            const extension: 'jpeg' | 'png' = img.mime === 'image/png' ? 'png' : 'jpeg';
             const imageId = workbook.addImage({ base64: base64Data, extension });
             row.height = PHOTO_ROW_HEIGHT;
             worksheet.addImage(imageId, {
@@ -374,15 +434,10 @@ export default function AttendanceDashboard() {
 
         // Embed check-out photo
         if (checkoutPhotoUrl) {
-          const b64 = await fetchImageAsBase64(checkoutPhotoUrl);
-          if (b64) {
-            const mimeMatch = b64.match(/^data:(image\/\w+);base64,/);
-            let extension: 'jpeg' | 'png' | 'gif' = 'jpeg';
-            if (mimeMatch) {
-              const ext = mimeMatch[1].split('/')[1];
-              if (ext === 'png' || ext === 'gif') extension = ext;
-            }
-            const base64Data = b64.split(',')[1];
+          const img = await fetchPhotoForExport(checkoutPhotoUrl, { maxDimension: 900, preferredMime: 'image/jpeg' });
+          if (img) {
+            const base64Data = img.dataUrl.split(',')[1];
+            const extension: 'jpeg' | 'png' = img.mime === 'image/png' ? 'png' : 'jpeg';
             const imageId = workbook.addImage({ base64: base64Data, extension });
             row.height = PHOTO_ROW_HEIGHT;
             worksheet.addImage(imageId, {
@@ -468,58 +523,63 @@ export default function AttendanceDashboard() {
       // Photo pages — one record per page (check-in + check-out side by side)
       const recordsWithPhotos = records.filter((r) => r.checkin_photo || r.checkout_photo);
 
-      for (const record of recordsWithPhotos) {
-        const checkinPhotoUrl = await getDisplayPhotoUrl(record.checkin_photo);
-        const checkoutPhotoUrl = await getDisplayPhotoUrl(record.checkout_photo);
+       for (const record of recordsWithPhotos) {
+         // Use the already computed public URLs when available, but fetch via Storage.download() when possible.
+         const checkinPhotoUrl = await getDisplayPhotoUrl(record.checkin_photo);
+         const checkoutPhotoUrl = await getDisplayPhotoUrl(record.checkout_photo);
 
-        const checkinB64 = checkinPhotoUrl ? await fetchImageAsBase64(checkinPhotoUrl) : null;
-        const checkoutB64 = checkoutPhotoUrl ? await fetchImageAsBase64(checkoutPhotoUrl) : null;
+         const [checkinImg, checkoutImg] = await Promise.all([
+           checkinPhotoUrl ? fetchPhotoForExport(checkinPhotoUrl, { maxDimension: 1800, preferredMime: 'image/jpeg' }) : Promise.resolve(null),
+           checkoutPhotoUrl ? fetchPhotoForExport(checkoutPhotoUrl, { maxDimension: 1800, preferredMime: 'image/jpeg' }) : Promise.resolve(null),
+         ]);
 
-        // Skip if no images could be loaded
-        if (!checkinB64 && !checkoutB64) continue;
+         // Skip if no images could be loaded
+         if (!checkinImg && !checkoutImg) continue;
 
-        doc.addPage();
+         doc.addPage();
 
-        // Page header bar
-        doc.setFillColor(30, 111, 62);
-        doc.rect(0, 0, pageWidth, 18, 'F');
-        doc.setTextColor(255, 255, 255);
-        doc.setFontSize(13);
-        const dateStr = new Date(record.date).toLocaleDateString(undefined, { weekday: 'long', year: 'numeric', month: 'long', day: 'numeric' });
-        const staffLabel = isOwner ? ` — ${record.staff_name}` : '';
-        doc.text(`${dateStr}${staffLabel}`, pageWidth / 2, 12, { align: 'center' });
+         // Page header bar
+         doc.setFillColor(30, 111, 62);
+         doc.rect(0, 0, pageWidth, 18, 'F');
+         doc.setTextColor(255, 255, 255);
+         doc.setFontSize(13);
+         const dateStr = new Date(record.date).toLocaleDateString(undefined, { weekday: 'long', year: 'numeric', month: 'long', day: 'numeric' });
+         const staffLabel = isOwner ? ` — ${record.staff_name}` : '';
+         doc.text(`${dateStr}${staffLabel}`, pageWidth / 2, 12, { align: 'center' });
 
-        doc.setTextColor(0, 0, 0);
-        doc.setFontSize(10);
+         doc.setTextColor(0, 0, 0);
+         doc.setFontSize(10);
 
-        const imgY = 25;
-        const imgH = pageHeight - imgY - 20;
-        const halfW = (pageWidth - 42) / 2; // 14 margin each side + 14 gap
+         const imgY = 25;
+         const imgH = pageHeight - imgY - 20;
+         const halfW = (pageWidth - 42) / 2; // 14 margin each side + 14 gap
 
-        if (checkinB64 && checkoutB64) {
-          // Side by side
-          doc.setFontSize(11);
-          doc.setFont(undefined as any, 'bold');
-          doc.text('Check-In Photo', 14 + halfW / 2, imgY + 6, { align: 'center' });
-          doc.setFont(undefined as any, 'normal');
-          doc.addImage(checkinB64, 'JPEG', 14, imgY + 10, halfW, imgH - 10);
+         const fmt = (mime: 'image/jpeg' | 'image/png') => (mime === 'image/png' ? 'PNG' : 'JPEG');
 
-          doc.setFont(undefined as any, 'bold');
-          doc.text('Check-Out Photo', 14 + halfW + 14 + halfW / 2, imgY + 6, { align: 'center' });
-          doc.setFont(undefined as any, 'normal');
-          doc.addImage(checkoutB64, 'JPEG', 14 + halfW + 14, imgY + 10, halfW, imgH - 10);
-        } else if (checkinB64) {
-          doc.setFont(undefined as any, 'bold');
-          doc.text('Check-In Photo', pageWidth / 2, imgY + 6, { align: 'center' });
-          doc.setFont(undefined as any, 'normal');
-          doc.addImage(checkinB64, 'JPEG', 14, imgY + 10, pageWidth - 28, imgH - 10);
-        } else if (checkoutB64) {
-          doc.setFont(undefined as any, 'bold');
-          doc.text('Check-Out Photo', pageWidth / 2, imgY + 6, { align: 'center' });
-          doc.setFont(undefined as any, 'normal');
-          doc.addImage(checkoutB64, 'JPEG', 14, imgY + 10, pageWidth - 28, imgH - 10);
-        }
-      }
+         if (checkinImg && checkoutImg) {
+           // Side by side
+           doc.setFontSize(11);
+           doc.setFont(undefined as any, 'bold');
+           doc.text('Check-In Photo', 14 + halfW / 2, imgY + 6, { align: 'center' });
+           doc.setFont(undefined as any, 'normal');
+           doc.addImage(checkinImg.dataUrl, fmt(checkinImg.mime) as any, 14, imgY + 10, halfW, imgH - 10);
+
+           doc.setFont(undefined as any, 'bold');
+           doc.text('Check-Out Photo', 14 + halfW + 14 + halfW / 2, imgY + 6, { align: 'center' });
+           doc.setFont(undefined as any, 'normal');
+           doc.addImage(checkoutImg.dataUrl, fmt(checkoutImg.mime) as any, 14 + halfW + 14, imgY + 10, halfW, imgH - 10);
+         } else if (checkinImg) {
+           doc.setFont(undefined as any, 'bold');
+           doc.text('Check-In Photo', pageWidth / 2, imgY + 6, { align: 'center' });
+           doc.setFont(undefined as any, 'normal');
+           doc.addImage(checkinImg.dataUrl, fmt(checkinImg.mime) as any, 14, imgY + 10, pageWidth - 28, imgH - 10);
+         } else if (checkoutImg) {
+           doc.setFont(undefined as any, 'bold');
+           doc.text('Check-Out Photo', pageWidth / 2, imgY + 6, { align: 'center' });
+           doc.setFont(undefined as any, 'normal');
+           doc.addImage(checkoutImg.dataUrl, fmt(checkoutImg.mime) as any, 14, imgY + 10, pageWidth - 28, imgH - 10);
+         }
+       }
 
       doc.save(`attendance-report-${filterDateFrom}-to-${filterDateTo}.pdf`);
       toast({ title: 'Export Complete', description: 'Attendance report with photos downloaded successfully.' });
