@@ -35,7 +35,7 @@ export default function RecordPurchaseDialog({ open, onOpenChange, supplierId, s
   const { toast } = useToast();
   const { profile } = useAuth();
   const { selectedBranch, userBranch, branchType } = useBranchContext();
-  const isGeneral = branchType === 'general' || branchType === 'warehouse';
+  const isGeneral = branchType !== 'pharmacy';
   const { categories } = useCustomCategories(isGeneral ? 'general' : 'pharmacy');
 
   const label = isGeneral
