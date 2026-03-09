@@ -35,7 +35,9 @@ export default function SmartAssistant() {
   const { user, profile } = useAuth();
   const { selectedBranch, branchType } = useBranchContext();
   const branding = useBranding();
+  const { isSubscriptionExpired } = useSubscription();
   const { toast } = useToast();
+  const subscriptionExpired = isSubscriptionExpired();
 
   // Fetch branch IDs for owner
   useEffect(() => {
