@@ -13,6 +13,9 @@ import { Calendar, CheckCircle2, Clock, XCircle, Users, ShieldCheck, ShieldAlert
 import { supabase } from '@/lib/db';
 import { useAuth } from '@/hooks/useAuth';
 import { useToast } from '@/hooks/use-toast';
+import ExcelJS from 'exceljs';
+import jsPDF from 'jspdf';
+import 'jspdf-autotable';
 
 interface AttendanceRecord {
   id: string;
