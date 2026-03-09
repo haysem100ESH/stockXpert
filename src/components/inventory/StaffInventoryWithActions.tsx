@@ -413,6 +413,65 @@ export default function StaffInventoryWithActions() {
           )}
         </TabsContent>
 
+  const renderMedicineCard = (medicine: Medicine) => (
+    <Card key={medicine.id} className={isExpired(medicine) ? "border-destructive/30 bg-destructive/5" : ""}>
+      <CardHeader>
+        <div className="flex justify-between items-start">
+          <div className="flex-1">
+            <CardTitle className="text-lg">{medicine.name}</CardTitle>
+            {medicine.generic_name && <CardDescription>{medicine.generic_name}</CardDescription>}
+          </div>
+          <div className="flex space-x-1">
+            <Button size="sm" variant="ghost" onClick={() => handleEditMedicine(medicine)} title="Edit"><Edit2 className="h-4 w-4" /></Button>
+            <Button size="sm" variant="ghost" onClick={() => handleReplicateMedicine(medicine)} title="Replicate"><Recycle className="h-4 w-4" /></Button>
+            <Button size="sm" variant="ghost" onClick={() => setStockAdjustMedicine(medicine)} title="Adjust Stock"><SlidersHorizontal className="h-4 w-4" /></Button>
+            <Button size="sm" variant="ghost" onClick={() => handleDeleteMedicine(medicine.id, medicine.name)} title="Delete"><Trash2 className="h-4 w-4" /></Button>
+          </div>
+        </div>
+      </CardHeader>
+      <CardContent>
+        <div className="space-y-2">
+          <div className="flex justify-between text-sm"><span>Category:</span><Badge variant="outline">{medicine.category}</Badge></div>
+          {isPharmacy && medicine.batch_number && <div className="flex justify-between text-sm"><span>Batch:</span><span>{medicine.batch_number}</span></div>}
+          {medicine.country_name && <div className="flex justify-between text-sm"><span>Country:</span><span>{medicine.country_name}</span></div>}
+          {medicine.manufacturer && <div className="flex justify-between text-sm"><span>{isPharmacy ? 'Manufacturer' : 'Brand'}:</span><span>{medicine.manufacturer}</span></div>}
+          {medicine.creator && <div className="flex justify-between text-sm"><span>Added by:</span><span className="text-xs">{medicine.creator.full_name || medicine.creator.email}</span></div>}
+          <div className="flex justify-between text-sm"><span>Price:</span><span className="font-medium">ETB {medicine.selling_price}</span></div>
+          <div className="flex justify-between text-sm items-center">
+            <span>Stock:</span>
+            <div className="flex items-center space-x-2">
+              <span className={(isLowStock(medicine) || isOutOfStock(medicine)) ? 'text-warning font-medium' : ''}>{medicine.stock_quantity}</span>
+              {isOutOfStock(medicine) && <Badge variant="destructive" className="text-xs">Out of Stock</Badge>}
+              {isLowStock(medicine) && <Badge variant="destructive" className="text-xs">Low Stock</Badge>}
+            </div>
+          </div>
+          {medicine.units_per_pack && (
+            <>
+              <div className="flex justify-between text-sm"><span>Unopened Packs:</span><Badge variant="secondary">{medicine.stock_quantity}</Badge></div>
+              <div className="flex justify-between text-sm items-center">
+                <span>Open Pack:</span>
+                <div className="flex items-center gap-2">
+                  <span className="font-medium">{medicine.open_pack_units || 0}/{medicine.units_per_pack} {medicine.unit_label || 'units'} remaining</span>
+                  <Button size="sm" variant="ghost" className="h-6 w-6 p-0" onClick={() => setAdjustingMedicine(medicine)} title="Adjust open pack units"><Settings2 className="h-3 w-3" /></Button>
+                </div>
+              </div>
+            </>
+          )}
+          {isPharmacy && medicine.expiry_date && (
+            <div className="flex justify-between text-sm">
+              <span>Expiry:</span>
+              <div className="flex items-center space-x-2">
+                <span className={isExpired(medicine) ? 'text-destructive font-medium' : isExpiringSoon(medicine) ? 'text-warning' : ''}>{new Date(medicine.expiry_date).toLocaleDateString()}</span>
+                {isExpired(medicine) && <Badge variant="destructive" className="text-xs">Expired</Badge>}
+                {!isExpired(medicine) && isExpiringSoon(medicine) && <Badge variant="secondary" className="text-xs">Expiring Soon</Badge>}
+              </div>
+            </div>
+          )}
+        </div>
+      </CardContent>
+    </Card>
+  );
+
 
         <TabsContent value="stock-history">
           <StockEditHistory />
