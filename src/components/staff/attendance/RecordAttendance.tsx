@@ -260,22 +260,22 @@ export default function RecordAttendance() {
   ) => {
     setRecording(true);
     try {
-      let checkoutPhotoUrl: string | null = null;
+      let checkoutPhotoPath: string | null = null;
       const today = new Date().toISOString().split('T')[0];
 
-      if (photoBlob) {
-        const fileName = `checkout_${user!.id}_${today}_${Date.now()}.jpg`;
-        const { error: uploadError } = await supabase.storage
-          .from('attendance-photos')
-          .upload(fileName, photoBlob, { contentType: 'image/jpeg' });
-
-        if (!uploadError) {
-          const { data: urlData } = supabase.storage
-            .from('attendance-photos')
-            .getPublicUrl(fileName);
-          checkoutPhotoUrl = urlData?.publicUrl || null;
-        }
+      // Photo is mandatory for attendance
+      if (!photoBlob) {
+        throw new Error('Photo capture failed — please try again.');
       }
+
+      // Store under the staffId prefix to satisfy common storage policies like: name starts with auth.uid()
+      const checkoutPath = `${user!.id}/${today}/checkout_${Date.now()}.jpg`;
+      const { error: uploadError } = await supabase.storage
+        .from('attendance-photos')
+        .upload(checkoutPath, photoBlob, { contentType: 'image/jpeg', upsert: false });
+
+      if (uploadError) throw uploadError;
+      checkoutPhotoPath = checkoutPath;
 
       const { error } = await supabase
         .from('staff_attendance')
