@@ -178,11 +178,23 @@ export default function RecordAttendance() {
 
       // Store under the staffId prefix to satisfy common storage policies like: name starts with auth.uid()
       const checkinPath = `${user!.id}/${today}/checkin_${Date.now()}.jpg`;
-      const { error: uploadError } = await supabase.storage
+      
+      console.log('Uploading check-in photo:', { path: checkinPath, blobSize: photoBlob.size });
+      const { data: uploadData, error: uploadError } = await supabase.storage
         .from('attendance-photos')
         .upload(checkinPath, photoBlob, { contentType: 'image/jpeg', upsert: false });
 
-      if (uploadError) throw uploadError;
+      if (uploadError) {
+        console.error('Check-in photo upload failed:', uploadError);
+        toast({ 
+          title: 'Photo Upload Failed', 
+          description: `Failed to save check-in photo: ${uploadError.message}`, 
+          variant: 'destructive' 
+        });
+        throw uploadError;
+      }
+      
+      console.log('Check-in photo uploaded successfully:', uploadData);
       checkinPhotoPath = checkinPath;
 
       const { error } = await supabase.from('staff_attendance').insert({
@@ -270,11 +282,23 @@ export default function RecordAttendance() {
 
       // Store under the staffId prefix to satisfy common storage policies like: name starts with auth.uid()
       const checkoutPath = `${user!.id}/${today}/checkout_${Date.now()}.jpg`;
-      const { error: uploadError } = await supabase.storage
+      
+      console.log('Uploading check-out photo:', { path: checkoutPath, blobSize: photoBlob.size });
+      const { data: uploadData, error: uploadError } = await supabase.storage
         .from('attendance-photos')
         .upload(checkoutPath, photoBlob, { contentType: 'image/jpeg', upsert: false });
 
-      if (uploadError) throw uploadError;
+      if (uploadError) {
+        console.error('Check-out photo upload failed:', uploadError);
+        toast({ 
+          title: 'Photo Upload Failed', 
+          description: `Failed to save check-out photo: ${uploadError.message}`, 
+          variant: 'destructive' 
+        });
+        throw uploadError;
+      }
+      
+      console.log('Check-out photo uploaded successfully:', uploadData);
       checkoutPhotoPath = checkoutPath;
 
       const { error } = await supabase
