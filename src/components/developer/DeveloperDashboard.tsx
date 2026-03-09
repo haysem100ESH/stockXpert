@@ -1062,7 +1062,7 @@ export default function DeveloperDashboard() {
               <TableHeader>
                 <TableRow>
                   <TableHead>Date & Time</TableHead>
-                  <TableHead>Pharmacy Name</TableHead>
+                  <TableHead>Business Name</TableHead>
                   <TableHead>Address</TableHead>
                   <TableHead>Owner</TableHead>
                   <TableHead>Amount Collected</TableHead>

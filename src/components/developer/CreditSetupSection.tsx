@@ -264,7 +264,7 @@ export default function CreditSetupSection() {
             <DialogHeader>
               <DialogTitle>Add Credit Plan</DialogTitle>
               <DialogDescription>
-                Create a new universal credit plan for all new pharmacy owners
+                Create a new universal credit plan for all new business owners
               </DialogDescription>
             </DialogHeader>
             <div className="space-y-4">

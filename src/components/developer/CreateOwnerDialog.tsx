@@ -164,7 +164,7 @@ export default function CreateOwnerDialog({ onOwnerCreated }: CreateOwnerDialogP
       console.error('Error creating owner:', error);
       toast({
         title: "Error",
-        description: error.message || "Failed to create pharmacy owner account",
+        description: error.message || "Failed to create business owner account",
         variant: "destructive"
       });
     } finally {

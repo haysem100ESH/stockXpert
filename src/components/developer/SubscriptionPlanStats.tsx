@@ -124,7 +124,7 @@ export default function SubscriptionPlanStats() {
                   ))}
                 </Pie>
                 <Tooltip 
-                  formatter={(value: number) => [`${value} owners`, 'Count']}
+                  formatter={(value: number) => [`${value} owner(s)`, 'Count']}
                 />
                 <Legend />
               </PieChart>
