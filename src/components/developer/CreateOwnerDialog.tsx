@@ -240,12 +240,12 @@ export default function CreateOwnerDialog({ onOwnerCreated }: CreateOwnerDialogP
           </div>
 
           <div>
-            <Label htmlFor="pharmacy_name">Pharmacy Name</Label>
+            <Label htmlFor="pharmacy_name">Business Name</Label>
             <Input
               id="pharmacy_name"
               value={formData.pharmacy_name}
               onChange={(e) => handleInputChange('pharmacy_name', e.target.value)}
-              placeholder="ABC Pharmacy"
+              placeholder="ABC Store"
             />
           </div>
 
