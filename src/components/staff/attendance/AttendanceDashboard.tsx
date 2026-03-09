@@ -419,15 +419,10 @@ export default function AttendanceDashboard() {
 
         // Embed check-in photo
         if (checkinPhotoUrl) {
-          const b64 = await fetchImageAsBase64(checkinPhotoUrl);
-          if (b64) {
-            const mimeMatch = b64.match(/^data:(image\/\w+);base64,/);
-            let extension: 'jpeg' | 'png' | 'gif' = 'jpeg';
-            if (mimeMatch) {
-              const ext = mimeMatch[1].split('/')[1];
-              if (ext === 'png' || ext === 'gif') extension = ext;
-            }
-            const base64Data = b64.split(',')[1];
+          const img = await fetchPhotoForExport(checkinPhotoUrl, { maxDimension: 900, preferredMime: 'image/jpeg' });
+          if (img) {
+            const base64Data = img.dataUrl.split(',')[1];
+            const extension: 'jpeg' | 'png' = img.mime === 'image/png' ? 'png' : 'jpeg';
             const imageId = workbook.addImage({ base64: base64Data, extension });
             row.height = PHOTO_ROW_HEIGHT;
             worksheet.addImage(imageId, {
@@ -439,15 +434,10 @@ export default function AttendanceDashboard() {
 
         // Embed check-out photo
         if (checkoutPhotoUrl) {
-          const b64 = await fetchImageAsBase64(checkoutPhotoUrl);
-          if (b64) {
-            const mimeMatch = b64.match(/^data:(image\/\w+);base64,/);
-            let extension: 'jpeg' | 'png' | 'gif' = 'jpeg';
-            if (mimeMatch) {
-              const ext = mimeMatch[1].split('/')[1];
-              if (ext === 'png' || ext === 'gif') extension = ext;
-            }
-            const base64Data = b64.split(',')[1];
+          const img = await fetchPhotoForExport(checkoutPhotoUrl, { maxDimension: 900, preferredMime: 'image/jpeg' });
+          if (img) {
+            const base64Data = img.dataUrl.split(',')[1];
+            const extension: 'jpeg' | 'png' = img.mime === 'image/png' ? 'png' : 'jpeg';
             const imageId = workbook.addImage({ base64: base64Data, extension });
             row.height = PHOTO_ROW_HEIGHT;
             worksheet.addImage(imageId, {
