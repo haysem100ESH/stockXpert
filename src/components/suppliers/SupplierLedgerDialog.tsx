@@ -92,7 +92,8 @@ export default function SupplierLedgerDialog({ open, onOpenChange, supplierId, s
         }
       });
 
-      setEntries(ledger);
+      // Sort from latest to oldest for display
+      setEntries(ledger.reverse());
     } catch {
       toast({ title: 'Error', description: 'Failed to load supplier ledger', variant: 'destructive' });
     } finally {
