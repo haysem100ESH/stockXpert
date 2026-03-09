@@ -470,31 +470,29 @@ export default function AttendanceDashboard() {
                       <TableCell>
                         {r.verification_score != null ? `${r.verification_score}%` : '—'}
                       </TableCell>
-                      {isOwner && (
-                        <TableCell>
-                          <div className="flex gap-2">
-                            {r.checkin_photo && (
-                              <img
-                                src={r.checkin_photo}
-                                alt="Check-in"
-                                className="h-10 w-10 rounded object-cover cursor-pointer hover:opacity-80 border transition-opacity"
-                                onClick={() => setPhotoModal({ url: r.checkin_photo!, title: `Check-In — ${r.staff_name} (${new Date(r.date).toLocaleDateString()})` })}
-                              />
-                            )}
-                            {r.checkout_photo && (
-                              <img
-                                src={r.checkout_photo}
-                                alt="Check-out"
-                                className="h-10 w-10 rounded object-cover cursor-pointer hover:opacity-80 border transition-opacity"
-                                onClick={() => setPhotoModal({ url: r.checkout_photo!, title: `Check-Out — ${r.staff_name} (${new Date(r.date).toLocaleDateString()})` })}
-                              />
-                            )}
-                            {!r.checkin_photo && !r.checkout_photo && (
-                              <span className="text-xs text-muted-foreground">—</span>
-                            )}
-                          </div>
-                        </TableCell>
-                      )}
+                      <TableCell>
+                        <div className="flex gap-2">
+                          {r.checkin_photo && (
+                            <img
+                              src={r.checkin_photo}
+                              alt="Check-in"
+                              className="h-10 w-10 rounded object-cover cursor-pointer hover:opacity-80 border transition-opacity"
+                              onClick={() => setPhotoModal({ url: r.checkin_photo!, title: `Check-In — ${r.staff_name || 'You'} (${new Date(r.date).toLocaleDateString()})` })}
+                            />
+                          )}
+                          {r.checkout_photo && (
+                            <img
+                              src={r.checkout_photo}
+                              alt="Check-out"
+                              className="h-10 w-10 rounded object-cover cursor-pointer hover:opacity-80 border transition-opacity"
+                              onClick={() => setPhotoModal({ url: r.checkout_photo!, title: `Check-Out — ${r.staff_name || 'You'} (${new Date(r.date).toLocaleDateString()})` })}
+                            />
+                          )}
+                          {!r.checkin_photo && !r.checkout_photo && (
+                            <span className="text-xs text-muted-foreground">—</span>
+                          )}
+                        </div>
+                      </TableCell>
                     </TableRow>
                   ))}
                 </TableBody>

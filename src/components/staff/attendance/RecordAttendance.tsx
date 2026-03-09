@@ -362,6 +362,47 @@ export default function RecordAttendance() {
     );
   }
 
+  // Show photo capture for staff without face data
+  if (showPhotoCapture && pendingLocation) {
+    const handlePhotoCaptured = (blob: Blob) => {
+      if (showPhotoCapture === 'checkin') {
+        completeCheckIn(pendingLocation.lat, pendingLocation.lng, pendingLocation.distance, false, blob, 0);
+      } else {
+        completeCheckOut(pendingLocation.lat, pendingLocation.lng, false, blob, 0);
+      }
+      setShowPhotoCapture(null);
+    };
+
+    return (
+      <Card>
+        <CardHeader>
+          <CardTitle className="flex items-center gap-2">
+            <ShieldCheck className="h-5 w-5" />
+            Take a Photo — {showPhotoCapture === 'checkin' ? 'Check-In' : 'Check-Out'}
+          </CardTitle>
+          <CardDescription>Please capture your photo for attendance verification</CardDescription>
+        </CardHeader>
+        <CardContent className="space-y-4">
+          <CameraCapture
+            showCaptureButton={true}
+            onCapture={handlePhotoCaptured}
+            mirror={true}
+          />
+          <Button
+            variant="outline"
+            className="w-full"
+            onClick={() => {
+              setShowPhotoCapture(null);
+              setPendingLocation(null);
+            }}
+          >
+            Cancel
+          </Button>
+        </CardContent>
+      </Card>
+    );
+  }
+
   const hasCheckedIn = !!todayRecord?.checkin_time;
   const hasCheckedOut = !!todayRecord?.checkout_time;
 
