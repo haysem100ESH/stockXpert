@@ -29,6 +29,8 @@ interface Medicine {
   open_pack_units?: number;
   unit_label?: string;
   item_type?: string;
+  branch_id?: string;
+  branch_name?: string;
 }
 
 interface CartItem extends Medicine {
