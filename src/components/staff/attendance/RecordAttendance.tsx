@@ -281,34 +281,16 @@ export default function RecordAttendance() {
   ) => {
     setRecording(true);
     try {
-      let checkoutPhotoPath: string | null = null;
       const today = new Date().toISOString().split('T')[0];
 
-      // Photo is mandatory for attendance
       if (!photoBlob) {
         throw new Error('Photo capture failed — please try again.');
       }
 
-      // Store under the staffId prefix to satisfy common storage policies like: name starts with auth.uid()
       const checkoutPath = `${user!.id}/${today}/checkout_${Date.now()}.jpg`;
-      
       console.log('Uploading check-out photo:', { path: checkoutPath, blobSize: photoBlob.size });
-      const { data: uploadData, error: uploadError } = await supabase.storage
-        .from('attendance-photos')
-        .upload(checkoutPath, photoBlob, { contentType: 'image/jpeg', upsert: false });
-
-      if (uploadError) {
-        console.error('Check-out photo upload failed:', uploadError);
-        toast({ 
-          title: 'Photo Upload Failed', 
-          description: `Failed to save check-out photo: ${uploadError.message}`, 
-          variant: 'destructive' 
-        });
-        throw uploadError;
-      }
       
-      console.log('Check-out photo uploaded successfully:', uploadData);
-      checkoutPhotoPath = checkoutPath;
+      const checkoutPhotoPath = await uploadWithRetry(checkoutPath, photoBlob);
 
       const { error } = await supabase
         .from('staff_attendance')
@@ -323,7 +305,7 @@ export default function RecordAttendance() {
         .eq('id', todayRecord!.id);
 
       if (error) throw error;
-      toast({ title: 'Checked Out', description: `Have a great rest of your day!${faceVerified ? ' ✅ Face verified' : ''}` });
+      toast({ title: 'Checked Out ✅', description: `Have a great rest of your day!${faceVerified ? ' • Face verified' : ''}` });
       fetchData();
     } catch (error: any) {
       toast({ title: 'Error', description: error.message || 'Failed to check out', variant: 'destructive' });
