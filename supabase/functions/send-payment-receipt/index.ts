@@ -1,4 +1,4 @@
-const TELEGRAM_BOT_TOKEN = Deno.env.get('TELEGRAM_BOT_TOKEN') || Deno.env.get('TELEGRAM_BOT_TOKEN_ADMIN');
+const TELEGRAM_BOT_TOKEN = Deno.env.get('TELEGRAM_BOT_TOKEN_ADMIN');
 const ADMIN_CHAT_IDS = ['1447176624', '1447176623'];
 
 const corsHeaders = {
