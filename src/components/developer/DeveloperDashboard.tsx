@@ -1126,7 +1126,7 @@ export default function DeveloperDashboard() {
           <DialogHeader>
             <DialogTitle>Add Credit to {selectedOwnerForCredit?.full_name}</DialogTitle>
             <DialogDescription>
-              Select a credit plan to add to this pharmacy owner's account
+              Select a credit plan to add to this owner's account
             </DialogDescription>
           </DialogHeader>
           
