@@ -414,6 +414,44 @@ export default function AddMedicineDialog({ open, onOpenChange, onMedicineAdded,
             </Select>
           </div>
 
+          {/* Supplier Selection (Optional) */}
+          <div className="space-y-3 p-4 rounded-lg border bg-muted/30">
+            <Label className="text-sm font-semibold">Link to Supplier (Optional)</Label>
+            <Select value={selectedSupplierId} onValueChange={setSelectedSupplierId}>
+              <SelectTrigger>
+                <SelectValue placeholder="Select supplier (optional)" />
+              </SelectTrigger>
+              <SelectContent>
+                <SelectItem value="">No Supplier</SelectItem>
+                {suppliers.map((supplier) => (
+                  <SelectItem key={supplier.id} value={supplier.id}>
+                    {supplier.name}
+                  </SelectItem>
+                ))}
+              </SelectContent>
+            </Select>
+
+            {selectedSupplierId && (
+              <div className="space-y-2 pt-2">
+                <Label className="text-sm">Payment Type</Label>
+                <RadioGroup
+                  value={paymentType}
+                  onValueChange={(val) => setPaymentType(val as 'paid' | 'credit')}
+                  className="flex gap-6"
+                >
+                  <div className="flex items-center space-x-2">
+                    <RadioGroupItem value="paid" id="payment_paid" />
+                    <Label htmlFor="payment_paid" className="cursor-pointer">Paid</Label>
+                  </div>
+                  <div className="flex items-center space-x-2">
+                    <RadioGroupItem value="credit" id="payment_credit" />
+                    <Label htmlFor="payment_credit" className="cursor-pointer">Credit</Label>
+                  </div>
+                </RadioGroup>
+              </div>
+            )}
+          </div>
+
           {/* Record in Expense checkbox */}
           <div className="flex items-center space-x-2 rounded-md border p-3 bg-muted/30">
             <Checkbox
