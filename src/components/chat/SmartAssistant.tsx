@@ -173,11 +173,21 @@ export default function SmartAssistant() {
       {/* Floating button */}
       {!open && (
         <button
-          onClick={() => setOpen(true)}
-          className="fixed bottom-6 right-6 z-50 h-14 w-14 rounded-full bg-primary text-primary-foreground shadow-lg hover:bg-primary/90 flex items-center justify-center transition-transform hover:scale-105"
+          onClick={() => {
+            if (subscriptionExpired) {
+              toast({ title: 'Subscription Expired', description: 'AI Assistant is disabled. Please renew your subscription.', variant: 'destructive' });
+              return;
+            }
+            setOpen(true);
+          }}
+          className={`fixed bottom-6 right-6 z-50 h-14 w-14 rounded-full shadow-lg flex items-center justify-center transition-transform hover:scale-105 ${
+            subscriptionExpired
+              ? 'bg-muted text-muted-foreground cursor-not-allowed'
+              : 'bg-primary text-primary-foreground hover:bg-primary/90'
+          }`}
           aria-label="Open AI Assistant"
         >
-          <Sparkles className="h-6 w-6" />
+          {subscriptionExpired ? <Lock className="h-6 w-6" /> : <Sparkles className="h-6 w-6" />}
         </button>
       )}
 
