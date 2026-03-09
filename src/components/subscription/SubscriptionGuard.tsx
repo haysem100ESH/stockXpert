@@ -244,8 +244,8 @@ export default function SubscriptionGuard({ children, fallback }: SubscriptionGu
 
             <div className="text-center space-y-2 text-sm text-muted-foreground">
               <p>Need help? Contact support:</p>
-              <p><strong>Email:</strong> support@stockxpert.com</p>
-              <p><strong>Phone:</strong> +251-911-123456</p>
+              <p><strong>Email:</strong> insightstockxpert@gmail.com</p>
+              <p><strong>Phone:</strong> +251-987794086</p>
             </div>
           </CardContent>
         </Card>
