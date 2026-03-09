@@ -651,7 +651,7 @@ export default function AttendanceDashboard() {
                  </Button>
                 </>
               )}
-            </div>
+          </div>
         </CardHeader>
         <CardContent>
           {loading ? (
