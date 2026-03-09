@@ -339,10 +339,12 @@ export default function Auth() {
               <TabsTrigger
                 value="signin"
                 className="data-[state=active]:bg-background data-[state=active]:shadow-md data-[state=active]:font-semibold rounded-lg transition"
+              >
+                Sign In
               </TabsTrigger>
               <TabsTrigger
                 value="forgot"
-                className="data-[state=active]:bg-white data-[state=active]:shadow-md data-[state=active]:font-semibold rounded-lg transition"
+                className="data-[state=active]:bg-background data-[state=active]:shadow-md data-[state=active]:font-semibold rounded-lg transition"
               >
                 Forgot Password
               </TabsTrigger>
