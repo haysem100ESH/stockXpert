@@ -9,6 +9,7 @@ import { useAuth } from '@/hooks/useAuth';
 import { useBranchContext } from '@/hooks/useBranchContext';
 import { haversineDistance } from '@/lib/haversine';
 import FaceVerification from '../face/FaceVerification';
+import CameraCapture from '../face/CameraCapture';
 
 interface TodayRecord {
   id: string;
@@ -41,6 +42,7 @@ export default function RecordAttendance() {
   const [recording, setRecording] = useState(false);
   const [currentTime, setCurrentTime] = useState(new Date());
   const [showFaceVerify, setShowFaceVerify] = useState<'checkin' | 'checkout' | null>(null);
+  const [showPhotoCapture, setShowPhotoCapture] = useState<'checkin' | 'checkout' | null>(null);
   const [pendingLocation, setPendingLocation] = useState<{ lat: number; lng: number; distance: number } | null>(null);
   const [hasFaceData, setHasFaceData] = useState<boolean>(false);
   const { toast } = useToast();
@@ -146,8 +148,10 @@ export default function RecordAttendance() {
         setShowFaceVerify('checkin');
         setRecording(false);
       } else {
-        // No face data — proceed without face verification
-        await completeCheckIn(pos.coords.latitude, pos.coords.longitude, distance, false, null, 0);
+        // No face data — show camera to capture photo
+        setPendingLocation({ lat: pos.coords.latitude, lng: pos.coords.longitude, distance });
+        setShowPhotoCapture('checkin');
+        setRecording(false);
       }
     } catch (error: any) {
       toast({ title: 'Error', description: error.message || 'Failed to check in', variant: 'destructive' });
@@ -240,7 +244,10 @@ export default function RecordAttendance() {
         setShowFaceVerify('checkout');
         setRecording(false);
       } else {
-        await completeCheckOut(pos.coords.latitude, pos.coords.longitude, false, null, 0);
+        // No face data — show camera to capture photo
+        setPendingLocation({ lat: pos.coords.latitude, lng: pos.coords.longitude, distance });
+        setShowPhotoCapture('checkout');
+        setRecording(false);
       }
     } catch (error: any) {
       toast({ title: 'Error', description: error.message || 'Failed to check out', variant: 'destructive' });
@@ -352,6 +359,47 @@ export default function RecordAttendance() {
           setPendingLocation(null);
         }}
       />
+    );
+  }
+
+  // Show photo capture for staff without face data
+  if (showPhotoCapture && pendingLocation) {
+    const handlePhotoCaptured = (blob: Blob) => {
+      if (showPhotoCapture === 'checkin') {
+        completeCheckIn(pendingLocation.lat, pendingLocation.lng, pendingLocation.distance, false, blob, 0);
+      } else {
+        completeCheckOut(pendingLocation.lat, pendingLocation.lng, false, blob, 0);
+      }
+      setShowPhotoCapture(null);
+    };
+
+    return (
+      <Card>
+        <CardHeader>
+          <CardTitle className="flex items-center gap-2">
+            <ShieldCheck className="h-5 w-5" />
+            Take a Photo — {showPhotoCapture === 'checkin' ? 'Check-In' : 'Check-Out'}
+          </CardTitle>
+          <CardDescription>Please capture your photo for attendance verification</CardDescription>
+        </CardHeader>
+        <CardContent className="space-y-4">
+          <CameraCapture
+            showCaptureButton={true}
+            onCapture={handlePhotoCaptured}
+            mirror={true}
+          />
+          <Button
+            variant="outline"
+            className="w-full"
+            onClick={() => {
+              setShowPhotoCapture(null);
+              setPendingLocation(null);
+            }}
+          >
+            Cancel
+          </Button>
+        </CardContent>
+      </Card>
     );
   }
 
