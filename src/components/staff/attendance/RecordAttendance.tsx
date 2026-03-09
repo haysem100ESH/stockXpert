@@ -52,6 +52,19 @@ export default function RecordAttendance() {
 
   const branchId = profile?.branch_id || selectedBranch;
 
+  const formatTimeTo12Hr = (time24: string): string => {
+    const [hours, minutes] = time24.split(':').map(Number);
+    const period = hours >= 12 ? 'PM' : 'AM';
+    const hours12 = hours % 12 || 12;
+    return `${hours12}:${minutes.toString().padStart(2, '0')} ${period}`;
+  };
+
+  const isAfterWorkEnd = useMemo(() => {
+    if (!branchSettings?.work_end_time) return true;
+    const now = currentTime.toTimeString().slice(0, 5);
+    return now >= branchSettings.work_end_time;
+  }, [currentTime, branchSettings?.work_end_time]);
+
   useEffect(() => {
     const timer = setInterval(() => setCurrentTime(new Date()), 1000);
     return () => clearInterval(timer);
