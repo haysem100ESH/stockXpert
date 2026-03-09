@@ -838,10 +838,10 @@ export default function DeveloperDashboard() {
               />
             </div>
             <div>
-              <Label htmlFor="search-pharmacy">Search by Pharmacy Name</Label>
+              <Label htmlFor="search-pharmacy">Search by Business Name</Label>
               <Input
                 id="search-pharmacy"
-                placeholder="Search pharmacy name..."
+                placeholder="Search business name..."
                 value={searchPharmacyName}
                 onChange={(e) => setSearchPharmacyName(e.target.value)}
               />
