@@ -547,10 +547,23 @@ export default function RecordAttendance() {
                 )}
               </div>
             ) : (
-              <Button onClick={startCheckOut} disabled={recording} variant="secondary" className="w-full" size="lg">
-                {recording ? <Loader2 className="h-4 w-4 mr-2 animate-spin" /> : <LogOut className="h-4 w-4 mr-2" />}
-                {recording ? 'Verifying Location...' : hasFaceData ? 'Check-Out (GPS + Face)' : 'Record Check-Out'}
-              </Button>
+              <TooltipProvider>
+                <Tooltip>
+                  <TooltipTrigger asChild>
+                    <span className="w-full">
+                      <Button onClick={startCheckOut} disabled={recording || !isAfterWorkEnd} variant="secondary" className="w-full" size="lg">
+                        {recording ? <Loader2 className="h-4 w-4 mr-2 animate-spin" /> : <LogOut className="h-4 w-4 mr-2" />}
+                        {recording ? 'Verifying Location...' : hasFaceData ? 'Check-Out (GPS + Face)' : 'Record Check-Out'}
+                      </Button>
+                    </span>
+                  </TooltipTrigger>
+                  {!isAfterWorkEnd && (
+                    <TooltipContent>
+                      <p>Checkout will be available after the official work end time.</p>
+                    </TooltipContent>
+                  )}
+                </Tooltip>
+              </TooltipProvider>
             )}
           </CardContent>
         </Card>
