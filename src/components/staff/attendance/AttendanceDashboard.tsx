@@ -63,6 +63,7 @@ export default function AttendanceDashboard() {
   const [editStatus, setEditStatus] = useState<string>('');
   const [editReason, setEditReason] = useState<string>('');
   const [saving, setSaving] = useState(false);
+  const [exporting, setExporting] = useState(false);
   const { profile, user } = useAuth();
   const { toast } = useToast();
   const isOwner = profile?.role === 'owner';
