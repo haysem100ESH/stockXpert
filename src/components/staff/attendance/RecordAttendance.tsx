@@ -9,6 +9,7 @@ import { useAuth } from '@/hooks/useAuth';
 import { useBranchContext } from '@/hooks/useBranchContext';
 import { haversineDistance } from '@/lib/haversine';
 import FaceVerification from '../face/FaceVerification';
+import CameraCapture from '../face/CameraCapture';
 
 interface TodayRecord {
   id: string;
