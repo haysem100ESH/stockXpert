@@ -648,10 +648,10 @@ export default function AttendanceDashboard() {
                     <FileText className="h-4 w-4" />
                   )}
                   PDF
-                </Button>
-              </div>
-            )}
-          </div>
+                 </Button>
+                </>
+              )}
+            </div>
         </CardHeader>
         <CardContent>
           {loading ? (
