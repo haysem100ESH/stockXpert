@@ -99,42 +99,12 @@ export default function SubscriptionGuard({ children, fallback }: SubscriptionGu
     }
   };
 
-  const compressImage = (file: File, maxWidth = 800, quality = 0.6): Promise<string> => {
-    return new Promise((resolve, reject) => {
-      const img = new Image();
-      const url = URL.createObjectURL(file);
-      img.onload = () => {
-        URL.revokeObjectURL(url);
-        const canvas = document.createElement('canvas');
-        let { width, height } = img;
-        if (width > maxWidth) {
-          height = (height * maxWidth) / width;
-          width = maxWidth;
-        }
-        canvas.width = width;
-        canvas.height = height;
-        const ctx = canvas.getContext('2d')!;
-        ctx.drawImage(img, 0, 0, width, height);
-        const dataUrl = canvas.toDataURL('image/jpeg', quality);
-        resolve(dataUrl);
-      };
-      img.onerror = reject;
-      img.src = url;
-    });
-  };
-
-  const handleFileChange = async (e: React.ChangeEvent<HTMLInputElement>) => {
+  const handleFileChange = (e: React.ChangeEvent<HTMLInputElement>) => {
     const file = e.target.files?.[0];
     if (file) {
       setReceiptFile(file);
-      try {
-        const compressed = await compressImage(file);
-        setReceiptPreview(compressed);
-      } catch {
-        const reader = new FileReader();
-        reader.onloadend = () => setReceiptPreview(reader.result as string);
-        reader.readAsDataURL(file);
-      }
+      const objectUrl = URL.createObjectURL(file);
+      setReceiptPreview(objectUrl);
     }
   };
 
@@ -146,15 +116,30 @@ export default function SubscriptionGuard({ children, fallback }: SubscriptionGu
 
     setSubmitting(true);
     try {
-      // Use the already-compressed preview image
-      const base64Data = receiptPreview!.split(',')[1];
+      // 1. Upload original image directly to Supabase Storage
+      const fileExt = receiptFile.name.split('.').pop();
+      const filePath = `receipts/${user!.id}/${Date.now()}.${fileExt}`;
 
-      const { data, error } = await supabase.functions.invoke('send-payment-receipt', {
+      const { error: uploadError } = await supabase.storage
+        .from('payment receipts')
+        .upload(filePath, receiptFile, { upsert: true });
+
+      if (uploadError) throw new Error(`Upload failed: ${uploadError.message}`);
+
+      // 2. Get public URL
+      const { data: urlData } = supabase.storage
+        .from('payment receipts')
+        .getPublicUrl(filePath);
+
+      const receiptUrl = urlData.publicUrl;
+
+      // 3. Send URL to edge function — it fetches & forwards to Telegram
+      const { error } = await supabase.functions.invoke('send-payment-receipt', {
         body: {
           amount,
           ownerName: profile?.full_name || 'Unknown',
           ownerEmail: user?.email || 'Unknown',
-          receiptBase64: base64Data,
+          receiptUrl,
           fileName: receiptFile.name,
         },
       });
