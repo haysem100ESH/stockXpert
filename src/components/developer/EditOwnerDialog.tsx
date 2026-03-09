@@ -157,7 +157,7 @@ export default function EditOwnerDialog({ owner, open, onOpenChange, onOwnerUpda
         <DialogHeader>
           <DialogTitle>Edit Owner: {owner.full_name}</DialogTitle>
           <DialogDescription>
-            Update pharmacy owner information and account status
+            Update business owner information and account status
           </DialogDescription>
         </DialogHeader>
         
