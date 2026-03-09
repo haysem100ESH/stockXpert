@@ -116,30 +116,23 @@ export default function SubscriptionGuard({ children, fallback }: SubscriptionGu
 
     setSubmitting(true);
     try {
-      // 1. Upload original image directly to Supabase Storage
-      const fileExt = receiptFile.name.split('.').pop();
-      const filePath = `receipts/${user!.id}/${Date.now()}.${fileExt}`;
+      // Convert file to base64
+      const reader = new FileReader();
+      const base64 = await new Promise<string>((resolve, reject) => {
+        reader.onload = () => {
+          const result = reader.result as string;
+          resolve(result.split(',')[1]); // Remove data:image/...;base64, prefix
+        };
+        reader.onerror = reject;
+        reader.readAsDataURL(receiptFile);
+      });
 
-      const { error: uploadError } = await supabase.storage
-        .from('payment receipts')
-        .upload(filePath, receiptFile, { upsert: true });
-
-      if (uploadError) throw new Error(`Upload failed: ${uploadError.message}`);
-
-      // 2. Get public URL
-      const { data: urlData } = supabase.storage
-        .from('payment receipts')
-        .getPublicUrl(filePath);
-
-      const receiptUrl = urlData.publicUrl;
-
-      // 3. Send URL to edge function — it fetches & forwards to Telegram
       const { error } = await supabase.functions.invoke('send-payment-receipt', {
         body: {
           amount,
           ownerName: profile?.full_name || 'Unknown',
           ownerEmail: user?.email || 'Unknown',
-          receiptUrl,
+          receiptBase64: base64,
           fileName: receiptFile.name,
         },
       });
