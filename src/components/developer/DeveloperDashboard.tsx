@@ -694,17 +694,17 @@ export default function DeveloperDashboard() {
                           <TableCell>{owner.pharmacy_name || 'N/A'}</TableCell>
                           <TableCell>
                             {owner.telegram_chat_id ? (
-                              <Badge variant="outline" className="bg-green-50">
+                              <Badge variant="outline" className="bg-green-500/10 text-green-500 border-green-500/30">
                                 <UserCheck className="mr-1 h-3 w-3" />
                                 Linked
                               </Badge>
                             ) : owner.phone ? (
-                              <Badge variant="outline" className="bg-yellow-50">
+                              <Badge variant="outline" className="bg-yellow-500/10 text-yellow-500 border-yellow-500/30">
                                 <AlertTriangle className="mr-1 h-3 w-3" />
                                 Phone Added
                               </Badge>
                             ) : (
-                              <Badge variant="outline" className="bg-gray-50">
+                              <Badge variant="outline" className="bg-muted text-muted-foreground">
                                 <UserX className="mr-1 h-3 w-3" />
                                 Not Setup
                               </Badge>
