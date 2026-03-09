@@ -604,6 +604,21 @@ export default function AttendanceDashboard() {
               <Calendar className="h-5 w-5" />
               Attendance Records
             </CardTitle>
+            <div className="flex gap-2">
+              <Button
+                variant="outline"
+                size="sm"
+                onClick={fetchRecords}
+                disabled={loading}
+                className="gap-2"
+              >
+                {loading ? (
+                  <Loader2 className="h-4 w-4 animate-spin" />
+                ) : (
+                  <RefreshCw className="h-4 w-4" />
+                )}
+                Refresh
+              </Button>
             {isOwner && records.length > 0 && (
               <div className="flex gap-2">
                 <Button
