@@ -213,7 +213,7 @@ export default function DeveloperDashboard() {
       console.error('Error fetching pharmacy owners:', error);
       toast({
         title: "Error",
-        description: "Failed to fetch pharmacy owners",
+        description: "Failed to fetch business owners",
         variant: "destructive"
       });
     } finally {
