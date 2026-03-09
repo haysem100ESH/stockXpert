@@ -126,7 +126,7 @@ export default function DeveloperDashboard() {
     try {
       setLoading(true);
       
-      // Get all pharmacy owners with their email using RPC call
+      // Get all business owners with their email using RPC call
       const { data: profilesWithEmail, error: profilesError } = await supabase
         .rpc('get_owners_with_email') as { data: any[] | null, error: any };
 
