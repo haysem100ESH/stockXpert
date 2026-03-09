@@ -111,12 +111,7 @@ export default function AttendanceDashboard() {
     const photoPath = extractPhotoPath(photoValue);
     if (!photoPath) return photoValue;
 
-    const { data, error } = await supabase.storage
-      .from('attendance-photos')
-      .createSignedUrl(photoPath, 60 * 60);
-
-    if (!error && data?.signedUrl) return data.signedUrl;
-
+    // Since bucket is public, use getPublicUrl directly
     const { data: publicData } = supabase.storage
       .from('attendance-photos')
       .getPublicUrl(photoPath);
