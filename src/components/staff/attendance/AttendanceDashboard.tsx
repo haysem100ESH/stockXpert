@@ -254,18 +254,83 @@ export default function AttendanceDashboard() {
     }
   };
 
-  // Fetch a photo URL and convert it to a base64 data URL for embedding in exports
-  const fetchImageAsBase64 = async (url: string): Promise<string | null> => {
+  // Load attendance photos (stored in Supabase Storage) in a way that works for PDF/Excel embedding.
+  // - Prefer Storage.download() (avoids CORS/auth edge cases)
+  // - Normalize to JPEG/PNG (jsPDF/exceljs don't support WebP)
+  // - Downscale large images to keep exports fast/stable
+  type SupportedExportMime = 'image/jpeg' | 'image/png';
+
+  const blobToDataUrl = (blob: Blob): Promise<string> =>
+    new Promise((resolve) => {
+      const reader = new FileReader();
+      reader.onloadend = () => resolve(reader.result as string);
+      reader.onerror = () => resolve('');
+      reader.readAsDataURL(blob);
+    });
+
+  const canvasToBlob = (canvas: HTMLCanvasElement, mime: SupportedExportMime, quality = 0.82) =>
+    new Promise<Blob | null>((resolve) => canvas.toBlob(resolve, mime, quality));
+
+  const normalizeImageForExport = async (
+    inputBlob: Blob,
+    opts?: { maxDimension?: number; preferredMime?: SupportedExportMime }
+  ): Promise<{ dataUrl: string; mime: SupportedExportMime } | null> => {
+    const maxDimension = opts?.maxDimension ?? 1600;
+
+    const isSupported = inputBlob.type === 'image/jpeg' || inputBlob.type === 'image/png';
+    const targetMime: SupportedExportMime = opts?.preferredMime ?? (isSupported ? (inputBlob.type as SupportedExportMime) : 'image/jpeg');
+
+    // If we can't decode/resize, fall back to direct dataURL for supported types.
     try {
-      const response = await fetch(url);
+      // createImageBitmap supports jpeg/png/webp in modern browsers.
+      const bitmap = await createImageBitmap(inputBlob);
+
+      let { width, height } = bitmap;
+      const scale = Math.min(1, maxDimension / Math.max(width, height));
+      width = Math.max(1, Math.round(width * scale));
+      height = Math.max(1, Math.round(height * scale));
+
+      const canvas = document.createElement('canvas');
+      canvas.width = width;
+      canvas.height = height;
+      const ctx = canvas.getContext('2d');
+      if (!ctx) return null;
+      ctx.drawImage(bitmap, 0, 0, width, height);
+
+      const outBlob = await canvasToBlob(canvas, targetMime, targetMime === 'image/jpeg' ? 0.82 : 1);
+      if (!outBlob) return null;
+
+      const dataUrl = await blobToDataUrl(outBlob);
+      if (!dataUrl) return null;
+      return { dataUrl, mime: targetMime };
+    } catch {
+      // Fallback: only safe for jpeg/png
+      if (!isSupported) return null;
+      const dataUrl = await blobToDataUrl(inputBlob);
+      if (!dataUrl) return null;
+      return { dataUrl, mime: inputBlob.type as SupportedExportMime };
+    }
+  };
+
+  const fetchPhotoForExport = async (
+    photoValue: string,
+    opts?: { maxDimension?: number; preferredMime?: SupportedExportMime }
+  ): Promise<{ dataUrl: string; mime: SupportedExportMime } | null> => {
+    try {
+      // First try download via Supabase Storage (best for private buckets / strict CORS)
+      const photoPath = extractPhotoPath(photoValue);
+      if (photoPath) {
+        const { data, error } = await supabase.storage.from('attendance-photos').download(photoPath);
+        if (!error && data) {
+          return await normalizeImageForExport(data, opts);
+        }
+      }
+
+      // Fallback to fetch (works for public URLs)
+      const response = await fetch(photoValue);
       if (!response.ok) return null;
       const blob = await response.blob();
-      return new Promise((resolve) => {
-        const reader = new FileReader();
-        reader.onloadend = () => resolve(reader.result as string);
-        reader.onerror = () => resolve(null);
-        reader.readAsDataURL(blob);
-      });
+      return await normalizeImageForExport(blob, opts);
     } catch {
       return null;
     }
