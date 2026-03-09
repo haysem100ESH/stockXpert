@@ -148,8 +148,10 @@ export default function RecordAttendance() {
         setShowFaceVerify('checkin');
         setRecording(false);
       } else {
-        // No face data — proceed without face verification
-        await completeCheckIn(pos.coords.latitude, pos.coords.longitude, distance, false, null, 0);
+        // No face data — show camera to capture photo
+        setPendingLocation({ lat: pos.coords.latitude, lng: pos.coords.longitude, distance });
+        setShowPhotoCapture('checkin');
+        setRecording(false);
       }
     } catch (error: any) {
       toast({ title: 'Error', description: error.message || 'Failed to check in', variant: 'destructive' });
