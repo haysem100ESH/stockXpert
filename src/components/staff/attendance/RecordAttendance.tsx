@@ -194,7 +194,7 @@ export default function RecordAttendance() {
         checkin_long: lng,
         attendance_status: status,
         checkin_face_verified: faceVerified,
-        checkin_photo: checkinPhotoUrl,
+        checkin_photo: checkinPhotoPath,
         verification_score: score,
       });
 
