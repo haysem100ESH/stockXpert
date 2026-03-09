@@ -310,8 +310,8 @@ export default function Auth() {
   };
 
   return (
-    <div className="min-h-screen flex items-center justify-center bg-gradient-to-br from-blue-50 to-indigo-100 p-6">
-      <Card className="w-full max-w-md shadow-xl rounded-2xl border border-gray-200">
+    <div className="min-h-screen flex items-center justify-center bg-background p-6">
+      <Card className="w-full max-w-md shadow-xl rounded-2xl border border-border">
         {/* Header */}
         <CardHeader className="text-center space-y-2 pb-6">
           <div className="flex flex-col items-center">
