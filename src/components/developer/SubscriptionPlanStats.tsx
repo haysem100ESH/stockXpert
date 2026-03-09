@@ -97,7 +97,7 @@ export default function SubscriptionPlanStats() {
           Subscription Plan Distribution
         </CardTitle>
         <CardDescription>
-          Total pharmacy owners: {totalOwners}
+          Total business owners: {totalOwners}
         </CardDescription>
       </CardHeader>
       <CardContent>
