@@ -207,7 +207,7 @@ export default function DeveloperDashboard() {
         })
       );
 
-      console.log('Fetched pharmacy owners:', ownersWithData);
+      console.log('Fetched business owners:', ownersWithData);
       setOwners(ownersWithData);
     } catch (error: any) {
       console.error('Error fetching pharmacy owners:', error);
