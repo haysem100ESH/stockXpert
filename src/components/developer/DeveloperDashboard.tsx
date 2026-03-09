@@ -670,7 +670,7 @@ export default function DeveloperDashboard() {
                       <TableRow>
                         <TableHead className="w-12">Select</TableHead>
                         <TableHead>Owner</TableHead>
-                        <TableHead>Pharmacy</TableHead>
+                        <TableHead>Business</TableHead>
                         <TableHead>Telegram Status</TableHead>
                       </TableRow>
                     </TableHeader>
