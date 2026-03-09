@@ -146,25 +146,15 @@ export default function SubscriptionGuard({ children, fallback }: SubscriptionGu
 
     setSubmitting(true);
     try {
-      // Convert file to base64
-      const reader = new FileReader();
-      const base64 = await new Promise<string>((resolve, reject) => {
-        reader.onloadend = () => {
-          const result = reader.result as string;
-          // Strip the data URL prefix
-          const base64Data = result.split(',')[1];
-          resolve(base64Data);
-        };
-        reader.onerror = reject;
-        reader.readAsDataURL(receiptFile);
-      });
+      // Use the already-compressed preview image
+      const base64Data = receiptPreview!.split(',')[1];
 
       const { data, error } = await supabase.functions.invoke('send-payment-receipt', {
         body: {
           amount,
           ownerName: profile?.full_name || 'Unknown',
           ownerEmail: user?.email || 'Unknown',
-          receiptBase64: base64,
+          receiptBase64: base64Data,
           fileName: receiptFile.name,
         },
       });
