@@ -99,13 +99,42 @@ export default function SubscriptionGuard({ children, fallback }: SubscriptionGu
     }
   };
 
-  const handleFileChange = (e: React.ChangeEvent<HTMLInputElement>) => {
+  const compressImage = (file: File, maxWidth = 800, quality = 0.6): Promise<string> => {
+    return new Promise((resolve, reject) => {
+      const img = new Image();
+      const url = URL.createObjectURL(file);
+      img.onload = () => {
+        URL.revokeObjectURL(url);
+        const canvas = document.createElement('canvas');
+        let { width, height } = img;
+        if (width > maxWidth) {
+          height = (height * maxWidth) / width;
+          width = maxWidth;
+        }
+        canvas.width = width;
+        canvas.height = height;
+        const ctx = canvas.getContext('2d')!;
+        ctx.drawImage(img, 0, 0, width, height);
+        const dataUrl = canvas.toDataURL('image/jpeg', quality);
+        resolve(dataUrl);
+      };
+      img.onerror = reject;
+      img.src = url;
+    });
+  };
+
+  const handleFileChange = async (e: React.ChangeEvent<HTMLInputElement>) => {
     const file = e.target.files?.[0];
     if (file) {
       setReceiptFile(file);
-      const reader = new FileReader();
-      reader.onloadend = () => setReceiptPreview(reader.result as string);
-      reader.readAsDataURL(file);
+      try {
+        const compressed = await compressImage(file);
+        setReceiptPreview(compressed);
+      } catch {
+        const reader = new FileReader();
+        reader.onloadend = () => setReceiptPreview(reader.result as string);
+        reader.readAsDataURL(file);
+      }
     }
   };
 
@@ -117,25 +146,15 @@ export default function SubscriptionGuard({ children, fallback }: SubscriptionGu
 
     setSubmitting(true);
     try {
-      // Convert file to base64
-      const reader = new FileReader();
-      const base64 = await new Promise<string>((resolve, reject) => {
-        reader.onloadend = () => {
-          const result = reader.result as string;
-          // Strip the data URL prefix
-          const base64Data = result.split(',')[1];
-          resolve(base64Data);
-        };
-        reader.onerror = reject;
-        reader.readAsDataURL(receiptFile);
-      });
+      // Use the already-compressed preview image
+      const base64Data = receiptPreview!.split(',')[1];
 
       const { data, error } = await supabase.functions.invoke('send-payment-receipt', {
         body: {
           amount,
           ownerName: profile?.full_name || 'Unknown',
           ownerEmail: user?.email || 'Unknown',
-          receiptBase64: base64,
+          receiptBase64: base64Data,
           fileName: receiptFile.name,
         },
       });
