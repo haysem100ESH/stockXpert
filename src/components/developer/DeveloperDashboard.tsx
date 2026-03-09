@@ -167,7 +167,7 @@ export default function DeveloperDashboard() {
             .order('created_at')
             .limit(5);
 
-          // Use the first branch name as pharmacy name, or join multiple
+          // Use the first branch name as business name, or join multiple
           const branchNames = (branches || []).map((b: any) => b.name);
           const pharmacyName = profile.pharmacy_name || (branchNames.length > 0 ? branchNames.join(', ') : 'N/A');
 
