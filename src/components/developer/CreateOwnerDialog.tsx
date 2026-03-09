@@ -207,7 +207,7 @@ export default function CreateOwnerDialog({ onOwnerCreated }: CreateOwnerDialogP
               type="email"
               value={formData.email}
               onChange={(e) => handleInputChange('email', e.target.value)}
-              placeholder="owner@pharmacy.com"
+              placeholder="owner@business.com"
               required
             />
           </div>
