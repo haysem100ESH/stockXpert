@@ -250,7 +250,7 @@ export default function CreateOwnerDialog({ onOwnerCreated }: CreateOwnerDialogP
           </div>
 
           <div>
-            <Label htmlFor="pharmacy_address">Pharmacy Address</Label>
+            <Label htmlFor="pharmacy_address">Business Address</Label>
             <Textarea
               id="pharmacy_address"
               value={formData.pharmacy_address}
