@@ -315,7 +315,7 @@ export default function Auth() {
         {/* Header */}
         <CardHeader className="text-center space-y-2 pb-6">
           <div className="flex flex-col items-center">
-            <div className="w-32 h-32 flex items-center justify-center bg-white rounded-full shadow-md mb-3 transition-transform duration-300 hover:scale-105 border border-gray-100">
+            <div className="w-32 h-32 flex items-center justify-center bg-card rounded-full shadow-md mb-3 transition-transform duration-300 hover:scale-105 border border-border">
               <img
                 src="/stocxpert-uploads/SIcon.svg"
                 alt="System Logo"
