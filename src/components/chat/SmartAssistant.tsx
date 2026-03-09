@@ -1,10 +1,11 @@
 import { useState, useRef, useEffect } from 'react';
-import { X, Send, Loader2, Sparkles, Trash2 } from 'lucide-react';
+import { X, Send, Loader2, Sparkles, Trash2, Lock } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { useAuth } from '@/hooks/useAuth';
 import { useBranchContext } from '@/hooks/useBranchContext';
 import { useBranding } from '@/hooks/useBranding';
+import { useSubscription } from '@/hooks/useSubscription';
 import { supabase } from '@/lib/db';
 import ReactMarkdown from 'react-markdown';
 import { useToast } from '@/hooks/use-toast';
