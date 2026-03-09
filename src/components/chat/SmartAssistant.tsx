@@ -174,7 +174,7 @@ export default function SmartAssistant() {
           className="fixed bottom-6 right-6 z-50 h-14 w-14 rounded-full bg-primary text-primary-foreground shadow-lg hover:bg-primary/90 flex items-center justify-center transition-transform hover:scale-105"
           aria-label="Open AI Assistant"
         >
-          <Sparkles className="h-6 w-6" />
+          <BrainCircuit className="h-6 w-6" />
         </button>
       )}
 
