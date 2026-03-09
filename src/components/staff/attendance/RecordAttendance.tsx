@@ -244,7 +244,10 @@ export default function RecordAttendance() {
         setShowFaceVerify('checkout');
         setRecording(false);
       } else {
-        await completeCheckOut(pos.coords.latitude, pos.coords.longitude, false, null, 0);
+        // No face data — show camera to capture photo
+        setPendingLocation({ lat: pos.coords.latitude, lng: pos.coords.longitude, distance });
+        setShowPhotoCapture('checkout');
+        setRecording(false);
       }
     } catch (error: any) {
       toast({ title: 'Error', description: error.message || 'Failed to check out', variant: 'destructive' });
