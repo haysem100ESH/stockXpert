@@ -42,6 +42,7 @@ export default function RecordAttendance() {
   const [recording, setRecording] = useState(false);
   const [currentTime, setCurrentTime] = useState(new Date());
   const [showFaceVerify, setShowFaceVerify] = useState<'checkin' | 'checkout' | null>(null);
+  const [showPhotoCapture, setShowPhotoCapture] = useState<'checkin' | 'checkout' | null>(null);
   const [pendingLocation, setPendingLocation] = useState<{ lat: number; lng: number; distance: number } | null>(null);
   const [hasFaceData, setHasFaceData] = useState<boolean>(false);
   const { toast } = useToast();
