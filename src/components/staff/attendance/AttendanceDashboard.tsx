@@ -404,8 +404,8 @@ export default function AttendanceDashboard() {
               <p className="text-muted-foreground">No attendance records found for the selected filters.</p>
             </div>
           ) : (
-            <div className="overflow-x-auto">
-              <Table>
+            <div className="overflow-x-auto pb-2">
+              <Table className="min-w-[900px]">
                 <TableHeader>
                   <TableRow>
                     <TableHead>Date</TableHead>
