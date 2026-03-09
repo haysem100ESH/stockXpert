@@ -523,58 +523,63 @@ export default function AttendanceDashboard() {
       // Photo pages — one record per page (check-in + check-out side by side)
       const recordsWithPhotos = records.filter((r) => r.checkin_photo || r.checkout_photo);
 
-      for (const record of recordsWithPhotos) {
-        const checkinPhotoUrl = await getDisplayPhotoUrl(record.checkin_photo);
-        const checkoutPhotoUrl = await getDisplayPhotoUrl(record.checkout_photo);
+       for (const record of recordsWithPhotos) {
+         // Use the already computed public URLs when available, but fetch via Storage.download() when possible.
+         const checkinPhotoUrl = await getDisplayPhotoUrl(record.checkin_photo);
+         const checkoutPhotoUrl = await getDisplayPhotoUrl(record.checkout_photo);
 
-        const checkinB64 = checkinPhotoUrl ? await fetchImageAsBase64(checkinPhotoUrl) : null;
-        const checkoutB64 = checkoutPhotoUrl ? await fetchImageAsBase64(checkoutPhotoUrl) : null;
+         const [checkinImg, checkoutImg] = await Promise.all([
+           checkinPhotoUrl ? fetchPhotoForExport(checkinPhotoUrl, { maxDimension: 1800, preferredMime: 'image/jpeg' }) : Promise.resolve(null),
+           checkoutPhotoUrl ? fetchPhotoForExport(checkoutPhotoUrl, { maxDimension: 1800, preferredMime: 'image/jpeg' }) : Promise.resolve(null),
+         ]);
 
-        // Skip if no images could be loaded
-        if (!checkinB64 && !checkoutB64) continue;
+         // Skip if no images could be loaded
+         if (!checkinImg && !checkoutImg) continue;
 
-        doc.addPage();
+         doc.addPage();
 
-        // Page header bar
-        doc.setFillColor(30, 111, 62);
-        doc.rect(0, 0, pageWidth, 18, 'F');
-        doc.setTextColor(255, 255, 255);
-        doc.setFontSize(13);
-        const dateStr = new Date(record.date).toLocaleDateString(undefined, { weekday: 'long', year: 'numeric', month: 'long', day: 'numeric' });
-        const staffLabel = isOwner ? ` — ${record.staff_name}` : '';
-        doc.text(`${dateStr}${staffLabel}`, pageWidth / 2, 12, { align: 'center' });
+         // Page header bar
+         doc.setFillColor(30, 111, 62);
+         doc.rect(0, 0, pageWidth, 18, 'F');
+         doc.setTextColor(255, 255, 255);
+         doc.setFontSize(13);
+         const dateStr = new Date(record.date).toLocaleDateString(undefined, { weekday: 'long', year: 'numeric', month: 'long', day: 'numeric' });
+         const staffLabel = isOwner ? ` — ${record.staff_name}` : '';
+         doc.text(`${dateStr}${staffLabel}`, pageWidth / 2, 12, { align: 'center' });
 
-        doc.setTextColor(0, 0, 0);
-        doc.setFontSize(10);
+         doc.setTextColor(0, 0, 0);
+         doc.setFontSize(10);
 
-        const imgY = 25;
-        const imgH = pageHeight - imgY - 20;
-        const halfW = (pageWidth - 42) / 2; // 14 margin each side + 14 gap
+         const imgY = 25;
+         const imgH = pageHeight - imgY - 20;
+         const halfW = (pageWidth - 42) / 2; // 14 margin each side + 14 gap
 
-        if (checkinB64 && checkoutB64) {
-          // Side by side
-          doc.setFontSize(11);
-          doc.setFont(undefined as any, 'bold');
-          doc.text('Check-In Photo', 14 + halfW / 2, imgY + 6, { align: 'center' });
-          doc.setFont(undefined as any, 'normal');
-          doc.addImage(checkinB64, 'JPEG', 14, imgY + 10, halfW, imgH - 10);
+         const fmt = (mime: 'image/jpeg' | 'image/png') => (mime === 'image/png' ? 'PNG' : 'JPEG');
 
-          doc.setFont(undefined as any, 'bold');
-          doc.text('Check-Out Photo', 14 + halfW + 14 + halfW / 2, imgY + 6, { align: 'center' });
-          doc.setFont(undefined as any, 'normal');
-          doc.addImage(checkoutB64, 'JPEG', 14 + halfW + 14, imgY + 10, halfW, imgH - 10);
-        } else if (checkinB64) {
-          doc.setFont(undefined as any, 'bold');
-          doc.text('Check-In Photo', pageWidth / 2, imgY + 6, { align: 'center' });
-          doc.setFont(undefined as any, 'normal');
-          doc.addImage(checkinB64, 'JPEG', 14, imgY + 10, pageWidth - 28, imgH - 10);
-        } else if (checkoutB64) {
-          doc.setFont(undefined as any, 'bold');
-          doc.text('Check-Out Photo', pageWidth / 2, imgY + 6, { align: 'center' });
-          doc.setFont(undefined as any, 'normal');
-          doc.addImage(checkoutB64, 'JPEG', 14, imgY + 10, pageWidth - 28, imgH - 10);
-        }
-      }
+         if (checkinImg && checkoutImg) {
+           // Side by side
+           doc.setFontSize(11);
+           doc.setFont(undefined as any, 'bold');
+           doc.text('Check-In Photo', 14 + halfW / 2, imgY + 6, { align: 'center' });
+           doc.setFont(undefined as any, 'normal');
+           doc.addImage(checkinImg.dataUrl, fmt(checkinImg.mime) as any, 14, imgY + 10, halfW, imgH - 10);
+
+           doc.setFont(undefined as any, 'bold');
+           doc.text('Check-Out Photo', 14 + halfW + 14 + halfW / 2, imgY + 6, { align: 'center' });
+           doc.setFont(undefined as any, 'normal');
+           doc.addImage(checkoutImg.dataUrl, fmt(checkoutImg.mime) as any, 14 + halfW + 14, imgY + 10, halfW, imgH - 10);
+         } else if (checkinImg) {
+           doc.setFont(undefined as any, 'bold');
+           doc.text('Check-In Photo', pageWidth / 2, imgY + 6, { align: 'center' });
+           doc.setFont(undefined as any, 'normal');
+           doc.addImage(checkinImg.dataUrl, fmt(checkinImg.mime) as any, 14, imgY + 10, pageWidth - 28, imgH - 10);
+         } else if (checkoutImg) {
+           doc.setFont(undefined as any, 'bold');
+           doc.text('Check-Out Photo', pageWidth / 2, imgY + 6, { align: 'center' });
+           doc.setFont(undefined as any, 'normal');
+           doc.addImage(checkoutImg.dataUrl, fmt(checkoutImg.mime) as any, 14, imgY + 10, pageWidth - 28, imgH - 10);
+         }
+       }
 
       doc.save(`attendance-report-${filterDateFrom}-to-${filterDateTo}.pdf`);
       toast({ title: 'Export Complete', description: 'Attendance report with photos downloaded successfully.' });
