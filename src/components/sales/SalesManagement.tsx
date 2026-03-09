@@ -29,6 +29,8 @@ interface Medicine {
   open_pack_units?: number;
   unit_label?: string;
   item_type?: string;
+  branch_id?: string;
+  branch_name?: string;
 }
 
 interface CartItem extends Medicine {
@@ -131,7 +133,7 @@ export default function SalesManagement() {
 
       let query = (supabase as any)
         .from('medicines')
-        .select('id, name, generic_name, selling_price, stock_quantity, category, expiry_date, units_per_pack, open_pack_units, unit_label, item_type')
+        .select('id, name, generic_name, selling_price, stock_quantity, category, expiry_date, units_per_pack, open_pack_units, unit_label, item_type, branch_id')
         .or('stock_quantity.gt.0,open_pack_units.gt.0')
         .order('name');
       if (selectedBranch) {
@@ -141,11 +143,24 @@ export default function SalesManagement() {
       }
       const { data, error } = await query;
       if (error) throw error;
+
+      // Fetch branch names in bulk
+      const allBranchIds = [...new Set((data || []).map((m: any) => m.branch_id).filter(Boolean))];
+      const branchMap: Record<string, string> = {};
+      if (allBranchIds.length > 0) {
+        const { data: branches } = await (supabase as any)
+          .from('pharmacy_branches')
+          .select('id, name')
+          .in('id', allBranchIds);
+        (branches || []).forEach((b: any) => { branchMap[b.id] = b.name; });
+      }
+
       // open_pack_units is stored as INTEGER thousandths in DB (e.g. 2500 = 2.5 strips).
       // Convert to real decimal units for all UI/cart arithmetic.
       const normalized = (data || []).map((m: any) => ({
         ...m,
         open_pack_units: m.units_per_pack ? (m.open_pack_units || 0) / 1000 : (m.open_pack_units || 0),
+        branch_name: m.branch_id ? branchMap[m.branch_id] : undefined,
       }));
       setMedicines(normalized);
     } catch {
@@ -751,6 +766,83 @@ export default function SalesManagement() {
   const discount = calculateDiscount();
   const total = calculateTotal();
 
+  const renderSaleCard = (medicine: Medicine) => (
+    <Card key={medicine.id} className="cursor-pointer hover:shadow-md transition-shadow">
+      <CardHeader>
+        <div className="flex items-start justify-between">
+          <div>
+            <CardTitle className="text-base">{medicine.name}</CardTitle>
+            {medicine.generic_name && <CardDescription>{medicine.generic_name}</CardDescription>}
+          </div>
+          <div className="flex flex-col gap-1 items-end">
+            {medicine.category && <Badge variant="outline" className="text-xs">{medicine.category}</Badge>}
+            {isMeasurable(medicine.unit_label) ? (
+              <Badge variant="secondary" className="text-xs">Measurable ({medicine.unit_label})</Badge>
+            ) : medicine.units_per_pack ? (
+              <Badge variant="secondary" className="text-xs">By {medicine.unit_label || 'unit'}</Badge>
+            ) : null}
+          </div>
+        </div>
+      </CardHeader>
+      <CardContent>
+        <div className="space-y-2">
+          <div className="flex justify-between text-sm">
+            <span>Price:</span>
+            <span className="font-medium">ETB {medicine.selling_price}</span>
+          </div>
+          {medicine.units_per_pack && (
+            <div className="flex justify-between text-sm text-muted-foreground">
+              <span>Per {medicine.unit_label || 'unit'}:</span>
+              <span>ETB {(medicine.selling_price / medicine.units_per_pack).toFixed(2)}</span>
+            </div>
+          )}
+          <div className="flex justify-between text-sm">
+            <span>{isMeasurable(medicine.unit_label) ? 'Stock:' : medicine.units_per_pack ? 'Unopened Packs:' : 'Stock:'}</span>
+            <Badge variant={medicine.stock_quantity <= 10 ? 'destructive' : 'secondary'}>
+              {isMeasurable(medicine.unit_label)
+                ? `${medicine.stock_quantity + ((medicine.open_pack_units || 0) / 1000)} ${medicine.unit_label}`
+                : `${medicine.stock_quantity} ${medicine.stock_quantity === 1 ? 'pack' : 'packs'}`}
+            </Badge>
+          </div>
+          {!isMeasurable(medicine.unit_label) && medicine.units_per_pack && (
+            <div className="flex justify-between text-sm text-muted-foreground">
+              <span>Open pack:</span>
+              <Badge variant="outline" className="text-xs">
+                {medicine.open_pack_units || 0}/{medicine.units_per_pack} {medicine.unit_label || 'unit'}s remaining
+              </Badge>
+            </div>
+          )}
+          {isPharmacy && medicine.expiry_date && (
+            <div className="flex justify-between text-sm">
+              <span>Expires:</span>
+              <div className="flex items-center gap-1">
+                <span className={isExpired(medicine.expiry_date) ? 'text-destructive font-medium' : isExpiringSoon(medicine.expiry_date) ? 'text-warning' : ''}>
+                  {new Date(medicine.expiry_date).toLocaleDateString()}
+                </span>
+                {isExpired(medicine.expiry_date) && <Badge variant="destructive" className="text-xs">Expired</Badge>}
+                {!isExpired(medicine.expiry_date) && isExpiringSoon(medicine.expiry_date) && <Badge variant="destructive" className="text-xs">Soon</Badge>}
+              </div>
+            </div>
+          )}
+          {selectedBranch ? (
+            <Button
+              onClick={() => addToCartInstant(medicine)}
+              className="w-full"
+              disabled={medicine.stock_quantity === 0 || (isPharmacy && isExpired(medicine.expiry_date))}
+            >
+              <Plus className="h-4 w-4 mr-2" />
+              {isPharmacy && isExpired(medicine.expiry_date) ? 'Expired' : 'Add to Cart'}
+            </Button>
+          ) : (
+            <p className="text-sm text-muted-foreground text-center py-2">
+              Please select a branch to sell items
+            </p>
+          )}
+        </div>
+      </CardContent>
+    </Card>
+  );
+
   if (loading) {
     return <div className="p-4 text-muted-foreground">Loading {isPharmacy ? 'medicines' : 'items'}...</div>;
   }
@@ -804,88 +896,31 @@ export default function SalesManagement() {
         </div>
 
         {/* Item grid */}
-        <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-          {paginatedMedicines.map((medicine) => (
-            <Card key={medicine.id} className="cursor-pointer hover:shadow-md transition-shadow">
-              <CardHeader>
-                <div className="flex items-start justify-between">
-                  <div>
-                    <CardTitle className="text-base">{medicine.name}</CardTitle>
-                    {medicine.generic_name && <CardDescription>{medicine.generic_name}</CardDescription>}
-                  </div>
-                   <div className="flex flex-col gap-1 items-end">
-                    {medicine.category && <Badge variant="outline" className="text-xs">{medicine.category}</Badge>}
-                    {isMeasurable(medicine.unit_label) ? (
-                      <Badge variant="secondary" className="text-xs">
-                        Measurable ({medicine.unit_label})
-                      </Badge>
-                    ) : medicine.units_per_pack ? (
-                      <Badge variant="secondary" className="text-xs">
-                        By {medicine.unit_label || 'unit'}
-                      </Badge>
-                    ) : null}
-                  </div>
+        {!selectedBranch && paginatedMedicines.some(m => m.branch_name) ? (
+          (() => {
+            const grouped: Record<string, Medicine[]> = {};
+            paginatedMedicines.forEach(m => {
+              const key = m.branch_name || 'Unknown Branch';
+              if (!grouped[key]) grouped[key] = [];
+              grouped[key].push(m);
+            });
+            return Object.entries(grouped).sort(([a], [b]) => a.localeCompare(b)).map(([branchName, items]) => (
+              <div key={branchName} className="space-y-3">
+                <div className="flex items-center gap-2">
+                  <h3 className="text-lg font-semibold text-foreground">{branchName}</h3>
+                  <Badge variant="secondary" className="text-xs">{items.length} {items.length === 1 ? 'item' : 'items'}</Badge>
                 </div>
-              </CardHeader>
-              <CardContent>
-                <div className="space-y-2">
-                  <div className="flex justify-between text-sm">
-                    <span>Price:</span>
-                    <span className="font-medium">ETB {medicine.selling_price}</span>
-                  </div>
-                  {medicine.units_per_pack && (
-                    <div className="flex justify-between text-sm text-muted-foreground">
-                      <span>Per {medicine.unit_label || 'unit'}:</span>
-                      <span>ETB {(medicine.selling_price / medicine.units_per_pack).toFixed(2)}</span>
-                    </div>
-                  )}
-                  <div className="flex justify-between text-sm">
-                    <span>{isMeasurable(medicine.unit_label) ? 'Stock:' : medicine.units_per_pack ? 'Unopened Packs:' : 'Stock:'}</span>
-                    <Badge variant={medicine.stock_quantity <= 10 ? 'destructive' : 'secondary'}>
-                      {isMeasurable(medicine.unit_label)
-                        ? `${medicine.stock_quantity + ((medicine.open_pack_units || 0) / 1000)} ${medicine.unit_label}`
-                        : `${medicine.stock_quantity} ${medicine.stock_quantity === 1 ? 'pack' : 'packs'}`}
-                    </Badge>
-                  </div>
-                  {!isMeasurable(medicine.unit_label) && medicine.units_per_pack && (
-                    <div className="flex justify-between text-sm text-muted-foreground">
-                      <span>Open pack:</span>
-                      <Badge variant="outline" className="text-xs">
-                        {medicine.open_pack_units || 0}/{medicine.units_per_pack} {medicine.unit_label || 'unit'}s remaining
-                      </Badge>
-                    </div>
-                  )}
-                  {isPharmacy && medicine.expiry_date && (
-                    <div className="flex justify-between text-sm">
-                      <span>Expires:</span>
-                      <div className="flex items-center gap-1">
-                        <span className={isExpired(medicine.expiry_date) ? 'text-destructive font-medium' : isExpiringSoon(medicine.expiry_date) ? 'text-warning' : ''}>
-                          {new Date(medicine.expiry_date).toLocaleDateString()}
-                        </span>
-                        {isExpired(medicine.expiry_date) && <Badge variant="destructive" className="text-xs">Expired</Badge>}
-                        {!isExpired(medicine.expiry_date) && isExpiringSoon(medicine.expiry_date) && <Badge variant="destructive" className="text-xs">Soon</Badge>}
-                      </div>
-                    </div>
-                  )}
-                  {selectedBranch ? (
-                    <Button
-                      onClick={() => addToCartInstant(medicine)}
-                      className="w-full"
-                      disabled={medicine.stock_quantity === 0 || (isPharmacy && isExpired(medicine.expiry_date))}
-                    >
-                      <Plus className="h-4 w-4 mr-2" />
-                      {isPharmacy && isExpired(medicine.expiry_date) ? 'Expired' : 'Add to Cart'}
-                    </Button>
-                  ) : (
-                    <p className="text-sm text-muted-foreground text-center py-2">
-                      Please select a branch to sell items
-                    </p>
-                  )}
+                <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                  {items.map((medicine) => renderSaleCard(medicine))}
                 </div>
-              </CardContent>
-            </Card>
-          ))}
-        </div>
+              </div>
+            ));
+          })()
+        ) : (
+          <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+            {paginatedMedicines.map((medicine) => renderSaleCard(medicine))}
+          </div>
+        )}
 
         {filteredMedicines.length === 0 && (
           <div className="text-center py-8">
