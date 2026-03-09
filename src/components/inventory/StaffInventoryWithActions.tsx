@@ -292,127 +292,6 @@ export default function StaffInventoryWithActions() {
     thirtyDaysFromNow.setDate(thirtyDaysFromNow.getDate() + 30);
     return new Date(medicine.expiry_date) <= thirtyDaysFromNow;
   };
-
-  if (loading) {
-    return (
-      <div className="flex items-center justify-center py-12 gap-3">
-        <div className="h-6 w-6 animate-spin rounded-full border-2 border-primary border-t-transparent" />
-        <span className="text-muted-foreground">Loading {isPharmacy ? 'medicines' : 'items'}...</span>
-      </div>
-    );
-  }
-
-  return (
-    <div className="space-y-6">
-      <div className="flex flex-col space-y-4">
-        <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3">
-          <h2 className="text-xl sm:text-2xl font-bold">{isPharmacy ? 'Inventory Management' : 'Stock Management'}</h2>
-          <div className="flex gap-2 flex-wrap">
-            {isPharmacy && (
-              <Button 
-                onClick={() => setShowAddDialog(true)}
-                disabled={!hasBranches}
-                size="sm"
-              >
-                <Plus className="h-4 w-4 mr-2" />
-                Add Medicine
-              </Button>
-            )}
-            <Button 
-              onClick={() => setShowAddItemDialog(true)}
-              disabled={!hasBranches}
-              variant={isPharmacy ? "outline" : "default"}
-              size="sm"
-            >
-              <Plus className="h-4 w-4 mr-2" />
-              Add Item
-            </Button>
-          </div>
-        </div>
-        {!hasBranches && (
-          <div className="bg-yellow-50 border border-yellow-200 rounded-lg p-4">
-            <p className="text-sm text-yellow-800">
-              ⚠️ Please create a branch first before adding {isPharmacy ? 'medicines' : 'items'}.
-            </p>
-          </div>
-        )}
-      </div>
-
-      <Tabs value={activeTab} onValueChange={setActiveTab} className="space-y-4">
-        <TabsList className="grid w-full grid-cols-3 h-auto">
-          <TabsTrigger value="inventory" className="text-xs sm:text-sm">{isPharmacy ? 'Medicines & Items' : 'Items'}</TabsTrigger>
-          <TabsTrigger value="stock-history" className="text-xs sm:text-sm">
-            <History className="h-3.5 w-3.5 mr-1" />
-            Stock History
-          </TabsTrigger>
-          <TabsTrigger value="categories" className="text-xs sm:text-sm">Categories</TabsTrigger>
-        </TabsList>
-
-        <TabsContent value="inventory" className="space-y-4">
-          <div className="flex flex-col sm:flex-row sm:items-center gap-3">
-            <div className="relative flex-1">
-              <Search className="absolute left-2 top-2.5 h-4 w-4 text-muted-foreground" />
-              <Input
-                placeholder={isPharmacy ? "Search medicines..." : "Search items..."}
-                value={searchTerm}
-                onChange={(e) => setSearchTerm(e.target.value)}
-                className="pl-8"
-              />
-            </div>
-
-            <div className="flex items-center space-x-2">
-              <Filter className="h-4 w-4 text-muted-foreground flex-shrink-0" />
-              <Select value={categoryFilter} onValueChange={setCategoryFilter}>
-                <SelectTrigger className="w-full sm:w-48">
-                  <SelectValue placeholder="Filter by category" />
-                </SelectTrigger>
-                <SelectContent>
-                  <SelectItem value="all">All Categories</SelectItem>
-                  {isPharmacy && <SelectItem value="medicines_only">Medicines Only</SelectItem>}
-                  {getUniqueCategories().map((category) => (
-                    <SelectItem key={category} value={category}>
-                      {category}
-                    </SelectItem>
-                  ))}
-                </SelectContent>
-              </Select>
-            </div>
-          </div>
-
-          {!selectedBranch && filteredMedicines.some(m => m.branch_name) ? (
-            // Group by branch when "All Branches" is selected
-            (() => {
-              const grouped: Record<string, Medicine[]> = {};
-              filteredMedicines.forEach(m => {
-                const key = m.branch_name || 'Unknown Branch';
-                if (!grouped[key]) grouped[key] = [];
-                grouped[key].push(m);
-              });
-              return Object.entries(grouped).sort(([a], [b]) => a.localeCompare(b)).map(([branchName, items]) => (
-                <div key={branchName} className="space-y-3">
-                  <div className="flex items-center gap-2">
-                    <h3 className="text-lg font-semibold text-foreground">{branchName}</h3>
-                    <Badge variant="secondary" className="text-xs">{items.length} {items.length === 1 ? 'item' : 'items'}</Badge>
-                  </div>
-                  <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-4">
-                    {items.map((medicine) => renderMedicineCard(medicine))}
-                  </div>
-                </div>
-              ));
-            })()
-          ) : (
-            <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-4">
-              {filteredMedicines.map((medicine) => renderMedicineCard(medicine))}
-            </div>
-          )}
-
-          {filteredMedicines.length === 0 && (
-            <div className="text-center py-8">
-              <p className="text-muted-foreground">No {isPharmacy ? 'medicines' : 'items'} found.</p>
-            </div>
-          )}
-        </TabsContent>
-
   const renderMedicineCard = (medicine: Medicine) => (
     <Card key={medicine.id} className={isExpired(medicine) ? "border-destructive/30 bg-destructive/5" : ""}>
       <CardHeader>
@@ -472,6 +351,112 @@ export default function StaffInventoryWithActions() {
     </Card>
   );
 
+  if (loading) {
+    return (
+      <div className="flex items-center justify-center py-12 gap-3">
+        <div className="h-6 w-6 animate-spin rounded-full border-2 border-primary border-t-transparent" />
+        <span className="text-muted-foreground">Loading {isPharmacy ? 'medicines' : 'items'}...</span>
+      </div>
+    );
+  }
+
+  return (
+    <div className="space-y-6">
+      <div className="flex flex-col space-y-4">
+        <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3">
+          <h2 className="text-xl sm:text-2xl font-bold">{isPharmacy ? 'Inventory Management' : 'Stock Management'}</h2>
+          <div className="flex gap-2 flex-wrap">
+            {isPharmacy && (
+              <Button onClick={() => setShowAddDialog(true)} disabled={!hasBranches} size="sm">
+                <Plus className="h-4 w-4 mr-2" />
+                Add Medicine
+              </Button>
+            )}
+            <Button onClick={() => setShowAddItemDialog(true)} disabled={!hasBranches} variant={isPharmacy ? "outline" : "default"} size="sm">
+              <Plus className="h-4 w-4 mr-2" />
+              Add Item
+            </Button>
+          </div>
+        </div>
+        {!hasBranches && (
+          <div className="bg-warning/10 border border-warning/30 rounded-lg p-4">
+            <p className="text-sm text-warning">
+              ⚠️ Please create a branch first before adding {isPharmacy ? 'medicines' : 'items'}.
+            </p>
+          </div>
+        )}
+      </div>
+
+      <Tabs value={activeTab} onValueChange={setActiveTab} className="space-y-4">
+        <TabsList className="grid w-full grid-cols-3 h-auto">
+          <TabsTrigger value="inventory" className="text-xs sm:text-sm">{isPharmacy ? 'Medicines & Items' : 'Items'}</TabsTrigger>
+          <TabsTrigger value="stock-history" className="text-xs sm:text-sm">
+            <History className="h-3.5 w-3.5 mr-1" />
+            Stock History
+          </TabsTrigger>
+          <TabsTrigger value="categories" className="text-xs sm:text-sm">Categories</TabsTrigger>
+        </TabsList>
+
+        <TabsContent value="inventory" className="space-y-4">
+          <div className="flex flex-col sm:flex-row sm:items-center gap-3">
+            <div className="relative flex-1">
+              <Search className="absolute left-2 top-2.5 h-4 w-4 text-muted-foreground" />
+              <Input
+                placeholder={isPharmacy ? "Search medicines..." : "Search items..."}
+                value={searchTerm}
+                onChange={(e) => setSearchTerm(e.target.value)}
+                className="pl-8"
+              />
+            </div>
+            <div className="flex items-center space-x-2">
+              <Filter className="h-4 w-4 text-muted-foreground flex-shrink-0" />
+              <Select value={categoryFilter} onValueChange={setCategoryFilter}>
+                <SelectTrigger className="w-full sm:w-48">
+                  <SelectValue placeholder="Filter by category" />
+                </SelectTrigger>
+                <SelectContent>
+                  <SelectItem value="all">All Categories</SelectItem>
+                  {isPharmacy && <SelectItem value="medicines_only">Medicines Only</SelectItem>}
+                  {getUniqueCategories().map((category) => (
+                    <SelectItem key={category} value={category}>{category}</SelectItem>
+                  ))}
+                </SelectContent>
+              </Select>
+            </div>
+          </div>
+
+          {!selectedBranch && filteredMedicines.some(m => m.branch_name) ? (
+            (() => {
+              const grouped: Record<string, Medicine[]> = {};
+              filteredMedicines.forEach(m => {
+                const key = m.branch_name || 'Unknown Branch';
+                if (!grouped[key]) grouped[key] = [];
+                grouped[key].push(m);
+              });
+              return Object.entries(grouped).sort(([a], [b]) => a.localeCompare(b)).map(([branchName, items]) => (
+                <div key={branchName} className="space-y-3">
+                  <div className="flex items-center gap-2">
+                    <h3 className="text-lg font-semibold text-foreground">{branchName}</h3>
+                    <Badge variant="secondary" className="text-xs">{items.length} {items.length === 1 ? 'item' : 'items'}</Badge>
+                  </div>
+                  <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-4">
+                    {items.map((medicine) => renderMedicineCard(medicine))}
+                  </div>
+                </div>
+              ));
+            })()
+          ) : (
+            <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-4">
+              {filteredMedicines.map((medicine) => renderMedicineCard(medicine))}
+            </div>
+          )}
+
+          {filteredMedicines.length === 0 && (
+            <div className="text-center py-8">
+              <p className="text-muted-foreground">No {isPharmacy ? 'medicines' : 'items'} found.</p>
+            </div>
+          )}
+        </TabsContent>
 
         <TabsContent value="stock-history">
           <StockEditHistory />
@@ -483,19 +468,10 @@ export default function StaffInventoryWithActions() {
       </Tabs>
 
       {isPharmacy && (
-        <AddMedicineDialog
-          open={showAddDialog}
-          onOpenChange={setShowAddDialog}
-          onMedicineAdded={handleMedicineAdded}
-        />
+        <AddMedicineDialog open={showAddDialog} onOpenChange={setShowAddDialog} onMedicineAdded={handleMedicineAdded} />
       )}
 
-      <AddMedicineDialog
-        open={showAddItemDialog}
-        onOpenChange={setShowAddItemDialog}
-        onMedicineAdded={handleMedicineAdded}
-        mode="general"
-      />
+      <AddMedicineDialog open={showAddItemDialog} onOpenChange={setShowAddItemDialog} onMedicineAdded={handleMedicineAdded} mode="general" />
 
       <AddMedicineDialog
         open={showReplicateDialog}
