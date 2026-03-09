@@ -250,7 +250,7 @@ export default function CreditSetupSection() {
               Universal Credit Setup
             </CardTitle>
             <CardDescription>
-              Manage credit plans that apply to all new pharmacy owner accounts
+              Manage credit plans that apply to all new business owner accounts
             </CardDescription>
           </div>
         <Dialog open={addDialogOpen} onOpenChange={setAddDialogOpen}>
