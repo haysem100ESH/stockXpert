@@ -819,10 +819,10 @@ export default function DeveloperDashboard() {
         </Card>
       </div>
 
-      {/* Pharmacy Owners Table */}
+      {/* Business Owners Table */}
       <Card>
         <CardHeader>
-          <CardTitle>Pharmacy Owners</CardTitle>
+          <CardTitle>Business Owners</CardTitle>
           <CardDescription>Manage owner accounts, subscriptions, and activation status</CardDescription>
         </CardHeader>
         <CardContent>
