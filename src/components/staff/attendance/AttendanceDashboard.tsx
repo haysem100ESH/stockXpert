@@ -9,7 +9,7 @@ import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogFooter, DialogDescription } from '@/components/ui/dialog';
 import { Textarea } from '@/components/ui/textarea';
 import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from '@/components/ui/tooltip';
-import { Calendar, CheckCircle2, Clock, XCircle, Users, ShieldCheck, ShieldAlert, AlertTriangle, Pencil, Info, Loader2, FileSpreadsheet, FileText, Download } from 'lucide-react';
+import { Calendar, CheckCircle2, Clock, XCircle, Users, ShieldCheck, ShieldAlert, AlertTriangle, Pencil, Info, Loader2, FileSpreadsheet, FileText, Download, RefreshCw } from 'lucide-react';
 import { supabase } from '@/lib/db';
 import { useAuth } from '@/hooks/useAuth';
 import { useToast } from '@/hooks/use-toast';
