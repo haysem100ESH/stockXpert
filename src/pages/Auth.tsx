@@ -289,7 +289,7 @@ export default function Auth() {
 
   if (loading) {
     return (
-      <div className="min-h-screen flex items-center justify-center bg-gradient-to-br from-blue-50 to-indigo-100">
+      <div className="min-h-screen flex items-center justify-center bg-background">
         <Loader2 className="h-10 w-10 animate-spin text-primary" />
       </div>
     );
@@ -310,12 +310,12 @@ export default function Auth() {
   };
 
   return (
-    <div className="min-h-screen flex items-center justify-center bg-gradient-to-br from-blue-50 to-indigo-100 p-6">
-      <Card className="w-full max-w-md shadow-xl rounded-2xl border border-gray-200">
+    <div className="min-h-screen flex items-center justify-center bg-background p-6">
+      <Card className="w-full max-w-md shadow-xl rounded-2xl border border-border">
         {/* Header */}
         <CardHeader className="text-center space-y-2 pb-6">
           <div className="flex flex-col items-center">
-            <div className="w-32 h-32 flex items-center justify-center bg-white rounded-full shadow-md mb-3 transition-transform duration-300 hover:scale-105 border border-gray-100">
+            <div className="w-32 h-32 flex items-center justify-center bg-card rounded-full shadow-md mb-3 transition-transform duration-300 hover:scale-105 border border-border">
               <img
                 src="/stocxpert-uploads/SIcon.svg"
                 alt="System Logo"
@@ -335,16 +335,16 @@ export default function Auth() {
         {/* Tabs & Forms */}
         <CardContent className="px-6 pb-6">
           <Tabs value={activeTab} onValueChange={setActiveTab} className="w-full">
-            <TabsList className="grid w-full grid-cols-2 mb-6 rounded-xl bg-gray-100 p-1">
+            <TabsList className="grid w-full grid-cols-2 mb-6 rounded-xl p-1">
               <TabsTrigger
                 value="signin"
-                className="data-[state=active]:bg-white data-[state=active]:shadow-md data-[state=active]:font-semibold rounded-lg transition"
+                className="data-[state=active]:bg-background data-[state=active]:shadow-md data-[state=active]:font-semibold rounded-lg transition"
               >
                 Sign In
               </TabsTrigger>
               <TabsTrigger
                 value="forgot"
-                className="data-[state=active]:bg-white data-[state=active]:shadow-md data-[state=active]:font-semibold rounded-lg transition"
+                className="data-[state=active]:bg-background data-[state=active]:shadow-md data-[state=active]:font-semibold rounded-lg transition"
               >
                 Forgot Password
               </TabsTrigger>
@@ -378,7 +378,7 @@ export default function Auth() {
                   <button
                     type="button"
                     onClick={() => setShowPassword(!showPassword)}
-                    className="absolute right-3 top-9 text-gray-400 hover:text-gray-600"
+                    className="absolute right-3 top-9 text-muted-foreground hover:text-foreground"
                   >
                     {showPassword ? <EyeOff className="h-5 w-5" /> : <Eye className="h-5 w-5" />}
                   </button>
