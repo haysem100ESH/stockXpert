@@ -1,7 +1,8 @@
-import { useState, useEffect, useCallback } from 'react';
+import { useState, useEffect, useCallback, useMemo } from 'react';
 import { Card, CardContent, CardHeader, CardTitle, CardDescription } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
 import { Badge } from '@/components/ui/badge';
+import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from '@/components/ui/tooltip';
 import { LogIn, LogOut, MapPin, Clock, AlertTriangle, CheckCircle2, Loader2, ShieldCheck } from 'lucide-react';
 import { supabase } from '@/lib/db';
 import { useToast } from '@/hooks/use-toast';
@@ -50,6 +51,19 @@ export default function RecordAttendance() {
   const { selectedBranch } = useBranchContext();
 
   const branchId = profile?.branch_id || selectedBranch;
+
+  const formatTimeTo12Hr = (time24: string): string => {
+    const [hours, minutes] = time24.split(':').map(Number);
+    const period = hours >= 12 ? 'PM' : 'AM';
+    const hours12 = hours % 12 || 12;
+    return `${hours12}:${minutes.toString().padStart(2, '0')} ${period}`;
+  };
+
+  const isAfterWorkEnd = useMemo(() => {
+    if (!branchSettings?.work_end_time) return true;
+    const now = currentTime.toTimeString().slice(0, 5);
+    return now >= branchSettings.work_end_time;
+  }, [currentTime, branchSettings?.work_end_time]);
 
   useEffect(() => {
     const timer = setInterval(() => setCurrentTime(new Date()), 1000);
@@ -533,10 +547,23 @@ export default function RecordAttendance() {
                 )}
               </div>
             ) : (
-              <Button onClick={startCheckOut} disabled={recording} variant="secondary" className="w-full" size="lg">
-                {recording ? <Loader2 className="h-4 w-4 mr-2 animate-spin" /> : <LogOut className="h-4 w-4 mr-2" />}
-                {recording ? 'Verifying Location...' : hasFaceData ? 'Check-Out (GPS + Face)' : 'Record Check-Out'}
-              </Button>
+              <TooltipProvider>
+                <Tooltip>
+                  <TooltipTrigger asChild>
+                    <span className="w-full">
+                      <Button onClick={startCheckOut} disabled={recording || !isAfterWorkEnd} variant="secondary" className="w-full" size="lg">
+                        {recording ? <Loader2 className="h-4 w-4 mr-2 animate-spin" /> : <LogOut className="h-4 w-4 mr-2" />}
+                        {recording ? 'Verifying Location...' : hasFaceData ? 'Check-Out (GPS + Face)' : 'Record Check-Out'}
+                      </Button>
+                    </span>
+                  </TooltipTrigger>
+                  {!isAfterWorkEnd && (
+                    <TooltipContent>
+                      <p>Checkout will be available after the official work end time.</p>
+                    </TooltipContent>
+                  )}
+                </Tooltip>
+              </TooltipProvider>
             )}
           </CardContent>
         </Card>
@@ -551,19 +578,19 @@ export default function RecordAttendance() {
           <div className="grid grid-cols-2 md:grid-cols-4 gap-4 text-sm">
             <div>
               <p className="text-muted-foreground">Work Start</p>
-              <p className="font-medium">{branchSettings.work_start_time}</p>
+              <p className="font-medium">{formatTimeTo12Hr(branchSettings.work_start_time)}</p>
             </div>
             <div>
               <p className="text-muted-foreground">Late After</p>
-              <p className="font-medium">{branchSettings.late_start_time}</p>
+              <p className="font-medium">{formatTimeTo12Hr(branchSettings.late_start_time)}</p>
             </div>
             <div>
               <p className="text-muted-foreground">Absent After</p>
-              <p className="font-medium">{branchSettings.absent_start_time}</p>
+              <p className="font-medium">{formatTimeTo12Hr(branchSettings.absent_start_time)}</p>
             </div>
             <div>
               <p className="text-muted-foreground">Work End</p>
-              <p className="font-medium">{branchSettings.work_end_time}</p>
+              <p className="font-medium">{formatTimeTo12Hr(branchSettings.work_end_time)}</p>
             </div>
           </div>
         </CardContent>
