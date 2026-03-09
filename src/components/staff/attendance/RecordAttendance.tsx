@@ -578,19 +578,19 @@ export default function RecordAttendance() {
           <div className="grid grid-cols-2 md:grid-cols-4 gap-4 text-sm">
             <div>
               <p className="text-muted-foreground">Work Start</p>
-              <p className="font-medium">{branchSettings.work_start_time}</p>
+              <p className="font-medium">{formatTimeTo12Hr(branchSettings.work_start_time)}</p>
             </div>
             <div>
               <p className="text-muted-foreground">Late After</p>
-              <p className="font-medium">{branchSettings.late_start_time}</p>
+              <p className="font-medium">{formatTimeTo12Hr(branchSettings.late_start_time)}</p>
             </div>
             <div>
               <p className="text-muted-foreground">Absent After</p>
-              <p className="font-medium">{branchSettings.absent_start_time}</p>
+              <p className="font-medium">{formatTimeTo12Hr(branchSettings.absent_start_time)}</p>
             </div>
             <div>
               <p className="text-muted-foreground">Work End</p>
-              <p className="font-medium">{branchSettings.work_end_time}</p>
+              <p className="font-medium">{formatTimeTo12Hr(branchSettings.work_end_time)}</p>
             </div>
           </div>
         </CardContent>
