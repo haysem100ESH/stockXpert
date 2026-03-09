@@ -338,9 +338,7 @@ export default function Auth() {
             <TabsList className="grid w-full grid-cols-2 mb-6 rounded-xl p-1">
               <TabsTrigger
                 value="signin"
-                className="data-[state=active]:bg-white data-[state=active]:shadow-md data-[state=active]:font-semibold rounded-lg transition"
-              >
-                Sign In
+                className="data-[state=active]:bg-background data-[state=active]:shadow-md data-[state=active]:font-semibold rounded-lg transition"
               </TabsTrigger>
               <TabsTrigger
                 value="forgot"
