@@ -254,6 +254,23 @@ export default function AttendanceDashboard() {
     }
   };
 
+  // Fetch a photo URL and convert it to a base64 data URL for embedding in exports
+  const fetchImageAsBase64 = async (url: string): Promise<string | null> => {
+    try {
+      const response = await fetch(url);
+      if (!response.ok) return null;
+      const blob = await response.blob();
+      return new Promise((resolve) => {
+        const reader = new FileReader();
+        reader.onloadend = () => resolve(reader.result as string);
+        reader.onerror = () => resolve(null);
+        reader.readAsDataURL(blob);
+      });
+    } catch {
+      return null;
+    }
+  };
+
   const exportToExcel = async () => {
     if (records.length === 0) {
       toast({ title: 'No Data', description: 'No attendance records to export.', variant: 'destructive' });
@@ -265,30 +282,33 @@ export default function AttendanceDashboard() {
       const workbook = new ExcelJS.Workbook();
       const worksheet = workbook.addWorksheet('Attendance Report');
 
+      // Fixed photo column width/height
+      const PHOTO_COL_WIDTH = 20; // chars
+      const PHOTO_ROW_HEIGHT = 80; // pts
+
+      // Column headers
+      const headers = ['Date', ...(isOwner ? ['Staff', 'Branch'] : []), 'Check-In Time', 'Check-Out Time', 'Status', 'Face In', 'Face Out', 'Check-In Photo', 'Check-Out Photo'];
+      const colCount = headers.length;
+
       // Header styling
       const headerRow = worksheet.addRow(['Attendance Report']);
-      worksheet.mergeCells('A1:I1');
+      worksheet.mergeCells(`A1:${String.fromCharCode(64 + colCount)}1`);
       headerRow.getCell(1).fill = { type: 'pattern', pattern: 'solid', fgColor: { argb: 'FF1E6F3E' } };
       headerRow.getCell(1).font = { color: { argb: 'FFFFFFFF' }, size: 16, bold: true };
       headerRow.getCell(1).alignment = { horizontal: 'center' };
 
-      // Date range
       const dateRangeRow = worksheet.addRow([`Period: ${filterDateFrom} to ${filterDateTo}`]);
-      worksheet.mergeCells('A2:I2');
+      worksheet.mergeCells(`A2:${String.fromCharCode(64 + colCount)}2`);
       dateRangeRow.getCell(1).font = { size: 12 };
       dateRangeRow.getCell(1).alignment = { horizontal: 'center' };
 
-      // Summary stats
       const summaryRow = worksheet.addRow([`Present: ${presentCount} | Late: ${lateCount} | Absent: ${absentCount}`]);
-      worksheet.mergeCells('A3:I3');
+      worksheet.mergeCells(`A3:${String.fromCharCode(64 + colCount)}3`);
       summaryRow.getCell(1).font = { size: 11 };
       summaryRow.getCell(1).alignment = { horizontal: 'center' };
 
-      // Empty row
-      worksheet.addRow([]);
+      worksheet.addRow([]); // empty row
 
-      // Column headers
-      const headers = ['Date', ...(isOwner ? ['Staff', 'Branch'] : []), 'Check-In Time', 'Check-Out Time', 'Status', 'Face In', 'Face Out', 'Check-In Photo', 'Check-Out Photo'];
       const headerRow2 = worksheet.addRow(headers);
       headerRow2.eachCell((cell) => {
         cell.fill = { type: 'pattern', pattern: 'solid', fgColor: { argb: 'FFF0F9F4' } };
@@ -296,12 +316,18 @@ export default function AttendanceDashboard() {
         cell.border = { top: { style: 'thin' }, left: { style: 'thin' }, bottom: { style: 'thin' }, right: { style: 'thin' } };
       });
 
-      // Data rows
+      // Set photo column widths
+      const checkinPhotoColIdx = headers.indexOf('Check-In Photo') + 1;
+      const checkoutPhotoColIdx = headers.indexOf('Check-Out Photo') + 1;
+      worksheet.getColumn(checkinPhotoColIdx).width = PHOTO_COL_WIDTH;
+      worksheet.getColumn(checkoutPhotoColIdx).width = PHOTO_COL_WIDTH;
+
+      // Data rows with embedded images
       for (let i = 0; i < records.length; i++) {
         const record = records[i];
         const checkinPhotoUrl = await getDisplayPhotoUrl(record.checkin_photo);
         const checkoutPhotoUrl = await getDisplayPhotoUrl(record.checkout_photo);
-        
+
         const rowData = [
           new Date(record.date).toLocaleDateString(),
           ...(isOwner ? [record.staff_name, record.branch_name] : []),
@@ -310,39 +336,62 @@ export default function AttendanceDashboard() {
           record.attendance_status,
           record.checkin_face_verified === true ? 'Verified' : record.checkin_face_verified === false ? 'Failed' : '—',
           record.checkout_face_verified === true ? 'Verified' : record.checkout_face_verified === false ? 'Failed' : '—',
-          checkinPhotoUrl || '—',
-          checkoutPhotoUrl || '—'
+          '',
+          '',
         ];
-        
+
         const row = worksheet.addRow(rowData);
-        
+        const rowNumber = row.number;
+
         // Alternating row colors
         if (i % 2 === 0) {
-          row.eachCell((cell) => {
-            cell.fill = { type: 'pattern', pattern: 'solid', fgColor: { argb: 'FFF9F9F9' } };
+          row.eachCell({ includeEmpty: true }, (cell, colNum) => {
+            if (colNum !== checkinPhotoColIdx && colNum !== checkoutPhotoColIdx) {
+              cell.fill = { type: 'pattern', pattern: 'solid', fgColor: { argb: 'FFF9F9F9' } };
+            }
           });
         }
-        
-        // Add hyperlinks for photos
-        if (checkinPhotoUrl && checkinPhotoUrl !== '—') {
-          const checkinCell = row.getCell(headers.indexOf('Check-In Photo') + 1);
-          checkinCell.value = { text: 'View Photo', hyperlink: checkinPhotoUrl };
-          checkinCell.font = { color: { argb: 'FF0066CC' }, underline: true };
+
+        // Embed check-in photo
+        if (checkinPhotoUrl) {
+          const b64 = await fetchImageAsBase64(checkinPhotoUrl);
+          if (b64) {
+            const mimeMatch = b64.match(/^data:(image\/\w+);base64,/);
+            const extension = mimeMatch ? (mimeMatch[1].split('/')[1] as 'jpeg' | 'png' | 'gif' | 'bmp') : 'jpeg';
+            const base64Data = b64.split(',')[1];
+            const imageId = workbook.addImage({ base64: base64Data, extension });
+            row.height = PHOTO_ROW_HEIGHT;
+            worksheet.addImage(imageId, {
+              tl: { col: checkinPhotoColIdx - 1, row: rowNumber - 1 },
+              br: { col: checkinPhotoColIdx, row: rowNumber },
+            });
+          }
         }
-        
-        if (checkoutPhotoUrl && checkoutPhotoUrl !== '—') {
-          const checkoutCell = row.getCell(headers.indexOf('Check-Out Photo') + 1);
-          checkoutCell.value = { text: 'View Photo', hyperlink: checkoutPhotoUrl };
-          checkoutCell.font = { color: { argb: 'FF0066CC' }, underline: true };
+
+        // Embed check-out photo
+        if (checkoutPhotoUrl) {
+          const b64 = await fetchImageAsBase64(checkoutPhotoUrl);
+          if (b64) {
+            const mimeMatch = b64.match(/^data:(image\/\w+);base64,/);
+            const extension = mimeMatch ? (mimeMatch[1].split('/')[1] as 'jpeg' | 'png' | 'gif' | 'bmp') : 'jpeg';
+            const base64Data = b64.split(',')[1];
+            const imageId = workbook.addImage({ base64: base64Data, extension });
+            row.height = PHOTO_ROW_HEIGHT;
+            worksheet.addImage(imageId, {
+              tl: { col: checkoutPhotoColIdx - 1, row: rowNumber - 1 },
+              br: { col: checkoutPhotoColIdx, row: rowNumber },
+            });
+          }
         }
       }
 
-      // Auto-fit columns
-      worksheet.columns.forEach((column) => {
-        column.width = 15;
+      // Auto-fit non-photo columns
+      worksheet.columns.forEach((column, idx) => {
+        if (idx + 1 !== checkinPhotoColIdx && idx + 1 !== checkoutPhotoColIdx) {
+          column.width = 18;
+        }
       });
 
-      // Generate and download
       const buffer = await workbook.xlsx.writeBuffer();
       const blob = new Blob([buffer], { type: 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet' });
       const url = window.URL.createObjectURL(blob);
@@ -370,93 +419,102 @@ export default function AttendanceDashboard() {
 
     setExporting(true);
     try {
-      const doc = new jsPDF();
-      
+      const doc = new jsPDF({ orientation: 'landscape' });
+      const pageWidth = doc.internal.pageSize.width;
+      const pageHeight = doc.internal.pageSize.height;
+
       // Header
       doc.setFillColor(30, 111, 62);
-      doc.rect(0, 0, doc.internal.pageSize.width, 25, 'F');
+      doc.rect(0, 0, pageWidth, 25, 'F');
       doc.setTextColor(255, 255, 255);
       doc.setFontSize(18);
-      doc.text('Attendance Report', doc.internal.pageSize.width / 2, 16, { align: 'center' });
-      
-      // Date range and stats
+      doc.text('Attendance Report', pageWidth / 2, 16, { align: 'center' });
+
       doc.setTextColor(0, 0, 0);
       doc.setFontSize(12);
       doc.text(`Period: ${filterDateFrom} to ${filterDateTo}`, 14, 35);
       doc.text(`Present: ${presentCount} | Late: ${lateCount} | Absent: ${absentCount}`, 14, 45);
 
-      // Prepare table data
-      const tableHeaders = ['Date', ...(isOwner ? ['Staff', 'Branch'] : []), 'Check-In', 'Check-Out', 'Status'];
-      const tableData = await Promise.all(records.map(async (record) => {
-        const checkinPhotoUrl = await getDisplayPhotoUrl(record.checkin_photo);
-        const checkoutPhotoUrl = await getDisplayPhotoUrl(record.checkout_photo);
-        
-        return [
-          new Date(record.date).toLocaleDateString(),
-          ...(isOwner ? [record.staff_name, record.branch_name] : []),
-          record.checkin_time ? new Date(record.checkin_time).toLocaleTimeString() : '—',
-          record.checkout_time ? new Date(record.checkout_time).toLocaleTimeString() : '—',
-          record.attendance_status
-        ];
-      }));
+      // Main summary table (no photo columns — photos go on separate pages)
+      const tableHeaders = ['Date', ...(isOwner ? ['Staff', 'Branch'] : []), 'Check-In', 'Check-Out', 'Status', 'Face In', 'Face Out'];
+      const tableData = records.map((record) => [
+        new Date(record.date).toLocaleDateString(),
+        ...(isOwner ? [record.staff_name ?? '—', record.branch_name ?? '—'] : []),
+        record.checkin_time ? new Date(record.checkin_time).toLocaleTimeString() : '—',
+        record.checkout_time ? new Date(record.checkout_time).toLocaleTimeString() : '—',
+        record.attendance_status.charAt(0).toUpperCase() + record.attendance_status.slice(1),
+        record.checkin_face_verified === true ? 'Verified' : record.checkin_face_verified === false ? 'Failed' : '—',
+        record.checkout_face_verified === true ? 'Verified' : record.checkout_face_verified === false ? 'Failed' : '—',
+      ]);
 
-      // Table
       (doc as any).autoTable({
         head: [tableHeaders],
         body: tableData,
         startY: 55,
         theme: 'grid',
-        headStyles: {
-          fillColor: [240, 249, 244],
-          textColor: [30, 111, 62],
-          fontStyle: 'bold'
-        },
-        alternateRowStyles: {
-          fillColor: [249, 249, 249]
-        },
-        margin: { left: 14, right: 14 }
+        headStyles: { fillColor: [30, 111, 62], textColor: [255, 255, 255], fontStyle: 'bold' },
+        alternateRowStyles: { fillColor: [249, 249, 249] },
+        margin: { left: 14, right: 14 },
       });
 
-      // Photo links section if available
-      const recordsWithPhotos = records.filter(r => r.checkin_photo || r.checkout_photo);
-      if (recordsWithPhotos.length > 0) {
-        const finalY = (doc as any).lastAutoTable.finalY || 55;
-        doc.setFontSize(14);
-        doc.text('Photo Links', 14, finalY + 20);
-        
-        let yPos = finalY + 30;
-        for (const record of recordsWithPhotos.slice(0, 10)) { // Limit to first 10 to avoid page overflow
-          doc.setFontSize(10);
-          const dateStr = new Date(record.date).toLocaleDateString();
-          const staffName = isOwner ? record.staff_name : 'You';
-          
-          doc.text(`${dateStr} - ${staffName}:`, 14, yPos);
-          
-          if (record.checkin_photo) {
-            const checkinUrl = await getDisplayPhotoUrl(record.checkin_photo);
-            if (checkinUrl) {
-              doc.setTextColor(0, 102, 204);
-              doc.textWithLink('Check-In Photo', 14, yPos + 8, { url: checkinUrl });
-            }
-          }
-          
-          if (record.checkout_photo) {
-            const checkoutUrl = await getDisplayPhotoUrl(record.checkout_photo);
-            if (checkoutUrl) {
-              doc.setTextColor(0, 102, 204);
-              doc.textWithLink('Check-Out Photo', record.checkin_photo ? 80 : 14, yPos + 8, { url: checkoutUrl });
-            }
-          }
-          
-          doc.setTextColor(0, 0, 0);
-          yPos += 16;
-          
-          if (yPos > doc.internal.pageSize.height - 30) break; // Avoid overflow
+      // Photo pages — one record per page (check-in + check-out side by side)
+      const recordsWithPhotos = records.filter((r) => r.checkin_photo || r.checkout_photo);
+
+      for (const record of recordsWithPhotos) {
+        const checkinPhotoUrl = await getDisplayPhotoUrl(record.checkin_photo);
+        const checkoutPhotoUrl = await getDisplayPhotoUrl(record.checkout_photo);
+
+        const checkinB64 = checkinPhotoUrl ? await fetchImageAsBase64(checkinPhotoUrl) : null;
+        const checkoutB64 = checkoutPhotoUrl ? await fetchImageAsBase64(checkoutPhotoUrl) : null;
+
+        // Skip if no images could be loaded
+        if (!checkinB64 && !checkoutB64) continue;
+
+        doc.addPage();
+
+        // Page header bar
+        doc.setFillColor(30, 111, 62);
+        doc.rect(0, 0, pageWidth, 18, 'F');
+        doc.setTextColor(255, 255, 255);
+        doc.setFontSize(13);
+        const dateStr = new Date(record.date).toLocaleDateString(undefined, { weekday: 'long', year: 'numeric', month: 'long', day: 'numeric' });
+        const staffLabel = isOwner ? ` — ${record.staff_name}` : '';
+        doc.text(`${dateStr}${staffLabel}`, pageWidth / 2, 12, { align: 'center' });
+
+        doc.setTextColor(0, 0, 0);
+        doc.setFontSize(10);
+
+        const imgY = 25;
+        const imgH = pageHeight - imgY - 20;
+        const halfW = (pageWidth - 42) / 2; // 14 margin each side + 14 gap
+
+        if (checkinB64 && checkoutB64) {
+          // Side by side
+          doc.setFontSize(11);
+          doc.setFont(undefined as any, 'bold');
+          doc.text('Check-In Photo', 14 + halfW / 2, imgY + 6, { align: 'center' });
+          doc.setFont(undefined as any, 'normal');
+          doc.addImage(checkinB64, 'JPEG', 14, imgY + 10, halfW, imgH - 10);
+
+          doc.setFont(undefined as any, 'bold');
+          doc.text('Check-Out Photo', 14 + halfW + 14 + halfW / 2, imgY + 6, { align: 'center' });
+          doc.setFont(undefined as any, 'normal');
+          doc.addImage(checkoutB64, 'JPEG', 14 + halfW + 14, imgY + 10, halfW, imgH - 10);
+        } else if (checkinB64) {
+          doc.setFont(undefined as any, 'bold');
+          doc.text('Check-In Photo', pageWidth / 2, imgY + 6, { align: 'center' });
+          doc.setFont(undefined as any, 'normal');
+          doc.addImage(checkinB64, 'JPEG', 14, imgY + 10, pageWidth - 28, imgH - 10);
+        } else if (checkoutB64) {
+          doc.setFont(undefined as any, 'bold');
+          doc.text('Check-Out Photo', pageWidth / 2, imgY + 6, { align: 'center' });
+          doc.setFont(undefined as any, 'normal');
+          doc.addImage(checkoutB64, 'JPEG', 14, imgY + 10, pageWidth - 28, imgH - 10);
         }
       }
 
       doc.save(`attendance-report-${filterDateFrom}-to-${filterDateTo}.pdf`);
-      toast({ title: 'Export Complete', description: 'Attendance report downloaded successfully.' });
+      toast({ title: 'Export Complete', description: 'Attendance report with photos downloaded successfully.' });
     } catch (error: any) {
       toast({ title: 'Export Failed', description: error.message || 'Failed to export PDF.', variant: 'destructive' });
     } finally {
