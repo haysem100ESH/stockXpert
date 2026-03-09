@@ -159,11 +159,17 @@ export default function DeveloperDashboard() {
             .eq('pharmacy_owner_id', profile.id)
             .maybeSingle();
 
-          // Get branch count
-          const { count: branchCount } = await supabase
+          // Get branch count and first branch name as pharmacy name
+          const { data: branches, count: branchCount } = await supabase
             .from('pharmacy_branches')
-            .select('id', { count: 'exact' })
-            .eq('pharmacy_owner_id', profile.id);
+            .select('id, name', { count: 'exact' })
+            .eq('pharmacy_owner_id', profile.id)
+            .order('created_at')
+            .limit(5);
+
+          // Use the first branch name as pharmacy name, or join multiple
+          const branchNames = (branches || []).map((b: any) => b.name);
+          const pharmacyName = profile.pharmacy_name || (branchNames.length > 0 ? branchNames.join(', ') : 'N/A');
 
           // Get gemini_api_key status
           const { data: profileExtra } = await supabase
@@ -178,7 +184,7 @@ export default function DeveloperDashboard() {
             email: profile.email,
             phone: profile.phone,
             telegram_chat_id: profile.telegram_chat_id,
-            pharmacy_name: profile.pharmacy_name || 'N/A',
+            pharmacy_name: pharmacyName,
             pharmacy_address: profile.pharmacy_address || 'N/A',
             active: profile.active,
             manually_deactivated: profile.manually_deactivated,
