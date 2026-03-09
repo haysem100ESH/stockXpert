@@ -78,18 +78,30 @@ export default function AddMedicineDialog({ open, onOpenChange, onMedicineAdded,
   }, [replicateData]);
   
   useEffect(() => {
-    const fetchUserRoleAndBranches = async () => {
+    const fetchUserRoleAndBranchesAndSuppliers = async () => {
       const { data: { user } } = await supabase.auth.getUser();
       if (!user) return;
       
       const { data: profile } = await supabase
         .from('profiles')
-        .select('role')
+        .select('role, pharmacy_owner_id')
         .eq('id', user.id)
         .single();
       
       if (profile) {
         setUserRole(profile.role as 'owner' | 'staff');
+        const ownerId = profile.role === 'owner' ? user.id : profile.pharmacy_owner_id;
+        
+        // Fetch suppliers
+        if (ownerId) {
+          const { data: suppliersData } = await supabase
+            .from('suppliers')
+            .select('id, name')
+            .eq('pharmacy_owner_id', ownerId)
+            .order('name');
+          if (suppliersData) setSuppliers(suppliersData);
+        }
+        
         if (profile.role === 'owner') {
           const { data: branchesData } = await supabase
             .from('pharmacy_branches')
@@ -113,8 +125,10 @@ export default function AddMedicineDialog({ open, onOpenChange, onMedicineAdded,
     };
     
     if (open) {
-      fetchUserRoleAndBranches();
+      fetchUserRoleAndBranchesAndSuppliers();
       setItemType('full_pcs');
+      setSelectedSupplierId('');
+      setPaymentType('paid');
     }
   }, [open, selectedBranch, userBranch]);
 
