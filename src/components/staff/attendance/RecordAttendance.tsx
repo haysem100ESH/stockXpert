@@ -284,7 +284,7 @@ export default function RecordAttendance() {
           checkout_lat: lat,
           checkout_long: lng,
           checkout_face_verified: faceVerified,
-          checkout_photo: checkoutPhotoUrl,
+          checkout_photo: checkoutPhotoPath,
           verification_score: score,
         })
         .eq('id', todayRecord!.id);
