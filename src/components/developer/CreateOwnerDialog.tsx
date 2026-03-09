@@ -182,9 +182,9 @@ export default function CreateOwnerDialog({ onOwnerCreated }: CreateOwnerDialogP
       </DialogTrigger>
       <DialogContent className="max-w-md max-h-[90vh] overflow-y-auto">
         <DialogHeader>
-          <DialogTitle>Create Pharmacy Owner Account</DialogTitle>
+          <DialogTitle>Create Business Owner Account</DialogTitle>
           <DialogDescription>
-            Create a new pharmacy owner account with full access credentials
+            Create a new business owner account with full access credentials
           </DialogDescription>
         </DialogHeader>
         
