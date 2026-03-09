@@ -143,7 +143,7 @@ export default function CreateOwnerDialog({ onOwnerCreated }: CreateOwnerDialogP
 
       toast({
         title: "Success",
-        description: "Pharmacy owner account created successfully"
+        description: "Business owner account created successfully"
       });
 
       setFormData({
