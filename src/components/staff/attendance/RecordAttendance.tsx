@@ -159,6 +159,34 @@ export default function RecordAttendance() {
     }
   };
 
+  const uploadWithRetry = async (path: string, blob: Blob, retries = 2): Promise<string> => {
+    for (let attempt = 0; attempt <= retries; attempt++) {
+      const { data, error } = await supabase.storage
+        .from('attendance-photos')
+        .upload(path, blob, { contentType: 'image/jpeg', upsert: false });
+
+      if (!error) {
+        console.log('Photo uploaded successfully:', data);
+        return path;
+      }
+
+      console.error(`Upload attempt ${attempt + 1} failed:`, error);
+      
+      if (attempt < retries && error.message?.includes('row-level security')) {
+        // Check auth session is still valid
+        const { data: session } = await supabase.auth.getSession();
+        if (!session?.session) {
+          throw new Error('Your session has expired. Please log in again.');
+        }
+        await new Promise(r => setTimeout(r, 1000 * (attempt + 1)));
+        continue;
+      }
+
+      throw error;
+    }
+    throw new Error('Upload failed after retries');
+  };
+
   const completeCheckIn = async (
     lat: number, lng: number, distance: number,
     faceVerified: boolean, photoBlob: Blob | null, score: number
@@ -169,33 +197,14 @@ export default function RecordAttendance() {
       const status = determineStatus(now, branchSettings!);
       const today = now.toISOString().split('T')[0];
 
-      let checkinPhotoPath: string | null = null;
-
-      // Photo is mandatory for attendance
       if (!photoBlob) {
         throw new Error('Photo capture failed — please try again.');
       }
 
-      // Store under the staffId prefix to satisfy common storage policies like: name starts with auth.uid()
       const checkinPath = `${user!.id}/${today}/checkin_${Date.now()}.jpg`;
-      
       console.log('Uploading check-in photo:', { path: checkinPath, blobSize: photoBlob.size });
-      const { data: uploadData, error: uploadError } = await supabase.storage
-        .from('attendance-photos')
-        .upload(checkinPath, photoBlob, { contentType: 'image/jpeg', upsert: false });
-
-      if (uploadError) {
-        console.error('Check-in photo upload failed:', uploadError);
-        toast({ 
-          title: 'Photo Upload Failed', 
-          description: `Failed to save check-in photo: ${uploadError.message}`, 
-          variant: 'destructive' 
-        });
-        throw uploadError;
-      }
       
-      console.log('Check-in photo uploaded successfully:', uploadData);
-      checkinPhotoPath = checkinPath;
+      const checkinPhotoPath = await uploadWithRetry(checkinPath, photoBlob);
 
       const { error } = await supabase.from('staff_attendance').insert({
         staff_id: user!.id,
@@ -212,8 +221,8 @@ export default function RecordAttendance() {
 
       if (error) throw error;
       toast({
-        title: 'Checked In',
-        description: `Status: ${status.charAt(0).toUpperCase() + status.slice(1)} (${Math.round(distance)}m from store)${faceVerified ? ' ✅ Face verified' : ''}`,
+        title: 'Checked In ✅',
+        description: `Status: ${status.charAt(0).toUpperCase() + status.slice(1)} (${Math.round(distance)}m from store)${faceVerified ? ' • Face verified' : ''}`,
       });
       fetchData();
     } catch (error: any) {
