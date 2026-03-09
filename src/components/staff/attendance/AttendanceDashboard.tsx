@@ -9,7 +9,7 @@ import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogFooter, DialogDescription } from '@/components/ui/dialog';
 import { Textarea } from '@/components/ui/textarea';
 import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from '@/components/ui/tooltip';
-import { Calendar, CheckCircle2, Clock, XCircle, Users, ShieldCheck, ShieldAlert, AlertTriangle, Pencil, Info, Loader2, FileSpreadsheet, FileText, Download } from 'lucide-react';
+import { Calendar, CheckCircle2, Clock, XCircle, Users, ShieldCheck, ShieldAlert, AlertTriangle, Pencil, Info, Loader2, FileSpreadsheet, FileText, Download, RefreshCw } from 'lucide-react';
 import { supabase } from '@/lib/db';
 import { useAuth } from '@/hooks/useAuth';
 import { useToast } from '@/hooks/use-toast';
@@ -604,8 +604,23 @@ export default function AttendanceDashboard() {
               <Calendar className="h-5 w-5" />
               Attendance Records
             </CardTitle>
-            {isOwner && records.length > 0 && (
-              <div className="flex gap-2">
+            <div className="flex gap-2">
+              <Button
+                variant="outline"
+                size="sm"
+                onClick={fetchRecords}
+                disabled={loading}
+                className="gap-2"
+              >
+                {loading ? (
+                  <Loader2 className="h-4 w-4 animate-spin" />
+                ) : (
+                  <RefreshCw className="h-4 w-4" />
+                )}
+                Refresh
+              </Button>
+              {isOwner && records.length > 0 && (
+                <>
                 <Button
                   variant="outline"
                   size="sm"
@@ -633,9 +648,10 @@ export default function AttendanceDashboard() {
                     <FileText className="h-4 w-4" />
                   )}
                   PDF
-                </Button>
-              </div>
-            )}
+                 </Button>
+                </>
+              )}
+            </div>
           </div>
         </CardHeader>
         <CardContent>
