@@ -173,18 +173,55 @@ export default function AddMedicineDialog({ open, onOpenChange, onMedicineAdded,
       const { error } = await supabase.from('medicines').insert([medicineData]);
       if (error) throw error;
 
+      const totalAmount = stockQuantity * medicineData.purchase_price;
+      const branchId = selectedBranchId || userBranch || selectedBranch || null;
+
+      // Record supplier purchase if supplier is selected
+      if (selectedSupplierId) {
+        await supabase.from('supplier_purchases').insert({
+          supplier_id: selectedSupplierId,
+          medicine_name: medicineData.name,
+          quantity: stockQuantity,
+          unit_price: medicineData.purchase_price,
+          total_amount: totalAmount,
+          payment_type: paymentType,
+          branch_id: branchId,
+          created_by: user?.id || null,
+        });
+
+        // Update supplier debt if credit purchase
+        if (paymentType === 'credit') {
+          const { data: existingDebt } = await supabase
+            .from('supplier_debts')
+            .select('id, total_debt')
+            .eq('supplier_id', selectedSupplierId)
+            .maybeSingle();
+
+          if (existingDebt) {
+            await supabase
+              .from('supplier_debts')
+              .update({ total_debt: existingDebt.total_debt + totalAmount })
+              .eq('id', existingDebt.id);
+          } else {
+            await supabase.from('supplier_debts').insert({
+              supplier_id: selectedSupplierId,
+              total_debt: totalAmount,
+            });
+          }
+        }
+      }
+
       // Record expense if checkbox is checked
       if (recordInExpense && stockQuantity > 0 && medicineData.purchase_price > 0) {
-        const expenseAmount = stockQuantity * medicineData.purchase_price;
         const itemName = medicineData.name || 'Item';
         const unit = (unitLabel || 'unit').toUpperCase();
         const qtyLabel = itemType === 'measurable' ? `${stockQuantity} ${unit}` : `${stockQuantity} ${unitLabel || 'pcs'}`;
         await supabase.from('expenses').insert({
           description: `Purchase of ${itemName} (${qtyLabel})`,
-          amount: expenseAmount,
+          amount: totalAmount,
           category: 'Stock Purchase',
           created_by: user?.id || null,
-          branch_id: selectedBranchId || userBranch || selectedBranch || null,
+          branch_id: branchId,
         });
       }
 
