@@ -30,6 +30,11 @@ interface Medicine {
   unit_label?: string;
 }
 
+interface Supplier {
+  id: string;
+  name: string;
+}
+
 interface AddMedicineDialogProps {
   open: boolean;
   onOpenChange: (open: boolean) => void;
@@ -46,6 +51,9 @@ export default function AddMedicineDialog({ open, onOpenChange, onMedicineAdded,
   const [itemType, setItemType] = useState<'full_pcs' | 'measurable'>('full_pcs');
   const [measurableUnit, setMeasurableUnit] = useState<string>('kg');
   const [recordInExpense, setRecordInExpense] = useState(true);
+  const [suppliers, setSuppliers] = useState<Supplier[]>([]);
+  const [selectedSupplierId, setSelectedSupplierId] = useState<string>('');
+  const [paymentType, setPaymentType] = useState<'paid' | 'credit'>('paid');
   const { toast } = useToast();
   const { selectedBranch, userBranch } = useBranchContext();
   const { categories } = useCustomCategories(isGeneral ? 'general' : 'pharmacy');
@@ -70,18 +78,30 @@ export default function AddMedicineDialog({ open, onOpenChange, onMedicineAdded,
   }, [replicateData]);
   
   useEffect(() => {
-    const fetchUserRoleAndBranches = async () => {
+    const fetchUserRoleAndBranchesAndSuppliers = async () => {
       const { data: { user } } = await supabase.auth.getUser();
       if (!user) return;
       
       const { data: profile } = await supabase
         .from('profiles')
-        .select('role')
+        .select('role, pharmacy_owner_id')
         .eq('id', user.id)
         .single();
       
       if (profile) {
         setUserRole(profile.role as 'owner' | 'staff');
+        const ownerId = profile.role === 'owner' ? user.id : profile.pharmacy_owner_id;
+        
+        // Fetch suppliers
+        if (ownerId) {
+          const { data: suppliersData } = await supabase
+            .from('suppliers')
+            .select('id, name')
+            .eq('pharmacy_owner_id', ownerId)
+            .order('name');
+          if (suppliersData) setSuppliers(suppliersData);
+        }
+        
         if (profile.role === 'owner') {
           const { data: branchesData } = await supabase
             .from('pharmacy_branches')
@@ -105,8 +125,10 @@ export default function AddMedicineDialog({ open, onOpenChange, onMedicineAdded,
     };
     
     if (open) {
-      fetchUserRoleAndBranches();
+      fetchUserRoleAndBranchesAndSuppliers();
       setItemType('full_pcs');
+      setSelectedSupplierId('');
+      setPaymentType('paid');
     }
   }, [open, selectedBranch, userBranch]);
 
@@ -151,18 +173,55 @@ export default function AddMedicineDialog({ open, onOpenChange, onMedicineAdded,
       const { error } = await supabase.from('medicines').insert([medicineData]);
       if (error) throw error;
 
+      const totalAmount = stockQuantity * medicineData.purchase_price;
+      const branchId = selectedBranchId || userBranch || selectedBranch || null;
+
+      // Record supplier purchase if supplier is selected
+      if (selectedSupplierId) {
+        await supabase.from('supplier_purchases').insert({
+          supplier_id: selectedSupplierId,
+          medicine_name: medicineData.name,
+          quantity: stockQuantity,
+          unit_price: medicineData.purchase_price,
+          total_amount: totalAmount,
+          payment_type: paymentType,
+          branch_id: branchId,
+          created_by: user?.id || null,
+        });
+
+        // Update supplier debt if credit purchase
+        if (paymentType === 'credit') {
+          const { data: existingDebt } = await supabase
+            .from('supplier_debts')
+            .select('id, total_debt')
+            .eq('supplier_id', selectedSupplierId)
+            .maybeSingle();
+
+          if (existingDebt) {
+            await supabase
+              .from('supplier_debts')
+              .update({ total_debt: existingDebt.total_debt + totalAmount })
+              .eq('id', existingDebt.id);
+          } else {
+            await supabase.from('supplier_debts').insert({
+              supplier_id: selectedSupplierId,
+              total_debt: totalAmount,
+            });
+          }
+        }
+      }
+
       // Record expense if checkbox is checked
       if (recordInExpense && stockQuantity > 0 && medicineData.purchase_price > 0) {
-        const expenseAmount = stockQuantity * medicineData.purchase_price;
         const itemName = medicineData.name || 'Item';
         const unit = (unitLabel || 'unit').toUpperCase();
         const qtyLabel = itemType === 'measurable' ? `${stockQuantity} ${unit}` : `${stockQuantity} ${unitLabel || 'pcs'}`;
         await supabase.from('expenses').insert({
           description: `Purchase of ${itemName} (${qtyLabel})`,
-          amount: expenseAmount,
+          amount: totalAmount,
           category: 'Stock Purchase',
           created_by: user?.id || null,
-          branch_id: selectedBranchId || userBranch || selectedBranch || null,
+          branch_id: branchId,
         });
       }
 
@@ -353,6 +412,44 @@ export default function AddMedicineDialog({ open, onOpenChange, onMedicineAdded,
                 <SelectItem value="6">6 Months</SelectItem>
               </SelectContent>
             </Select>
+          </div>
+
+          {/* Supplier Selection (Optional) */}
+          <div className="space-y-3 p-4 rounded-lg border bg-muted/30">
+            <Label className="text-sm font-semibold">Link to Supplier (Optional)</Label>
+            <Select value={selectedSupplierId} onValueChange={setSelectedSupplierId}>
+              <SelectTrigger>
+                <SelectValue placeholder="Select supplier (optional)" />
+              </SelectTrigger>
+              <SelectContent>
+                <SelectItem value="">No Supplier</SelectItem>
+                {suppliers.map((supplier) => (
+                  <SelectItem key={supplier.id} value={supplier.id}>
+                    {supplier.name}
+                  </SelectItem>
+                ))}
+              </SelectContent>
+            </Select>
+
+            {selectedSupplierId && (
+              <div className="space-y-2 pt-2">
+                <Label className="text-sm">Payment Type</Label>
+                <RadioGroup
+                  value={paymentType}
+                  onValueChange={(val) => setPaymentType(val as 'paid' | 'credit')}
+                  className="flex gap-6"
+                >
+                  <div className="flex items-center space-x-2">
+                    <RadioGroupItem value="paid" id="payment_paid" />
+                    <Label htmlFor="payment_paid" className="cursor-pointer">Paid</Label>
+                  </div>
+                  <div className="flex items-center space-x-2">
+                    <RadioGroupItem value="credit" id="payment_credit" />
+                    <Label htmlFor="payment_credit" className="cursor-pointer">Credit</Label>
+                  </div>
+                </RadioGroup>
+              </div>
+            )}
           </div>
 
           {/* Record in Expense checkbox */}
