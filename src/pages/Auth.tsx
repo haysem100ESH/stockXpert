@@ -335,7 +335,7 @@ export default function Auth() {
         {/* Tabs & Forms */}
         <CardContent className="px-6 pb-6">
           <Tabs value={activeTab} onValueChange={setActiveTab} className="w-full">
-            <TabsList className="grid w-full grid-cols-2 mb-6 rounded-xl bg-gray-100 p-1">
+            <TabsList className="grid w-full grid-cols-2 mb-6 rounded-xl p-1">
               <TabsTrigger
                 value="signin"
                 className="data-[state=active]:bg-white data-[state=active]:shadow-md data-[state=active]:font-semibold rounded-lg transition"
