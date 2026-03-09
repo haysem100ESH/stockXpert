@@ -852,7 +852,7 @@ export default function DeveloperDashboard() {
             <TableHeader>
               <TableRow>
                 <TableHead>Owner Name</TableHead>
-                <TableHead>Pharmacy Name</TableHead>
+                <TableHead>Business Name</TableHead>
                 <TableHead>AI Key</TableHead>
                 <TableHead>Account Status</TableHead>
                 <TableHead>Subscription</TableHead>
