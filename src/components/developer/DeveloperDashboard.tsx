@@ -606,7 +606,7 @@ export default function DeveloperDashboard() {
       <div className="flex items-center justify-between">
         <div>
           <h1 className="text-3xl font-bold">Developer Dashboard</h1>
-          <p className="text-muted-foreground">Manage pharmacy owners and subscriptions</p>
+          <p className="text-muted-foreground">Manage business owners and subscriptions</p>
         </div>
         <div className="flex gap-2">
           <Dialog open={showReportDialog} onOpenChange={setShowReportDialog}>
