@@ -136,7 +136,7 @@ export default function DeveloperDashboard() {
       }
 
       if (!profilesWithEmail || profilesWithEmail.length === 0) {
-        console.log('No pharmacy owners found');
+        console.log('No business owners found');
         setOwners([]);
         return;
       }
