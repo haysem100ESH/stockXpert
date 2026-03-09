@@ -417,7 +417,7 @@ export default function AttendanceDashboard() {
                     <TableHead>Face In</TableHead>
                     <TableHead>Face Out</TableHead>
                     <TableHead>Score</TableHead>
-                    {isOwner && <TableHead>Photos</TableHead>}
+                    <TableHead>Photos</TableHead>
                   </TableRow>
                 </TableHeader>
                 <TableBody>
