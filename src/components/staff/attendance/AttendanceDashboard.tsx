@@ -357,13 +357,17 @@ export default function AttendanceDashboard() {
           const b64 = await fetchImageAsBase64(checkinPhotoUrl);
           if (b64) {
             const mimeMatch = b64.match(/^data:(image\/\w+);base64,/);
-            const extension = mimeMatch ? (mimeMatch[1].split('/')[1] as 'jpeg' | 'png' | 'gif' | 'bmp') : 'jpeg';
+            let extension: 'jpeg' | 'png' | 'gif' = 'jpeg';
+            if (mimeMatch) {
+              const ext = mimeMatch[1].split('/')[1];
+              if (ext === 'png' || ext === 'gif') extension = ext;
+            }
             const base64Data = b64.split(',')[1];
             const imageId = workbook.addImage({ base64: base64Data, extension });
             row.height = PHOTO_ROW_HEIGHT;
             worksheet.addImage(imageId, {
-              tl: { col: checkinPhotoColIdx - 1, row: rowNumber - 1 },
-              br: { col: checkinPhotoColIdx, row: rowNumber },
+              tl: { col: checkinPhotoColIdx - 1 + 0.1, row: rowNumber - 1 + 0.1 } as any,
+              br: { col: checkinPhotoColIdx - 0.1, row: rowNumber - 0.1 } as any,
             });
           }
         }
@@ -373,13 +377,17 @@ export default function AttendanceDashboard() {
           const b64 = await fetchImageAsBase64(checkoutPhotoUrl);
           if (b64) {
             const mimeMatch = b64.match(/^data:(image\/\w+);base64,/);
-            const extension = mimeMatch ? (mimeMatch[1].split('/')[1] as 'jpeg' | 'png' | 'gif' | 'bmp') : 'jpeg';
+            let extension: 'jpeg' | 'png' | 'gif' = 'jpeg';
+            if (mimeMatch) {
+              const ext = mimeMatch[1].split('/')[1];
+              if (ext === 'png' || ext === 'gif') extension = ext;
+            }
             const base64Data = b64.split(',')[1];
             const imageId = workbook.addImage({ base64: base64Data, extension });
             row.height = PHOTO_ROW_HEIGHT;
             worksheet.addImage(imageId, {
-              tl: { col: checkoutPhotoColIdx - 1, row: rowNumber - 1 },
-              br: { col: checkoutPhotoColIdx, row: rowNumber },
+              tl: { col: checkoutPhotoColIdx - 1 + 0.1, row: rowNumber - 1 + 0.1 } as any,
+              br: { col: checkoutPhotoColIdx - 0.1, row: rowNumber - 0.1 } as any,
             });
           }
         }
