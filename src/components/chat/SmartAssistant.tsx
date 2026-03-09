@@ -184,7 +184,7 @@ export default function SmartAssistant() {
           {/* Header */}
           <div className="flex items-center justify-between px-4 py-3 border-b bg-primary text-primary-foreground rounded-t-2xl">
             <div className="flex items-center gap-2">
-              <BrainCircuit className="h-5 w-5" />
+              <Sparkles className="h-5 w-5" />
               <div>
                 <p className="font-semibold text-sm">StockXpert AI</p>
                 <p className="text-xs opacity-80">Smart Assistant</p>
