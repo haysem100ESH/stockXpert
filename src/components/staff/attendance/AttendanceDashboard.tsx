@@ -619,8 +619,8 @@ export default function AttendanceDashboard() {
                 )}
                 Refresh
               </Button>
-            {isOwner && records.length > 0 && (
-              <div className="flex gap-2">
+              {isOwner && records.length > 0 && (
+                <>
                 <Button
                   variant="outline"
                   size="sm"
