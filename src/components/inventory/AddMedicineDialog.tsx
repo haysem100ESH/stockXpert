@@ -417,12 +417,12 @@ export default function AddMedicineDialog({ open, onOpenChange, onMedicineAdded,
           {/* Supplier Selection (Optional) */}
           <div className="space-y-3 p-4 rounded-lg border bg-muted/30">
             <Label className="text-sm font-semibold">Link to Supplier (Optional)</Label>
-            <Select value={selectedSupplierId} onValueChange={setSelectedSupplierId}>
+            <Select value={selectedSupplierId} onValueChange={(val) => setSelectedSupplierId(val === 'none' ? '' : val)}>
               <SelectTrigger>
                 <SelectValue placeholder="Select supplier (optional)" />
               </SelectTrigger>
               <SelectContent>
-                <SelectItem value="">No Supplier</SelectItem>
+                <SelectItem value="none">No Supplier</SelectItem>
                 {suppliers.map((supplier) => (
                   <SelectItem key={supplier.id} value={supplier.id}>
                     {supplier.name}
