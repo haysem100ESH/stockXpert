@@ -176,10 +176,10 @@ export default function AddMedicineDialog({ open, onOpenChange, onMedicineAdded,
       if (selectedSupplierId) {
         await supabase.from('supplier_purchases').insert({
           supplier_id: selectedSupplierId,
-          medicine_name: medicineData.name,
+          item_name: medicineData.name,
           quantity: stockQuantity,
-          unit_price: medicineData.purchase_price,
-          total_amount: totalAmount,
+          unit_cost: medicineData.purchase_price,
+          total_cost: totalAmount,
           payment_type: paymentType,
           branch_id: branchId,
           created_by: user?.id || null,
