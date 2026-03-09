@@ -254,6 +254,216 @@ export default function AttendanceDashboard() {
     }
   };
 
+  const exportToExcel = async () => {
+    if (records.length === 0) {
+      toast({ title: 'No Data', description: 'No attendance records to export.', variant: 'destructive' });
+      return;
+    }
+
+    setExporting(true);
+    try {
+      const workbook = new ExcelJS.Workbook();
+      const worksheet = workbook.addWorksheet('Attendance Report');
+
+      // Header styling
+      const headerRow = worksheet.addRow(['Attendance Report']);
+      worksheet.mergeCells('A1:I1');
+      headerRow.getCell(1).fill = { type: 'pattern', pattern: 'solid', fgColor: { argb: 'FF1E6F3E' } };
+      headerRow.getCell(1).font = { color: { argb: 'FFFFFFFF' }, size: 16, bold: true };
+      headerRow.getCell(1).alignment = { horizontal: 'center' };
+
+      // Date range
+      const dateRangeRow = worksheet.addRow([`Period: ${filterDateFrom} to ${filterDateTo}`]);
+      worksheet.mergeCells('A2:I2');
+      dateRangeRow.getCell(1).font = { size: 12 };
+      dateRangeRow.getCell(1).alignment = { horizontal: 'center' };
+
+      // Summary stats
+      const summaryRow = worksheet.addRow([`Present: ${presentCount} | Late: ${lateCount} | Absent: ${absentCount}`]);
+      worksheet.mergeCells('A3:I3');
+      summaryRow.getCell(1).font = { size: 11 };
+      summaryRow.getCell(1).alignment = { horizontal: 'center' };
+
+      // Empty row
+      worksheet.addRow([]);
+
+      // Column headers
+      const headers = ['Date', ...(isOwner ? ['Staff', 'Branch'] : []), 'Check-In Time', 'Check-Out Time', 'Status', 'Face In', 'Face Out', 'Check-In Photo', 'Check-Out Photo'];
+      const headerRow2 = worksheet.addRow(headers);
+      headerRow2.eachCell((cell) => {
+        cell.fill = { type: 'pattern', pattern: 'solid', fgColor: { argb: 'FFF0F9F4' } };
+        cell.font = { bold: true };
+        cell.border = { top: { style: 'thin' }, left: { style: 'thin' }, bottom: { style: 'thin' }, right: { style: 'thin' } };
+      });
+
+      // Data rows
+      for (let i = 0; i < records.length; i++) {
+        const record = records[i];
+        const checkinPhotoUrl = await getDisplayPhotoUrl(record.checkin_photo);
+        const checkoutPhotoUrl = await getDisplayPhotoUrl(record.checkout_photo);
+        
+        const rowData = [
+          new Date(record.date).toLocaleDateString(),
+          ...(isOwner ? [record.staff_name, record.branch_name] : []),
+          record.checkin_time ? new Date(record.checkin_time).toLocaleTimeString() : '—',
+          record.checkout_time ? new Date(record.checkout_time).toLocaleTimeString() : '—',
+          record.attendance_status,
+          record.checkin_face_verified === true ? 'Verified' : record.checkin_face_verified === false ? 'Failed' : '—',
+          record.checkout_face_verified === true ? 'Verified' : record.checkout_face_verified === false ? 'Failed' : '—',
+          checkinPhotoUrl || '—',
+          checkoutPhotoUrl || '—'
+        ];
+        
+        const row = worksheet.addRow(rowData);
+        
+        // Alternating row colors
+        if (i % 2 === 0) {
+          row.eachCell((cell) => {
+            cell.fill = { type: 'pattern', pattern: 'solid', fgColor: { argb: 'FFF9F9F9' } };
+          });
+        }
+        
+        // Add hyperlinks for photos
+        if (checkinPhotoUrl && checkinPhotoUrl !== '—') {
+          const checkinCell = row.getCell(headers.indexOf('Check-In Photo') + 1);
+          checkinCell.value = { text: 'View Photo', hyperlink: checkinPhotoUrl };
+          checkinCell.font = { color: { argb: 'FF0066CC' }, underline: true };
+        }
+        
+        if (checkoutPhotoUrl && checkoutPhotoUrl !== '—') {
+          const checkoutCell = row.getCell(headers.indexOf('Check-Out Photo') + 1);
+          checkoutCell.value = { text: 'View Photo', hyperlink: checkoutPhotoUrl };
+          checkoutCell.font = { color: { argb: 'FF0066CC' }, underline: true };
+        }
+      }
+
+      // Auto-fit columns
+      worksheet.columns.forEach((column) => {
+        column.width = 15;
+      });
+
+      // Generate and download
+      const buffer = await workbook.xlsx.writeBuffer();
+      const blob = new Blob([buffer], { type: 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet' });
+      const url = window.URL.createObjectURL(blob);
+      const a = document.createElement('a');
+      a.href = url;
+      a.download = `attendance-report-${filterDateFrom}-to-${filterDateTo}.xlsx`;
+      document.body.appendChild(a);
+      a.click();
+      document.body.removeChild(a);
+      window.URL.revokeObjectURL(url);
+
+      toast({ title: 'Export Complete', description: 'Attendance report downloaded successfully.' });
+    } catch (error: any) {
+      toast({ title: 'Export Failed', description: error.message || 'Failed to export data.', variant: 'destructive' });
+    } finally {
+      setExporting(false);
+    }
+  };
+
+  const exportToPDF = async () => {
+    if (records.length === 0) {
+      toast({ title: 'No Data', description: 'No attendance records to export.', variant: 'destructive' });
+      return;
+    }
+
+    setExporting(true);
+    try {
+      const doc = new jsPDF();
+      
+      // Header
+      doc.setFillColor(30, 111, 62);
+      doc.rect(0, 0, doc.internal.pageSize.width, 25, 'F');
+      doc.setTextColor(255, 255, 255);
+      doc.setFontSize(18);
+      doc.text('Attendance Report', doc.internal.pageSize.width / 2, 16, { align: 'center' });
+      
+      // Date range and stats
+      doc.setTextColor(0, 0, 0);
+      doc.setFontSize(12);
+      doc.text(`Period: ${filterDateFrom} to ${filterDateTo}`, 14, 35);
+      doc.text(`Present: ${presentCount} | Late: ${lateCount} | Absent: ${absentCount}`, 14, 45);
+
+      // Prepare table data
+      const tableHeaders = ['Date', ...(isOwner ? ['Staff', 'Branch'] : []), 'Check-In', 'Check-Out', 'Status'];
+      const tableData = await Promise.all(records.map(async (record) => {
+        const checkinPhotoUrl = await getDisplayPhotoUrl(record.checkin_photo);
+        const checkoutPhotoUrl = await getDisplayPhotoUrl(record.checkout_photo);
+        
+        return [
+          new Date(record.date).toLocaleDateString(),
+          ...(isOwner ? [record.staff_name, record.branch_name] : []),
+          record.checkin_time ? new Date(record.checkin_time).toLocaleTimeString() : '—',
+          record.checkout_time ? new Date(record.checkout_time).toLocaleTimeString() : '—',
+          record.attendance_status
+        ];
+      }));
+
+      // Table
+      (doc as any).autoTable({
+        head: [tableHeaders],
+        body: tableData,
+        startY: 55,
+        theme: 'grid',
+        headStyles: {
+          fillColor: [240, 249, 244],
+          textColor: [30, 111, 62],
+          fontStyle: 'bold'
+        },
+        alternateRowStyles: {
+          fillColor: [249, 249, 249]
+        },
+        margin: { left: 14, right: 14 }
+      });
+
+      // Photo links section if available
+      const recordsWithPhotos = records.filter(r => r.checkin_photo || r.checkout_photo);
+      if (recordsWithPhotos.length > 0) {
+        const finalY = (doc as any).lastAutoTable.finalY || 55;
+        doc.setFontSize(14);
+        doc.text('Photo Links', 14, finalY + 20);
+        
+        let yPos = finalY + 30;
+        for (const record of recordsWithPhotos.slice(0, 10)) { // Limit to first 10 to avoid page overflow
+          doc.setFontSize(10);
+          const dateStr = new Date(record.date).toLocaleDateString();
+          const staffName = isOwner ? record.staff_name : 'You';
+          
+          doc.text(`${dateStr} - ${staffName}:`, 14, yPos);
+          
+          if (record.checkin_photo) {
+            const checkinUrl = await getDisplayPhotoUrl(record.checkin_photo);
+            if (checkinUrl) {
+              doc.setTextColor(0, 102, 204);
+              doc.textWithLink('Check-In Photo', 14, yPos + 8, { url: checkinUrl });
+            }
+          }
+          
+          if (record.checkout_photo) {
+            const checkoutUrl = await getDisplayPhotoUrl(record.checkout_photo);
+            if (checkoutUrl) {
+              doc.setTextColor(0, 102, 204);
+              doc.textWithLink('Check-Out Photo', record.checkin_photo ? 80 : 14, yPos + 8, { url: checkoutUrl });
+            }
+          }
+          
+          doc.setTextColor(0, 0, 0);
+          yPos += 16;
+          
+          if (yPos > doc.internal.pageSize.height - 30) break; // Avoid overflow
+        }
+      }
+
+      doc.save(`attendance-report-${filterDateFrom}-to-${filterDateTo}.pdf`);
+      toast({ title: 'Export Complete', description: 'Attendance report downloaded successfully.' });
+    } catch (error: any) {
+      toast({ title: 'Export Failed', description: error.message || 'Failed to export PDF.', variant: 'destructive' });
+    } finally {
+      setExporting(false);
+    }
+  };
+
   const presentCount = records.filter((r) => r.attendance_status === 'present').length;
   const lateCount = records.filter((r) => r.attendance_status === 'late').length;
   const absentCount = records.filter((r) => r.attendance_status === 'absent').length;
