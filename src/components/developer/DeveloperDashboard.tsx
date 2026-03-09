@@ -1029,10 +1029,10 @@ export default function DeveloperDashboard() {
             {/* Filters */}
             <div className="grid grid-cols-1 md:grid-cols-3 gap-4 mb-4">
               <div>
-                <Label htmlFor="filter-pharmacy">Filter by Pharmacy Name</Label>
-                <Input
-                  id="filter-pharmacy"
-                  placeholder="Search pharmacy..."
+              <Label htmlFor="filter-pharmacy">Filter by Business Name</Label>
+              <Input
+                id="filter-pharmacy"
+                placeholder="Search business..."
                   value={filterPharmacyName}
                   onChange={(e) => setFilterPharmacyName(e.target.value)}
                 />
