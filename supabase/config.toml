@@ -100,3 +100,6 @@ verify_jwt = false
 
 [functions.update-owner-profile]
 verify_jwt = false
+
+[functions.send-payment-receipt]
+verify_jwt = false
