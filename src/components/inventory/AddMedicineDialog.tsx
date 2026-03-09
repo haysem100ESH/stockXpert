@@ -30,6 +30,11 @@ interface Medicine {
   unit_label?: string;
 }
 
+interface Supplier {
+  id: string;
+  name: string;
+}
+
 interface AddMedicineDialogProps {
   open: boolean;
   onOpenChange: (open: boolean) => void;
@@ -46,6 +51,9 @@ export default function AddMedicineDialog({ open, onOpenChange, onMedicineAdded,
   const [itemType, setItemType] = useState<'full_pcs' | 'measurable'>('full_pcs');
   const [measurableUnit, setMeasurableUnit] = useState<string>('kg');
   const [recordInExpense, setRecordInExpense] = useState(true);
+  const [suppliers, setSuppliers] = useState<Supplier[]>([]);
+  const [selectedSupplierId, setSelectedSupplierId] = useState<string>('');
+  const [paymentType, setPaymentType] = useState<'paid' | 'credit'>('paid');
   const { toast } = useToast();
   const { selectedBranch, userBranch } = useBranchContext();
   const { categories } = useCustomCategories(isGeneral ? 'general' : 'pharmacy');
