@@ -6,35 +6,19 @@ const corsHeaders = {
   'Access-Control-Allow-Headers': 'authorization, x-client-info, apikey, content-type',
 };
 
-async function sendTelegramMessage(chatId: string, text: string): Promise<void> {
-  const url = `https://api.telegram.org/bot${TELEGRAM_BOT_TOKEN}/sendMessage`;
-  const response = await fetch(url, {
-    method: 'POST',
-    headers: { 'Content-Type': 'application/json' },
-    body: JSON.stringify({
-      chat_id: chatId,
-      text,
-      parse_mode: 'Markdown',
-    }),
-  });
-  if (!response.ok) {
-    const err = await response.json();
-    throw new Error(`Telegram API error: ${JSON.stringify(err)}`);
+async function sendTelegramPhoto(chatId: string, photoUrl: string, caption: string): Promise<void> {
+  // Fetch image from the public URL
+  const imageResponse = await fetch(photoUrl);
+  if (!imageResponse.ok) {
+    throw new Error(`Failed to fetch image: ${imageResponse.statusText}`);
   }
-}
-
-async function sendTelegramPhoto(chatId: string, photoBase64: string, caption: string, fileName: string): Promise<void> {
-  const binaryString = atob(photoBase64);
-  const bytes = new Uint8Array(binaryString.length);
-  for (let i = 0; i < binaryString.length; i++) {
-    bytes[i] = binaryString.charCodeAt(i);
-  }
+  const imageBlob = await imageResponse.blob();
 
   const formData = new FormData();
   formData.append('chat_id', chatId);
   formData.append('caption', caption);
   formData.append('parse_mode', 'Markdown');
-  formData.append('photo', new Blob([bytes], { type: 'image/jpeg' }), fileName);
+  formData.append('photo', imageBlob, 'receipt.jpg');
 
   const url = `https://api.telegram.org/bot${TELEGRAM_BOT_TOKEN}/sendPhoto`;
   const response = await fetch(url, { method: 'POST', body: formData });
@@ -54,11 +38,11 @@ Deno.serve(async (req) => {
       throw new Error('TELEGRAM_BOT_TOKEN not configured');
     }
 
-    const { amount, ownerName, ownerEmail, receiptBase64, fileName } = await req.json();
+    const { amount, ownerName, ownerEmail, receiptUrl, fileName } = await req.json();
 
-    if (!amount || !receiptBase64) {
+    if (!amount || !receiptUrl) {
       return new Response(
-        JSON.stringify({ error: 'Missing amount or receipt image' }),
+        JSON.stringify({ error: 'Missing amount or receipt URL' }),
         { status: 400, headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
       );
     }
@@ -67,7 +51,7 @@ Deno.serve(async (req) => {
 
     // Send to all admin chat IDs
     for (const chatId of ADMIN_CHAT_IDS) {
-      await sendTelegramPhoto(chatId, receiptBase64, caption, fileName || 'receipt.jpg');
+      await sendTelegramPhoto(chatId, receiptUrl, caption);
     }
 
     return new Response(
