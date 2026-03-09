@@ -159,7 +159,7 @@ export default function DeveloperDashboard() {
             .eq('pharmacy_owner_id', profile.id)
             .maybeSingle();
 
-          // Get branch count and first branch name as pharmacy name
+          // Get branch count and first branch name as business name
           const { data: branches, count: branchCount } = await supabase
             .from('pharmacy_branches')
             .select('id, name', { count: 'exact' })
