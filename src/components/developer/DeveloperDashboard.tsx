@@ -1007,7 +1007,7 @@ export default function DeveloperDashboard() {
                   onClick={() => triggerQuickReport('monthly')} 
                   variant="outline"
                   disabled={sendingReport}
-                  className="bg-purple-50 hover:bg-purple-100"
+                  className="bg-purple-500/10 hover:bg-purple-500/20 text-purple-500 border-purple-500/30"
                 >
                   <Send className="h-4 w-4 mr-2" />
                   Test Monthly Report
