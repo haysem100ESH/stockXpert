@@ -133,7 +133,7 @@ export default function SalesManagement() {
 
       let query = (supabase as any)
         .from('medicines')
-        .select('id, name, generic_name, selling_price, stock_quantity, category, expiry_date, units_per_pack, open_pack_units, unit_label, item_type')
+        .select('id, name, generic_name, selling_price, stock_quantity, category, expiry_date, units_per_pack, open_pack_units, unit_label, item_type, branch_id')
         .or('stock_quantity.gt.0,open_pack_units.gt.0')
         .order('name');
       if (selectedBranch) {
@@ -143,11 +143,24 @@ export default function SalesManagement() {
       }
       const { data, error } = await query;
       if (error) throw error;
+
+      // Fetch branch names in bulk
+      const allBranchIds = [...new Set((data || []).map((m: any) => m.branch_id).filter(Boolean))];
+      const branchMap: Record<string, string> = {};
+      if (allBranchIds.length > 0) {
+        const { data: branches } = await (supabase as any)
+          .from('pharmacy_branches')
+          .select('id, name')
+          .in('id', allBranchIds);
+        (branches || []).forEach((b: any) => { branchMap[b.id] = b.name; });
+      }
+
       // open_pack_units is stored as INTEGER thousandths in DB (e.g. 2500 = 2.5 strips).
       // Convert to real decimal units for all UI/cart arithmetic.
       const normalized = (data || []).map((m: any) => ({
         ...m,
         open_pack_units: m.units_per_pack ? (m.open_pack_units || 0) / 1000 : (m.open_pack_units || 0),
+        branch_name: m.branch_id ? branchMap[m.branch_id] : undefined,
       }));
       setMedicines(normalized);
     } catch {
