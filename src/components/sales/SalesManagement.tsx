@@ -205,7 +205,7 @@ export default function SalesManagement() {
         setCustomers([]);
         return;
       }
-      const rawCustomers: {id: string; name: string; phone?: string | null; credit_score?: number; max_credit_limit?: number}[] = data || [];
+      const rawCustomers: {id: string; name: string; phone?: string | null; credit_score?: number}[] = data || [];
       if (rawCustomers.length === 0) { setCustomers([]); return; }
 
       // Fetch debt from customer_credits table for fast lookup
