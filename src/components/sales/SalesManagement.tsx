@@ -192,7 +192,7 @@ export default function SalesManagement() {
 
       let query = (supabase as any)
         .from('customers')
-        .select('id, name, phone, credit_score, max_credit_limit')
+        .select('id, name, phone, credit_score')
         .order('name');
       if (selectedBranch) {
         query = query.eq('branch_id', selectedBranch);
@@ -205,7 +205,7 @@ export default function SalesManagement() {
         setCustomers([]);
         return;
       }
-      const rawCustomers: {id: string; name: string; phone?: string | null; credit_score?: number; max_credit_limit?: number}[] = data || [];
+      const rawCustomers: {id: string; name: string; phone?: string | null; credit_score?: number}[] = data || [];
       if (rawCustomers.length === 0) { setCustomers([]); return; }
 
       // Fetch debt from customer_credits table for fast lookup
@@ -231,7 +231,7 @@ export default function SalesManagement() {
         ...c,
         computed_debt: Math.max(0, debtMap[c.id] || 0),
         credit_score: latestScoreMap[c.id] ?? c.credit_score ?? 50,
-        max_credit_limit: c.max_credit_limit ?? getCreditLimit(latestScoreMap[c.id] ?? c.credit_score ?? 50),
+        max_credit_limit: getCreditLimit(latestScoreMap[c.id] ?? c.credit_score ?? 50),
       })));
     } catch (err) {
       console.error('Error fetching customers:', err);
