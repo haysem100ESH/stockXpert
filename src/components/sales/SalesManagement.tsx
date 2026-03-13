@@ -582,8 +582,8 @@ export default function SalesManagement() {
       }
       saleData = saleResult.data;
 
-      // Keep compatibility with both legacy (stripes_sold) and current
-      // strip/pack quantity columns used by debtor and finance views.
+      // Keep compatibility with both legacy and new branch_items system.
+      // Now using branch_item_id (item.id is branch_items.id).
       const saleItems = cart.map(item => {
         const isByStripe = item.saleType === 'by_stripe';
         const isMeasurableItem = item.item_type === 'measurable' || isMeasurable(item.unit_label);
@@ -592,7 +592,8 @@ export default function SalesManagement() {
 
         return {
           sale_id: saleData.id,
-          medicine_id: item.id,
+          medicine_id: (item as any).medicine_id || item.id, // fallback to medicine_id
+          branch_item_id: item.id, // branch_items.id
           quantity: isByStripe ? Number(stripeQty.toFixed(4)) : Number(packQty),
           unit_price: Number(item.selling_price),
           total_price: Number(item.total.toFixed(2)),
