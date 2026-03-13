@@ -18,11 +18,13 @@ import { updateCreditScore, getCreditLimit } from '@/hooks/useCreditScore';
 import { isMeasurable } from '@/lib/itemTypes';
 
 interface Medicine {
-  id: string;
+  id: string; // branch_items.id
+  medicine_id: string; // medicines.id (for reference)
   name: string;
   generic_name?: string;
   selling_price: number;
-  stock_quantity: number;
+  purchase_price: number;
+  stock_quantity: number; // branch_items.quantity
   category?: string;
   expiry_date?: string;
   units_per_pack?: number;
