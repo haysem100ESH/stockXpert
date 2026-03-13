@@ -755,7 +755,7 @@ export default function OwnerDashboard() {
         </TabsContent>
 
         <TabsContent value="inventory">
-          <InventoryManagement />
+          <StaffInventoryWithActions />
         </TabsContent>
 
         <TabsContent value="sales">
