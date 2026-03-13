@@ -241,12 +241,14 @@ export function useSmartInventory() {
       });
 
       // Compute smart items
-      const smartItems: SmartItem[] = medicines.map((med: any) => {
-        const sales = salesMap[med.id] || { totalQty30: 0, totalQty60: 0, lastSaleDate: null };
+      const smartItems: SmartItem[] = medicinesForAnalysis.map((med: any) => {
+        // Use medicine_id for sales lookup (sale_items references the original medicine)
+        const lookupId = med.medicine_id || med.id;
+        const sales = salesMap[lookupId] || { totalQty30: 0, totalQty60: 0, lastSaleDate: null };
         const adc = sales.totalQty30 / 30;
 
         // Apply seasonal multiplier to demand prediction
-        const seasonalMult = getSeasonalMultiplier(monthlyMap[med.id] || new Array(12).fill(0));
+        const seasonalMult = getSeasonalMultiplier(monthlyMap[lookupId] || new Array(12).fill(0));
         const predictedDemand14 = adc * 14 * seasonalMult;
 
         const safetyStock = predictedDemand14 * 0.2;
