@@ -612,50 +612,25 @@ export default function SalesManagement() {
         throw itemsError;
       }
 
-      // Stock deduction
-      // NOTE: open_pack_units is stored in the DB as INTEGER thousandths (×1000).
-      // e.g. 2.5 strips → stored as 2500. We multiply before writing and divide after reading.
+      // Stock deduction — update branch_items.quantity
       for (const item of cart) {
         if (item.saleType === 'full_pack') {
           await (supabase as any)
-            .from('medicines')
-            .update({ stock_quantity: item.stock_quantity - item.quantity })
+            .from('branch_items')
+            .update({ quantity: item.stock_quantity - item.quantity, updated_at: new Date().toISOString() })
             .eq('id', item.id);
         } else if (item.saleType === 'by_stripe' && item.stripesCount) {
+          // For strip-based sales from branch_items, deduct proportionally
           const medicine = medicines.find(m => m.id === item.id);
           if (!medicine?.units_per_pack) continue;
 
-          // open_pack_units in `medicines` state is already normalized to real decimal units
-          // (done in fetchMedicines: DB-thousandths / 1000 → real units).
-          // Do NOT divide again here — that caused the 1.502 bug.
-          const openPackReal = medicine.open_pack_units || 0;
           const unitsPerPack = medicine.units_per_pack;
-
-          let stripesToDeduct = item.stripesCount;
-          let newOpenPackReal = openPackReal;
-          let newStockQuantity = medicine.stock_quantity;
-
-          // First consume from open pack
-          if (newOpenPackReal > 0) {
-            const deductFromOpen = Math.min(stripesToDeduct, newOpenPackReal);
-            newOpenPackReal = parseFloat((newOpenPackReal - deductFromOpen).toFixed(6));
-            stripesToDeduct = parseFloat((stripesToDeduct - deductFromOpen).toFixed(6));
-          }
-
-          // Then consume from sealed packs
-          while (stripesToDeduct > 0.000001 && newStockQuantity > 0) {
-            newStockQuantity--;
-            const stripsFromThisPack = Math.min(stripesToDeduct, unitsPerPack);
-            newOpenPackReal = parseFloat((unitsPerPack - stripsFromThisPack).toFixed(6));
-            stripesToDeduct = parseFloat((stripesToDeduct - stripsFromThisPack).toFixed(6));
-          }
-
-          // Convert back to integer thousandths for DB storage
-          const newOpenPackThousandths = Math.round(newOpenPackReal * 1000);
+          const packsToDeduct = item.stripesCount / unitsPerPack;
+          const newQty = Math.max(0, medicine.stock_quantity - packsToDeduct);
 
           await (supabase as any)
-            .from('medicines')
-            .update({ stock_quantity: newStockQuantity, open_pack_units: newOpenPackThousandths })
+            .from('branch_items')
+            .update({ quantity: newQty, updated_at: new Date().toISOString() })
             .eq('id', item.id);
         }
       }
