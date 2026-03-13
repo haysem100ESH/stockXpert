@@ -115,39 +115,53 @@ export default function SalesManagement() {
 
   const fetchMedicines = async () => {
     try {
-      // When "All Branches" is selected, fetch only branches belonging to
-      // the current owner and filter medicines by those branch IDs.
+      // Get branch IDs for this user
       let branchIds: string[] = [];
-      if (!selectedBranch && profile?.role === 'owner' && profile?.id) {
+      if (selectedBranch) {
+        branchIds = [selectedBranch];
+      } else if (!selectedBranch && profile?.role === 'owner' && profile?.id) {
         const { data: ownerBranches } = await (supabase as any)
           .from('pharmacy_branches')
           .select('id')
           .eq('pharmacy_owner_id', profile.id);
         branchIds = (ownerBranches || []).map((b: any) => b.id);
+      } else if (profile?.branch_id) {
+        branchIds = [profile.branch_id];
       }
 
-      // If owner has no branches yet, show empty data
-      if (!selectedBranch && branchIds.length === 0 && profile?.role === 'owner') {
+      if (branchIds.length === 0) {
         setMedicines([]);
         setLoading(false);
         return;
       }
 
-      let query = (supabase as any)
-        .from('medicines')
-        .select('id, name, generic_name, selling_price, stock_quantity, category, expiry_date, units_per_pack, open_pack_units, unit_label, item_type, branch_id')
-        .or('stock_quantity.gt.0,open_pack_units.gt.0')
-        .order('name');
-      if (selectedBranch) {
-        query = query.eq('branch_id', selectedBranch);
-      } else if (branchIds.length > 0) {
-        query = query.in('branch_id', branchIds);
-      }
-      const { data, error } = await query;
+      // Fetch from branch_items with quantity > 0
+      const { data: items, error } = await (supabase as any)
+        .from('branch_items')
+        .select('id, medicine_id, branch_id, selling_price, purchase_price, quantity, expiry_date')
+        .in('branch_id', branchIds)
+        .gt('quantity', 0)
+        .order('created_at', { ascending: false });
+
       if (error) throw error;
+      if (!items || items.length === 0) {
+        setMedicines([]);
+        setLoading(false);
+        return;
+      }
+
+      // Fetch medicine details
+      const medicineIds = [...new Set(items.map((i: any) => i.medicine_id))];
+      const { data: meds } = await (supabase as any)
+        .from('medicines')
+        .select('id, name, generic_name, category, item_type, unit_label, units_per_pack')
+        .in('id', medicineIds);
+
+      const medMap: Record<string, any> = {};
+      (meds || []).forEach((m: any) => { medMap[m.id] = m; });
 
       // Fetch branch names in bulk
-      const allBranchIds = [...new Set((data || []).map((m: any) => m.branch_id).filter(Boolean))];
+      const allBranchIds = [...new Set(items.map((i: any) => i.branch_id).filter(Boolean))];
       const branchMap: Record<string, string> = {};
       if (allBranchIds.length > 0) {
         const { data: branches } = await (supabase as any)
@@ -157,13 +171,26 @@ export default function SalesManagement() {
         (branches || []).forEach((b: any) => { branchMap[b.id] = b.name; });
       }
 
-      // open_pack_units is stored as INTEGER thousandths in DB (e.g. 2500 = 2.5 strips).
-      // Convert to real decimal units for all UI/cart arithmetic.
-      const normalized = (data || []).map((m: any) => ({
-        ...m,
-        open_pack_units: m.units_per_pack ? (m.open_pack_units || 0) / 1000 : (m.open_pack_units || 0),
-        branch_name: m.branch_id ? branchMap[m.branch_id] : undefined,
-      }));
+      const normalized = items.map((item: any) => {
+        const med = medMap[item.medicine_id] || {};
+        return {
+          id: item.id, // branch_items.id
+          medicine_id: item.medicine_id,
+          name: med.name || 'Unknown',
+          generic_name: med.generic_name,
+          selling_price: item.selling_price,
+          purchase_price: item.purchase_price,
+          stock_quantity: item.quantity,
+          category: med.category,
+          expiry_date: item.expiry_date,
+          units_per_pack: med.units_per_pack,
+          open_pack_units: 0, // branch_items doesn't track open packs yet
+          unit_label: med.unit_label,
+          item_type: med.item_type,
+          branch_id: item.branch_id,
+          branch_name: branchMap[item.branch_id],
+        };
+      });
       setMedicines(normalized);
     } catch {
       toast({ title: 'Error', description: `Failed to fetch ${isPharmacy ? 'medicines' : 'items'}`, variant: 'destructive' });
