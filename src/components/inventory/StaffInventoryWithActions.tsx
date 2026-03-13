@@ -6,69 +6,34 @@ import { Input } from '@/components/ui/input';
 import { Badge } from '@/components/ui/badge';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
-import { Search, Edit2, Plus, Trash2, Filter, Settings2, Recycle, SlidersHorizontal, History } from 'lucide-react';
+import { Search, Edit2, Plus, Trash2, Filter, Settings2, SlidersHorizontal, History } from 'lucide-react';
 import { supabase } from '@/lib/db';
 import { useToast } from '@/hooks/use-toast';
 import { useAuth } from '@/hooks/useAuth';
 import { useBranchContext } from '@/hooks/useBranchContext';
-import AddMedicineDialog from './AddMedicineDialog';
-import EditMedicineDialog from './EditMedicineDialog';
+import AddBranchItemDialog from './AddBranchItemDialog';
+import EditBranchItemDialog, { type BranchItem } from './EditBranchItemDialog';
 import { ConfirmationDialog } from '@/components/ui/confirmation-dialog';
 import CategoryManagement from './CategoryManagement';
-import OpenPackAdjustmentDialog from './OpenPackAdjustmentDialog';
-import StockAdjustmentDialog from './StockAdjustmentDialog';
 import StockEditHistory from './StockEditHistory';
-
-interface Medicine {
-  id: string;
-  name: string;
-  generic_name?: string;
-  category: string;
-  selling_price: number;
-  purchase_price: number;
-  stock_quantity: number;
-  minimum_stock_level: number;
-  expiry_date?: string;
-  batch_number?: string;
-  manufacturer?: string;
-  country_name?: string;
-  units_per_pack?: number;
-  open_pack_units?: number;
-  unit_label?: string;
-  branch_id?: string;
-  branch_name?: string;
-  creator?: {
-    full_name: string;
-    email: string;
-  };
-}
 
 export default function StaffInventoryWithActions() {
   const [searchParams] = useSearchParams();
   const initialTab = searchParams.get('tab') || 'inventory';
   const [activeTab, setActiveTab] = useState(initialTab);
-  const [medicines, setMedicines] = useState<Medicine[]>([]);
-  const [filteredMedicines, setFilteredMedicines] = useState<Medicine[]>([]);
+  const [branchItems, setBranchItems] = useState<BranchItem[]>([]);
+  const [filteredItems, setFilteredItems] = useState<BranchItem[]>([]);
   const [searchTerm, setSearchTerm] = useState('');
   const [categoryFilter, setCategoryFilter] = useState('all');
   const [loading, setLoading] = useState(true);
   const [showAddDialog, setShowAddDialog] = useState(false);
-  const [showAddItemDialog, setShowAddItemDialog] = useState(false);
-  const [showReplicateDialog, setShowReplicateDialog] = useState(false);
-  const [editingMedicine, setEditingMedicine] = useState<Medicine | null>(null);
-  const [medicineToReplicate, setMedicineToReplicate] = useState<Medicine | null>(null);
+  const [editingItem, setEditingItem] = useState<BranchItem | null>(null);
   const [deleteConfirmation, setDeleteConfirmation] = useState<{
     open: boolean;
-    medicineId: string;
-    medicineName: string;
-  }>({
-    open: false,
-    medicineId: '',
-    medicineName: ''
-  });
+    itemId: string;
+    itemName: string;
+  }>({ open: false, itemId: '', itemName: '' });
   const [hasBranches, setHasBranches] = useState(true);
-  const [adjustingMedicine, setAdjustingMedicine] = useState<Medicine | null>(null);
-  const [stockAdjustMedicine, setStockAdjustMedicine] = useState<Medicine | null>(null);
   const { toast } = useToast();
   const { profile } = useAuth();
   const { selectedBranch, branchType } = useBranchContext();
@@ -82,24 +47,18 @@ export default function StaffInventoryWithActions() {
   useEffect(() => {
     if (profile) {
       setLoading(true);
-      fetchMedicines();
+      fetchBranchItems();
       checkBranches();
     }
   }, [selectedBranch, profile?.id]);
 
   const checkBranches = async () => {
     try {
-      let query = supabase
-        .from('pharmacy_branches')
-        .select('id')
-        .limit(1);
-      
+      let query = supabase.from('pharmacy_branches').select('id').limit(1);
       if (profile?.role === 'owner' && profile?.id) {
         query = query.eq('pharmacy_owner_id', profile.id);
       }
-
       const { data, error } = await query;
-      
       if (error) throw error;
       setHasBranches(data && data.length > 0);
     } catch (error) {
@@ -110,239 +69,200 @@ export default function StaffInventoryWithActions() {
   useEffect(() => {
     const medicineCategories = ['tablet', 'capsule', 'syrup', 'injection', 'cream', 'ointment', 'drops', 'inhaler'];
     
-    const filtered = medicines.filter(medicine => {
-      const matchesSearch = medicine.name.toLowerCase().includes(searchTerm.toLowerCase()) ||
-        medicine.generic_name?.toLowerCase().includes(searchTerm.toLowerCase());
+    const filtered = branchItems.filter(item => {
+      const matchesSearch = item.name.toLowerCase().includes(searchTerm.toLowerCase()) ||
+        (item.generic_name || '').toLowerCase().includes(searchTerm.toLowerCase());
       
       let matchesCategory = true;
       if (categoryFilter === 'medicines_only') {
-        matchesCategory = medicineCategories.includes(medicine.category);
+        matchesCategory = medicineCategories.includes(item.category);
       } else if (categoryFilter !== 'all') {
-        matchesCategory = medicine.category === categoryFilter;
+        matchesCategory = item.category === categoryFilter;
       }
       
       return matchesSearch && matchesCategory;
     });
-    setFilteredMedicines(filtered);
-  }, [medicines, searchTerm, categoryFilter]);
+    setFilteredItems(filtered);
+  }, [branchItems, searchTerm, categoryFilter]);
 
-  const fetchMedicines = async () => {
+  const fetchBranchItems = async () => {
     try {
-      // Owner isolation: when "All Branches", only fetch from owner's branches
-      let ownerBranchIds: string[] = [];
-      if (!selectedBranch && profile?.role === 'owner' && profile?.id) {
+      // Get branch IDs for this owner
+      let branchIds: string[] = [];
+      if (selectedBranch) {
+        branchIds = [selectedBranch];
+      } else if (profile?.role === 'owner' && profile?.id) {
         const { data: ownerBranches } = await supabase
           .from('pharmacy_branches')
           .select('id')
           .eq('pharmacy_owner_id', profile.id);
-        ownerBranchIds = (ownerBranches || []).map((b: any) => b.id);
+        branchIds = (ownerBranches || []).map((b: any) => b.id);
+      } else if (profile?.branch_id) {
+        branchIds = [profile.branch_id];
       }
 
-      // If owner has no branches yet, show empty data
-      if (!selectedBranch && ownerBranchIds.length === 0 && profile?.role === 'owner') {
-        setMedicines([]);
+      if (branchIds.length === 0) {
+        setBranchItems([]);
         setLoading(false);
         return;
       }
 
+      // Fetch branch_items
       let query = supabase
-        .from('medicines')
-        .select('*')
-        .order('name');
+        .from('branch_items')
+        .select('id, medicine_id, branch_id, owner_id, selling_price, purchase_price, quantity, expiry_date')
+        .in('branch_id', branchIds)
+        .order('created_at', { ascending: false });
 
-      if (selectedBranch) {
-        query = query.eq('branch_id', selectedBranch);
-      } else if (ownerBranchIds.length > 0) {
-        query = query.in('branch_id', ownerBranchIds);
-      }
-
-      const { data, error } = await query;
-
+      const { data: items, error } = await query;
       if (error) throw error;
 
-      // Fetch branch names in bulk
-      const branchIds = [...new Set((data || []).map((m: any) => m.branch_id).filter(Boolean))];
+      if (!items || items.length === 0) {
+        setBranchItems([]);
+        setLoading(false);
+        return;
+      }
+
+      // Fetch medicine details
+      const medicineIds = [...new Set(items.map((i: any) => i.medicine_id))];
+      const { data: meds } = await supabase
+        .from('medicines')
+        .select('id, name, generic_name, category, manufacturer, batch_number, item_type, unit_label, units_per_pack')
+        .in('id', medicineIds);
+
+      const medMap: Record<string, any> = {};
+      (meds || []).forEach((m: any) => { medMap[m.id] = m; });
+
+      // Fetch branch names
+      const allBranchIds = [...new Set(items.map((i: any) => i.branch_id))];
       const branchMap: Record<string, string> = {};
-      if (branchIds.length > 0) {
+      if (allBranchIds.length > 0) {
         const { data: branches } = await supabase
           .from('pharmacy_branches')
           .select('id, name')
-          .in('id', branchIds);
+          .in('id', allBranchIds);
         (branches || []).forEach((b: any) => { branchMap[b.id] = b.name; });
       }
-      
-      const medicinesWithCreator = await Promise.all(
-        (data || []).map(async (medicine: any) => {
-          let creatorData = null;
-          if (medicine.created_by) {
-            const { data: cd } = await supabase
-              .from('profiles')
-              .select('full_name')
-              .eq('id', medicine.created_by)
-              .maybeSingle();
-            creatorData = cd;
-          }
-          const openPackUnits = medicine.units_per_pack
-            ? (medicine.open_pack_units || 0) / 1000
-            : (medicine.open_pack_units || 0);
-          const branchName = medicine.branch_id ? branchMap[medicine.branch_id] : undefined;
-          return { ...medicine, creator: creatorData, open_pack_units: openPackUnits, branch_name: branchName };
-        })
-      );
-      
-      setMedicines(medicinesWithCreator);
+
+      const merged: BranchItem[] = items.map((item: any) => {
+        const med = medMap[item.medicine_id] || {};
+        return {
+          ...item,
+          name: med.name || 'Unknown',
+          generic_name: med.generic_name,
+          category: med.category || 'Uncategorized',
+          manufacturer: med.manufacturer,
+          batch_number: med.batch_number,
+          item_type: med.item_type,
+          unit_label: med.unit_label,
+          units_per_pack: med.units_per_pack,
+          branch_name: branchMap[item.branch_id],
+        };
+      });
+
+      setBranchItems(merged);
     } catch (error) {
       toast({
-        title: "Error",
+        title: 'Error',
         description: `Failed to fetch ${isPharmacy ? 'medicines' : 'items'}`,
-        variant: "destructive"
+        variant: 'destructive',
       });
     } finally {
       setLoading(false);
     }
   };
 
-  // Stock editing removed - use Adjust Stock workflow instead
-
-  const handleMedicineAdded = () => {
-    fetchMedicines();
+  const handleItemAdded = () => {
+    fetchBranchItems();
     setShowAddDialog(false);
   };
 
-  const handleEditMedicine = (medicine: Medicine) => {
-    setEditingMedicine(medicine);
+  const handleEditItem = (item: BranchItem) => {
+    setEditingItem(item);
   };
 
-  const handleReplicateMedicine = (medicine: Medicine) => {
-    setMedicineToReplicate(medicine);
-    setShowReplicateDialog(true);
+  const handleItemUpdated = () => {
+    fetchBranchItems();
+    setEditingItem(null);
   };
 
-  const handleMedicineUpdated = () => {
-    fetchMedicines();
-    setEditingMedicine(null);
+  const handleDeleteItem = (itemId: string, itemName: string) => {
+    setDeleteConfirmation({ open: true, itemId, itemName });
   };
 
-  const handleDeleteMedicine = (medicineId: string, medicineName: string) => {
-    setDeleteConfirmation({
-      open: true,
-      medicineId,
-      medicineName
-    });
-  };
-
-  const confirmDeleteMedicine = async () => {
+  const confirmDeleteItem = async () => {
     try {
-      // Find the medicine to calculate expense deduction
-      const med = medicines.find(m => m.id === deleteConfirmation.medicineId);
-      
-      const { error } = await supabase
-        .from('medicines')
-        .delete()
-        .eq('id', deleteConfirmation.medicineId);
-
+      const { error } = await supabase.from('branch_items').delete().eq('id', deleteConfirmation.itemId);
       if (error) throw error;
-
-      // Deduct remaining stock cost from expenses
-      if (med && med.stock_quantity > 0) {
-        const stockCost = med.stock_quantity * med.purchase_price;
-        const branchId = med.branch_id || selectedBranch;
-        await supabase.from('expenses').insert({
-          description: `Item deleted: ${med.name} – ${med.stock_quantity} units remaining (cost deducted)`,
-          amount: -stockCost,
-          category: 'Stock Deletion',
-          created_by: profile?.id || null,
-          branch_id: branchId,
-        });
-      }
-
-      setMedicines(medicines.filter(m => m.id !== deleteConfirmation.medicineId));
-      
-      toast({
-        title: "Success",
-        description: `${isPharmacy ? 'Medicine' : 'Item'} deleted successfully`
-      });
-
-      setDeleteConfirmation({ open: false, medicineId: '', medicineName: '' });
+      setBranchItems(prev => prev.filter(i => i.id !== deleteConfirmation.itemId));
+      toast({ title: 'Success', description: `${isPharmacy ? 'Medicine' : 'Item'} removed from branch` });
+      setDeleteConfirmation({ open: false, itemId: '', itemName: '' });
     } catch (error) {
-      toast({
-        title: "Error",
-        description: `Failed to delete ${isPharmacy ? 'medicine' : 'item'}`,
-        variant: "destructive"
-      });
+      toast({ title: 'Error', description: `Failed to delete ${isPharmacy ? 'medicine' : 'item'}`, variant: 'destructive' });
     }
   };
 
-  const isOutOfStock = (medicine: Medicine) => medicine.stock_quantity === 0;
-  const isLowStock = (medicine: Medicine) => medicine.stock_quantity > 0 && medicine.stock_quantity <= medicine.minimum_stock_level;
-  const getUniqueCategories = () => [...new Set(medicines.map(m => m.category))].sort();
+  const isOutOfStock = (item: BranchItem) => item.quantity === 0;
+  const isLowStock = (item: BranchItem) => item.quantity > 0 && item.quantity <= 10;
+  const getUniqueCategories = () => [...new Set(branchItems.map(i => i.category))].sort();
 
-  const isExpired = (medicine: Medicine) => {
-    if (!medicine.expiry_date) return false;
-    const expiry = new Date(medicine.expiry_date);
+  const isExpired = (item: BranchItem) => {
+    if (!item.expiry_date) return false;
+    const expiry = new Date(item.expiry_date);
     const today = new Date();
     today.setHours(0, 0, 0, 0);
     expiry.setHours(0, 0, 0, 0);
     return expiry <= today;
   };
 
-  const isExpiringSoon = (medicine: Medicine) => {
-    if (!medicine.expiry_date || isExpired(medicine)) return false;
+  const isExpiringSoon = (item: BranchItem) => {
+    if (!item.expiry_date || isExpired(item)) return false;
     const thirtyDaysFromNow = new Date();
     thirtyDaysFromNow.setDate(thirtyDaysFromNow.getDate() + 30);
-    return new Date(medicine.expiry_date) <= thirtyDaysFromNow;
+    return new Date(item.expiry_date) <= thirtyDaysFromNow;
   };
-  const renderMedicineCard = (medicine: Medicine) => (
-    <Card key={medicine.id} className={isExpired(medicine) ? "border-destructive/30 bg-destructive/5" : ""}>
+
+  const renderItemCard = (item: BranchItem & { branch_name?: string }) => (
+    <Card key={item.id} className={isExpired(item) ? 'border-destructive/30 bg-destructive/5' : ''}>
       <CardHeader>
         <div className="flex justify-between items-start">
           <div className="flex-1">
-            <CardTitle className="text-lg">{medicine.name}</CardTitle>
-            {medicine.generic_name && <CardDescription>{medicine.generic_name}</CardDescription>}
+            <CardTitle className="text-lg">{item.name}</CardTitle>
+            {item.generic_name && <CardDescription>{item.generic_name}</CardDescription>}
           </div>
           <div className="flex space-x-1">
-            <Button size="sm" variant="ghost" onClick={() => handleEditMedicine(medicine)} title="Edit"><Edit2 className="h-4 w-4" /></Button>
-            <Button size="sm" variant="ghost" onClick={() => handleReplicateMedicine(medicine)} title="Replicate"><Recycle className="h-4 w-4" /></Button>
-            <Button size="sm" variant="ghost" onClick={() => setStockAdjustMedicine(medicine)} title="Adjust Stock"><SlidersHorizontal className="h-4 w-4" /></Button>
-            <Button size="sm" variant="ghost" onClick={() => handleDeleteMedicine(medicine.id, medicine.name)} title="Delete"><Trash2 className="h-4 w-4" /></Button>
+            <Button size="sm" variant="ghost" onClick={() => handleEditItem(item)} title="Edit"><Edit2 className="h-4 w-4" /></Button>
+            <Button size="sm" variant="ghost" onClick={() => handleDeleteItem(item.id, item.name)} title="Remove"><Trash2 className="h-4 w-4" /></Button>
           </div>
         </div>
       </CardHeader>
       <CardContent>
         <div className="space-y-2">
-          <div className="flex justify-between text-sm"><span>Category:</span><Badge variant="outline">{medicine.category}</Badge></div>
-          {isPharmacy && medicine.batch_number && <div className="flex justify-between text-sm"><span>Batch:</span><span>{medicine.batch_number}</span></div>}
-          {medicine.country_name && <div className="flex justify-between text-sm"><span>Country:</span><span>{medicine.country_name}</span></div>}
-          {medicine.manufacturer && <div className="flex justify-between text-sm"><span>{isPharmacy ? 'Manufacturer' : 'Brand'}:</span><span>{medicine.manufacturer}</span></div>}
-          {medicine.creator && <div className="flex justify-between text-sm"><span>Added by:</span><span className="text-xs">{medicine.creator.full_name || medicine.creator.email}</span></div>}
-          <div className="flex justify-between text-sm"><span>Price:</span><span className="font-medium">ETB {medicine.selling_price}</span></div>
+          <div className="flex justify-between text-sm"><span>Category:</span><Badge variant="outline">{item.category}</Badge></div>
+          {isPharmacy && item.batch_number && <div className="flex justify-between text-sm"><span>Batch:</span><span>{item.batch_number}</span></div>}
+          {item.manufacturer && <div className="flex justify-between text-sm"><span>{isPharmacy ? 'Manufacturer' : 'Brand'}:</span><span>{item.manufacturer}</span></div>}
+          <div className="flex justify-between text-sm"><span>Selling Price:</span><span className="font-medium">ETB {item.selling_price}</span></div>
+          <div className="flex justify-between text-sm"><span>Cost Price:</span><span className="text-muted-foreground">ETB {item.purchase_price}</span></div>
           <div className="flex justify-between text-sm items-center">
             <span>Stock:</span>
             <div className="flex items-center space-x-2">
-              <span className={(isLowStock(medicine) || isOutOfStock(medicine)) ? 'text-warning font-medium' : ''}>{medicine.stock_quantity}</span>
-              {isOutOfStock(medicine) && <Badge variant="destructive" className="text-xs">Out of Stock</Badge>}
-              {isLowStock(medicine) && <Badge variant="destructive" className="text-xs">Low Stock</Badge>}
+              <span className={(isLowStock(item) || isOutOfStock(item)) ? 'text-warning font-medium' : ''}>{item.quantity}</span>
+              {isOutOfStock(item) && <Badge variant="destructive" className="text-xs">Out of Stock</Badge>}
+              {isLowStock(item) && <Badge variant="destructive" className="text-xs">Low Stock</Badge>}
             </div>
           </div>
-          {medicine.units_per_pack && (
-            <>
-              <div className="flex justify-between text-sm"><span>Unopened Packs:</span><Badge variant="secondary">{medicine.stock_quantity}</Badge></div>
-              <div className="flex justify-between text-sm items-center">
-                <span>Open Pack:</span>
-                <div className="flex items-center gap-2">
-                  <span className="font-medium">{medicine.open_pack_units || 0}/{medicine.units_per_pack} {medicine.unit_label || 'units'} remaining</span>
-                  <Button size="sm" variant="ghost" className="h-6 w-6 p-0" onClick={() => setAdjustingMedicine(medicine)} title="Adjust open pack units"><Settings2 className="h-3 w-3" /></Button>
-                </div>
-              </div>
-            </>
+          {item.branch_name && !selectedBranch && (
+            <div className="flex justify-between text-sm"><span>Branch:</span><Badge variant="outline">{item.branch_name}</Badge></div>
           )}
-          {isPharmacy && medicine.expiry_date && (
+          {isPharmacy && item.expiry_date && (
             <div className="flex justify-between text-sm">
               <span>Expiry:</span>
               <div className="flex items-center space-x-2">
-                <span className={isExpired(medicine) ? 'text-destructive font-medium' : isExpiringSoon(medicine) ? 'text-warning' : ''}>{new Date(medicine.expiry_date).toLocaleDateString()}</span>
-                {isExpired(medicine) && <Badge variant="destructive" className="text-xs">Expired</Badge>}
-                {!isExpired(medicine) && isExpiringSoon(medicine) && <Badge variant="secondary" className="text-xs">Expiring Soon</Badge>}
+                <span className={isExpired(item) ? 'text-destructive font-medium' : isExpiringSoon(item) ? 'text-warning' : ''}>
+                  {new Date(item.expiry_date).toLocaleDateString()}
+                </span>
+                {isExpired(item) && <Badge variant="destructive" className="text-xs">Expired</Badge>}
+                {!isExpired(item) && isExpiringSoon(item) && <Badge variant="secondary" className="text-xs">Expiring Soon</Badge>}
               </div>
             </div>
           )}
@@ -366,13 +286,7 @@ export default function StaffInventoryWithActions() {
         <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3">
           <h2 className="text-xl sm:text-2xl font-bold">{isPharmacy ? 'Inventory Management' : 'Stock Management'}</h2>
           <div className="flex gap-2 flex-wrap">
-            {isPharmacy && (
-              <Button onClick={() => setShowAddDialog(true)} disabled={!hasBranches} size="sm">
-                <Plus className="h-4 w-4 mr-2" />
-                Add Medicine
-              </Button>
-            )}
-            <Button onClick={() => setShowAddItemDialog(true)} disabled={!hasBranches} variant={isPharmacy ? "outline" : "default"} size="sm">
+            <Button onClick={() => setShowAddDialog(true)} disabled={!hasBranches} size="sm">
               <Plus className="h-4 w-4 mr-2" />
               Add Item
             </Button>
@@ -402,7 +316,7 @@ export default function StaffInventoryWithActions() {
             <div className="relative flex-1">
               <Search className="absolute left-2 top-2.5 h-4 w-4 text-muted-foreground" />
               <Input
-                placeholder={isPharmacy ? "Search medicines..." : "Search items..."}
+                placeholder={isPharmacy ? 'Search medicines...' : 'Search items...'}
                 value={searchTerm}
                 onChange={(e) => setSearchTerm(e.target.value)}
                 className="pl-8"
@@ -417,21 +331,22 @@ export default function StaffInventoryWithActions() {
                 <SelectContent>
                   <SelectItem value="all">All Categories</SelectItem>
                   {isPharmacy && <SelectItem value="medicines_only">Medicines Only</SelectItem>}
-                  {getUniqueCategories().map((category) => (
-                    <SelectItem key={category} value={category}>{category}</SelectItem>
+                  {getUniqueCategories().map(cat => (
+                    <SelectItem key={cat} value={cat}>{cat}</SelectItem>
                   ))}
                 </SelectContent>
               </Select>
             </div>
           </div>
 
-          {!selectedBranch && filteredMedicines.some(m => m.branch_name) ? (
+          {/* Group by branch when "All Branches" */}
+          {!selectedBranch && branchItems.some((i: any) => i.branch_name) ? (
             (() => {
-              const grouped: Record<string, Medicine[]> = {};
-              filteredMedicines.forEach(m => {
-                const key = m.branch_name || 'Unknown Branch';
+              const grouped: Record<string, (BranchItem & { branch_name?: string })[]> = {};
+              filteredItems.forEach((i: any) => {
+                const key = i.branch_name || 'Unknown Branch';
                 if (!grouped[key]) grouped[key] = [];
-                grouped[key].push(m);
+                grouped[key].push(i);
               });
               return Object.entries(grouped).sort(([a], [b]) => a.localeCompare(b)).map(([branchName, items]) => (
                 <div key={branchName} className="space-y-3">
@@ -439,21 +354,26 @@ export default function StaffInventoryWithActions() {
                     <h3 className="text-lg font-semibold text-foreground">{branchName}</h3>
                     <Badge variant="secondary" className="text-xs">{items.length} {items.length === 1 ? 'item' : 'items'}</Badge>
                   </div>
-                  <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-4">
-                    {items.map((medicine) => renderMedicineCard(medicine))}
+                  <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
+                    {items.map(item => renderItemCard(item))}
                   </div>
                 </div>
               ));
             })()
           ) : (
-            <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-4">
-              {filteredMedicines.map((medicine) => renderMedicineCard(medicine))}
+            <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
+              {filteredItems.map(item => renderItemCard(item))}
             </div>
           )}
 
-          {filteredMedicines.length === 0 && (
+          {filteredItems.length === 0 && (
             <div className="text-center py-8">
               <p className="text-muted-foreground">No {isPharmacy ? 'medicines' : 'items'} found.</p>
+              {branchItems.length === 0 && (
+                <p className="text-sm text-muted-foreground mt-2">
+                  Click "Add Item" to add items from the catalog to your branch inventory.
+                </p>
+              )}
             </div>
           )}
         </TabsContent>
@@ -467,51 +387,27 @@ export default function StaffInventoryWithActions() {
         </TabsContent>
       </Tabs>
 
-      {isPharmacy && (
-        <AddMedicineDialog open={showAddDialog} onOpenChange={setShowAddDialog} onMedicineAdded={handleMedicineAdded} />
-      )}
-
-      <AddMedicineDialog open={showAddItemDialog} onOpenChange={setShowAddItemDialog} onMedicineAdded={handleMedicineAdded} mode="general" />
-
-      <AddMedicineDialog
-        open={showReplicateDialog}
-        onOpenChange={setShowReplicateDialog}
-        onMedicineAdded={handleMedicineAdded}
-        replicateData={medicineToReplicate}
-        mode={isPharmacy ? 'pharmacy' : 'general'}
+      {/* Dialogs */}
+      <AddBranchItemDialog
+        open={showAddDialog}
+        onOpenChange={setShowAddDialog}
+        onItemAdded={handleItemAdded}
       />
 
-      {editingMedicine && (
-        <EditMedicineDialog
-          medicine={editingMedicine}
-          open={!!editingMedicine}
-          onOpenChange={(open) => !open && setEditingMedicine(null)}
-          onMedicineUpdated={handleMedicineUpdated}
-        />
-      )}
+      <EditBranchItemDialog
+        open={!!editingItem}
+        onOpenChange={(open) => { if (!open) setEditingItem(null); }}
+        item={editingItem}
+        onItemUpdated={handleItemUpdated}
+      />
 
       <ConfirmationDialog
         open={deleteConfirmation.open}
         onOpenChange={(open) => setDeleteConfirmation(prev => ({ ...prev, open }))}
-        title={isPharmacy ? "Delete Medicine" : "Delete Item"}
-        description={`Are you sure you want to delete "${deleteConfirmation.medicineName}"? This action cannot be undone.`}
-        onConfirm={confirmDeleteMedicine}
-        confirmText="Delete"
-        cancelText="Cancel"
-      />
-
-      <OpenPackAdjustmentDialog
-        open={!!adjustingMedicine}
-        onOpenChange={(open) => { if (!open) setAdjustingMedicine(null); }}
-        medicine={adjustingMedicine}
-        onAdjusted={fetchMedicines}
-      />
-
-      <StockAdjustmentDialog
-        open={!!stockAdjustMedicine}
-        onOpenChange={(open) => { if (!open) setStockAdjustMedicine(null); }}
-        medicine={stockAdjustMedicine}
-        onAdjusted={fetchMedicines}
+        title={`Remove ${deleteConfirmation.itemName}?`}
+        description="This will remove the item from this branch's inventory. The master catalog entry will not be affected."
+        onConfirm={confirmDeleteItem}
+        confirmText="Remove"
       />
     </div>
   );

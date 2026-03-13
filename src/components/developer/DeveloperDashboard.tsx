@@ -14,6 +14,7 @@ import CreateOwnerDialog from './CreateOwnerDialog';
 import EditOwnerDialog from './EditOwnerDialog';
 import CreditSetupSection from './CreditSetupSection';
 import SubscriptionPlanStats from './SubscriptionPlanStats';
+import CatalogManagement from './CatalogManagement';
 
 interface PharmacyOwner {
   id: string;
