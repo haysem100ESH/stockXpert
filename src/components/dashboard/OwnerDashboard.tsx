@@ -24,7 +24,7 @@ import { supabase } from '@/lib/db';
 import { useToast } from '@/hooks/use-toast';
 import { useBranchContext } from '@/hooks/useBranchContext';
 import { useAuth } from '@/hooks/useAuth';
-import InventoryManagement from '@/components/inventory/InventoryManagement';
+import StaffInventoryWithActions from '@/components/inventory/StaffInventoryWithActions';
 import SalesManagement from '@/components/sales/SalesManagement';
 import FinanceManagement from '@/components/finance/FinanceManagement';
 import SupplierManagement from '@/components/suppliers/SupplierManagement';
