@@ -14,6 +14,7 @@ import CreateOwnerDialog from './CreateOwnerDialog';
 import EditOwnerDialog from './EditOwnerDialog';
 import CreditSetupSection from './CreditSetupSection';
 import SubscriptionPlanStats from './SubscriptionPlanStats';
+import CatalogManagement from './CatalogManagement';
 
 interface PharmacyOwner {
   id: string;
@@ -742,6 +743,17 @@ export default function DeveloperDashboard() {
 
       {/* Universal Credit Setup Section */}
       <CreditSetupSection />
+
+      {/* Item Catalog Management */}
+      <Card>
+        <CardHeader>
+          <CardTitle>Item Catalog & Group Management</CardTitle>
+          <CardDescription>Manage the master item catalog, item groups, and owner assignments</CardDescription>
+        </CardHeader>
+        <CardContent>
+          <CatalogManagement />
+        </CardContent>
+      </Card>
 
       {/* Subscription Plan Statistics */}
       <SubscriptionPlanStats />

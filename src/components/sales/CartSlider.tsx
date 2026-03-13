@@ -74,8 +74,10 @@ function MeasurableQtyInput({ value, max, unit, onChange }: { value: number; max
 
 interface CartItem {
   id: string;
+  medicine_id?: string;
   name: string;
   selling_price: number;
+  purchase_price?: number;
   stock_quantity: number;
   units_per_pack?: number;
   open_pack_units?: number;

@@ -143,17 +143,48 @@ export function useSmartInventory() {
         return;
       }
 
-      // Fetch all medicines
-      const { data: medicines } = await supabase
-        .from('medicines')
-        .select('id, name, category, stock_quantity, minimum_stock_level, expiry_date, branch_id, selling_price, item_type')
+      // Fetch all branch_items for the branches, joined with medicines
+      const { data: branchItemsData } = await supabase
+        .from('branch_items')
+        .select('id, medicine_id, branch_id, selling_price, purchase_price, quantity, expiry_date')
         .in('branch_id', branchIds);
 
-      if (!medicines || medicines.length === 0) {
+      // Fetch medicine details for the branch_items
+      const medIds = [...new Set((branchItemsData || []).map((bi: any) => bi.medicine_id))];
+      const { data: medicines } = medIds.length > 0
+        ? await supabase
+            .from('medicines')
+            .select('id, name, category, minimum_stock_level, item_type')
+            .in('id', medIds)
+        : { data: [] };
+
+      const medMap: Record<string, any> = {};
+      (medicines || []).forEach((m: any) => { medMap[m.id] = m; });
+
+      // Map branch_items as inventory items for smart analysis
+      const mappedMedicines = (branchItemsData || []).map((bi: any) => {
+        const med = medMap[bi.medicine_id] || {};
+        return {
+          id: bi.id,
+          name: med.name || 'Unknown',
+          category: med.category || 'Uncategorized',
+          stock_quantity: bi.quantity,
+          minimum_stock_level: med.minimum_stock_level || 0,
+          expiry_date: bi.expiry_date,
+          branch_id: bi.branch_id,
+          selling_price: bi.selling_price,
+          item_type: med.item_type,
+          medicine_id: bi.medicine_id,
+        };
+      });
+
+      if (!mappedMedicines || mappedMedicines.length === 0) {
         setItems([]);
         setLoading(false);
         return;
       }
+
+      const medicinesForAnalysis = mappedMedicines;
 
       // Fetch sales from last 60 days for dead stock + demand calc
       const sixtyDaysAgo = new Date();
@@ -210,12 +241,14 @@ export function useSmartInventory() {
       });
 
       // Compute smart items
-      const smartItems: SmartItem[] = medicines.map((med: any) => {
-        const sales = salesMap[med.id] || { totalQty30: 0, totalQty60: 0, lastSaleDate: null };
+      const smartItems: SmartItem[] = medicinesForAnalysis.map((med: any) => {
+        // Use medicine_id for sales lookup (sale_items references the original medicine)
+        const lookupId = med.medicine_id || med.id;
+        const sales = salesMap[lookupId] || { totalQty30: 0, totalQty60: 0, lastSaleDate: null };
         const adc = sales.totalQty30 / 30;
 
         // Apply seasonal multiplier to demand prediction
-        const seasonalMult = getSeasonalMultiplier(monthlyMap[med.id] || new Array(12).fill(0));
+        const seasonalMult = getSeasonalMultiplier(monthlyMap[lookupId] || new Array(12).fill(0));
         const predictedDemand14 = adc * 14 * seasonalMult;
 
         const safetyStock = predictedDemand14 * 0.2;
