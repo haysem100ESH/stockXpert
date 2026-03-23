@@ -137,11 +137,13 @@ export default function OwnerDashboard() {
         return;
       }
 
-      // Build queries
+      // Build queries - use branch_items for inventory stats
       let salesQuery = supabase.from('sales').select('total_amount, payment_method, discount_amount, branch_id, created_at')
         .gte('created_at', startDate.toISOString())
         .lte('created_at', now.toISOString());
-      let medicinesQuery = supabase.from('medicines').select('stock_quantity, minimum_stock_level, expiry_date, branch_id, category');
+      let branchItemsQuery = supabase
+        .from('branch_items')
+        .select('id, quantity, expiry_date, medicines!inner(category, minimum_stock_level)');
       let saleItemsQuery = supabase
         .from('sale_items')
         .select(`
@@ -152,44 +154,32 @@ export default function OwnerDashboard() {
       // Filter by specific branch or owner's branches
       if (selectedBranch) {
         salesQuery = salesQuery.eq('branch_id', selectedBranch);
-        medicinesQuery = medicinesQuery.eq('branch_id', selectedBranch);
+        branchItemsQuery = branchItemsQuery.eq('branch_id', selectedBranch);
         saleItemsQuery = saleItemsQuery.eq('sales.branch_id', selectedBranch);
       } else if (ownerBranchIds.length > 0) {
         salesQuery = salesQuery.in('branch_id', ownerBranchIds);
-        medicinesQuery = medicinesQuery.in('branch_id', ownerBranchIds);
+        branchItemsQuery = branchItemsQuery.in('branch_id', ownerBranchIds);
         saleItemsQuery = saleItemsQuery.in('sales.branch_id', ownerBranchIds);
       }
 
       // Fetch data
       const { data: salesData } = await salesQuery;
-      const { data: medicinesData } = await medicinesQuery;
+      const { data: branchItemsData } = await branchItemsQuery;
       const { data: saleItemsData } = await saleItemsQuery;
       
       const totalRevenue = salesData?.reduce((sum, sale) => sum + Number(sale.total_amount), 0) || 0;
-      const totalProducts = medicinesData?.length || 0;
-      const totalMedicines = medicinesData?.filter(m => medicineCategories.includes(m.category)).length || 0;
-      const totalItems = medicinesData?.filter(m => !medicineCategories.includes(m.category)).length || 0;
-      const lowStockItems = medicinesData?.filter(
-        medicine => medicine.stock_quantity <= medicine.minimum_stock_level && medicine.stock_quantity > 0
+      const totalProducts = branchItemsData?.length || 0;
+      const totalMedicines = branchItemsData?.filter((bi: any) => medicineCategories.includes(bi.medicines?.category)).length || 0;
+      const totalItems = branchItemsData?.filter((bi: any) => !medicineCategories.includes(bi.medicines?.category)).length || 0;
+      const lowStockItems = branchItemsData?.filter(
+        (bi: any) => bi.quantity <= (bi.medicines?.minimum_stock_level || 0) && bi.quantity > 0
       ).length || 0;
-      const outOfStockItems = medicinesData?.filter(medicine => medicine.stock_quantity === 0).length || 0;
+      const outOfStockItems = branchItemsData?.filter((bi: any) => bi.quantity === 0).length || 0;
       const totalSoldItems = saleItemsData?.reduce((sum, item) => sum + item.quantity, 0) || 0;
 
-      // Fetch expired items count
-      let expiredQuery = supabase
-        .from('medicines')
-        .select('id')
-        .not('expiry_date', 'is', null)
-        .lte('expiry_date', new Date().toISOString().split('T')[0]);
-      
-      if (selectedBranch) {
-        expiredQuery = expiredQuery.eq('branch_id', selectedBranch);
-      } else if (ownerBranchIds.length > 0) {
-        expiredQuery = expiredQuery.in('branch_id', ownerBranchIds);
-      }
-
-      const { data: expiredMedicinesData } = await expiredQuery;
-      const expiredItems = expiredMedicinesData?.length || 0;
+      // Count expired items from branch_items
+      const today = new Date().toISOString().split('T')[0];
+      const expiredItems = branchItemsData?.filter((bi: any) => bi.expiry_date && bi.quantity > 0 && bi.expiry_date <= today).length || 0;
 
       // Fetch sales data with items for charts
       let salesWithItemsQuery = supabase
