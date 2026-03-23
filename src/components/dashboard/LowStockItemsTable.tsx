@@ -26,7 +26,6 @@ export default function LowStockItemsTable() {
 
   const fetchLowStockItems = async () => {
     try {
-      // Owner isolation
       let ownerBranchIds: string[] = [];
       if (!selectedBranch && profile?.role === 'owner' && profile?.id) {
         const { data: ownerBranches } = await supabase
@@ -42,10 +41,11 @@ export default function LowStockItemsTable() {
         return;
       }
 
+      // Query branch_items joined with medicines for minimum_stock_level
       let query = supabase
-        .from('medicines')
-        .select('id, name, stock_quantity, minimum_stock_level')
-        .gt('stock_quantity', 0);
+        .from('branch_items')
+        .select('id, quantity, medicine_id, medicines!inner(name, minimum_stock_level)')
+        .gt('quantity', 0);
 
       if (selectedBranch) {
         query = query.eq('branch_id', selectedBranch);
@@ -53,13 +53,18 @@ export default function LowStockItemsTable() {
         query = query.in('branch_id', ownerBranchIds);
       }
 
-      const { data, error } = await query.order('stock_quantity', { ascending: true });
+      const { data, error } = await query.order('quantity', { ascending: true });
 
       if (error) throw error;
 
-      const lowStock = (data || []).filter(item => 
-        item.stock_quantity <= item.minimum_stock_level
-      );
+      const lowStock = (data || [])
+        .filter((item: any) => item.quantity <= (item.medicines?.minimum_stock_level || 0))
+        .map((item: any) => ({
+          id: item.id,
+          name: item.medicines?.name || 'Unknown',
+          stock_quantity: item.quantity,
+          minimum_stock_level: item.medicines?.minimum_stock_level || 0,
+        }));
 
       setLowStockItems(lowStock);
     } catch (error) {
@@ -93,7 +98,7 @@ export default function LowStockItemsTable() {
         <Table className="min-w-[500px]">
           <TableHeader>
             <TableRow>
-              <TableHead>Medicine Name</TableHead>
+              <TableHead>Item Name</TableHead>
               <TableHead>Available Quantity</TableHead>
               <TableHead>Threshold Limit</TableHead>
               <TableHead>Status</TableHead>
