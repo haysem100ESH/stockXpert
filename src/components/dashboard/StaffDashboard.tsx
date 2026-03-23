@@ -297,8 +297,8 @@ export default function StaffDashboard() {
   const handleRemoveExpiredItem = async (itemId: string) => {
     try {
       const { error } = await supabase
-        .from('medicines')
-        .update({ stock_quantity: 0 })
+        .from('branch_items')
+        .update({ quantity: 0 })
         .eq('id', itemId);
 
       if (error) throw error;
