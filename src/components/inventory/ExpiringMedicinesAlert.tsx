@@ -42,7 +42,6 @@ export default function ExpiringMedicinesAlert() {
           .eq('pharmacy_owner_id', profile.id);
         ownerBranchIds = (ownerBranches || []).map((b: any) => b.id);
         
-        // If owner has no branches, show no alerts
         if (ownerBranchIds.length === 0) {
           setExpiringCount(0);
           setExpiredCount(0);
@@ -52,7 +51,6 @@ export default function ExpiringMedicinesAlert() {
         }
       }
 
-      // Build base filter
       const addBranchFilter = (q: any) => {
         if (profile?.role === 'staff') return q.eq('branch_id', userBranch || profile?.branch_id);
         if (effectiveBranchId) return q.eq('branch_id', effectiveBranchId);
@@ -60,34 +58,43 @@ export default function ExpiringMedicinesAlert() {
         return q;
       };
 
-      // Expiring soon (within 30 days, not yet expired)
-      let expiringQ = supabase.from('medicines').select('id', { count: 'exact', head: true })
-        .not('expiry_date', 'is', null)
-        .gt('expiry_date', today)
-        .lte('expiry_date', thirtyDaysStr);
-      const { count: expiring } = await addBranchFilter(expiringQ);
+      // Fetch all branch_items with medicine details in one query
+      let query = supabase
+        .from('branch_items')
+        .select('id, quantity, expiry_date, medicines!inner(minimum_stock_level)');
+      query = addBranchFilter(query);
+      const { data: items } = await query;
 
-      // Expired
-      let expiredQ = supabase.from('medicines').select('id', { count: 'exact', head: true })
-        .not('expiry_date', 'is', null)
-        .lte('expiry_date', today);
-      const { count: expired } = await addBranchFilter(expiredQ);
+      if (!items || items.length === 0) {
+        setExpiringCount(0);
+        setExpiredCount(0);
+        setOutOfStockCount(0);
+        setLowStockCount(0);
+        return;
+      }
 
-      // Out of stock
-      let oosQ = supabase.from('medicines').select('id', { count: 'exact', head: true })
-        .eq('stock_quantity', 0);
-      const { count: oos } = await addBranchFilter(oosQ);
+      let expiring = 0, expired = 0, oos = 0, low = 0;
 
-      // Low stock (stock > 0 but <= minimum)
-      let lowQ = supabase.from('medicines').select('id, stock_quantity, minimum_stock_level')
-        .gt('stock_quantity', 0);
-      const { data: lowData } = await addBranchFilter(lowQ);
-      const lowCount = (lowData || []).filter((m: any) => m.stock_quantity <= m.minimum_stock_level).length;
+      for (const item of items as any[]) {
+        if (item.quantity === 0) {
+          oos++;
+        } else if (item.medicines?.minimum_stock_level && item.quantity <= item.medicines.minimum_stock_level) {
+          low++;
+        }
 
-      setExpiringCount(expiring || 0);
-      setExpiredCount(expired || 0);
-      setOutOfStockCount(oos || 0);
-      setLowStockCount(lowCount);
+        if (item.expiry_date && item.quantity > 0) {
+          if (item.expiry_date <= today) {
+            expired++;
+          } else if (item.expiry_date <= thirtyDaysStr) {
+            expiring++;
+          }
+        }
+      }
+
+      setExpiringCount(expiring);
+      setExpiredCount(expired);
+      setOutOfStockCount(oos);
+      setLowStockCount(low);
     } catch (error) {
       console.error('Error fetching inventory alerts:', error);
     }
