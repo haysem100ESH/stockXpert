@@ -100,17 +100,17 @@ export default function StaffDashboard() {
       const { start, end } = getDateRange();
       const medicineCategories = ['tablet', 'capsule', 'syrup', 'injection', 'cream', 'ointment', 'drops', 'inhaler'];
       
-      // Use explicit any types to bypass complex inference
-      let medicinesQuery = supabase
-        .from('medicines')
-        .select('stock_quantity, minimum_stock_level, category');
+      // Fetch branch_items with medicine details for inventory stats
+      let branchItemsQuery = supabase
+        .from('branch_items')
+        .select('id, quantity, expiry_date, medicines!inner(name, category, minimum_stock_level)');
       
       if (userBranch) {
-        medicinesQuery = medicinesQuery.eq('branch_id', userBranch);
+        branchItemsQuery = branchItemsQuery.eq('branch_id', userBranch);
       }
       
-      const medicinesResult = await medicinesQuery;
-      const medicinesData = medicinesResult.data as any[] || [];
+      const branchItemsResult = await branchItemsQuery;
+      const branchItemsData = branchItemsResult.data as any[] || [];
 
       let salesQuery = supabase
         .from('sales')
@@ -215,76 +215,56 @@ export default function StaffDashboard() {
         .sort((a, b) => b.sales - a.sales)
         .slice(0, 10);
 
-      let outOfStockQuery = supabase
-        .from('medicines')
-        .select('id, name, category, stock_quantity')
-        .eq('stock_quantity', 0);
-      
-      if (userBranch) {
-        outOfStockQuery = outOfStockQuery.eq('branch_id', userBranch);
-      }
-      
-      const outOfStockResult = await outOfStockQuery;
-      const outOfStockData = outOfStockResult.data as SimpleItem[] || [];
+      // Derive inventory alerts from branch_items
+      const outOfStockData: SimpleItem[] = branchItemsData
+        .filter((bi: any) => bi.quantity === 0)
+        .map((bi: any) => ({
+          id: bi.id,
+          name: bi.medicines?.name || 'Unknown',
+          category: bi.medicines?.category || '',
+        }));
 
-      // For low stock items, query medicines directly since we need branch filtering
-      let lowStockQuery = supabase
-        .from('medicines')
-        .select('id, name, category, stock_quantity, minimum_stock_level')
-        .gt('stock_quantity', 0);
-      
-      if (userBranch) {
-        lowStockQuery = lowStockQuery.eq('branch_id', userBranch);
-      }
-      
-      const lowStockResult = await lowStockQuery;
-      const allMedicines = lowStockResult.data as SimpleItem[] || [];
-      
-      // Filter low stock items client-side
-      const lowStockData = allMedicines.filter(med => 
-        med.stock_quantity && med.minimum_stock_level && 
-        med.stock_quantity <= med.minimum_stock_level
-      );
+      const lowStockData: SimpleItem[] = branchItemsData
+        .filter((bi: any) => bi.quantity > 0 && bi.medicines?.minimum_stock_level && bi.quantity <= bi.medicines.minimum_stock_level)
+        .map((bi: any) => ({
+          id: bi.id,
+          name: bi.medicines?.name || 'Unknown',
+          category: bi.medicines?.category || '',
+          stock_quantity: bi.quantity,
+          minimum_stock_level: bi.medicines?.minimum_stock_level,
+        }));
 
+      const today = new Date().toISOString().split('T')[0];
       const thirtyDaysFromNow = new Date();
       thirtyDaysFromNow.setDate(thirtyDaysFromNow.getDate() + 30);
       const tomorrow = new Date();
       tomorrow.setDate(tomorrow.getDate() + 1);
-      
-      let expiringQuery = supabase
-        .from('medicines')
-        .select('id, name, category, expiry_date')
-        .not('expiry_date', 'is', null)
-        .lte('expiry_date', thirtyDaysFromNow.toISOString().split('T')[0])
-        .gte('expiry_date', tomorrow.toISOString().split('T')[0]);
-      
-      if (userBranch) {
-        expiringQuery = expiringQuery.eq('branch_id', userBranch);
-      }
-      
-      const expiringResult = await expiringQuery;
-      const expiringData = expiringResult.data as SimpleItem[] || [];
+      const tomorrowStr = tomorrow.toISOString().split('T')[0];
+      const thirtyStr = thirtyDaysFromNow.toISOString().split('T')[0];
 
-      let expiredQuery = supabase
-        .from('medicines')
-        .select('id, name, category, expiry_date')
-        .not('expiry_date', 'is', null)
-        .lte('expiry_date', new Date().toISOString().split('T')[0]);
-      
-      if (userBranch) {
-        expiredQuery = expiredQuery.eq('branch_id', userBranch);
-      }
-      
-      const expiredResult = await expiredQuery;
-      const expiredData = expiredResult.data as SimpleItem[] || [];
+      const expiringData: SimpleItem[] = branchItemsData
+        .filter((bi: any) => bi.expiry_date && bi.quantity > 0 && bi.expiry_date >= tomorrowStr && bi.expiry_date <= thirtyStr)
+        .map((bi: any) => ({
+          id: bi.id,
+          name: bi.medicines?.name || 'Unknown',
+          category: bi.medicines?.category || '',
+          expiry_date: bi.expiry_date,
+        }));
 
-      const totalProducts = medicinesData.length;
-      const totalMedicines = medicinesData.filter((med: any) => medicineCategories.includes(med.category)).length;
-      const totalItems = medicinesData.filter((med: any) => !medicineCategories.includes(med.category)).length;
-      const lowStockItemsCount = medicinesData.filter((med: any) => 
-        med.stock_quantity <= med.minimum_stock_level && med.stock_quantity > 0
-      ).length;
-      const outOfStockItemsCount = medicinesData.filter((med: any) => med.stock_quantity === 0).length;
+      const expiredData: SimpleItem[] = branchItemsData
+        .filter((bi: any) => bi.expiry_date && bi.quantity > 0 && bi.expiry_date <= today)
+        .map((bi: any) => ({
+          id: bi.id,
+          name: bi.medicines?.name || 'Unknown',
+          category: bi.medicines?.category || '',
+          expiry_date: bi.expiry_date,
+        }));
+
+      const totalProducts = branchItemsData.length;
+      const totalMedicines = branchItemsData.filter((bi: any) => medicineCategories.includes(bi.medicines?.category)).length;
+      const totalItems = branchItemsData.filter((bi: any) => !medicineCategories.includes(bi.medicines?.category)).length;
+      const lowStockItemsCount = lowStockData.length;
+      const outOfStockItemsCount = outOfStockData.length;
       const periodSalesRevenue = salesData.reduce((sum: number, sale: any) => sum + Number(sale.total_amount), 0);
 
       setStats({
@@ -317,8 +297,8 @@ export default function StaffDashboard() {
   const handleRemoveExpiredItem = async (itemId: string) => {
     try {
       const { error } = await supabase
-        .from('medicines')
-        .update({ stock_quantity: 0 })
+        .from('branch_items')
+        .update({ quantity: 0 })
         .eq('id', itemId);
 
       if (error) throw error;
