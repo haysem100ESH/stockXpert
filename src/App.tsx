@@ -6,6 +6,7 @@ import { ThemeProvider } from "next-themes";
 import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
 import { BrowserRouter, Routes, Route, Navigate } from "react-router-dom";
 import { AuthProvider, useAuth } from "@/hooks/useAuth";
+import { AdvancedModeProvider } from "@/hooks/useAdvancedMode";
 import Layout from "@/components/Layout";
 import SubscriptionGuard from "@/components/subscription/SubscriptionGuard";
 import Dashboard from "./pages/Dashboard";
