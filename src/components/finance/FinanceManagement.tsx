@@ -331,8 +331,8 @@ export default function FinanceManagement() {
           const branchSales = salesData?.filter((s: any) => s.branch_id === branch.id) || [];
           const branchCustomExpenses = expensesData?.filter((e: any) => e.branch_id === branch.id) || [];
           const branchInvExpenses = invExpenses.filter((e: any) => {
-            const med = (inventoryData || []).find((m: any) => m.id === e.id);
-            return med?.branch_id === branch.id;
+            const bi = (inventoryData || []).find((m: any) => m.id === e.id);
+            return bi?.branch_id === branch.id;
           });
           
           return {
