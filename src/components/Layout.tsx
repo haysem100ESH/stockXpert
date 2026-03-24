@@ -5,7 +5,7 @@ import { Button } from '@/components/ui/button';
 import { Avatar, AvatarFallback } from '@/components/ui/avatar';
 import { SidebarProvider, SidebarTrigger } from '@/components/ui/sidebar';
 import { AppSidebar } from '@/components/AppSidebar';
-import { LogOut, Settings, Sun, Moon } from 'lucide-react';
+import { LogOut, Settings, Sun, Moon, Zap } from 'lucide-react';
 import { Loader2 } from 'lucide-react';
 import { ConfirmationDialog } from '@/components/ui/confirmation-dialog';
 import SubscriptionStatus from '@/components/subscription/SubscriptionStatus';
