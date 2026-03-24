@@ -381,39 +381,52 @@ export default function CatalogManagement() {
               {/* Add medicine to group */}
               <Card>
                 <CardHeader>
-                  <CardTitle className="text-base">Add Item to Group</CardTitle>
+                  <CardTitle className="text-base">Add Items to Group</CardTitle>
+                  <CardDescription>Select multiple items and add them all at once</CardDescription>
                 </CardHeader>
-                <CardContent>
-                  <div className="flex gap-3 items-end">
-                    <div className="flex-1 space-y-2">
-                      <Label>Search Catalog</Label>
-                      <div className="relative">
-                        <Search className="absolute left-2 top-2.5 h-4 w-4 text-muted-foreground" />
-                        <Input
-                          value={memberSearch}
-                          onChange={e => setMemberSearch(e.target.value)}
-                          placeholder="Search by name..."
-                          className="pl-8"
-                        />
+                <CardContent className="space-y-3">
+                  <div className="relative">
+                    <Search className="absolute left-2 top-2.5 h-4 w-4 text-muted-foreground" />
+                    <Input
+                      value={memberSearch}
+                      onChange={e => setMemberSearch(e.target.value)}
+                      placeholder="Search catalog items..."
+                      className="pl-8"
+                    />
+                  </div>
+                  {selectedMedicineIds.length > 0 && (
+                    <div className="flex items-center justify-between rounded-md bg-muted px-3 py-2">
+                      <span className="text-sm font-medium">{selectedMedicineIds.length} item(s) selected</span>
+                      <div className="flex gap-2">
+                        <Button size="sm" variant="ghost" onClick={() => setSelectedMedicineIds([])}>Clear</Button>
+                        <Button size="sm" onClick={handleAddMembers}>
+                          <Plus className="h-4 w-4 mr-1" /> Add Selected
+                        </Button>
                       </div>
                     </div>
-                    <div className="flex-1 space-y-2">
-                      <Label>Select Item</Label>
-                      <Select value={selectedMedicineId} onValueChange={setSelectedMedicineId}>
-                        <SelectTrigger><SelectValue placeholder="Choose item" /></SelectTrigger>
-                        <SelectContent>
-                          {filteredMedicines.slice(0, 50).map(m => (
-                            <SelectItem key={m.id} value={m.id}>
-                              {m.name} — {m.category}
-                            </SelectItem>
-                          ))}
-                        </SelectContent>
-                      </Select>
+                  )}
+                  <ScrollArea className="h-[240px] rounded-md border">
+                    <div className="p-2 space-y-1">
+                      {filteredMedicines.slice(0, 100).map(m => (
+                        <label
+                          key={m.id}
+                          className="flex items-center gap-3 rounded-md px-3 py-2 hover:bg-accent cursor-pointer transition-colors"
+                        >
+                          <Checkbox
+                            checked={selectedMedicineIds.includes(m.id)}
+                            onCheckedChange={() => toggleMedicineSelection(m.id)}
+                          />
+                          <div className="flex-1 min-w-0">
+                            <p className="text-sm font-medium truncate">{m.name}</p>
+                            <p className="text-xs text-muted-foreground">{m.category}{m.generic_name ? ` · ${m.generic_name}` : ''}</p>
+                          </div>
+                        </label>
+                      ))}
+                      {filteredMedicines.length === 0 && (
+                        <p className="text-sm text-muted-foreground text-center py-4">No items found</p>
+                      )}
                     </div>
-                    <Button onClick={handleAddMember} disabled={!selectedMedicineId}>
-                      <Plus className="h-4 w-4 mr-1" /> Add
-                    </Button>
-                  </div>
+                  </ScrollArea>
                 </CardContent>
               </Card>
 
