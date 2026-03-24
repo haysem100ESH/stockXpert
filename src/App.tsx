@@ -58,6 +58,7 @@ const App = () => {
   return (
     <QueryClientProvider client={queryClient}>
       <ThemeProvider attribute="class" defaultTheme="light" enableSystem={false}>
+      <AdvancedModeProvider>
       <AuthProvider>
         <TooltipProvider>
           <Toaster />
