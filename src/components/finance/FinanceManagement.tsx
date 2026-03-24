@@ -1292,7 +1292,9 @@ export default function FinanceManagement() {
           </Card>
         </TabsContent>
 
-      </Tabs>
+          </Tabs>
+        </>
+      )}
     </div>
   );
 }
