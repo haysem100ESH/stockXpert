@@ -265,10 +265,10 @@ export default function FinanceManagement() {
       const { data: expensesData, error: expensesError } = await expensesQuery;
       if (expensesError) throw expensesError;
 
-      // Fetch inventory expenses (medicines added in period)
+      // Fetch inventory expenses from branch_items
       let inventoryQuery = supabase
-        .from('medicines')
-        .select('id, name, stock_quantity, purchase_price, branch_id, created_at')
+        .from('branch_items')
+        .select('id, quantity, purchase_price, branch_id, created_at, medicines!inner(name)')
         .gte('created_at', queryStartDate.toISOString())
         .lte('created_at', queryEndDate.toISOString())
         .order('created_at', { ascending: false });
@@ -291,14 +291,14 @@ export default function FinanceManagement() {
       const { data: branchesForNames } = await branchNameQuery;
       const branchNameMap = new Map((branchesForNames || []).map((b: any) => [b.id, b.name]));
 
-      const invExpenses: InventoryExpense[] = (inventoryData || []).map((med: any) => ({
-        id: med.id,
-        name: med.name,
-        stock_quantity: med.stock_quantity,
-        purchase_price: Number(med.purchase_price),
-        total_cost: Number(med.purchase_price) * Number(med.stock_quantity),
-        branch_name: med.branch_id ? branchNameMap.get(med.branch_id) : undefined,
-        created_at: med.created_at,
+      const invExpenses: InventoryExpense[] = (inventoryData || []).map((bi: any) => ({
+        id: bi.id,
+        name: (bi.medicines as any)?.name || 'Unknown',
+        stock_quantity: bi.quantity,
+        purchase_price: Number(bi.purchase_price),
+        total_cost: Number(bi.purchase_price) * Number(bi.quantity),
+        branch_name: bi.branch_id ? branchNameMap.get(bi.branch_id) : undefined,
+        created_at: bi.created_at,
       }));
 
       setInventoryExpenses(invExpenses);
