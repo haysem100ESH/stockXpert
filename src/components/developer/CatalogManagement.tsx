@@ -1,4 +1,4 @@
-import { useState, useEffect } from 'react';
+import { useState, useEffect, useCallback } from 'react';
 import { supabase } from '@/lib/db';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
@@ -10,7 +10,9 @@ import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@
 import { Dialog, DialogContent, DialogDescription, DialogHeader, DialogTitle } from '@/components/ui/dialog';
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
 import { useToast } from '@/hooks/use-toast';
-import { Plus, Trash2, Search, Users, Package, FolderOpen } from 'lucide-react';
+import { Plus, Trash2, Search, Users, Package, FolderOpen, Check } from 'lucide-react';
+import { Checkbox } from '@/components/ui/checkbox';
+import { ScrollArea } from '@/components/ui/scroll-area';
 
 interface ItemGroup {
   id: string;
@@ -74,7 +76,7 @@ export default function CatalogManagement() {
   const [newGroupName, setNewGroupName] = useState('');
   const [newGroupDesc, setNewGroupDesc] = useState('');
   const [newGroupType, setNewGroupType] = useState<string>('pharmacy');
-  const [selectedMedicineId, setSelectedMedicineId] = useState('');
+  const [selectedMedicineIds, setSelectedMedicineIds] = useState<string[]>([]);
   const [selectedOwnerId, setSelectedOwnerId] = useState('');
   const [assignGroupId, setAssignGroupId] = useState('');
 
@@ -197,19 +199,24 @@ export default function CatalogManagement() {
     }
   };
 
-  const handleAddMember = async () => {
-    if (!selectedGroupId || !selectedMedicineId) return;
-    const { error } = await supabase.from('grouped_item_members').insert({
-      group_id: selectedGroupId,
-      medicine_id: selectedMedicineId,
-    });
+  const handleAddMembers = async () => {
+    if (!selectedGroupId || selectedMedicineIds.length === 0) return;
+    const rows = selectedMedicineIds.map(mid => ({ group_id: selectedGroupId, medicine_id: mid }));
+    const { error } = await supabase.from('grouped_item_members').insert(rows);
     if (error) {
-      toast({ title: 'Error', description: error.code === '23505' ? 'Item already in this group' : error.message, variant: 'destructive' });
+      toast({ title: 'Error', description: error.code === '23505' ? 'Some items already in this group' : error.message, variant: 'destructive' });
     } else {
-      toast({ title: 'Added', description: 'Item added to group' });
-      setSelectedMedicineId('');
+      toast({ title: 'Added', description: `${selectedMedicineIds.length} item(s) added to group` });
+      setSelectedMedicineIds([]);
+      setMemberSearch('');
       fetchMembers();
     }
+  };
+
+  const toggleMedicineSelection = (id: string) => {
+    setSelectedMedicineIds(prev =>
+      prev.includes(id) ? prev.filter(x => x !== id) : [...prev, id]
+    );
   };
 
   const handleRemoveMember = async (memberId: string) => {
@@ -249,9 +256,11 @@ export default function CatalogManagement() {
     }
   };
 
+  const existingMedicineIds = new Set(members.filter(m => m.group_id === selectedGroupId).map(m => m.medicine_id));
   const filteredMedicines = medicines.filter(m =>
-    m.name.toLowerCase().includes(memberSearch.toLowerCase()) ||
-    (m.generic_name || '').toLowerCase().includes(memberSearch.toLowerCase())
+    !existingMedicineIds.has(m.id) &&
+    (m.name.toLowerCase().includes(memberSearch.toLowerCase()) ||
+    (m.generic_name || '').toLowerCase().includes(memberSearch.toLowerCase()))
   );
 
   const groupMembersForSelected = members.filter(m => m.group_id === selectedGroupId);
@@ -372,39 +381,52 @@ export default function CatalogManagement() {
               {/* Add medicine to group */}
               <Card>
                 <CardHeader>
-                  <CardTitle className="text-base">Add Item to Group</CardTitle>
+                  <CardTitle className="text-base">Add Items to Group</CardTitle>
+                  <CardDescription>Select multiple items and add them all at once</CardDescription>
                 </CardHeader>
-                <CardContent>
-                  <div className="flex gap-3 items-end">
-                    <div className="flex-1 space-y-2">
-                      <Label>Search Catalog</Label>
-                      <div className="relative">
-                        <Search className="absolute left-2 top-2.5 h-4 w-4 text-muted-foreground" />
-                        <Input
-                          value={memberSearch}
-                          onChange={e => setMemberSearch(e.target.value)}
-                          placeholder="Search by name..."
-                          className="pl-8"
-                        />
+                <CardContent className="space-y-3">
+                  <div className="relative">
+                    <Search className="absolute left-2 top-2.5 h-4 w-4 text-muted-foreground" />
+                    <Input
+                      value={memberSearch}
+                      onChange={e => setMemberSearch(e.target.value)}
+                      placeholder="Search catalog items..."
+                      className="pl-8"
+                    />
+                  </div>
+                  {selectedMedicineIds.length > 0 && (
+                    <div className="flex items-center justify-between rounded-md bg-muted px-3 py-2">
+                      <span className="text-sm font-medium">{selectedMedicineIds.length} item(s) selected</span>
+                      <div className="flex gap-2">
+                        <Button size="sm" variant="ghost" onClick={() => setSelectedMedicineIds([])}>Clear</Button>
+                        <Button size="sm" onClick={handleAddMembers}>
+                          <Plus className="h-4 w-4 mr-1" /> Add Selected
+                        </Button>
                       </div>
                     </div>
-                    <div className="flex-1 space-y-2">
-                      <Label>Select Item</Label>
-                      <Select value={selectedMedicineId} onValueChange={setSelectedMedicineId}>
-                        <SelectTrigger><SelectValue placeholder="Choose item" /></SelectTrigger>
-                        <SelectContent>
-                          {filteredMedicines.slice(0, 50).map(m => (
-                            <SelectItem key={m.id} value={m.id}>
-                              {m.name} — {m.category}
-                            </SelectItem>
-                          ))}
-                        </SelectContent>
-                      </Select>
+                  )}
+                  <ScrollArea className="h-[240px] rounded-md border">
+                    <div className="p-2 space-y-1">
+                      {filteredMedicines.slice(0, 100).map(m => (
+                        <label
+                          key={m.id}
+                          className="flex items-center gap-3 rounded-md px-3 py-2 hover:bg-accent cursor-pointer transition-colors"
+                        >
+                          <Checkbox
+                            checked={selectedMedicineIds.includes(m.id)}
+                            onCheckedChange={() => toggleMedicineSelection(m.id)}
+                          />
+                          <div className="flex-1 min-w-0">
+                            <p className="text-sm font-medium truncate">{m.name}</p>
+                            <p className="text-xs text-muted-foreground">{m.category}{m.generic_name ? ` · ${m.generic_name}` : ''}</p>
+                          </div>
+                        </label>
+                      ))}
+                      {filteredMedicines.length === 0 && (
+                        <p className="text-sm text-muted-foreground text-center py-4">No items found</p>
+                      )}
                     </div>
-                    <Button onClick={handleAddMember} disabled={!selectedMedicineId}>
-                      <Plus className="h-4 w-4 mr-1" /> Add
-                    </Button>
-                  </div>
+                  </ScrollArea>
                 </CardContent>
               </Card>
 
