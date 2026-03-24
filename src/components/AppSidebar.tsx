@@ -33,6 +33,7 @@ import {
 import { useAuth } from "@/hooks/useAuth";
 import { useBranchContext } from "@/hooks/useBranchContext";
 import { useBranding } from "@/hooks/useBranding";
+import { useAdvancedMode } from "@/hooks/useAdvancedMode";
 import { Badge } from "@/components/ui/badge";
 
 export function AppSidebar() {
