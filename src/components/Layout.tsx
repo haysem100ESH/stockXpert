@@ -17,6 +17,8 @@ import { useBranchContext } from '@/hooks/useBranchContext';
 import { useBranding } from '@/hooks/useBranding';
 import { DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuLabel, DropdownMenuSeparator, DropdownMenuTrigger } from '@/components/ui/dropdown-menu';
 import { useTheme } from 'next-themes';
+import { useAdvancedMode } from '@/hooks/useAdvancedMode';
+import { Switch } from '@/components/ui/switch';
 
 interface LayoutProps {
   children: ReactNode;
