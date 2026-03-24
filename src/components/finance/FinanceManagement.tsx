@@ -19,6 +19,7 @@ import { supabase } from '@/lib/db';
 import { useToast } from '@/hooks/use-toast';
 import { useAuth } from '@/hooks/useAuth';
 import { useBranchContext } from '@/hooks/useBranchContext';
+import { useAdvancedMode } from '@/hooks/useAdvancedMode';
 
 import DebtManagement from './DebtManagement';
 import SalaryHistory from '@/components/staff/SalaryHistory';
@@ -124,6 +125,8 @@ export default function FinanceManagement() {
   const { profile } = useAuth();
   const { toast } = useToast();
   const { selectedBranch } = useBranchContext();
+  const { isAdvancedMode } = useAdvancedMode();
+  const [showFinanceDetails, setShowFinanceDetails] = useState(false);
   
   const itemsPerPage = 15;
 
@@ -819,30 +822,52 @@ export default function FinanceManagement() {
           </CardContent>
         </Card>
 
-        <Card>
-          <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
-            <CardTitle className="text-sm font-medium">Profit Margin</CardTitle>
-            <BarChart3 className="h-4 w-4 text-info" />
-          </CardHeader>
-          <CardContent>
-            <div className={`text-2xl font-bold ${stats.profitMargin >= 0 ? 'text-success' : 'text-destructive'}`}>
-              {stats.profitMargin.toFixed(1)}%
-            </div>
-          </CardContent>
-        </Card>
+        {(isAdvancedMode || showFinanceDetails) && (
+          <Card>
+            <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
+              <CardTitle className="text-sm font-medium">Profit Margin</CardTitle>
+              <BarChart3 className="h-4 w-4 text-info" />
+            </CardHeader>
+            <CardContent>
+              <div className={`text-2xl font-bold ${stats.profitMargin >= 0 ? 'text-success' : 'text-destructive'}`}>
+                {stats.profitMargin.toFixed(1)}%
+              </div>
+            </CardContent>
+          </Card>
+        )}
       </div>
 
-      {/* Detailed Views */}
-      <Tabs defaultValue="overview" className="space-y-4">
-        <TabsList className="flex flex-wrap h-auto gap-1">
-          <TabsTrigger value="overview">Overview</TabsTrigger>
-          <TabsTrigger value="income">Income</TabsTrigger>
-          <TabsTrigger value="expenses">Expenses</TabsTrigger>
-          <TabsTrigger value="salaries">Salaries</TabsTrigger>
-          <TabsTrigger value="debts">Debts</TabsTrigger>
-          <TabsTrigger value="reports">Reports</TabsTrigger>
-          
-        </TabsList>
+      {/* See Details button in Simple Mode */}
+      {!isAdvancedMode && !showFinanceDetails && (
+        <div className="flex justify-center">
+          <Button variant="outline" onClick={() => setShowFinanceDetails(true)} className="gap-2">
+            <ChevronRight className="h-4 w-4" />
+            See Details
+          </Button>
+        </div>
+      )}
+
+      {(isAdvancedMode || showFinanceDetails) && (
+        <>
+          {!isAdvancedMode && showFinanceDetails && (
+            <div className="flex justify-center">
+              <Button variant="ghost" size="sm" onClick={() => setShowFinanceDetails(false)} className="gap-2 text-muted-foreground">
+                <ArrowLeft className="h-4 w-4" />
+                Hide Details
+              </Button>
+            </div>
+          )}
+
+          {/* Detailed Views */}
+          <Tabs defaultValue="overview" className="space-y-4">
+            <TabsList className="flex flex-wrap h-auto gap-1">
+              <TabsTrigger value="overview">Overview</TabsTrigger>
+              <TabsTrigger value="income">Income</TabsTrigger>
+              <TabsTrigger value="expenses">Expenses</TabsTrigger>
+              <TabsTrigger value="salaries">Salaries</TabsTrigger>
+              <TabsTrigger value="debts">Debts</TabsTrigger>
+              <TabsTrigger value="reports">Reports</TabsTrigger>
+            </TabsList>
 
         <TabsContent value="overview">
           <div className="space-y-6">
@@ -1267,7 +1292,9 @@ export default function FinanceManagement() {
           </Card>
         </TabsContent>
 
-      </Tabs>
+          </Tabs>
+        </>
+      )}
     </div>
   );
 }
