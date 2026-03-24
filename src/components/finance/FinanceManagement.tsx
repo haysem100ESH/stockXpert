@@ -125,6 +125,8 @@ export default function FinanceManagement() {
   const { profile } = useAuth();
   const { toast } = useToast();
   const { selectedBranch } = useBranchContext();
+  const { isAdvancedMode } = useAdvancedMode();
+  const [showFinanceDetails, setShowFinanceDetails] = useState(false);
   
   const itemsPerPage = 15;
 
