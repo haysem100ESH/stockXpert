@@ -19,6 +19,7 @@ import { supabase } from '@/lib/db';
 import { useToast } from '@/hooks/use-toast';
 import { useAuth } from '@/hooks/useAuth';
 import { useBranchContext } from '@/hooks/useBranchContext';
+import { useAdvancedMode } from '@/hooks/useAdvancedMode';
 
 import DebtManagement from './DebtManagement';
 import SalaryHistory from '@/components/staff/SalaryHistory';
