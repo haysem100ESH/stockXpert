@@ -199,19 +199,24 @@ export default function CatalogManagement() {
     }
   };
 
-  const handleAddMember = async () => {
-    if (!selectedGroupId || !selectedMedicineId) return;
-    const { error } = await supabase.from('grouped_item_members').insert({
-      group_id: selectedGroupId,
-      medicine_id: selectedMedicineId,
-    });
+  const handleAddMembers = async () => {
+    if (!selectedGroupId || selectedMedicineIds.length === 0) return;
+    const rows = selectedMedicineIds.map(mid => ({ group_id: selectedGroupId, medicine_id: mid }));
+    const { error } = await supabase.from('grouped_item_members').insert(rows);
     if (error) {
-      toast({ title: 'Error', description: error.code === '23505' ? 'Item already in this group' : error.message, variant: 'destructive' });
+      toast({ title: 'Error', description: error.code === '23505' ? 'Some items already in this group' : error.message, variant: 'destructive' });
     } else {
-      toast({ title: 'Added', description: 'Item added to group' });
-      setSelectedMedicineId('');
+      toast({ title: 'Added', description: `${selectedMedicineIds.length} item(s) added to group` });
+      setSelectedMedicineIds([]);
+      setMemberSearch('');
       fetchMembers();
     }
+  };
+
+  const toggleMedicineSelection = (id: string) => {
+    setSelectedMedicineIds(prev =>
+      prev.includes(id) ? prev.filter(x => x !== id) : [...prev, id]
+    );
   };
 
   const handleRemoveMember = async (memberId: string) => {
