@@ -5,16 +5,20 @@ import { Button } from '@/components/ui/button';
 import { Avatar, AvatarFallback } from '@/components/ui/avatar';
 import { SidebarProvider, SidebarTrigger } from '@/components/ui/sidebar';
 import { AppSidebar } from '@/components/AppSidebar';
-import { LogOut, Settings } from 'lucide-react';
+import { LogOut, Settings, Sun, Moon, Zap } from 'lucide-react';
 import { Loader2 } from 'lucide-react';
 import { ConfirmationDialog } from '@/components/ui/confirmation-dialog';
 import SubscriptionStatus from '@/components/subscription/SubscriptionStatus';
 import ExpiringMedicinesAlert from '@/components/inventory/ExpiringMedicinesAlert';
 import { BranchProvider } from '@/hooks/useBranchContext';
+import SmartAssistant from '@/components/chat/SmartAssistant';
 import BranchSelector from '@/components/branch/BranchSelector';
 import { useBranchContext } from '@/hooks/useBranchContext';
 import { useBranding } from '@/hooks/useBranding';
 import { DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuLabel, DropdownMenuSeparator, DropdownMenuTrigger } from '@/components/ui/dropdown-menu';
+import { useTheme } from 'next-themes';
+import { useAdvancedMode } from '@/hooks/useAdvancedMode';
+import { Switch } from '@/components/ui/switch';
 
 interface LayoutProps {
   children: ReactNode;
@@ -63,6 +67,9 @@ export default function Layout({ children }: LayoutProps) {
               <ExpiringMedicinesAlert />
               {children}
             </main>
+            
+            {/* AI Smart Assistant */}
+            {profile?.role !== 'developer' && <SmartAssistant />}
           </div>
         </div>
         
@@ -76,6 +83,37 @@ export default function Layout({ children }: LayoutProps) {
         />
       </SidebarProvider>
     </BranchProvider>
+  );
+}
+
+function AdvancedModeToggle() {
+  const { isAdvancedMode, toggleAdvancedMode } = useAdvancedMode();
+  return (
+    <div className="flex items-center space-x-1.5">
+      <Zap className={`h-3.5 w-3.5 transition-colors ${isAdvancedMode ? 'text-warning' : 'text-muted-foreground'}`} />
+      <span className="text-xs font-medium hidden sm:inline text-muted-foreground">Advanced</span>
+      <Switch
+        checked={isAdvancedMode}
+        onCheckedChange={toggleAdvancedMode}
+        className="scale-75"
+      />
+    </div>
+  );
+}
+
+function ThemeToggle() {
+  const { theme, setTheme } = useTheme();
+  return (
+    <Button
+      variant="ghost"
+      size="icon"
+      className="h-8 w-8"
+      onClick={() => setTheme(theme === 'dark' ? 'light' : 'dark')}
+      aria-label="Toggle theme"
+    >
+      <Sun className="h-4 w-4 rotate-0 scale-100 transition-all dark:-rotate-90 dark:scale-0" />
+      <Moon className="absolute h-4 w-4 rotate-90 scale-0 transition-all dark:rotate-0 dark:scale-100" />
+    </Button>
   );
 }
 
@@ -103,7 +141,9 @@ function LayoutHeader({ profile, user, onSignOut }: { profile: any, user: any, o
         )}
       </div>
       
-      <div className="flex items-center space-x-4">
+      <div className="flex items-center space-x-2 sm:space-x-3">
+        <AdvancedModeToggle />
+        <ThemeToggle />
         <DropdownMenu>
           <DropdownMenuTrigger asChild>
             <button className="flex items-center space-x-2 cursor-pointer rounded-full hover:bg-muted p-1 transition-colors">

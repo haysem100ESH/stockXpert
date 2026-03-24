@@ -5,7 +5,8 @@ import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
 import { Badge } from '@/components/ui/badge';
 import { Dialog, DialogContent, DialogDescription, DialogHeader, DialogTitle } from '@/components/ui/dialog';
-import { Plus, Users, Phone, Mail, Edit, Trash2, Search, KeyRound } from 'lucide-react';
+import { Plus, Users, Phone, Mail, Edit, Trash2, Search, KeyRound, MapPin, BarChart3, UserCircle2 } from 'lucide-react';
+import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
 import { supabase } from '@/lib/db';
 import { useToast } from '@/hooks/use-toast';
 import { useAuth } from '@/hooks/useAuth';
@@ -14,6 +15,13 @@ import { ConfirmationDialog } from '@/components/ui/confirmation-dialog';
 import EditStaffDialog from './EditStaffDialog';
 import CreateStaffDialog from './CreateStaffDialog';
 import { usePlanLimits } from '@/hooks/usePlanLimits';
+import SalaryOverview from './SalaryOverview';
+import SalaryHistory from './SalaryHistory';
+import AssignStoreLocation from './attendance/AssignStoreLocation';
+import RecordAttendance from './attendance/RecordAttendance';
+import AttendanceDashboard from './attendance/AttendanceDashboard';
+import PerformanceDashboard from './performance/PerformanceDashboard';
+import FaceRegistration from './face/FaceRegistration';
 
 interface StaffMember {
   id: string;
@@ -40,6 +48,7 @@ export default function StaffManagement() {
   const [selectedStaff, setSelectedStaff] = useState<StaffMember | null>(null);
   const [newPassword, setNewPassword] = useState('');
   const [resettingPassword, setResettingPassword] = useState(false);
+  const [faceRegStaff, setFaceRegStaff] = useState<StaffMember | null>(null);
   const { toast } = useToast();
   const { profile } = useAuth();
   const { selectedBranch } = useBranchContext();
@@ -349,6 +358,91 @@ export default function StaffManagement() {
           <p className="text-muted-foreground">No staff members found.</p>
         </div>
       )}
+
+      {/* Salary, Attendance & Performance Section */}
+      <Tabs defaultValue={profile?.role === 'staff' ? 'record-attendance' : 'salary-overview'} className="space-y-4">
+        <TabsList className="flex-wrap h-auto gap-1">
+          {profile?.role === 'owner' && (
+            <>
+              <TabsTrigger value="salary-overview">Salary Overview</TabsTrigger>
+              <TabsTrigger value="salary-history">Salary History</TabsTrigger>
+              <TabsTrigger value="store-location">
+                <MapPin className="h-4 w-4 mr-1" />
+                Store Location
+              </TabsTrigger>
+            </>
+          )}
+          <TabsTrigger value="record-attendance">Record Attendance</TabsTrigger>
+          <TabsTrigger value="attendance-dashboard">Attendance History</TabsTrigger>
+          {profile?.role === 'owner' && (
+            <>
+              <TabsTrigger value="face-registration">
+                <UserCircle2 className="h-4 w-4 mr-1" />
+                Face Registration
+              </TabsTrigger>
+              <TabsTrigger value="performance">
+                <BarChart3 className="h-4 w-4 mr-1" />
+                Performance
+              </TabsTrigger>
+            </>
+          )}
+        </TabsList>
+        {profile?.role === 'owner' && (
+          <>
+            <TabsContent value="salary-overview">
+              <SalaryOverview />
+            </TabsContent>
+            <TabsContent value="salary-history">
+              <SalaryHistory />
+            </TabsContent>
+            <TabsContent value="store-location">
+              <AssignStoreLocation />
+            </TabsContent>
+          </>
+        )}
+        <TabsContent value="record-attendance">
+          <RecordAttendance />
+        </TabsContent>
+        <TabsContent value="attendance-dashboard">
+          <AttendanceDashboard />
+        </TabsContent>
+        {profile?.role === 'owner' && (
+          <>
+            <TabsContent value="face-registration">
+              <Card>
+                <CardHeader>
+                  <CardTitle>Select Staff for Face Registration</CardTitle>
+                  <CardDescription>Choose a staff member to register or update their face data</CardDescription>
+                </CardHeader>
+                <CardContent className="space-y-4">
+                  <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-3">
+                    {staff.map((member) => (
+                      <Button
+                        key={member.id}
+                        variant={faceRegStaff?.id === member.id ? 'default' : 'outline'}
+                        className="justify-start h-auto py-3"
+                        onClick={() => setFaceRegStaff(member)}
+                      >
+                        <UserCircle2 className="h-4 w-4 mr-2 shrink-0" />
+                        <span className="truncate">{member.full_name}</span>
+                      </Button>
+                    ))}
+                  </div>
+                  {faceRegStaff && (
+                    <FaceRegistration
+                      staffId={faceRegStaff.id}
+                      staffName={faceRegStaff.full_name}
+                    />
+                  )}
+                </CardContent>
+              </Card>
+            </TabsContent>
+            <TabsContent value="performance">
+              <PerformanceDashboard />
+            </TabsContent>
+          </>
+        )}
+      </Tabs>
 
       <EditStaffDialog
         open={showEditDialog}

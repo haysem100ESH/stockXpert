@@ -143,7 +143,7 @@ export default function CreateOwnerDialog({ onOwnerCreated }: CreateOwnerDialogP
 
       toast({
         title: "Success",
-        description: "Pharmacy owner account created successfully"
+        description: "Business owner account created successfully"
       });
 
       setFormData({
@@ -164,7 +164,7 @@ export default function CreateOwnerDialog({ onOwnerCreated }: CreateOwnerDialogP
       console.error('Error creating owner:', error);
       toast({
         title: "Error",
-        description: error.message || "Failed to create pharmacy owner account",
+        description: error.message || "Failed to create business owner account",
         variant: "destructive"
       });
     } finally {
@@ -182,9 +182,9 @@ export default function CreateOwnerDialog({ onOwnerCreated }: CreateOwnerDialogP
       </DialogTrigger>
       <DialogContent className="max-w-md max-h-[90vh] overflow-y-auto">
         <DialogHeader>
-          <DialogTitle>Create Pharmacy Owner Account</DialogTitle>
+          <DialogTitle>Create Business Owner Account</DialogTitle>
           <DialogDescription>
-            Create a new pharmacy owner account with full access credentials
+            Create a new business owner account with full access credentials
           </DialogDescription>
         </DialogHeader>
         
@@ -207,7 +207,7 @@ export default function CreateOwnerDialog({ onOwnerCreated }: CreateOwnerDialogP
               type="email"
               value={formData.email}
               onChange={(e) => handleInputChange('email', e.target.value)}
-              placeholder="owner@pharmacy.com"
+              placeholder="owner@business.com"
               required
             />
           </div>
@@ -240,17 +240,17 @@ export default function CreateOwnerDialog({ onOwnerCreated }: CreateOwnerDialogP
           </div>
 
           <div>
-            <Label htmlFor="pharmacy_name">Pharmacy Name</Label>
+            <Label htmlFor="pharmacy_name">Business Name</Label>
             <Input
               id="pharmacy_name"
               value={formData.pharmacy_name}
               onChange={(e) => handleInputChange('pharmacy_name', e.target.value)}
-              placeholder="ABC Pharmacy"
+              placeholder="ABC Store"
             />
           </div>
 
           <div>
-            <Label htmlFor="pharmacy_address">Pharmacy Address</Label>
+            <Label htmlFor="pharmacy_address">Business Address</Label>
             <Textarea
               id="pharmacy_address"
               value={formData.pharmacy_address}

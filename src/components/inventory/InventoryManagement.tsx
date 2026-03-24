@@ -262,9 +262,71 @@ export default function InventoryManagement() {
     }
   };
 
+  const renderMedicineCard = (medicine: Medicine) => (
+    <Card key={medicine.id} className="relative">
+      <CardHeader>
+        <div className="flex items-start justify-between">
+          <div>
+            <CardTitle className="text-lg">{medicine.name}</CardTitle>
+            {medicine.generic_name && <CardDescription>{medicine.generic_name}</CardDescription>}
+          </div>
+          <div className="flex space-x-1">
+            <Button variant="ghost" size="sm" onClick={() => handleEditMedicine(medicine)} title="Edit"><Edit className="h-4 w-4" /></Button>
+            <Button variant="ghost" size="sm" onClick={() => handleReplicateMedicine(medicine)} title="Replicate"><Plus className="h-4 w-4" /></Button>
+            {profile?.role === 'owner' && (
+              <Button variant="ghost" size="sm" onClick={() => handleDeleteMedicine(medicine.id)} title="Delete"><Trash2 className="h-4 w-4" /></Button>
+            )}
+          </div>
+        </div>
+      </CardHeader>
+      <CardContent>
+        <div className="space-y-2">
+          <div className="flex justify-between text-sm"><span>Category:</span><Badge variant="outline">{getDisplayCategory(medicine)}</Badge></div>
+          {isPharmacy && medicine.batch_number && <div className="flex justify-between text-sm"><span>Batch:</span><span>{medicine.batch_number}</span></div>}
+          {medicine.country_name && <div className="flex justify-between text-sm"><span>Country:</span><span>{medicine.country_name}</span></div>}
+          {medicine.manufacturer && <div className="flex justify-between text-sm"><span>{isPharmacy ? 'Manufacturer' : 'Brand'}:</span><span>{medicine.manufacturer}</span></div>}
+          {medicine.creator && <div className="flex justify-between text-sm"><span>Added by:</span><span className="text-xs">{medicine.creator.full_name || medicine.creator.email}</span></div>}
+          <div className="flex justify-between text-sm"><span>Price:</span><span className="font-medium">ETB {medicine.selling_price}</span></div>
+          <div className="flex justify-between text-sm">
+            <span>Stock:</span>
+            <div className="flex items-center space-x-2">
+              <span className={(isLowStock(medicine) || isOutOfStock(medicine)) ? 'text-warning font-medium' : ''}>{medicine.stock_quantity}</span>
+              {isOutOfStock(medicine) && <Badge variant="destructive" className="text-xs">Out of Stock</Badge>}
+              {isLowStock(medicine) && <Badge variant="destructive" className="text-xs">Low Stock</Badge>}
+            </div>
+          </div>
+          {medicine.units_per_pack && (
+            <div className="flex justify-between text-sm">
+              <span>Open Pack:</span>
+              <span className="font-medium">{medicine.open_pack_units || 0}/{medicine.units_per_pack} {medicine.unit_label || 'units'} remaining</span>
+            </div>
+          )}
+          {medicine.branch_name && !selectedBranch && (
+            <div className="flex justify-between text-sm"><span>Branch:</span><Badge variant="outline">{medicine.branch_name}</Badge></div>
+          )}
+          {isPharmacy && medicine.expiry_date && (
+            <div className="flex justify-between text-sm">
+              <span>Expires:</span>
+              <div className="flex items-center space-x-2">
+                <span className={isExpired(medicine.expiry_date) ? 'text-destructive font-medium' : isExpiringSoon(medicine.expiry_date) ? 'text-warning' : ''}>
+                  {new Date(medicine.expiry_date).toLocaleDateString()}
+                </span>
+                {isExpired(medicine.expiry_date) && <Badge variant="destructive" className="text-xs">Expired</Badge>}
+                {!isExpired(medicine.expiry_date) && isExpiringSoon(medicine.expiry_date) && (
+                  <Badge variant="destructive" className="text-xs">Expiring Soon</Badge>
+                )}
+              </div>
+            </div>
+          )}
+        </div>
+      </CardContent>
+    </Card>
+  );
+
   if (loading) {
     return <div>Loading {isPharmacy ? 'medicines' : 'items'}...</div>;
   }
+
 
   return (
     <div className="space-y-6">
@@ -329,104 +391,31 @@ export default function InventoryManagement() {
           </Popover>
         </div>
 
-      <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
-        {paginatedMedicines.map((medicine) => (
-          <Card key={medicine.id} className="relative">
-            <CardHeader>
-              <div className="flex items-start justify-between">
-                <div>
-                  <CardTitle className="text-lg">{medicine.name}</CardTitle>
-                  {medicine.generic_name && <CardDescription>{medicine.generic_name}</CardDescription>}
-                </div>
-                <div className="flex space-x-1">
-                  <Button variant="ghost" size="sm" onClick={() => handleEditMedicine(medicine)} title="Edit"><Edit className="h-4 w-4" /></Button>
-                  <Button variant="ghost" size="sm" onClick={() => handleReplicateMedicine(medicine)} title="Replicate"><Plus className="h-4 w-4" /></Button>
-                  {profile?.role === 'owner' && (
-                    <Button variant="ghost" size="sm" onClick={() => handleDeleteMedicine(medicine.id)} title="Delete"><Trash2 className="h-4 w-4" /></Button>
-                  )}
-                </div>
+      {!selectedBranch && paginatedMedicines.some(m => m.branch_name) ? (
+        (() => {
+          const grouped: Record<string, Medicine[]> = {};
+          paginatedMedicines.forEach(m => {
+            const key = m.branch_name || 'Unknown Branch';
+            if (!grouped[key]) grouped[key] = [];
+            grouped[key].push(m);
+          });
+          return Object.entries(grouped).sort(([a], [b]) => a.localeCompare(b)).map(([branchName, items]) => (
+            <div key={branchName} className="space-y-3">
+              <div className="flex items-center gap-2">
+                <h3 className="text-lg font-semibold text-foreground">{branchName}</h3>
+                <Badge variant="secondary" className="text-xs">{items.length} {items.length === 1 ? 'item' : 'items'}</Badge>
               </div>
-            </CardHeader>
-            <CardContent>
-              <div className="space-y-2">
-                <div className="flex justify-between text-sm">
-                  <span>Category:</span>
-                  <Badge variant="outline">{getDisplayCategory(medicine)}</Badge>
-                </div>
-                {isPharmacy && medicine.batch_number && (
-                  <div className="flex justify-between text-sm">
-                    <span>Batch:</span>
-                    <span>{medicine.batch_number}</span>
-                  </div>
-                )}
-                {medicine.country_name && (
-                  <div className="flex justify-between text-sm">
-                    <span>Country:</span>
-                    <span>{medicine.country_name}</span>
-                  </div>
-                )}
-                {medicine.manufacturer && (
-                  <div className="flex justify-between text-sm">
-                    <span>{isPharmacy ? 'Manufacturer' : 'Brand'}:</span>
-                    <span>{medicine.manufacturer}</span>
-                  </div>
-                )}
-                {medicine.creator && (
-                  <div className="flex justify-between text-sm">
-                    <span>Added by:</span>
-                    <span className="text-xs">{medicine.creator.full_name || medicine.creator.email}</span>
-                  </div>
-                )}
-                <div className="flex justify-between text-sm">
-                  <span>Price:</span>
-                  <span className="font-medium">ETB {medicine.selling_price}</span>
-                </div>
-                  <div className="flex justify-between text-sm">
-                   <span>Stock:</span>
-                   <div className="flex items-center space-x-2">
-                     <span className={(isLowStock(medicine) || isOutOfStock(medicine)) ? 'text-warning font-medium' : ''}>
-                       {medicine.stock_quantity}
-                     </span>
-                     {isOutOfStock(medicine) && <Badge variant="destructive" className="text-xs">Out of Stock</Badge>}
-                     {isLowStock(medicine) && <Badge variant="destructive" className="text-xs">Low Stock</Badge>}
-                   </div>
-                 </div>
-                {medicine.units_per_pack && (
-                  <div className="flex justify-between text-sm">
-                    <span>Open Pack:</span>
-                    <span className="font-medium">
-                      {medicine.open_pack_units || 0}/{medicine.units_per_pack} {medicine.unit_label || 'units'} remaining
-                    </span>
-                  </div>
-                )}
-                {medicine.branch_name && (
-                  <div className="flex justify-between text-sm">
-                    <span>Branch:</span>
-                    <Badge variant="outline">{medicine.branch_name}</Badge>
-                  </div>
-                )}
-                {isPharmacy && medicine.expiry_date && (
-                  <div className="flex justify-between text-sm">
-                    <span>Expires:</span>
-                    <div className="flex items-center space-x-2">
-                      <span className={
-                        isExpired(medicine.expiry_date) ? 'text-destructive font-medium' 
-                          : isExpiringSoon(medicine.expiry_date) ? 'text-warning' : ''
-                      }>
-                        {new Date(medicine.expiry_date).toLocaleDateString()}
-                      </span>
-                      {isExpired(medicine.expiry_date) && <Badge variant="destructive" className="text-xs">Expired</Badge>}
-                      {!isExpired(medicine.expiry_date) && isExpiringSoon(medicine.expiry_date) && (
-                        <Badge variant="destructive" className="text-xs">Expiring Soon</Badge>
-                      )}
-                    </div>
-                  </div>
-                )}
+              <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
+                {items.map((medicine) => renderMedicineCard(medicine))}
               </div>
-            </CardContent>
-          </Card>
-        ))}
-      </div>
+            </div>
+          ));
+        })()
+      ) : (
+        <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
+          {paginatedMedicines.map((medicine) => renderMedicineCard(medicine))}
+        </div>
+      )}
 
       {filteredMedicines.length === 0 && (
         <div className="text-center py-8">

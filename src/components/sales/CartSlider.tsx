@@ -1,4 +1,4 @@
-import { useRef, useState } from 'react';
+import { useRef, useState, useEffect } from 'react';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
@@ -11,10 +11,73 @@ import { cn } from '@/lib/utils';
 import CreditScoreBadge from '@/components/customers/CreditScoreBadge';
 import DebtProgressBar from '@/components/customers/DebtProgressBar';
 
+// Free-form measurable quantity input with validation
+function MeasurableQtyInput({ value, max, unit, onChange }: { value: number; max: number; unit: string; onChange: (qty: number) => void }) {
+  const [inputVal, setInputVal] = useState(String(value));
+  const [error, setError] = useState('');
+
+  useEffect(() => {
+    setInputVal(String(value));
+  }, [value]);
+
+  const validate = (raw: string) => {
+    const num = parseFloat(raw);
+    if (raw.trim() === '' || isNaN(num)) return 'Enter a valid number';
+    if (num <= 0) return 'Must be greater than 0';
+    if (num > max) return `Exceeds stock (${max} ${unit})`;
+    return '';
+  };
+
+  const handleChange = (e: React.ChangeEvent<HTMLInputElement>) => {
+    const raw = e.target.value;
+    setInputVal(raw);
+    const err = validate(raw);
+    setError(err);
+    if (!err) {
+      onChange(parseFloat(parseFloat(raw).toFixed(2)));
+    }
+  };
+
+  const handleBlur = () => {
+    const num = parseFloat(inputVal);
+    if (isNaN(num) || num <= 0) {
+      setInputVal(String(value));
+      setError('');
+    } else if (num > max) {
+      const clamped = max;
+      setInputVal(String(clamped));
+      setError('');
+      onChange(clamped);
+    }
+  };
+
+  return (
+    <div className="flex flex-col gap-0.5">
+      <div className="flex items-center gap-1">
+        <input
+          type="number"
+          step="any"
+          value={inputVal}
+          onChange={handleChange}
+          onBlur={handleBlur}
+          className={cn(
+            "w-20 text-sm font-medium text-center border rounded-md h-7 bg-background px-1 focus:outline-none focus:ring-1 focus:ring-ring",
+            error && "border-destructive focus:ring-destructive"
+          )}
+        />
+        <span className="text-xs text-muted-foreground">{unit}</span>
+      </div>
+      {error && <span className="text-[10px] text-destructive leading-tight">{error}</span>}
+    </div>
+  );
+}
+
 interface CartItem {
   id: string;
+  medicine_id?: string;
   name: string;
   selling_price: number;
+  purchase_price?: number;
   stock_quantity: number;
   units_per_pack?: number;
   open_pack_units?: number;
@@ -119,7 +182,7 @@ export default function CartSlider({
           // Mobile: fixed right-side drawer
           'fixed top-0 right-0 h-full z-50 w-[90vw] max-w-sm bg-background shadow-2xl flex flex-col',
           'transition-transform duration-300 ease-in-out',
-          'lg:relative lg:top-auto lg:right-auto lg:h-auto lg:z-auto lg:w-auto lg:max-w-none lg:shadow-none',
+          'lg:sticky lg:top-0 lg:h-screen lg:z-auto lg:w-auto lg:max-w-none lg:shadow-none',
           'lg:translate-x-0', // always visible on desktop
           open ? 'translate-x-0' : 'translate-x-full lg:translate-x-0'
         )}
@@ -193,42 +256,14 @@ export default function CartSlider({
                         <div className="flex items-center gap-2">
                           {item.item_type === 'measurable' ? (() => {
                             const currentQty = item.saleType === 'by_stripe' ? (item.stripesCount ?? 1) : item.quantity;
-                            const wholePart = Math.floor(currentQty);
-                            const decPart = Math.round((currentQty - wholePart) * 100);
                             const measurableUnit = item.unit_label || 'unit';
                             return (
-                              <div className="flex items-center gap-1">
-                                <input
-                                  type="number"
-                                  min="0"
-                                  value={wholePart}
-                                  onChange={(e) => {
-                                    const w = parseInt(e.target.value) || 0;
-                                    const newQty = parseFloat((w + decPart / 100).toFixed(2));
-                                    if (newQty > 0 && onSetMeasurableQuantity) {
-                                      onSetMeasurableQuantity(item.id, newQty);
-                                    }
-                                  }}
-                                  className="w-14 text-sm font-medium text-center border rounded-md h-7 bg-background px-1 focus:outline-none focus:ring-1 focus:ring-ring"
-                                />
-                                <span className="text-sm font-bold">.</span>
-                                <input
-                                  type="text"
-                                  inputMode="numeric"
-                                  maxLength={2}
-                                  value={decPart.toString().padStart(2, '0')}
-                                  onChange={(e) => {
-                                    const val = e.target.value.replace(/[^0-9]/g, '').slice(0, 2);
-                                    const d = parseInt(val || '0');
-                                    const newQty = parseFloat((wholePart + d / 100).toFixed(2));
-                                    if (newQty > 0 && onSetMeasurableQuantity) {
-                                      onSetMeasurableQuantity(item.id, newQty);
-                                    }
-                                  }}
-                                  className="w-10 text-sm font-medium text-center border rounded-md h-7 bg-background px-1 focus:outline-none focus:ring-1 focus:ring-ring"
-                                />
-                                <span className="text-xs text-muted-foreground">{measurableUnit}</span>
-                              </div>
+                              <MeasurableQtyInput
+                                value={currentQty}
+                                max={item.stock_quantity}
+                                unit={measurableUnit}
+                                onChange={(qty) => onSetMeasurableQuantity?.(item.id, qty)}
+                              />
                             );
                           })() : (
                             <>
@@ -244,12 +279,12 @@ export default function CartSlider({
                                 <input
                                   type="number"
                                   step="1"
-                                  min="1"
-                                  value={Math.max(1, Math.round(item.stripesCount ?? 1))}
+                                  min="0"
+                                  value={Math.max(0, Math.round(item.stripesCount ?? 1))}
                                   onChange={(e) => {
                                     const val = parseInt(e.target.value, 10);
-                                    if (!isNaN(val) && val > 0) {
-                                      const current = Math.max(1, Math.round(item.stripesCount ?? 1));
+                                    if (!isNaN(val) && val >= 0) {
+                                      const current = Math.max(0, Math.round(item.stripesCount ?? 1));
                                       const delta = val - current;
                                       if (delta !== 0) onUpdateQuantity(item.id, item.saleType, delta);
                                     }
@@ -286,7 +321,7 @@ export default function CartSlider({
                       </p>
 
                       {/* Leftover strip info for by_stripe sales */}
-                      {item.saleType === 'by_stripe' && item.units_per_pack && item.stripesCount && (() => {
+                      {item.saleType === 'by_stripe' && item.units_per_pack && (item.stripesCount !== undefined) && (() => {
                         // open_pack_units is already in real decimal units (normalized in fetchMedicines)
                         const openPack = item.open_pack_units || 0;
                         const uPP = item.units_per_pack;

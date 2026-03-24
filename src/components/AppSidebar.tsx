@@ -10,7 +10,12 @@ import {
   Settings,
   Building2,
   Shield,
-  UserCheck
+  UserCheck,
+  MapPin,
+  ArrowRightLeft,
+  ClipboardList,
+  Globe,
+  Brain
 } from "lucide-react";
 
 import {
@@ -28,6 +33,7 @@ import {
 import { useAuth } from "@/hooks/useAuth";
 import { useBranchContext } from "@/hooks/useBranchContext";
 import { useBranding } from "@/hooks/useBranding";
+import { useAdvancedMode } from "@/hooks/useAdvancedMode";
 import { Badge } from "@/components/ui/badge";
 
 export function AppSidebar() {
@@ -37,6 +43,7 @@ export function AppSidebar() {
   const { profile } = useAuth();
   const { branchType } = useBranchContext();
   const branding = useBranding();
+  const { isAdvancedMode } = useAdvancedMode();
   const currentPath = location.pathname;
 
   const isPharmacy = branchType === 'pharmacy';
@@ -44,12 +51,16 @@ export function AppSidebar() {
   const ownerNavItems = [
     { title: "Overview", url: "/", icon: LayoutDashboard },
     { title: isPharmacy ? "Inventory" : "Stock", url: "/inventory", icon: Package },
+    { title: "Global Inventory", url: "/stock-movements", icon: Globe },
+    { title: "Smart Inventory", url: "/smart-inventory", icon: Brain },
     { title: "Sales", url: "/sales", icon: ShoppingCart },
     { title: "Finance", url: "/finance", icon: DollarSign },
     { title: "Customers", url: "/customers", icon: UserCheck },
     { title: "Suppliers", url: "/suppliers", icon: Truck },
     { title: "Staff", url: "/staff", icon: Users },
     { title: "Branches", url: "/branches", icon: Building2 },
+    
+    { title: "Transfer Requests", url: "/transfer-requests", icon: ClipboardList },
     { title: "Account", url: "/account", icon: Settings },
   ];
 
@@ -57,7 +68,11 @@ export function AppSidebar() {
     { title: "Overview", url: "/", icon: LayoutDashboard },
     { title: "Sales", url: "/sales", icon: ShoppingCart },
     { title: isPharmacy ? "Inventory" : "Stock", url: "/inventory", icon: Package },
+    { title: "Smart Inventory", url: "/smart-inventory", icon: Brain },
     { title: "Customers", url: "/customers", icon: UserCheck },
+    { title: "Suppliers", url: "/suppliers", icon: Truck },
+    { title: "Attendance", url: "/staff", icon: MapPin },
+    { title: "Transfer Requests", url: "/transfer-requests", icon: ClipboardList },
     { title: "Account", url: "/account", icon: Settings },
   ];
 
@@ -72,7 +87,15 @@ export function AppSidebar() {
     return staffNavItems;
   };
 
-  const navItems = getNavItems();
+  // Pages hidden in simple mode
+  const hiddenInSimpleMode = ['/smart-inventory', '/staff', '/transfer-requests', '/stock-movements'];
+  
+  const navItems = getNavItems().filter(item => {
+    if (isAdvancedMode) return true;
+    // For staff, '/staff' is Attendance - hide it in simple mode
+    // For owner, '/stock-movements' is Global Inventory - hide it in simple mode
+    return !hiddenInSimpleMode.includes(item.url);
+  });
   const isCollapsed = state === "collapsed";
 
   const isActive = (path: string) => {

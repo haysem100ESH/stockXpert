@@ -9,11 +9,12 @@ import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
 import { useToast } from '@/hooks/use-toast';
-import { Users, Building, CreditCard, AlertTriangle, Edit, UserX, UserCheck, DollarSign, Calendar, TrendingUp, Send } from 'lucide-react';
+import { Users, Building, CreditCard, AlertTriangle, Edit, UserX, UserCheck, DollarSign, Calendar, TrendingUp, Send, Key } from 'lucide-react';
 import CreateOwnerDialog from './CreateOwnerDialog';
 import EditOwnerDialog from './EditOwnerDialog';
 import CreditSetupSection from './CreditSetupSection';
 import SubscriptionPlanStats from './SubscriptionPlanStats';
+import CatalogManagement from './CatalogManagement';
 
 interface PharmacyOwner {
   id: string;
@@ -25,6 +26,7 @@ interface PharmacyOwner {
   pharmacy_address?: string;
   active: boolean;
   manually_deactivated?: boolean;
+  has_gemini_api_key: boolean;
   subscription: {
     subscription_credit: number;
     status: string;
@@ -125,7 +127,7 @@ export default function DeveloperDashboard() {
     try {
       setLoading(true);
       
-      // Get all pharmacy owners with their email using RPC call
+      // Get all business owners with their email using RPC call
       const { data: profilesWithEmail, error: profilesError } = await supabase
         .rpc('get_owners_with_email') as { data: any[] | null, error: any };
 
@@ -135,7 +137,7 @@ export default function DeveloperDashboard() {
       }
 
       if (!profilesWithEmail || profilesWithEmail.length === 0) {
-        console.log('No pharmacy owners found');
+        console.log('No business owners found');
         setOwners([]);
         return;
       }
@@ -158,11 +160,24 @@ export default function DeveloperDashboard() {
             .eq('pharmacy_owner_id', profile.id)
             .maybeSingle();
 
-          // Get branch count
-          const { count: branchCount } = await supabase
+          // Get branch count and first branch name as business name
+          const { data: branches, count: branchCount } = await supabase
             .from('pharmacy_branches')
-            .select('id', { count: 'exact' })
-            .eq('pharmacy_owner_id', profile.id);
+            .select('id, name', { count: 'exact' })
+            .eq('pharmacy_owner_id', profile.id)
+            .order('created_at')
+            .limit(5);
+
+          // Use the first branch name as business name, or join multiple
+          const branchNames = (branches || []).map((b: any) => b.name);
+          const pharmacyName = profile.pharmacy_name || (branchNames.length > 0 ? branchNames.join(', ') : 'N/A');
+
+          // Get gemini_api_key status
+          const { data: profileExtra } = await supabase
+            .from('profiles')
+            .select('gemini_api_key')
+            .eq('id', profile.id)
+            .single();
 
           return {
             id: profile.id,
@@ -170,10 +185,11 @@ export default function DeveloperDashboard() {
             email: profile.email,
             phone: profile.phone,
             telegram_chat_id: profile.telegram_chat_id,
-            pharmacy_name: profile.pharmacy_name || 'N/A',
+            pharmacy_name: pharmacyName,
             pharmacy_address: profile.pharmacy_address || 'N/A',
             active: profile.active,
             manually_deactivated: profile.manually_deactivated,
+            has_gemini_api_key: !!profileExtra?.gemini_api_key,
             subscription: subscription ? {
               subscription_credit: subscription.subscription_credit,
               status: subscription.status,
@@ -192,13 +208,13 @@ export default function DeveloperDashboard() {
         })
       );
 
-      console.log('Fetched pharmacy owners:', ownersWithData);
+      console.log('Fetched business owners:', ownersWithData);
       setOwners(ownersWithData);
     } catch (error: any) {
       console.error('Error fetching pharmacy owners:', error);
       toast({
         title: "Error",
-        description: "Failed to fetch pharmacy owners",
+        description: "Failed to fetch business owners",
         variant: "destructive"
       });
     } finally {
@@ -555,31 +571,31 @@ export default function DeveloperDashboard() {
   const getStatusBadge = (status: string | null) => {
     switch (status) {
       case 'active':
-        return <Badge className="bg-green-100 text-green-800">Active</Badge>;
+        return <Badge className="bg-green-500/15 text-green-500 border-green-500/30">Active</Badge>;
       case 'expiring_soon':
-        return <Badge className="bg-yellow-100 text-yellow-800">Expiring Soon</Badge>;
+        return <Badge className="bg-yellow-500/15 text-yellow-500 border-yellow-500/30">Expiring Soon</Badge>;
       case 'expired':
-        return <Badge className="bg-red-100 text-red-800">Expired</Badge>;
+        return <Badge className="bg-red-500/15 text-red-500 border-red-500/30">Expired</Badge>;
       case 'inactive':
-        return <Badge className="bg-gray-100 text-gray-800">Inactive</Badge>;
+        return <Badge className="bg-muted text-muted-foreground">Inactive</Badge>;
       default:
-        return <Badge className="bg-gray-100 text-gray-800">No Subscription</Badge>;
+        return <Badge className="bg-muted text-muted-foreground">No Subscription</Badge>;
     }
   };
 
   const getAccountStatusBadge = (active: boolean, manuallyDeactivated?: boolean, subscriptionStatus?: string) => {
     if (!active) {
       if (subscriptionStatus === 'inactive') {
-        return <Badge className="bg-gray-100 text-gray-800">Inactive</Badge>;
+        return <Badge className="bg-muted text-muted-foreground">Inactive</Badge>;
       } else if (manuallyDeactivated) {
-        return <Badge className="bg-red-100 text-red-800">Deactivated</Badge>;
+        return <Badge className="bg-red-500/15 text-red-500 border-red-500/30">Deactivated</Badge>;
       } else if (subscriptionStatus === 'expired') {
-        return <Badge className="bg-orange-100 text-orange-800">Expired</Badge>;
+        return <Badge className="bg-orange-500/15 text-orange-500 border-orange-500/30">Expired</Badge>;
       } else {
-        return <Badge className="bg-red-100 text-red-800">Deactivated</Badge>;
+        return <Badge className="bg-red-500/15 text-red-500 border-red-500/30">Deactivated</Badge>;
       }
     }
-    return <Badge className="bg-green-100 text-green-800">Active</Badge>;
+    return <Badge className="bg-green-500/15 text-green-500 border-green-500/30">Active</Badge>;
   };
 
   if (loading) {
@@ -591,7 +607,7 @@ export default function DeveloperDashboard() {
       <div className="flex items-center justify-between">
         <div>
           <h1 className="text-3xl font-bold">Developer Dashboard</h1>
-          <p className="text-muted-foreground">Manage pharmacy owners and subscriptions</p>
+          <p className="text-muted-foreground">Manage business owners and subscriptions</p>
         </div>
         <div className="flex gap-2">
           <Dialog open={showReportDialog} onOpenChange={setShowReportDialog}>
@@ -655,7 +671,7 @@ export default function DeveloperDashboard() {
                       <TableRow>
                         <TableHead className="w-12">Select</TableHead>
                         <TableHead>Owner</TableHead>
-                        <TableHead>Pharmacy</TableHead>
+                        <TableHead>Business</TableHead>
                         <TableHead>Telegram Status</TableHead>
                       </TableRow>
                     </TableHeader>
@@ -679,17 +695,17 @@ export default function DeveloperDashboard() {
                           <TableCell>{owner.pharmacy_name || 'N/A'}</TableCell>
                           <TableCell>
                             {owner.telegram_chat_id ? (
-                              <Badge variant="outline" className="bg-green-50">
+                              <Badge variant="outline" className="bg-green-500/10 text-green-500 border-green-500/30">
                                 <UserCheck className="mr-1 h-3 w-3" />
                                 Linked
                               </Badge>
                             ) : owner.phone ? (
-                              <Badge variant="outline" className="bg-yellow-50">
+                              <Badge variant="outline" className="bg-yellow-500/10 text-yellow-500 border-yellow-500/30">
                                 <AlertTriangle className="mr-1 h-3 w-3" />
                                 Phone Added
                               </Badge>
                             ) : (
-                              <Badge variant="outline" className="bg-gray-50">
+                              <Badge variant="outline" className="bg-muted text-muted-foreground">
                                 <UserX className="mr-1 h-3 w-3" />
                                 Not Setup
                               </Badge>
@@ -727,6 +743,17 @@ export default function DeveloperDashboard() {
 
       {/* Universal Credit Setup Section */}
       <CreditSetupSection />
+
+      {/* Item Catalog Management */}
+      <Card>
+        <CardHeader>
+          <CardTitle>Item Catalog & Group Management</CardTitle>
+          <CardDescription>Manage the master item catalog, item groups, and owner assignments</CardDescription>
+        </CardHeader>
+        <CardContent>
+          <CatalogManagement />
+        </CardContent>
+      </Card>
 
       {/* Subscription Plan Statistics */}
       <SubscriptionPlanStats />
@@ -804,10 +831,10 @@ export default function DeveloperDashboard() {
         </Card>
       </div>
 
-      {/* Pharmacy Owners Table */}
+      {/* Business Owners Table */}
       <Card>
         <CardHeader>
-          <CardTitle>Pharmacy Owners</CardTitle>
+          <CardTitle>Business Owners</CardTitle>
           <CardDescription>Manage owner accounts, subscriptions, and activation status</CardDescription>
         </CardHeader>
         <CardContent>
@@ -823,10 +850,10 @@ export default function DeveloperDashboard() {
               />
             </div>
             <div>
-              <Label htmlFor="search-pharmacy">Search by Pharmacy Name</Label>
+              <Label htmlFor="search-pharmacy">Search by Business Name</Label>
               <Input
                 id="search-pharmacy"
-                placeholder="Search pharmacy name..."
+                placeholder="Search business name..."
                 value={searchPharmacyName}
                 onChange={(e) => setSearchPharmacyName(e.target.value)}
               />
@@ -837,7 +864,8 @@ export default function DeveloperDashboard() {
             <TableHeader>
               <TableRow>
                 <TableHead>Owner Name</TableHead>
-                <TableHead>Pharmacy Name</TableHead>
+                <TableHead>Business Name</TableHead>
+                <TableHead>AI Key</TableHead>
                 <TableHead>Account Status</TableHead>
                 <TableHead>Subscription</TableHead>
                 <TableHead>Subscription Plan</TableHead>
@@ -869,6 +897,11 @@ export default function DeveloperDashboard() {
                   </TableCell>
                   <TableCell>
                     <div className="font-medium">{owner.pharmacy_name || 'N/A'}</div>
+                  </TableCell>
+                  <TableCell>
+                    <div className="flex items-center justify-center" title={owner.has_gemini_api_key ? 'API key configured' : 'No API key'}>
+                      <Key className={`h-4 w-4 ${owner.has_gemini_api_key ? 'text-green-500' : 'text-red-400'}`} />
+                    </div>
                   </TableCell>
                   <TableCell>
                     <Select 
@@ -968,7 +1001,7 @@ export default function DeveloperDashboard() {
                   onClick={() => triggerQuickReport('daily')} 
                   variant="outline"
                   disabled={sendingReport}
-                  className="bg-blue-50 hover:bg-blue-100"
+                  className="bg-blue-500/10 hover:bg-blue-500/20 text-blue-500 border-blue-500/30"
                 >
                   <Send className="h-4 w-4 mr-2" />
                   Test Daily Report
@@ -977,7 +1010,7 @@ export default function DeveloperDashboard() {
                   onClick={() => triggerQuickReport('weekly')} 
                   variant="outline"
                   disabled={sendingReport}
-                  className="bg-green-50 hover:bg-green-100"
+                  className="bg-green-500/10 hover:bg-green-500/20 text-green-500 border-green-500/30"
                 >
                   <Send className="h-4 w-4 mr-2" />
                   Test Weekly Report
@@ -986,7 +1019,7 @@ export default function DeveloperDashboard() {
                   onClick={() => triggerQuickReport('monthly')} 
                   variant="outline"
                   disabled={sendingReport}
-                  className="bg-purple-50 hover:bg-purple-100"
+                  className="bg-purple-500/10 hover:bg-purple-500/20 text-purple-500 border-purple-500/30"
                 >
                   <Send className="h-4 w-4 mr-2" />
                   Test Monthly Report
@@ -1008,10 +1041,10 @@ export default function DeveloperDashboard() {
             {/* Filters */}
             <div className="grid grid-cols-1 md:grid-cols-3 gap-4 mb-4">
               <div>
-                <Label htmlFor="filter-pharmacy">Filter by Pharmacy Name</Label>
-                <Input
-                  id="filter-pharmacy"
-                  placeholder="Search pharmacy..."
+              <Label htmlFor="filter-pharmacy">Filter by Business Name</Label>
+              <Input
+                id="filter-pharmacy"
+                placeholder="Search business..."
                   value={filterPharmacyName}
                   onChange={(e) => setFilterPharmacyName(e.target.value)}
                 />
@@ -1041,7 +1074,7 @@ export default function DeveloperDashboard() {
               <TableHeader>
                 <TableRow>
                   <TableHead>Date & Time</TableHead>
-                  <TableHead>Pharmacy Name</TableHead>
+                  <TableHead>Business Name</TableHead>
                   <TableHead>Address</TableHead>
                   <TableHead>Owner</TableHead>
                   <TableHead>Amount Collected</TableHead>
@@ -1105,7 +1138,7 @@ export default function DeveloperDashboard() {
           <DialogHeader>
             <DialogTitle>Add Credit to {selectedOwnerForCredit?.full_name}</DialogTitle>
             <DialogDescription>
-              Select a credit plan to add to this pharmacy owner's account
+              Select a credit plan to add to this owner's account
             </DialogDescription>
           </DialogHeader>
           

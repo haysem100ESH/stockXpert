@@ -14,21 +14,25 @@ import { ConfirmationDialog } from '@/components/ui/confirmation-dialog';
 import CartSlider from './CartSlider';
 import AddToCartDialog from './AddToCartDialog';
 import { useIsMobile } from '@/hooks/use-mobile';
-import { updateCreditScore } from '@/hooks/useCreditScore';
+import { updateCreditScore, getCreditLimit } from '@/hooks/useCreditScore';
 import { isMeasurable } from '@/lib/itemTypes';
 
 interface Medicine {
-  id: string;
+  id: string; // branch_items.id
+  medicine_id: string; // medicines.id (for reference)
   name: string;
   generic_name?: string;
   selling_price: number;
-  stock_quantity: number;
+  purchase_price: number;
+  stock_quantity: number; // branch_items.quantity
   category?: string;
   expiry_date?: string;
   units_per_pack?: number;
   open_pack_units?: number;
   unit_label?: string;
   item_type?: string;
+  branch_id?: string;
+  branch_name?: string;
 }
 
 interface CartItem extends Medicine {
@@ -111,42 +115,82 @@ export default function SalesManagement() {
 
   const fetchMedicines = async () => {
     try {
-      // When "All Branches" is selected, fetch only branches belonging to
-      // the current owner and filter medicines by those branch IDs.
+      // Get branch IDs for this user
       let branchIds: string[] = [];
-      if (!selectedBranch && profile?.role === 'owner' && profile?.id) {
+      if (selectedBranch) {
+        branchIds = [selectedBranch];
+      } else if (!selectedBranch && profile?.role === 'owner' && profile?.id) {
         const { data: ownerBranches } = await (supabase as any)
           .from('pharmacy_branches')
           .select('id')
           .eq('pharmacy_owner_id', profile.id);
         branchIds = (ownerBranches || []).map((b: any) => b.id);
+      } else if (profile?.branch_id) {
+        branchIds = [profile.branch_id];
       }
 
-      // If owner has no branches yet, show empty data
-      if (!selectedBranch && branchIds.length === 0 && profile?.role === 'owner') {
+      if (branchIds.length === 0) {
         setMedicines([]);
         setLoading(false);
         return;
       }
 
-      let query = (supabase as any)
-        .from('medicines')
-        .select('id, name, generic_name, selling_price, stock_quantity, category, expiry_date, units_per_pack, open_pack_units, unit_label, item_type')
-        .or('stock_quantity.gt.0,open_pack_units.gt.0')
-        .order('name');
-      if (selectedBranch) {
-        query = query.eq('branch_id', selectedBranch);
-      } else if (branchIds.length > 0) {
-        query = query.in('branch_id', branchIds);
-      }
-      const { data, error } = await query;
+      // Fetch from branch_items with quantity > 0
+      const { data: items, error } = await (supabase as any)
+        .from('branch_items')
+        .select('id, medicine_id, branch_id, selling_price, purchase_price, quantity, expiry_date')
+        .in('branch_id', branchIds)
+        .gt('quantity', 0)
+        .order('created_at', { ascending: false });
+
       if (error) throw error;
-      // open_pack_units is stored as INTEGER thousandths in DB (e.g. 2500 = 2.5 strips).
-      // Convert to real decimal units for all UI/cart arithmetic.
-      const normalized = (data || []).map((m: any) => ({
-        ...m,
-        open_pack_units: m.units_per_pack ? (m.open_pack_units || 0) / 1000 : (m.open_pack_units || 0),
-      }));
+      if (!items || items.length === 0) {
+        setMedicines([]);
+        setLoading(false);
+        return;
+      }
+
+      // Fetch medicine details
+      const medicineIds = [...new Set(items.map((i: any) => i.medicine_id))];
+      const { data: meds } = await (supabase as any)
+        .from('medicines')
+        .select('id, name, generic_name, category, item_type, unit_label, units_per_pack')
+        .in('id', medicineIds);
+
+      const medMap: Record<string, any> = {};
+      (meds || []).forEach((m: any) => { medMap[m.id] = m; });
+
+      // Fetch branch names in bulk
+      const allBranchIds = [...new Set(items.map((i: any) => i.branch_id).filter(Boolean))];
+      const branchMap: Record<string, string> = {};
+      if (allBranchIds.length > 0) {
+        const { data: branches } = await (supabase as any)
+          .from('pharmacy_branches')
+          .select('id, name')
+          .in('id', allBranchIds);
+        (branches || []).forEach((b: any) => { branchMap[b.id] = b.name; });
+      }
+
+      const normalized = items.map((item: any) => {
+        const med = medMap[item.medicine_id] || {};
+        return {
+          id: item.id, // branch_items.id
+          medicine_id: item.medicine_id,
+          name: med.name || 'Unknown',
+          generic_name: med.generic_name,
+          selling_price: item.selling_price,
+          purchase_price: item.purchase_price,
+          stock_quantity: item.quantity,
+          category: med.category,
+          expiry_date: item.expiry_date,
+          units_per_pack: med.units_per_pack,
+          open_pack_units: 0, // branch_items doesn't track open packs yet
+          unit_label: med.unit_label,
+          item_type: med.item_type,
+          branch_id: item.branch_id,
+          branch_name: branchMap[item.branch_id],
+        };
+      });
       setMedicines(normalized);
     } catch {
       toast({ title: 'Error', description: `Failed to fetch ${isPharmacy ? 'medicines' : 'items'}`, variant: 'destructive' });
@@ -190,26 +234,33 @@ export default function SalesManagement() {
         setCustomers([]);
         return;
       }
-      const rawCustomers: {id: string; name: string; phone?: string | null; credit_score?: number; max_credit_limit?: number}[] = data || [];
+      const rawCustomers: {id: string; name: string; phone?: string | null; credit_score?: number}[] = data || [];
       if (rawCustomers.length === 0) { setCustomers([]); return; }
 
       // Fetch debt from customer_credits table for fast lookup
       const customerIds = rawCustomers.map(c => c.id);
-      const { data: creditsData } = await (supabase as any)
-        .from('customer_credits')
-        .select('customer_id, total_debt')
-        .in('customer_id', customerIds);
+      const [creditsRes, creditLogsRes] = await Promise.all([
+        (supabase as any).from('customer_credits').select('customer_id, total_debt').in('customer_id', customerIds),
+        (supabase as any).from('credit_logs').select('customer_id, new_score, created_at').in('customer_id', customerIds).order('created_at', { ascending: false }),
+      ]);
 
       const debtMap: Record<string, number> = {};
-      for (const credit of creditsData || []) {
+      for (const credit of creditsRes.data || []) {
         debtMap[credit.customer_id] = Math.max(0, Number(credit.total_debt) || 0);
+      }
+
+      const latestScoreMap: Record<string, number> = {};
+      for (const log of creditLogsRes.data || []) {
+        if (!latestScoreMap[log.customer_id]) {
+          latestScoreMap[log.customer_id] = log.new_score;
+        }
       }
 
       setCustomers(rawCustomers.map(c => ({
         ...c,
         computed_debt: Math.max(0, debtMap[c.id] || 0),
-        credit_score: c.credit_score ?? 50,
-        max_credit_limit: c.max_credit_limit ?? 5000,
+        credit_score: latestScoreMap[c.id] ?? c.credit_score ?? 50,
+        max_credit_limit: getCreditLimit(latestScoreMap[c.id] ?? c.credit_score ?? 50),
       })));
     } catch (err) {
       console.error('Error fetching customers:', err);
@@ -321,7 +372,7 @@ export default function SalesManagement() {
         // For countable strip items, quantity must always be whole numbers.
         // Measurable items can still use fractional strip quantities.
         const isMeasurableItem = item.item_type === 'measurable' || isMeasurable(item.unit_label);
-        const currentCount = item.stripesCount || 1;
+        const currentCount = item.stripesCount ?? 1;
 
         let newCount: number;
         if (isMeasurableItem) {
@@ -329,7 +380,7 @@ export default function SalesManagement() {
           newCount = parseFloat((Math.max(0.25, currentCount + step)).toFixed(4));
         } else {
           const integerDelta = Number.isInteger(delta) ? delta : Math.round(delta);
-          newCount = Math.max(1, Math.round(currentCount + integerDelta));
+          newCount = Math.max(0, Math.round(currentCount + integerDelta));
         }
 
         if (newCount > totalAvailableStripes) return item;
@@ -421,6 +472,15 @@ export default function SalesManagement() {
     }
     if (cart.length === 0) {
       toast({ title: 'Error', description: 'Cart is empty', variant: 'destructive' });
+      return;
+    }
+    // Prevent selling items with 0 quantity
+    const zeroItem = cart.find(item => 
+      (item.saleType === 'by_stripe' && (item.stripesCount ?? 0) <= 0) ||
+      (item.saleType === 'full_pack' && item.quantity <= 0)
+    );
+    if (zeroItem) {
+      toast({ title: 'Invalid Quantity', description: `"${zeroItem.name}" has 0 quantity. Please set a valid amount or remove it.`, variant: 'destructive' });
       return;
     }
     const change = getChangeAmount();
@@ -522,8 +582,8 @@ export default function SalesManagement() {
       }
       saleData = saleResult.data;
 
-      // Keep compatibility with both legacy (stripes_sold) and current
-      // strip/pack quantity columns used by debtor and finance views.
+      // Keep compatibility with both legacy and new branch_items system.
+      // Now using branch_item_id (item.id is branch_items.id).
       const saleItems = cart.map(item => {
         const isByStripe = item.saleType === 'by_stripe';
         const isMeasurableItem = item.item_type === 'measurable' || isMeasurable(item.unit_label);
@@ -532,7 +592,8 @@ export default function SalesManagement() {
 
         return {
           sale_id: saleData.id,
-          medicine_id: item.id,
+          medicine_id: (item as any).medicine_id || item.id, // fallback to medicine_id
+          branch_item_id: item.id, // branch_items.id
           quantity: isByStripe ? Number(stripeQty.toFixed(4)) : Number(packQty),
           unit_price: Number(item.selling_price),
           total_price: Number(item.total.toFixed(2)),
@@ -551,50 +612,25 @@ export default function SalesManagement() {
         throw itemsError;
       }
 
-      // Stock deduction
-      // NOTE: open_pack_units is stored in the DB as INTEGER thousandths (×1000).
-      // e.g. 2.5 strips → stored as 2500. We multiply before writing and divide after reading.
+      // Stock deduction — update branch_items.quantity
       for (const item of cart) {
         if (item.saleType === 'full_pack') {
           await (supabase as any)
-            .from('medicines')
-            .update({ stock_quantity: item.stock_quantity - item.quantity })
+            .from('branch_items')
+            .update({ quantity: item.stock_quantity - item.quantity, updated_at: new Date().toISOString() })
             .eq('id', item.id);
         } else if (item.saleType === 'by_stripe' && item.stripesCount) {
+          // For strip-based sales from branch_items, deduct proportionally
           const medicine = medicines.find(m => m.id === item.id);
           if (!medicine?.units_per_pack) continue;
 
-          // open_pack_units in `medicines` state is already normalized to real decimal units
-          // (done in fetchMedicines: DB-thousandths / 1000 → real units).
-          // Do NOT divide again here — that caused the 1.502 bug.
-          const openPackReal = medicine.open_pack_units || 0;
           const unitsPerPack = medicine.units_per_pack;
-
-          let stripesToDeduct = item.stripesCount;
-          let newOpenPackReal = openPackReal;
-          let newStockQuantity = medicine.stock_quantity;
-
-          // First consume from open pack
-          if (newOpenPackReal > 0) {
-            const deductFromOpen = Math.min(stripesToDeduct, newOpenPackReal);
-            newOpenPackReal = parseFloat((newOpenPackReal - deductFromOpen).toFixed(6));
-            stripesToDeduct = parseFloat((stripesToDeduct - deductFromOpen).toFixed(6));
-          }
-
-          // Then consume from sealed packs
-          while (stripesToDeduct > 0.000001 && newStockQuantity > 0) {
-            newStockQuantity--;
-            const stripsFromThisPack = Math.min(stripesToDeduct, unitsPerPack);
-            newOpenPackReal = parseFloat((unitsPerPack - stripsFromThisPack).toFixed(6));
-            stripesToDeduct = parseFloat((stripesToDeduct - stripsFromThisPack).toFixed(6));
-          }
-
-          // Convert back to integer thousandths for DB storage
-          const newOpenPackThousandths = Math.round(newOpenPackReal * 1000);
+          const packsToDeduct = item.stripesCount / unitsPerPack;
+          const newQty = Math.max(0, medicine.stock_quantity - packsToDeduct);
 
           await (supabase as any)
-            .from('medicines')
-            .update({ stock_quantity: newStockQuantity, open_pack_units: newOpenPackThousandths })
+            .from('branch_items')
+            .update({ quantity: newQty, updated_at: new Date().toISOString() })
             .eq('id', item.id);
         }
       }
@@ -735,6 +771,83 @@ export default function SalesManagement() {
   const discount = calculateDiscount();
   const total = calculateTotal();
 
+  const renderSaleCard = (medicine: Medicine) => (
+    <Card key={medicine.id} className="cursor-pointer hover:shadow-md transition-shadow">
+      <CardHeader>
+        <div className="flex items-start justify-between">
+          <div>
+            <CardTitle className="text-base">{medicine.name}</CardTitle>
+            {medicine.generic_name && <CardDescription>{medicine.generic_name}</CardDescription>}
+          </div>
+          <div className="flex flex-col gap-1 items-end">
+            {medicine.category && <Badge variant="outline" className="text-xs">{medicine.category}</Badge>}
+            {isMeasurable(medicine.unit_label) ? (
+              <Badge variant="secondary" className="text-xs">Measurable ({medicine.unit_label})</Badge>
+            ) : medicine.units_per_pack ? (
+              <Badge variant="secondary" className="text-xs">By {medicine.unit_label || 'unit'}</Badge>
+            ) : null}
+          </div>
+        </div>
+      </CardHeader>
+      <CardContent>
+        <div className="space-y-2">
+          <div className="flex justify-between text-sm">
+            <span>Price:</span>
+            <span className="font-medium">ETB {medicine.selling_price}</span>
+          </div>
+          {medicine.units_per_pack && (
+            <div className="flex justify-between text-sm text-muted-foreground">
+              <span>Per {medicine.unit_label || 'unit'}:</span>
+              <span>ETB {(medicine.selling_price / medicine.units_per_pack).toFixed(2)}</span>
+            </div>
+          )}
+          <div className="flex justify-between text-sm">
+            <span>{isMeasurable(medicine.unit_label) ? 'Stock:' : medicine.units_per_pack ? 'Unopened Packs:' : 'Stock:'}</span>
+            <Badge variant={medicine.stock_quantity <= 10 ? 'destructive' : 'secondary'}>
+              {isMeasurable(medicine.unit_label)
+                ? `${medicine.stock_quantity + ((medicine.open_pack_units || 0) / 1000)} ${medicine.unit_label}`
+                : `${medicine.stock_quantity} ${medicine.stock_quantity === 1 ? 'pack' : 'packs'}`}
+            </Badge>
+          </div>
+          {!isMeasurable(medicine.unit_label) && medicine.units_per_pack && (
+            <div className="flex justify-between text-sm text-muted-foreground">
+              <span>Open pack:</span>
+              <Badge variant="outline" className="text-xs">
+                {medicine.open_pack_units || 0}/{medicine.units_per_pack} {medicine.unit_label || 'unit'}s remaining
+              </Badge>
+            </div>
+          )}
+          {isPharmacy && medicine.expiry_date && (
+            <div className="flex justify-between text-sm">
+              <span>Expires:</span>
+              <div className="flex items-center gap-1">
+                <span className={isExpired(medicine.expiry_date) ? 'text-destructive font-medium' : isExpiringSoon(medicine.expiry_date) ? 'text-warning' : ''}>
+                  {new Date(medicine.expiry_date).toLocaleDateString()}
+                </span>
+                {isExpired(medicine.expiry_date) && <Badge variant="destructive" className="text-xs">Expired</Badge>}
+                {!isExpired(medicine.expiry_date) && isExpiringSoon(medicine.expiry_date) && <Badge variant="destructive" className="text-xs">Soon</Badge>}
+              </div>
+            </div>
+          )}
+          {selectedBranch ? (
+            <Button
+              onClick={() => addToCartInstant(medicine)}
+              className="w-full"
+              disabled={medicine.stock_quantity === 0 || (isPharmacy && isExpired(medicine.expiry_date))}
+            >
+              <Plus className="h-4 w-4 mr-2" />
+              {isPharmacy && isExpired(medicine.expiry_date) ? 'Expired' : 'Add to Cart'}
+            </Button>
+          ) : (
+            <p className="text-sm text-muted-foreground text-center py-2">
+              Please select a branch to sell items
+            </p>
+          )}
+        </div>
+      </CardContent>
+    </Card>
+  );
+
   if (loading) {
     return <div className="p-4 text-muted-foreground">Loading {isPharmacy ? 'medicines' : 'items'}...</div>;
   }
@@ -788,88 +901,31 @@ export default function SalesManagement() {
         </div>
 
         {/* Item grid */}
-        <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-          {paginatedMedicines.map((medicine) => (
-            <Card key={medicine.id} className="cursor-pointer hover:shadow-md transition-shadow">
-              <CardHeader>
-                <div className="flex items-start justify-between">
-                  <div>
-                    <CardTitle className="text-base">{medicine.name}</CardTitle>
-                    {medicine.generic_name && <CardDescription>{medicine.generic_name}</CardDescription>}
-                  </div>
-                   <div className="flex flex-col gap-1 items-end">
-                    {medicine.category && <Badge variant="outline" className="text-xs">{medicine.category}</Badge>}
-                    {isMeasurable(medicine.unit_label) ? (
-                      <Badge variant="secondary" className="text-xs">
-                        Measurable ({medicine.unit_label})
-                      </Badge>
-                    ) : medicine.units_per_pack ? (
-                      <Badge variant="secondary" className="text-xs">
-                        By {medicine.unit_label || 'unit'}
-                      </Badge>
-                    ) : null}
-                  </div>
+        {!selectedBranch && paginatedMedicines.some(m => m.branch_name) ? (
+          (() => {
+            const grouped: Record<string, Medicine[]> = {};
+            paginatedMedicines.forEach(m => {
+              const key = m.branch_name || 'Unknown Branch';
+              if (!grouped[key]) grouped[key] = [];
+              grouped[key].push(m);
+            });
+            return Object.entries(grouped).sort(([a], [b]) => a.localeCompare(b)).map(([branchName, items]) => (
+              <div key={branchName} className="space-y-3">
+                <div className="flex items-center gap-2">
+                  <h3 className="text-lg font-semibold text-foreground">{branchName}</h3>
+                  <Badge variant="secondary" className="text-xs">{items.length} {items.length === 1 ? 'item' : 'items'}</Badge>
                 </div>
-              </CardHeader>
-              <CardContent>
-                <div className="space-y-2">
-                  <div className="flex justify-between text-sm">
-                    <span>Price:</span>
-                    <span className="font-medium">ETB {medicine.selling_price}</span>
-                  </div>
-                  {medicine.units_per_pack && (
-                    <div className="flex justify-between text-sm text-muted-foreground">
-                      <span>Per {medicine.unit_label || 'unit'}:</span>
-                      <span>ETB {(medicine.selling_price / medicine.units_per_pack).toFixed(2)}</span>
-                    </div>
-                  )}
-                  <div className="flex justify-between text-sm">
-                    <span>{isMeasurable(medicine.unit_label) ? 'Stock:' : medicine.units_per_pack ? 'Unopened Packs:' : 'Stock:'}</span>
-                    <Badge variant={medicine.stock_quantity <= 10 ? 'destructive' : 'secondary'}>
-                      {isMeasurable(medicine.unit_label)
-                        ? `${medicine.stock_quantity + ((medicine.open_pack_units || 0) / 1000)} ${medicine.unit_label}`
-                        : `${medicine.stock_quantity} ${medicine.stock_quantity === 1 ? 'pack' : 'packs'}`}
-                    </Badge>
-                  </div>
-                  {!isMeasurable(medicine.unit_label) && medicine.units_per_pack && (
-                    <div className="flex justify-between text-sm text-muted-foreground">
-                      <span>Open pack:</span>
-                      <Badge variant="outline" className="text-xs">
-                        {medicine.open_pack_units || 0}/{medicine.units_per_pack} {medicine.unit_label || 'unit'}s remaining
-                      </Badge>
-                    </div>
-                  )}
-                  {isPharmacy && medicine.expiry_date && (
-                    <div className="flex justify-between text-sm">
-                      <span>Expires:</span>
-                      <div className="flex items-center gap-1">
-                        <span className={isExpired(medicine.expiry_date) ? 'text-destructive font-medium' : isExpiringSoon(medicine.expiry_date) ? 'text-warning' : ''}>
-                          {new Date(medicine.expiry_date).toLocaleDateString()}
-                        </span>
-                        {isExpired(medicine.expiry_date) && <Badge variant="destructive" className="text-xs">Expired</Badge>}
-                        {!isExpired(medicine.expiry_date) && isExpiringSoon(medicine.expiry_date) && <Badge variant="destructive" className="text-xs">Soon</Badge>}
-                      </div>
-                    </div>
-                  )}
-                  {selectedBranch ? (
-                    <Button
-                      onClick={() => addToCartInstant(medicine)}
-                      className="w-full"
-                      disabled={medicine.stock_quantity === 0 || (isPharmacy && isExpired(medicine.expiry_date))}
-                    >
-                      <Plus className="h-4 w-4 mr-2" />
-                      {isPharmacy && isExpired(medicine.expiry_date) ? 'Expired' : 'Add to Cart'}
-                    </Button>
-                  ) : (
-                    <p className="text-sm text-muted-foreground text-center py-2">
-                      Please select a branch to sell items
-                    </p>
-                  )}
+                <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                  {items.map((medicine) => renderSaleCard(medicine))}
                 </div>
-              </CardContent>
-            </Card>
-          ))}
-        </div>
+              </div>
+            ));
+          })()
+        ) : (
+          <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+            {paginatedMedicines.map((medicine) => renderSaleCard(medicine))}
+          </div>
+        )}
 
         {filteredMedicines.length === 0 && (
           <div className="text-center py-8">

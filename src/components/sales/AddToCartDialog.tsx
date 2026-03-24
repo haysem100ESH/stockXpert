@@ -8,6 +8,7 @@ import { Badge } from '@/components/ui/badge';
 
 interface Medicine {
   id: string;
+  medicine_id?: string;
   name: string;
   generic_name?: string;
   selling_price: number;

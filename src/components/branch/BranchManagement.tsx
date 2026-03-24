@@ -13,8 +13,9 @@ import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@
 import {
   DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuTrigger,
 } from '@/components/ui/dropdown-menu';
+import { ConfirmationDialog } from '@/components/ui/confirmation-dialog';
 import { DataTable } from '@/components/ui/data-table';
-import { Building2, Plus, Edit, MapPin, Phone, MoreHorizontal } from 'lucide-react';
+import { Building2, Plus, Edit, MapPin, Phone, MoreHorizontal, Trash2 } from 'lucide-react';
 import { usePlanLimits } from '@/hooks/usePlanLimits';
 
 interface Branch {
@@ -24,7 +25,7 @@ interface Branch {
   phone?: string;
   manager_staff_id?: string;
   is_main_branch: boolean;
-  branch_type: 'pharmacy' | 'general';
+  branch_type: 'pharmacy' | 'general' | 'warehouse';
   created_at: string;
   manager_name?: string;
 }
@@ -47,11 +48,12 @@ function BranchForm({
       </div>
       <div>
         <Label>Branch Type *</Label>
-        <Select value={branchType} onValueChange={(v: 'pharmacy' | 'general') => setBranchType(v)}>
+        <Select value={branchType} onValueChange={(v: 'pharmacy' | 'general' | 'warehouse') => setBranchType(v)}>
           <SelectTrigger className="mt-2"><SelectValue /></SelectTrigger>
           <SelectContent>
             <SelectItem value="pharmacy">Pharmacy Branch</SelectItem>
             <SelectItem value="general">General Inventory Branch</SelectItem>
+            <SelectItem value="warehouse">Warehouse</SelectItem>
           </SelectContent>
         </Select>
       </div>
@@ -84,11 +86,12 @@ export default function BranchManagement() {
   const [editingBranch, setEditingBranch] = useState<Branch | null>(null);
   const [showEditDialog, setShowEditDialog] = useState(false);
   const [saving, setSaving] = useState(false);
+  const [deletingBranch, setDeletingBranch] = useState<Branch | null>(null);
 
   const [branchName, setBranchName] = useState('');
   const [branchAddress, setBranchAddress] = useState('');
   const [branchPhone, setBranchPhone] = useState('');
-  const [branchType, setBranchType] = useState<'pharmacy' | 'general'>('general');
+  const [branchType, setBranchType] = useState<'pharmacy' | 'general' | 'warehouse'>('general');
   const [isMainBranch, setIsMainBranch] = useState(false);
 
   useEffect(() => {
@@ -137,12 +140,23 @@ export default function BranchManagement() {
     }
     setSaving(true);
     try {
-      const { error } = await (supabase as any).from('pharmacy_branches').insert({
+      const { data: newBranch, error } = await (supabase as any).from('pharmacy_branches').insert({
         pharmacy_owner_id: user!.id, name: branchName,
         address: branchAddress || null, phone: branchPhone || null,
         branch_type: branchType, is_main_branch: isMainBranch,
-      });
+      }).select().single();
       if (error) throw error;
+
+      // Auto-create linked location entry for stock movements/transfers
+      if (newBranch) {
+        await (supabase as any).from('locations').insert({
+          pharmacy_owner_id: user!.id,
+          name: branchName,
+          type: branchType === 'pharmacy' ? 'pharmacy' : 'store',
+          branch_id: newBranch.id,
+        });
+      }
+
       toast({ title: 'Success', description: 'Branch created successfully' });
       resetForm(); setShowCreateDialog(false);
       fetchBranches(); refetchPlanLimits();
@@ -162,8 +176,45 @@ export default function BranchManagement() {
         .update({ name: branchName, address: branchAddress || null, phone: branchPhone || null, branch_type: branchType, is_main_branch: isMainBranch })
         .eq('id', editingBranch.id);
       if (error) throw error;
+
+      // Auto-sync: create location entry if missing, or update name/type
+      const { data: existingLoc } = await (supabase as any)
+        .from('locations').select('id').eq('branch_id', editingBranch.id).maybeSingle();
+      if (existingLoc) {
+        await (supabase as any).from('locations').update({
+          name: branchName,
+          type: branchType === 'pharmacy' ? 'pharmacy' : 'store',
+        }).eq('id', existingLoc.id);
+      } else {
+        await (supabase as any).from('locations').insert({
+          pharmacy_owner_id: user!.id,
+          name: branchName,
+          type: branchType === 'pharmacy' ? 'pharmacy' : 'store',
+          branch_id: editingBranch.id,
+        });
+      }
+
       toast({ title: 'Success', description: 'Branch updated successfully' });
       setShowEditDialog(false); resetForm(); fetchBranches();
+      window.dispatchEvent(new Event('branches-updated'));
+    } catch (e: any) {
+      toast({ title: 'Error', description: e.message, variant: 'destructive' });
+    } finally {
+      setSaving(false);
+    }
+  };
+
+  const handleDelete = async () => {
+    if (!deletingBranch) return;
+    setSaving(true);
+    try {
+      // Delete linked location first
+      await (supabase as any).from('locations').delete().eq('branch_id', deletingBranch.id);
+      const { error } = await (supabase as any).from('pharmacy_branches').delete().eq('id', deletingBranch.id);
+      if (error) throw error;
+      toast({ title: 'Success', description: 'Branch deleted successfully' });
+      setDeletingBranch(null);
+      fetchBranches(); refetchPlanLimits();
       window.dispatchEvent(new Event('branches-updated'));
     } catch (e: any) {
       toast({ title: 'Error', description: e.message, variant: 'destructive' });
@@ -211,8 +262,8 @@ export default function BranchManagement() {
       accessorKey: 'branch_type',
       header: 'Type',
       cell: ({ row }) => (
-        <Badge variant={row.original.branch_type === 'pharmacy' ? 'secondary' : 'outline'}>
-          {row.original.branch_type === 'pharmacy' ? '💊 Pharmacy' : '📦 General'}
+        <Badge variant={row.original.branch_type === 'pharmacy' ? 'secondary' : row.original.branch_type === 'warehouse' ? 'default' : 'outline'}>
+          {row.original.branch_type === 'pharmacy' ? '💊 Pharmacy' : row.original.branch_type === 'warehouse' ? '🏭 Warehouse' : '📦 General'}
         </Badge>
       ),
     },
@@ -229,6 +280,12 @@ export default function BranchManagement() {
           <DropdownMenuContent align="end">
             <DropdownMenuItem onClick={() => startEdit(row.original)}>
               <Edit className="mr-2 h-4 w-4" /> Edit Branch
+            </DropdownMenuItem>
+            <DropdownMenuItem
+              className="text-destructive focus:text-destructive"
+              onClick={() => setDeletingBranch(row.original)}
+            >
+              <Trash2 className="mr-2 h-4 w-4" /> Delete Branch
             </DropdownMenuItem>
           </DropdownMenuContent>
         </DropdownMenu>
@@ -310,6 +367,16 @@ export default function BranchManagement() {
           />
         </DialogContent>
       </Dialog>
+
+      {/* Delete Confirmation */}
+      <ConfirmationDialog
+        open={!!deletingBranch}
+        onOpenChange={(open) => { if (!open) setDeletingBranch(null); }}
+        onConfirm={handleDelete}
+        title="Delete Branch"
+        description={`Are you sure you want to delete "${deletingBranch?.name}"? This will remove all associated data (inventory, sales, staff assignments) and cannot be undone.`}
+        confirmText="Delete"
+      />
     </div>
   );
 }

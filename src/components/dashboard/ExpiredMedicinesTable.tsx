@@ -32,7 +32,6 @@ export default function ExpiredMedicinesTable() {
 
   const fetchExpiredMedicines = async () => {
     try {
-      // Owner isolation
       let ownerBranchIds: string[] = [];
       if (!selectedBranch && profile?.role === 'owner' && profile?.id) {
         const { data: ownerBranches } = await supabase
@@ -48,9 +47,10 @@ export default function ExpiredMedicinesTable() {
         return;
       }
 
+      // Query branch_items for expired items
       let query = supabase
-        .from('medicines')
-        .select('id, name, batch_number, expiry_date, stock_quantity')
+        .from('branch_items')
+        .select('id, quantity, expiry_date, medicines!inner(name, batch_number)')
         .not('expiry_date', 'is', null)
         .lt('expiry_date', new Date().toISOString().split('T')[0]);
 
@@ -63,7 +63,16 @@ export default function ExpiredMedicinesTable() {
       const { data, error } = await query.order('expiry_date', { ascending: true });
 
       if (error) throw error;
-      setExpiredMedicines(data || []);
+      
+      const mapped = (data || []).map((item: any) => ({
+        id: item.id,
+        name: item.medicines?.name || 'Unknown',
+        batch_number: item.medicines?.batch_number,
+        expiry_date: item.expiry_date,
+        stock_quantity: item.quantity,
+      }));
+      
+      setExpiredMedicines(mapped);
     } catch (error) {
       console.error('Error fetching expired medicines:', error);
     } finally {
@@ -82,24 +91,24 @@ export default function ExpiredMedicinesTable() {
     setDeleteConfirm(false);
 
     try {
+      // Set quantity to 0 on branch_items
       const { error } = await supabase
-        .from('medicines')
-        .delete()
+        .from('branch_items')
+        .update({ quantity: 0 })
         .eq('id', medicineToDelete);
 
       if (error) throw error;
 
       toast({
         title: "Success",
-        description: "Expired medicine removed successfully"
+        description: "Expired item stock set to 0 successfully"
       });
 
-      // Remove from local state
       setExpiredMedicines(expiredMedicines.filter(item => item.id !== medicineToDelete));
     } catch (error) {
       toast({
         title: "Error",
-        description: "Failed to remove expired medicine",
+        description: "Failed to remove expired item",
         variant: "destructive"
       });
     } finally {
@@ -108,7 +117,7 @@ export default function ExpiredMedicinesTable() {
   };
 
   if (loading) {
-    return <div>Loading expired medicines...</div>;
+    return <div>Loading expired items...</div>;
   }
 
   if (expiredMedicines.length === 0) {
@@ -121,17 +130,17 @@ export default function ExpiredMedicinesTable() {
         <CardHeader>
           <CardTitle className="flex items-center space-x-2">
             <AlertTriangle className="h-5 w-5 text-destructive" />
-            <span>Expired Medicines</span>
+            <span>Expired Items</span>
           </CardTitle>
           <CardDescription>
-            {expiredMedicines.length} medicines have expired and should be removed from inventory
+            {expiredMedicines.length} items have expired and should be removed from inventory
           </CardDescription>
         </CardHeader>
         <CardContent>
           <Table>
             <TableHeader>
               <TableRow>
-                <TableHead>Medicine Name</TableHead>
+                <TableHead>Item Name</TableHead>
                 <TableHead>Batch Number</TableHead>
                 <TableHead>Expiry Date</TableHead>
                 <TableHead>Quantity</TableHead>
@@ -167,8 +176,8 @@ export default function ExpiredMedicinesTable() {
       <ConfirmationDialog
         open={deleteConfirm}
         onOpenChange={setDeleteConfirm}
-        title="Remove Expired Medicine"
-        description="Are you sure you want to remove this expired medicine from inventory? This action cannot be undone."
+        title="Remove Expired Item"
+        description="Are you sure you want to set this expired item's stock to 0? This action cannot be undone."
         onConfirm={confirmDeleteMedicine}
         confirmText="Remove"
       />

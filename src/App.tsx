@@ -2,9 +2,11 @@ import React from 'react';
 import { Toaster } from "@/components/ui/toaster";
 import { Toaster as Sonner } from "@/components/ui/sonner";
 import { TooltipProvider } from "@/components/ui/tooltip";
+import { ThemeProvider } from "next-themes";
 import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
 import { BrowserRouter, Routes, Route, Navigate } from "react-router-dom";
 import { AuthProvider, useAuth } from "@/hooks/useAuth";
+import { AdvancedModeProvider } from "@/hooks/useAdvancedMode";
 import Layout from "@/components/Layout";
 import SubscriptionGuard from "@/components/subscription/SubscriptionGuard";
 import Dashboard from "./pages/Dashboard";
@@ -17,6 +19,10 @@ import AccountPage from "./pages/AccountPage";
 import DeveloperPage from "./pages/DeveloperPage";
 import BranchPage from "./pages/BranchPage";
 import CustomersPage from "./pages/CustomersPage";
+
+import StockMovementsPage from "./pages/StockMovementsPage";
+import TransferRequestsPage from "./pages/TransferRequestsPage";
+import SmartInventoryPage from "./pages/SmartInventoryPage";
 import Auth from "./pages/Auth";
 import NotFound from "./pages/NotFound";
 
@@ -51,6 +57,8 @@ const queryClient = new QueryClient({
 const App = () => {
   return (
     <QueryClientProvider client={queryClient}>
+      <ThemeProvider attribute="class" defaultTheme="light" enableSystem={false}>
+      <AdvancedModeProvider>
       <AuthProvider>
         <TooltipProvider>
           <Toaster />
@@ -66,6 +74,10 @@ const App = () => {
               <Route path="/customers" element={<Layout><SubscriptionGuard><CustomersPage /></SubscriptionGuard></Layout>} />
               <Route path="/staff" element={<Layout><SubscriptionGuard><StaffPage /></SubscriptionGuard></Layout>} />
               <Route path="/branches" element={<Layout><SubscriptionGuard><BranchPage /></SubscriptionGuard></Layout>} />
+              
+              <Route path="/stock-movements" element={<Layout><SubscriptionGuard><StockMovementsPage /></SubscriptionGuard></Layout>} />
+              <Route path="/transfer-requests" element={<Layout><SubscriptionGuard><TransferRequestsPage /></SubscriptionGuard></Layout>} />
+              <Route path="/smart-inventory" element={<Layout><SubscriptionGuard><SmartInventoryPage /></SubscriptionGuard></Layout>} />
               <Route path="/developer" element={<Layout><DeveloperPage /></Layout>} />
               <Route path="/account" element={<Layout><AccountPage /></Layout>} />
               {/* ADD ALL CUSTOM ROUTES ABOVE THE CATCH-ALL "*" ROUTE */}
@@ -74,6 +86,8 @@ const App = () => {
           </BrowserRouter>
         </TooltipProvider>
       </AuthProvider>
+      </AdvancedModeProvider>
+      </ThemeProvider>
     </QueryClientProvider>
   );
 };

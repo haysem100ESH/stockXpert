@@ -1,5 +1,5 @@
 import { useState } from 'react';
-import { ChevronDown, ChevronRight, CreditCard, Loader2 } from 'lucide-react';
+import { ChevronDown, ChevronRight, CreditCard, FileText, Loader2 } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { Badge } from '@/components/ui/badge';
 import {
@@ -34,6 +34,7 @@ interface DebtorExpandableListProps {
   debtors: Debtor[];
   loading: boolean;
   onRecordPayment: (debtor: Debtor) => void;
+  onViewLedger?: (debtor: Debtor) => void;
 }
 
 function formatQuantity(quantity: number, unitLabel: string, itemType: string): string {
@@ -105,7 +106,11 @@ function ExpandedCreditItems({ customerId }: { customerId: string }) {
           let displayQuantity = Number(si.quantity);
           let displayUnitLabel = med?.unit_label || 'pcs';
 
-          if (si.sale_type === 'by_stripe') {
+          // For measurable items, always use unit_label from medicines (KG, L, etc.)
+          if (med?.item_type === 'measurable') {
+            displayQuantity = Number(si.quantity);
+            displayUnitLabel = (med?.unit_label || 'unit').toUpperCase();
+          } else if (si.sale_type === 'by_stripe') {
             const directStripQty = Number(si.strip_quantity || 0);
             const legacyStripesSold = Number(si.stripes_sold || 0);
             const decodedLegacyQty = legacyStripesSold >= 1000 ? legacyStripesSold / 1000 : legacyStripesSold;
@@ -192,7 +197,7 @@ function ExpandedCreditItems({ customerId }: { customerId: string }) {
   );
 }
 
-export default function DebtorExpandableList({ debtors, loading, onRecordPayment }: DebtorExpandableListProps) {
+export default function DebtorExpandableList({ debtors, loading, onRecordPayment, onViewLedger }: DebtorExpandableListProps) {
   const [expandedIds, setExpandedIds] = useState<Set<string>>(new Set());
   const [search, setSearch] = useState('');
 
@@ -281,10 +286,15 @@ export default function DebtorExpandableList({ debtors, loading, onRecordPayment
                                 ? new Date(debtor.lastPurchaseDate).toLocaleDateString()
                                 : '—'}
                             </span>
-                            <div>
+                            <div className="flex gap-1">
                               <Button size="sm" variant="outline" onClick={() => onRecordPayment(debtor)}>
-                                <CreditCard className="h-3 w-3 mr-1" /> Record Payment
+                                <CreditCard className="h-3 w-3 mr-1" /> Pay
                               </Button>
+                              {onViewLedger && (
+                                <Button size="sm" variant="outline" onClick={() => onViewLedger(debtor)}>
+                                  <FileText className="h-3 w-3 mr-1" /> Ledger
+                                </Button>
+                              )}
                             </div>
                           </div>
                         </div>

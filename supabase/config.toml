@@ -88,3 +88,18 @@ verify_jwt = false
 
 [functions.get-staff-emails]
 verify_jwt = false
+
+[functions.smart-assistant]
+verify_jwt = false
+
+[functions.create-transfer-request]
+verify_jwt = false
+
+[functions.manage-transfer-request]
+verify_jwt = false
+
+[functions.update-owner-profile]
+verify_jwt = false
+
+[functions.send-payment-receipt]
+verify_jwt = false

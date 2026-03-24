@@ -97,7 +97,7 @@ export default function SubscriptionPlanStats() {
           Subscription Plan Distribution
         </CardTitle>
         <CardDescription>
-          Total pharmacy owners: {totalOwners}
+          Total business owners: {totalOwners}
         </CardDescription>
       </CardHeader>
       <CardContent>
@@ -124,7 +124,7 @@ export default function SubscriptionPlanStats() {
                   ))}
                 </Pie>
                 <Tooltip 
-                  formatter={(value: number) => [`${value} owners`, 'Count']}
+                  formatter={(value: number) => [`${value} owner(s)`, 'Count']}
                 />
                 <Legend />
               </PieChart>

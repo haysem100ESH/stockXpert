@@ -38,7 +38,8 @@ export default function EditOwnerDialog({ owner, open, onOpenChange, onOwnerUpda
     phone: '',
     pharmacy_address: '',
     active: true,
-    subscription_plan_id: ''
+    subscription_plan_id: '',
+    gemini_api_key: ''
   });
   const [subscriptionPlans, setSubscriptionPlans] = useState<Array<{ id: string; name: string }>>([]);
   const { toast } = useToast();
@@ -49,13 +50,23 @@ export default function EditOwnerDialog({ owner, open, onOpenChange, onOwnerUpda
 
   useEffect(() => {
     if (owner) {
-      setFormData({
-        full_name: owner.full_name || '',
-        phone: owner.phone || '',
-        pharmacy_address: owner.pharmacy_address || '',
-        active: owner.active,
-        subscription_plan_id: owner.subscription?.plan_id || ''
-      });
+      // Fetch gemini_api_key for this owner
+      const fetchApiKey = async () => {
+        const { data } = await supabase
+          .from('profiles')
+          .select('gemini_api_key')
+          .eq('id', owner.id)
+          .single();
+        setFormData({
+          full_name: owner.full_name || '',
+          phone: owner.phone || '',
+          pharmacy_address: owner.pharmacy_address || '',
+          active: owner.active,
+          subscription_plan_id: owner.subscription?.plan_id || '',
+          gemini_api_key: data?.gemini_api_key || ''
+        });
+      };
+      fetchApiKey();
     }
   }, [owner]);
 
@@ -103,26 +114,21 @@ export default function EditOwnerDialog({ owner, open, onOpenChange, onOwnerUpda
     setLoading(true);
 
     try {
-      const { error } = await supabase
-        .from('profiles')
-        .update({
+      const { data, error } = await supabase.functions.invoke('update-owner-profile', {
+        body: {
+          owner_id: owner.id,
           full_name: formData.full_name,
-          phone: formData.phone || null,
-          pharmacy_address: formData.pharmacy_address || null
-        })
-        .eq('id', owner.id);
+          phone: formData.phone,
+          pharmacy_address: formData.pharmacy_address,
+          gemini_api_key: formData.gemini_api_key,
+          subscription_plan_id: formData.subscription_plan_id && formData.subscription_plan_id !== owner.subscription?.plan_id
+            ? formData.subscription_plan_id
+            : undefined
+        }
+      });
 
       if (error) throw error;
-
-      // Update subscription plan if changed
-      if (formData.subscription_plan_id && formData.subscription_plan_id !== owner.subscription?.plan_id) {
-        const { error: subError } = await supabase
-          .from('pharmacy_subscriptions')
-          .update({ plan_id: formData.subscription_plan_id })
-          .eq('pharmacy_owner_id', owner.id);
-
-        if (subError) throw subError;
-      }
+      if (data?.error) throw new Error(data.error);
 
       toast({
         title: "Success",
@@ -151,7 +157,7 @@ export default function EditOwnerDialog({ owner, open, onOpenChange, onOwnerUpda
         <DialogHeader>
           <DialogTitle>Edit Owner: {owner.full_name}</DialogTitle>
           <DialogDescription>
-            Update pharmacy owner information and account status
+            Update business owner information and account status
           </DialogDescription>
         </DialogHeader>
         
@@ -189,7 +195,7 @@ export default function EditOwnerDialog({ owner, open, onOpenChange, onOwnerUpda
           </div>
 
           <div>
-            <Label htmlFor="pharmacy_address">Pharmacy Address</Label>
+            <Label htmlFor="pharmacy_address">Business Address</Label>
             <Textarea
               id="pharmacy_address"
               value={formData.pharmacy_address}
@@ -216,6 +222,20 @@ export default function EditOwnerDialog({ owner, open, onOpenChange, onOwnerUpda
                 ))}
               </SelectContent>
             </Select>
+          </div>
+
+          <div>
+            <Label htmlFor="gemini_api_key">Gemini API Key</Label>
+            <Input
+              id="gemini_api_key"
+              type="password"
+              value={formData.gemini_api_key}
+              onChange={(e) => handleInputChange('gemini_api_key', e.target.value)}
+              placeholder="AIzaSy..."
+            />
+            <p className="text-xs text-muted-foreground mt-1">
+              Owner's personal Gemini API key for StockXpert AI assistant
+            </p>
           </div>
 
           <DialogFooter>

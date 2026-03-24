@@ -9,52 +9,26 @@ import { ConfirmationDialog } from '@/components/ui/confirmation-dialog';
 import { useBranchContext } from '@/hooks/useBranchContext';
 import { useAuth } from '@/hooks/useAuth';
 
-interface OutOfStockItem {
+interface AlertItem {
   id: string;
   name: string;
   category: string;
-  stock_quantity: number;
-}
-
-interface LowStockItem {
-  id: string;
-  name: string;
-  category: string;
-  stock_quantity: number;
-  minimum_stock_level: number;
-}
-
-interface ExpiringItem {
-  id: string;
-  name: string;
-  category: string;
-  expiry_date: string;
-  stock_quantity: number;
-}
-
-interface ExpiredItem {
-  id: string;
-  name: string;
-  category: string;
-  expiry_date: string;
-  stock_quantity: number;
+  quantity: number;
+  minimum_stock_level?: number;
+  expiry_date?: string;
 }
 
 export default function InventoryDashboard() {
-  const [outOfStockItems, setOutOfStockItems] = useState<OutOfStockItem[]>([]);
-  const [lowStockItems, setLowStockItems] = useState<LowStockItem[]>([]);
-  const [expiringItems, setExpiringItems] = useState<ExpiringItem[]>([]);
-  const [expiredItems, setExpiredItems] = useState<ExpiredItem[]>([]);
+  const [outOfStockItems, setOutOfStockItems] = useState<AlertItem[]>([]);
+  const [lowStockItems, setLowStockItems] = useState<AlertItem[]>([]);
+  const [expiringItems, setExpiringItems] = useState<AlertItem[]>([]);
+  const [expiredItems, setExpiredItems] = useState<AlertItem[]>([]);
   const [loading, setLoading] = useState(true);
   const [deleteConfirm, setDeleteConfirm] = useState<{
     open: boolean;
-    medicineId: string;
-    medicineName: string;
-  }>({
-    open: false,
-    medicineId: '',
-    medicineName: ''
-  });
+    itemId: string;
+    itemName: string;
+  }>({ open: false, itemId: '', itemName: '' });
   const { toast } = useToast();
   const { selectedBranch, branchType } = useBranchContext();
   const { profile } = useAuth();
@@ -64,33 +38,21 @@ export default function InventoryDashboard() {
     fetchInventoryData();
   }, [selectedBranch]);
 
-  // Set up real-time subscription for medicines table changes
   useEffect(() => {
     const channel = supabase
-      .channel('inventory-changes')
+      .channel('branch-items-changes')
       .on(
         'postgres_changes',
-        {
-          event: 'UPDATE',
-          schema: 'public',
-          table: 'medicines'
-        },
-        (payload) => {
-          console.log('Medicine updated:', payload);
-          // Refresh inventory data when medicines are updated
-          fetchInventoryData();
-        }
+        { event: 'UPDATE', schema: 'public', table: 'branch_items' },
+        () => fetchInventoryData()
       )
       .subscribe();
 
-    return () => {
-      supabase.removeChannel(channel);
-    };
+    return () => { supabase.removeChannel(channel); };
   }, []);
 
   const fetchInventoryData = async () => {
     try {
-      // Owner isolation: fetch owner's branch IDs when "All Branches"
       let ownerBranchIds: string[] = [];
       if (!selectedBranch && profile?.role === 'owner' && profile?.id) {
         const { data: ownerBranches } = await supabase
@@ -100,143 +62,80 @@ export default function InventoryDashboard() {
         ownerBranchIds = (ownerBranches || []).map((b: any) => b.id);
       }
 
-      // If owner has no branches yet, show empty data
       if (!selectedBranch && ownerBranchIds.length === 0 && profile?.role === 'owner') {
         setOutOfStockItems([]); setLowStockItems([]); setExpiringItems([]); setExpiredItems([]);
         setLoading(false);
         return;
       }
 
-      // Fetch out of stock items
-      let outOfStockQuery = supabase
-        .from('medicines')
-        .select('id, name, category, stock_quantity')
-        .eq('stock_quantity', 0);
-      
+      // Fetch all branch_items with medicine details
+      let query = supabase
+        .from('branch_items')
+        .select('id, quantity, expiry_date, medicines!inner(name, category, minimum_stock_level)');
+
       if (selectedBranch) {
-        outOfStockQuery = outOfStockQuery.eq('branch_id', selectedBranch);
+        query = query.eq('branch_id', selectedBranch);
       } else if (ownerBranchIds.length > 0) {
-        outOfStockQuery = outOfStockQuery.in('branch_id', ownerBranchIds);
+        query = query.in('branch_id', ownerBranchIds);
       }
 
-      const { data: outOfStockDetails } = await outOfStockQuery;
+      const { data, error } = await query;
+      if (error) throw error;
 
-      // Fetch low stock items
-      let lowStockDirectQuery = supabase
-        .from('medicines')
-        .select('id, name, category, stock_quantity, minimum_stock_level')
-        .gt('stock_quantity', 0);
-      
-      if (selectedBranch) {
-        lowStockDirectQuery = lowStockDirectQuery.eq('branch_id', selectedBranch);
-      } else if (ownerBranchIds.length > 0) {
-        lowStockDirectQuery = lowStockDirectQuery.in('branch_id', ownerBranchIds);
-      }
+      const items = (data || []).map((bi: any) => ({
+        id: bi.id,
+        name: bi.medicines?.name || 'Unknown',
+        category: bi.medicines?.category || 'Uncategorized',
+        quantity: bi.quantity,
+        minimum_stock_level: bi.medicines?.minimum_stock_level || 0,
+        expiry_date: bi.expiry_date,
+      }));
 
-      const { data: allMedicines } = await lowStockDirectQuery;
-      
-      // Filter low stock items client-side
-      const lowStockDetails = allMedicines?.filter(med => 
-        med.stock_quantity <= med.minimum_stock_level
-      ) || [];
+      const outOfStock = items.filter(i => i.quantity === 0);
+      const lowStock = items.filter(i => i.quantity > 0 && i.minimum_stock_level && i.quantity <= i.minimum_stock_level);
 
-      // Only fetch expiry data for pharmacy branches
-      let expiringDetails: ExpiringItem[] = [];
-      let expiredDetails: ExpiredItem[] = [];
-      
-      if (isPharmacy) {
-        const thirtyDaysFromNow = new Date();
-        thirtyDaysFromNow.setDate(thirtyDaysFromNow.getDate() + 30);
-        const tomorrow = new Date();
-        tomorrow.setDate(tomorrow.getDate() + 1);
-        
-        let expiringQuery = supabase
-          .from('medicines')
-          .select('id, name, category, expiry_date, stock_quantity')
-          .not('expiry_date', 'is', null)
-          .lte('expiry_date', thirtyDaysFromNow.toISOString().split('T')[0])
-          .gte('expiry_date', tomorrow.toISOString().split('T')[0])
-          .gt('stock_quantity', 0);
-        
-        if (selectedBranch) {
-          expiringQuery = expiringQuery.eq('branch_id', selectedBranch);
-        } else if (ownerBranchIds.length > 0) {
-          expiringQuery = expiringQuery.in('branch_id', ownerBranchIds);
-        }
+      const today = new Date().toISOString().split('T')[0];
+      const thirtyDaysFromNow = new Date();
+      thirtyDaysFromNow.setDate(thirtyDaysFromNow.getDate() + 30);
+      const tomorrow = new Date();
+      tomorrow.setDate(tomorrow.getDate() + 1);
+      const tomorrowStr = tomorrow.toISOString().split('T')[0];
+      const thirtyStr = thirtyDaysFromNow.toISOString().split('T')[0];
 
-        const { data: expiringData } = await expiringQuery;
-        expiringDetails = expiringData || [];
+      const expiring = items.filter(i => i.expiry_date && i.quantity > 0 && i.expiry_date >= tomorrowStr && i.expiry_date <= thirtyStr);
+      const expired = items.filter(i => i.expiry_date && i.quantity > 0 && i.expiry_date <= today);
 
-        let expiredQuery = supabase
-          .from('medicines')
-          .select('id, name, category, expiry_date, stock_quantity')
-          .not('expiry_date', 'is', null)
-          .lte('expiry_date', new Date().toISOString().split('T')[0])
-          .gt('stock_quantity', 0);
-        
-        if (selectedBranch) {
-          expiredQuery = expiredQuery.eq('branch_id', selectedBranch);
-        } else if (ownerBranchIds.length > 0) {
-          expiredQuery = expiredQuery.in('branch_id', ownerBranchIds);
-        }
-
-        const { data: expiredData } = await expiredQuery;
-        expiredDetails = expiredData || [];
-      }
-
-      setOutOfStockItems(outOfStockDetails || []);
-      setLowStockItems(lowStockDetails || []);
-      setExpiringItems(expiringDetails);
-      setExpiredItems(expiredDetails || []);
+      setOutOfStockItems(outOfStock);
+      setLowStockItems(lowStock);
+      setExpiringItems(expiring);
+      setExpiredItems(expired);
     } catch (error) {
       console.error('Error fetching inventory data:', error);
-      toast({
-        title: "Error",
-        description: "Failed to fetch inventory data",
-        variant: "destructive"
-      });
+      toast({ title: "Error", description: "Failed to fetch inventory data", variant: "destructive" });
     } finally {
       setLoading(false);
     }
   };
 
   const handleRemoveExpiredItem = (itemId: string, itemName: string) => {
-    setDeleteConfirm({
-      open: true,
-      medicineId: itemId,
-      medicineName: itemName
-    });
+    setDeleteConfirm({ open: true, itemId, itemName });
   };
 
   const confirmRemoveExpiredItem = async () => {
     try {
-      // Set stock to 0 and clear expiry date for expired medicines
       const { error } = await supabase
-        .from('medicines')
-        .update({ 
-          stock_quantity: 0,
-          expiry_date: null
-        })
-        .eq('id', deleteConfirm.medicineId);
+        .from('branch_items')
+        .update({ quantity: 0 })
+        .eq('id', deleteConfirm.itemId);
 
       if (error) throw error;
 
-      // Remove from local state immediately for better UX
-      setExpiredItems(expiredItems.filter(item => item.id !== deleteConfirm.medicineId));
-      
-      toast({
-        title: "Success",
-        description: "Expired item stock set to 0 and expiry date cleared",
-      });
-
-      setDeleteConfirm({ open: false, medicineId: '', medicineName: '' });
+      setExpiredItems(expiredItems.filter(item => item.id !== deleteConfirm.itemId));
+      toast({ title: "Success", description: "Expired item stock set to 0" });
+      setDeleteConfirm({ open: false, itemId: '', itemName: '' });
     } catch (error) {
       console.error('Error updating expired item:', error);
-      toast({
-        title: "Error",
-        description: "Failed to update expired item",
-        variant: "destructive"
-      });
+      toast({ title: "Error", description: "Failed to update expired item", variant: "destructive" });
     }
   };
 
@@ -246,7 +145,6 @@ export default function InventoryDashboard() {
 
   return (
     <div className="space-y-6">
-      {/* Out of Stock Items */}
       {outOfStockItems.length > 0 && (
         <Card>
           <CardHeader>
@@ -254,9 +152,7 @@ export default function InventoryDashboard() {
               <Package className="h-5 w-5 text-destructive" />
               <span>Out of Stock Products</span>
             </CardTitle>
-            <CardDescription>
-              {outOfStockItems.length} products are currently out of stock
-            </CardDescription>
+            <CardDescription>{outOfStockItems.length} products are currently out of stock</CardDescription>
           </CardHeader>
           <CardContent>
             <div className="grid gap-2">
@@ -274,7 +170,6 @@ export default function InventoryDashboard() {
         </Card>
       )}
 
-      {/* Low Stock Items */}
       {lowStockItems.length > 0 && (
         <Card>
           <CardHeader>
@@ -282,9 +177,7 @@ export default function InventoryDashboard() {
               <AlertTriangle className="h-5 w-5 text-warning" />
               <span>Low Stock Items</span>
             </CardTitle>
-            <CardDescription>
-              {lowStockItems.length} items are running low on stock
-            </CardDescription>
+            <CardDescription>{lowStockItems.length} items are running low on stock</CardDescription>
           </CardHeader>
           <CardContent>
             <div className="grid gap-2">
@@ -295,7 +188,7 @@ export default function InventoryDashboard() {
                     <p className="text-sm text-muted-foreground">{item.category}</p>
                   </div>
                   <div className="text-right">
-                    <Badge variant="secondary">{item.stock_quantity} left</Badge>
+                    <Badge variant="secondary">{item.quantity} left</Badge>
                     <p className="text-xs text-muted-foreground">Min: {item.minimum_stock_level}</p>
                   </div>
                 </div>
@@ -305,17 +198,14 @@ export default function InventoryDashboard() {
         </Card>
       )}
 
-      {/* Items Expiring Soon */}
-      {isPharmacy && expiringItems.length > 0 && (
+      {expiringItems.length > 0 && (
         <Card>
           <CardHeader>
             <CardTitle className="flex items-center space-x-2">
               <CalendarDays className="h-5 w-5 text-warning" />
               <span>Items Expiring Soon</span>
             </CardTitle>
-            <CardDescription>
-              {expiringItems.length} items will expire within 30 days
-            </CardDescription>
+            <CardDescription>{expiringItems.length} items will expire within 30 days</CardDescription>
           </CardHeader>
           <CardContent>
             <div className="grid gap-2">
@@ -326,9 +216,9 @@ export default function InventoryDashboard() {
                     <p className="text-sm text-muted-foreground">{item.category}</p>
                   </div>
                   <div className="text-right">
-                    <Badge variant="secondary">{item.stock_quantity} in stock</Badge>
+                    <Badge variant="secondary">{item.quantity} in stock</Badge>
                     <p className="text-xs text-warning">
-                      Expires: {new Date(item.expiry_date).toLocaleDateString()}
+                      Expires: {new Date(item.expiry_date!).toLocaleDateString()}
                     </p>
                   </div>
                 </div>
@@ -338,27 +228,24 @@ export default function InventoryDashboard() {
         </Card>
       )}
 
-      {/* Expired Medicines */}
-      {isPharmacy && expiredItems.length > 0 && (
+      {expiredItems.length > 0 && (
         <Card>
           <CardHeader>
             <CardTitle className="flex items-center space-x-2">
               <AlertTriangle className="h-5 w-5 text-destructive" />
-              <span>Expired Medicines</span>
+              <span>Expired Items</span>
             </CardTitle>
-            <CardDescription>
-              {expiredItems.length} medicines have expired and should be removed
-            </CardDescription>
+            <CardDescription>{expiredItems.length} items have expired and should be removed</CardDescription>
           </CardHeader>
           <CardContent>
             <div className="grid gap-2">
               {expiredItems.map((item) => (
-                <div key={item.id} className="flex items-center justify-between p-2 border rounded-lg bg-red-50">
+                <div key={item.id} className="flex items-center justify-between p-2 border rounded-lg bg-destructive/5">
                   <div>
                     <p className="font-medium">{item.name}</p>
                     <p className="text-sm text-muted-foreground">{item.category}</p>
                     <p className="text-xs text-destructive">
-                      Expired: {new Date(item.expiry_date).toLocaleDateString()}
+                      Expired: {new Date(item.expiry_date!).toLocaleDateString()}
                     </p>
                   </div>
                   <div className="flex items-center space-x-2">
@@ -379,7 +266,6 @@ export default function InventoryDashboard() {
         </Card>
       )}
 
-      {/* Empty States */}
       {outOfStockItems.length === 0 && lowStockItems.length === 0 && 
        expiringItems.length === 0 && expiredItems.length === 0 && (
         <Card>
@@ -387,7 +273,7 @@ export default function InventoryDashboard() {
             <Package className="h-12 w-12 text-muted-foreground mx-auto mb-4" />
             <h3 className="text-lg font-semibold mb-2">All Good!</h3>
             <p className="text-muted-foreground">
-              No inventory issues detected. All products are well-stocked{isPharmacy ? ' and within expiry dates' : ''}.
+              No inventory issues detected. All products are well-stocked and within expiry dates.
             </p>
           </CardContent>
         </Card>
@@ -397,7 +283,7 @@ export default function InventoryDashboard() {
         open={deleteConfirm.open}
         onOpenChange={(open) => setDeleteConfirm(prev => ({ ...prev, open }))}
         title="Set Stock to Zero"
-        description={`Are you sure you want to set the stock of "${deleteConfirm.medicineName}" to 0? This will remove it from active inventory while preserving sales history.`}
+        description={`Are you sure you want to set the stock of "${deleteConfirm.itemName}" to 0?`}
         onConfirm={confirmRemoveExpiredItem}
         confirmText="Set to 0"
         cancelText="Cancel"

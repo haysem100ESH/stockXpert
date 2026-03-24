@@ -8,7 +8,7 @@ import {
   DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuTrigger,
 } from '@/components/ui/dropdown-menu';
 import { DataTable } from '@/components/ui/data-table';
-import { Search, Plus, Users, DollarSign, AlertTriangle, Edit, CreditCard, Eye, MoreHorizontal } from 'lucide-react';
+import { Search, Plus, Users, DollarSign, AlertTriangle, Edit, CreditCard, Eye, MoreHorizontal, FileText } from 'lucide-react';
 import { supabase } from '@/lib/db';
 import { useToast } from '@/hooks/use-toast';
 import { useBranchContext } from '@/hooks/useBranchContext';
@@ -19,6 +19,7 @@ import AddCustomerDialog from './AddCustomerDialog';
 import EditCustomerDialog from './EditCustomerDialog';
 import RecordPaymentDialog from './RecordPaymentDialog';
 import CustomerDetailDialog from './CustomerDetailDialog';
+import CustomerLedgerDialog from './CustomerLedgerDialog';
 import DebtorExpandableList from './DebtorExpandableList';
 
 interface Customer {
@@ -58,6 +59,7 @@ export default function CustomerManagement() {
   const [showEditDialog, setShowEditDialog] = useState(false);
   const [showPaymentDialog, setShowPaymentDialog] = useState(false);
   const [showDetailDialog, setShowDetailDialog] = useState(false);
+  const [showLedgerDialog, setShowLedgerDialog] = useState(false);
   const [selectedCustomer, setSelectedCustomer] = useState<Customer | null>(null);
   const { selectedBranch } = useBranchContext();
   const { toast } = useToast();
@@ -102,6 +104,19 @@ export default function CustomerManagement() {
 
         allSalesData = (salesData || []).filter((s: any) => s.customer_id !== null);
       }
+      // Fetch latest credit scores from credit_logs as source of truth
+      const { data: creditLogs } = await (supabase as any)
+        .from('credit_logs')
+        .select('customer_id, new_score, created_at')
+        .in('customer_id', customerIds)
+        .order('created_at', { ascending: false });
+
+      const latestScoreMap: Record<string, number> = {};
+      for (const log of creditLogs || []) {
+        if (!latestScoreMap[log.customer_id]) {
+          latestScoreMap[log.customer_id] = log.new_score;
+        }
+      }
 
       const enriched: Customer[] = (customersData || []).map((c: any) => {
         const custSales = allSalesData.filter((s: any) => s.customer_id === c.id);
@@ -109,7 +124,7 @@ export default function CustomerManagement() {
         const lastPurchaseDate = custSales[0]?.created_at;
         const totalDebt = debtMap[c.id] || 0;
         const totalPaid = Math.max(0, totalPurchases - totalDebt);
-        const creditScore = c.credit_score ?? 50;
+        const creditScore = latestScoreMap[c.id] ?? c.credit_score ?? 50;
         const maxCreditLimit = c.max_credit_limit ?? getCreditLimit(creditScore);
         return { ...c, totalPurchases, totalPaid, totalDebt, lastPurchaseDate, credit_score: creditScore, max_credit_limit: maxCreditLimit };
       });
@@ -125,6 +140,7 @@ export default function CustomerManagement() {
   const openEdit = (c: Customer) => { setSelectedCustomer(c); setShowEditDialog(true); };
   const openPayment = (c: Customer) => { setSelectedCustomer(c); setShowPaymentDialog(true); };
   const openDetail = (c: Customer) => { setSelectedCustomer(c); setShowDetailDialog(true); };
+  const openLedger = (c: Customer) => { setSelectedCustomer(c); setShowLedgerDialog(true); };
 
   const allColumns: ColumnDef<Customer>[] = [
     { accessorKey: 'name', header: 'Name', cell: ({ row }) => <span className="font-medium">{row.original.name}</span> },
@@ -174,6 +190,9 @@ export default function CustomerManagement() {
               </DropdownMenuItem>
               <DropdownMenuItem onClick={() => openEdit(c)}>
                 <Edit className="mr-2 h-4 w-4" /> Edit
+              </DropdownMenuItem>
+              <DropdownMenuItem onClick={() => openLedger(c)}>
+                <FileText className="mr-2 h-4 w-4" /> Ledger
               </DropdownMenuItem>
               {c.totalDebt > 0 && (
                 <DropdownMenuItem onClick={() => openPayment(c)}>
@@ -285,6 +304,7 @@ export default function CustomerManagement() {
                 debtors={debtors}
                 loading={loading}
                 onRecordPayment={(d) => openPayment(d as Customer)}
+                onViewLedger={(d) => openLedger(d as Customer)}
               />
             </CardContent>
           </Card>
@@ -307,6 +327,12 @@ export default function CustomerManagement() {
           <CustomerDetailDialog
             open={showDetailDialog}
             onOpenChange={setShowDetailDialog}
+            customerId={selectedCustomer.id}
+            customerName={selectedCustomer.name}
+          />
+          <CustomerLedgerDialog
+            open={showLedgerDialog}
+            onOpenChange={setShowLedgerDialog}
             customerId={selectedCustomer.id}
             customerName={selectedCustomer.name}
           />

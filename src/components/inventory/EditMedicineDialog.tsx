@@ -72,6 +72,8 @@ export default function EditMedicineDialog({
     item_type: 'full_pcs' as 'full_pcs' | 'measurable',
   });
   const [measurableUnit, setMeasurableUnit] = useState<string>('kg');
+  const [recordInExpense, setRecordInExpense] = useState(true);
+  const [originalRecordInExpense, setOriginalRecordInExpense] = useState(true);
   const [branches, setBranches] = useState<Array<{ id: string; name: string }>>([]);
   const [userRole, setUserRole] = useState<'owner' | 'staff' | null>(null);
   const [loading, setLoading] = useState(false);
@@ -130,6 +132,19 @@ export default function EditMedicineDialog({
         branch_id: medicineWithBranch.branch_id || '',
         item_type: isMeas ? 'measurable' : ((medicineWithBranch.item_type as 'full_pcs' | 'measurable') || 'full_pcs'),
       });
+
+      // Check if an expense exists for this item
+      (async () => {
+        const { data: existingExpense } = await supabase
+          .from('expenses')
+          .select('id')
+          .ilike('description', `%Purchase of ${medicine.name}%`)
+          .eq('category', 'Stock Purchase')
+          .limit(1);
+        const hasExpense = existingExpense && existingExpense.length > 0;
+        setRecordInExpense(hasExpense);
+        setOriginalRecordInExpense(hasExpense);
+      })();
     }
   }, [medicine, open]);
 
@@ -150,7 +165,7 @@ export default function EditMedicineDialog({
         country_name: medicineData.country_name || null,
         purchase_price: parseFloat(medicineData.purchase_price),
         selling_price: parseFloat(medicineData.selling_price),
-        stock_quantity: isMeas ? parseFloat(medicineData.stock_quantity) : parseInt(medicineData.stock_quantity),
+        
         minimum_stock_level: parseInt(medicineData.minimum_stock_level),
         units_per_pack: !isMeas && medicineData.units_per_pack ? parseInt(medicineData.units_per_pack) : null,
         unit_label: unitLabel,
@@ -165,6 +180,32 @@ export default function EditMedicineDialog({
 
       const { error } = await supabase.from('medicines').update(updateData).eq('id', medicine.id);
       if (error) throw error;
+
+      // Expense sync logic
+      const { data: { user } } = await supabase.auth.getUser();
+      if (recordInExpense && !originalRecordInExpense) {
+        // Unchecked → Checked: add expense
+        const stockQty = isMeas ? parseFloat(medicineData.stock_quantity) : parseInt(medicineData.stock_quantity);
+        const purchasePrice = parseFloat(medicineData.purchase_price);
+        if (stockQty > 0 && purchasePrice > 0) {
+          const expenseAmount = stockQty * purchasePrice;
+          const unit = isMeas ? measurableUnit.toUpperCase() : (medicineData.unit_label || 'pcs');
+          await supabase.from('expenses').insert({
+            description: `Purchase of ${medicineData.name} (${stockQty} ${unit})`,
+            amount: expenseAmount,
+            category: 'Stock Purchase',
+            created_by: user?.id || null,
+            branch_id: medicineData.branch_id || null,
+          });
+        }
+      } else if (!recordInExpense && originalRecordInExpense) {
+        // Checked → Unchecked: remove expense
+        await supabase
+          .from('expenses')
+          .delete()
+          .ilike('description', `%Purchase of ${medicine.name}%`)
+          .eq('category', 'Stock Purchase');
+      }
 
       toast({ title: "Success", description: `${isPharmacy ? 'Medicine' : 'Item'} updated successfully` });
       onMedicineUpdated();
@@ -291,8 +332,9 @@ export default function EditMedicineDialog({
 
           <div className="grid grid-cols-2 gap-4">
             <div className="space-y-2">
-              <Label htmlFor="stock_quantity">Stock Quantity *</Label>
-              <Input id="stock_quantity" type="number" step={medicineData.item_type === 'measurable' ? '0.01' : '1'} value={medicineData.stock_quantity} onChange={(e) => setMedicineData({ ...medicineData, stock_quantity: e.target.value })} required />
+              <Label htmlFor="stock_quantity">Stock Quantity</Label>
+              <Input id="stock_quantity" type="number" value={medicineData.stock_quantity} disabled className="opacity-60 cursor-not-allowed" />
+              <p className="text-xs text-muted-foreground">Use "Adjust Stock" to change quantity</p>
             </div>
             <div className="space-y-2">
               <Label htmlFor="minimum_stock_level">Minimum Stock Level(for alert!) *</Label>
@@ -353,6 +395,18 @@ export default function EditMedicineDialog({
               </div>
             </>
           )}
+
+          {/* Record in Expense checkbox */}
+          <div className="flex items-center space-x-2 rounded-md border p-3 bg-muted/30">
+            <Checkbox
+              id="edit-record-in-expense"
+              checked={recordInExpense}
+              onCheckedChange={(checked) => setRecordInExpense(!!checked)}
+            />
+            <Label htmlFor="edit-record-in-expense" className="text-sm cursor-pointer">
+              Record in Expense
+            </Label>
+          </div>
 
           <div className="flex gap-2 pt-4">
             <Button type="submit" disabled={loading} className="flex-1">
