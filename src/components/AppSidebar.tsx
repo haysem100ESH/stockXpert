@@ -87,7 +87,15 @@ export function AppSidebar() {
     return staffNavItems;
   };
 
-  const navItems = getNavItems();
+  // Pages hidden in simple mode
+  const hiddenInSimpleMode = ['/smart-inventory', '/staff', '/transfer-requests', '/stock-movements'];
+  
+  const navItems = getNavItems().filter(item => {
+    if (isAdvancedMode) return true;
+    // For staff, '/staff' is Attendance - hide it in simple mode
+    // For owner, '/stock-movements' is Global Inventory - hide it in simple mode
+    return !hiddenInSimpleMode.includes(item.url);
+  });
   const isCollapsed = state === "collapsed";
 
   const isActive = (path: string) => {
