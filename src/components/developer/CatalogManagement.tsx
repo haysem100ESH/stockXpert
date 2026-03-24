@@ -256,9 +256,11 @@ export default function CatalogManagement() {
     }
   };
 
+  const existingMedicineIds = new Set(members.filter(m => m.group_id === selectedGroupId).map(m => m.medicine_id));
   const filteredMedicines = medicines.filter(m =>
-    m.name.toLowerCase().includes(memberSearch.toLowerCase()) ||
-    (m.generic_name || '').toLowerCase().includes(memberSearch.toLowerCase())
+    !existingMedicineIds.has(m.id) &&
+    (m.name.toLowerCase().includes(memberSearch.toLowerCase()) ||
+    (m.generic_name || '').toLowerCase().includes(memberSearch.toLowerCase()))
   );
 
   const groupMembersForSelected = members.filter(m => m.group_id === selectedGroupId);
