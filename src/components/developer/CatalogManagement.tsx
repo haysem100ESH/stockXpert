@@ -76,7 +76,7 @@ export default function CatalogManagement() {
   const [newGroupName, setNewGroupName] = useState('');
   const [newGroupDesc, setNewGroupDesc] = useState('');
   const [newGroupType, setNewGroupType] = useState<string>('pharmacy');
-  const [selectedMedicineId, setSelectedMedicineId] = useState('');
+  const [selectedMedicineIds, setSelectedMedicineIds] = useState<string[]>([]);
   const [selectedOwnerId, setSelectedOwnerId] = useState('');
   const [assignGroupId, setAssignGroupId] = useState('');
 
