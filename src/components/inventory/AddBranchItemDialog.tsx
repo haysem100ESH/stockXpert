@@ -401,6 +401,11 @@ export default function AddBranchItemDialog({ open, onOpenChange, onItemAdded }:
                 </div>
 
                 <div className="space-y-2">
+                  <Label>Batch Number</Label>
+                  <Input value={batchNumber} onChange={e => setBatchNumber(e.target.value)} placeholder="e.g. BN-2026-001" />
+                </div>
+
+                <div className="space-y-2">
                   <Label>Expiry Date</Label>
                   <Input type="date" value={expiryDate} onChange={e => setExpiryDate(e.target.value)} />
                 </div>
