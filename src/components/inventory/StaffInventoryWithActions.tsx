@@ -16,6 +16,7 @@ import EditBranchItemDialog, { type BranchItem } from './EditBranchItemDialog';
 import { ConfirmationDialog } from '@/components/ui/confirmation-dialog';
 import CategoryManagement from './CategoryManagement';
 import StockEditHistory from './StockEditHistory';
+import BatchBreakdownDialog from './BatchBreakdownDialog';
 
 export default function StaffInventoryWithActions() {
   const [searchParams] = useSearchParams();
