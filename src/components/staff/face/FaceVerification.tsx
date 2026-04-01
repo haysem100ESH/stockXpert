@@ -172,7 +172,7 @@ export default function FaceVerification({ staffId, onVerified, onFailed, onCanc
 
     setResultScore(Math.round(bestScore));
 
-    if (bestScore >= SIMILARITY_THRESHOLD) {
+    if (bestScore >= SIMILARITY_THRESHOLD && consensusPassed) {
       setResultSuccess(true);
       setPhase('result');
       setFeedback('Face verified successfully!');
