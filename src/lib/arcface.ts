@@ -193,10 +193,11 @@ export function cosineSimilarity(a: Float32Array | number[], b: Float32Array | n
 
 /**
  * Convert cosine similarity to a percentage score (0-100).
- * Cosine sim of 1.0 = 100%, 0.0 = 50%, -1.0 = 0%
- * For face recognition, good matches are typically > 0.3 cosine sim
+ * Uses a stricter mapping where only high cosine similarities yield high percentages.
+ * Cosine sim of 1.0 = 100%, 0.5 = 50%, 0.0 = 0%, negative = 0%
+ * For ArcFace, genuine matches typically have cosine sim > 0.5
  */
 export function similarityToPercent(cosSim: number): number {
-  // Map from [-1, 1] to [0, 100]
-  return Math.max(0, Math.min(100, ((cosSim + 1) / 2) * 100));
+  // Strict mapping: [0, 1] → [0, 100], negative values clamp to 0
+  return Math.max(0, Math.min(100, cosSim * 100));
 }

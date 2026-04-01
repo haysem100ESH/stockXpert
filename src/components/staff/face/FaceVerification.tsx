@@ -26,9 +26,10 @@ const POSE_CHALLENGES: PoseChallenge[] = [
   { instruction: 'Look straight at the camera', check: (yaw: number) => Math.abs(yaw) < 0.12 },
 ];
 
-// ArcFace cosine similarity threshold. 0.3+ is good match, 0.4+ is strong match.
-// We use 70% (mapped from cosine sim) which corresponds to ~0.4 cosine similarity.
-const SIMILARITY_THRESHOLD = 70;
+// ArcFace cosine similarity threshold (now maps 1:1 with cosine sim percentage).
+// Genuine matches typically score 55-80%, impostors score below 30%.
+// Threshold of 50 corresponds to 0.50 cosine similarity — strict enough to reject strangers.
+const SIMILARITY_THRESHOLD = 50;
 const MAX_ATTEMPTS = 3;
 
 interface FaceVerificationProps {
@@ -153,17 +154,25 @@ export default function FaceVerification({ staffId, onVerified, onFailed, onCanc
     }
 
     // Compare with stored embeddings using cosine similarity
+    // Require majority of stored embeddings to pass threshold for stronger security
     let bestScore = 0;
+    let passCount = 0;
     for (const stored of storedEmbeddings.current) {
       const storedArr = new Float32Array(stored);
       const cosSim = cosineSimilarity(result.descriptor, storedArr);
       const percent = similarityToPercent(cosSim);
       if (percent > bestScore) bestScore = percent;
+      if (percent >= SIMILARITY_THRESHOLD) passCount++;
     }
+
+    // At least half of stored embeddings must match (consensus check)
+    const totalEmbeddings = storedEmbeddings.current.length;
+    const requiredMatches = Math.max(1, Math.ceil(totalEmbeddings / 2));
+    const consensusPassed = passCount >= requiredMatches;
 
     setResultScore(Math.round(bestScore));
 
-    if (bestScore >= SIMILARITY_THRESHOLD) {
+    if (bestScore >= SIMILARITY_THRESHOLD && consensusPassed) {
       setResultSuccess(true);
       setPhase('result');
       setFeedback('Face verified successfully!');
