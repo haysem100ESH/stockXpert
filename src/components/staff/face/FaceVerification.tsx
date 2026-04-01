@@ -26,9 +26,10 @@ const POSE_CHALLENGES: PoseChallenge[] = [
   { instruction: 'Look straight at the camera', check: (yaw: number) => Math.abs(yaw) < 0.12 },
 ];
 
-// ArcFace cosine similarity threshold. 0.3+ is good match, 0.4+ is strong match.
-// We use 70% (mapped from cosine sim) which corresponds to ~0.4 cosine similarity.
-const SIMILARITY_THRESHOLD = 70;
+// ArcFace cosine similarity threshold (now maps 1:1 with cosine sim percentage).
+// Genuine matches typically score 55-80%, impostors score below 30%.
+// Threshold of 50 corresponds to 0.50 cosine similarity — strict enough to reject strangers.
+const SIMILARITY_THRESHOLD = 50;
 const MAX_ATTEMPTS = 3;
 
 interface FaceVerificationProps {
