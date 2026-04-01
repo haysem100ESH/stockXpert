@@ -6,7 +6,7 @@ import { Input } from '@/components/ui/input';
 import { Badge } from '@/components/ui/badge';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
-import { Search, Edit2, Plus, Trash2, Filter, Settings2, SlidersHorizontal, History } from 'lucide-react';
+import { Search, Edit2, Plus, Trash2, Filter, Settings2, SlidersHorizontal, History, Layers } from 'lucide-react';
 import { supabase } from '@/lib/db';
 import { useToast } from '@/hooks/use-toast';
 import { useAuth } from '@/hooks/useAuth';
@@ -16,6 +16,7 @@ import EditBranchItemDialog, { type BranchItem } from './EditBranchItemDialog';
 import { ConfirmationDialog } from '@/components/ui/confirmation-dialog';
 import CategoryManagement from './CategoryManagement';
 import StockEditHistory from './StockEditHistory';
+import BatchBreakdownDialog from './BatchBreakdownDialog';
 
 export default function StaffInventoryWithActions() {
   const [searchParams] = useSearchParams();
@@ -34,6 +35,7 @@ export default function StaffInventoryWithActions() {
     itemName: string;
   }>({ open: false, itemId: '', itemName: '' });
   const [hasBranches, setHasBranches] = useState(true);
+  const [batchBreakdown, setBatchBreakdown] = useState<{ open: boolean; itemId: string; itemName: string }>({ open: false, itemId: '', itemName: '' });
   const { toast } = useToast();
   const { profile } = useAuth();
   const { selectedBranch, branchType } = useBranchContext();
@@ -231,6 +233,7 @@ export default function StaffInventoryWithActions() {
             {item.generic_name && <CardDescription>{item.generic_name}</CardDescription>}
           </div>
           <div className="flex space-x-1">
+            <Button size="sm" variant="ghost" onClick={() => setBatchBreakdown({ open: true, itemId: item.id, itemName: item.name })} title="View Batches"><Layers className="h-4 w-4" /></Button>
             <Button size="sm" variant="ghost" onClick={() => handleEditItem(item)} title="Edit"><Edit2 className="h-4 w-4" /></Button>
             <Button size="sm" variant="ghost" onClick={() => handleDeleteItem(item.id, item.name)} title="Remove"><Trash2 className="h-4 w-4" /></Button>
           </div>
@@ -408,6 +411,13 @@ export default function StaffInventoryWithActions() {
         description="This will remove the item from this branch's inventory. The master catalog entry will not be affected."
         onConfirm={confirmDeleteItem}
         confirmText="Remove"
+      />
+
+      <BatchBreakdownDialog
+        open={batchBreakdown.open}
+        onOpenChange={(open) => setBatchBreakdown(prev => ({ ...prev, open }))}
+        branchItemId={batchBreakdown.itemId}
+        itemName={batchBreakdown.itemName}
       />
     </div>
   );
