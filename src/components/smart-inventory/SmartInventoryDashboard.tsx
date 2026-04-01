@@ -29,6 +29,7 @@ import SeasonalPerformance from './SeasonalPerformance';
 import SeasonalInsights from './SeasonalInsights';
 import SeasonalTrendsWidget from './SeasonalTrendsWidget';
 import InventoryDashboard from '@/components/inventory/InventoryDashboard';
+import BatchAnalytics from '@/components/inventory/BatchAnalytics';
 
 export default function SmartInventoryDashboard() {
   const { items, summary, loading, isPharmacy, refetch } = useSmartInventory();
