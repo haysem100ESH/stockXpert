@@ -17,6 +17,7 @@ import {
   RefreshCw,
   Sun,
   Bell,
+  Layers,
 } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import ScoreOverview from './ScoreOverview';
