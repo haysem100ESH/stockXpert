@@ -419,7 +419,6 @@ export default function StaffInventoryWithActions() {
         branchItemId={batchBreakdown.itemId}
         itemName={batchBreakdown.itemName}
       />
-      />
     </div>
   );
 }
