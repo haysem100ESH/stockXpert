@@ -113,7 +113,7 @@ export default function RecordPurchaseDialog({ open, onOpenChange, supplierId, s
     const totalCost = stockQuantity * purchasePrice;
 
     try {
-      // 1. Insert into medicines (inventory)
+      // 1. Insert into medicines (inventory catalog)
       const medicineData: Record<string, any> = {
         name: itemName,
         generic_name: formData.get('generic_name') as string || null,
@@ -136,8 +136,38 @@ export default function RecordPurchaseDialog({ open, onOpenChange, supplierId, s
         supplier_id: supplierId,
       };
 
-      const { error: medicineErr } = await supabase.from('medicines').insert([medicineData]);
+      const { data: medResult, error: medicineErr } = await supabase.from('medicines').insert([medicineData]).select('id').single();
       if (medicineErr) throw medicineErr;
+
+      // 1b. Create branch_item + inventory batch
+      const { data: branchItem, error: biErr } = await supabase.from('branch_items').insert({
+        owner_id: profile?.id,
+        branch_id: branchId,
+        medicine_id: medResult.id,
+        selling_price: sellingPrice,
+        purchase_price: purchasePrice,
+        quantity: stockQuantity,
+        expiry_date: formData.get('expiry_date') as string || null,
+      }).select('id').single();
+
+      if (biErr) {
+        // If branch_item creation fails, continue without batch (non-critical)
+        console.warn('Branch item creation failed:', biErr);
+      } else {
+        // Create inventory batch
+        await createBatch({
+          branchId,
+          medicineId: medResult.id,
+          branchItemId: branchItem.id,
+          supplierId,
+          batchNumber: formData.get('batch_number') as string || null,
+          quantity: stockQuantity,
+          purchasePrice,
+          sellingPrice,
+          expiryDate: formData.get('expiry_date') as string || null,
+          createdBy: user?.id || null,
+        });
+      }
 
       // 2. Insert purchase record
       const { error: purchaseErr } = await supabase.from('supplier_purchases').insert({
