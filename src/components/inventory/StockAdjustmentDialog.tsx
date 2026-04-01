@@ -69,12 +69,40 @@ export default function StockAdjustmentDialog({ open, onOpenChange, medicine, on
         ? medicine.stock_quantity + qty
         : medicine.stock_quantity - qty;
 
-      // Update stock
+      // Update stock on branch_items (medicine.id is branch_items.id)
       const { error: updateErr } = await supabase
-        .from('medicines')
-        .update({ stock_quantity: newStock })
+        .from('branch_items')
+        .update({ quantity: newStock, updated_at: new Date().toISOString() })
         .eq('id', medicine.id);
-      if (updateErr) throw updateErr;
+      if (updateErr) {
+        // Fallback to medicines table
+        const { error: fallbackErr } = await supabase
+          .from('medicines')
+          .update({ stock_quantity: newStock })
+          .eq('id', medicine.id);
+        if (fallbackErr) throw fallbackErr;
+      }
+
+      // Create a batch for stock increase
+      if (adjustmentType === 'increase') {
+        const branchId = medicine.branch_id || selectedBranch;
+        if (branchId) {
+          // Try to create a batch — non-critical if it fails
+          try {
+            await createBatch({
+              branchId,
+              medicineId: medicine.id,
+              branchItemId: medicine.id, // branch_items.id
+              quantity: qty,
+              purchasePrice: medicine.purchase_price,
+              sellingPrice: medicine.purchase_price, // use purchase as default
+              createdBy: profile?.id || null,
+            });
+          } catch (e) {
+            console.warn('Batch creation failed during stock adjustment:', e);
+          }
+        }
+      }
 
       // Record adjustment
       const branchId = medicine.branch_id || selectedBranch;
