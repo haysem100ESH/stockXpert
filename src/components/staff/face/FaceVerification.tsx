@@ -154,13 +154,21 @@ export default function FaceVerification({ staffId, onVerified, onFailed, onCanc
     }
 
     // Compare with stored embeddings using cosine similarity
+    // Require majority of stored embeddings to pass threshold for stronger security
     let bestScore = 0;
+    let passCount = 0;
     for (const stored of storedEmbeddings.current) {
       const storedArr = new Float32Array(stored);
       const cosSim = cosineSimilarity(result.descriptor, storedArr);
       const percent = similarityToPercent(cosSim);
       if (percent > bestScore) bestScore = percent;
+      if (percent >= SIMILARITY_THRESHOLD) passCount++;
     }
+
+    // At least half of stored embeddings must match (consensus check)
+    const totalEmbeddings = storedEmbeddings.current.length;
+    const requiredMatches = Math.max(1, Math.ceil(totalEmbeddings / 2));
+    const consensusPassed = passCount >= requiredMatches;
 
     setResultScore(Math.round(bestScore));
 
