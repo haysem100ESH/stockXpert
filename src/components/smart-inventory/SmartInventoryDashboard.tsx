@@ -197,6 +197,9 @@ export default function SmartInventoryDashboard() {
             refetch={seasonal.refetch}
           />
         </TabsContent>
+        <TabsContent value="batches">
+          <BatchAnalytics />
+        </TabsContent>
         {isPharmacy && (
           <TabsContent value="expiry">
             <ExpiryRiskPanel items={summary.expiryAlerts} />
