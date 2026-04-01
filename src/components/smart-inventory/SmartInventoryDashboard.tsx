@@ -125,7 +125,7 @@ export default function SmartInventoryDashboard() {
 
       {/* Tabbed Content */}
       <Tabs defaultValue="alerts" className="space-y-4">
-        <TabsList className="grid w-full grid-cols-3 md:grid-cols-7 h-auto">
+        <TabsList className="grid w-full grid-cols-4 md:grid-cols-8 h-auto">
           <TabsTrigger value="alerts" className="gap-1">
             <Bell className="h-4 w-4" />
             <span className="hidden sm:inline">Alerts</span>
@@ -159,6 +159,10 @@ export default function SmartInventoryDashboard() {
           <TabsTrigger value="seasonal" className="gap-1">
             <Sun className="h-4 w-4" />
             <span className="hidden sm:inline">Seasonal</span>
+          </TabsTrigger>
+          <TabsTrigger value="batches" className="gap-1">
+            <Layers className="h-4 w-4" />
+            <span className="hidden sm:inline">Batches</span>
           </TabsTrigger>
           {isPharmacy && (
             <TabsTrigger value="expiry" className="gap-1">
