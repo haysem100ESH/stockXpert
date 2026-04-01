@@ -412,6 +412,14 @@ export default function StaffInventoryWithActions() {
         onConfirm={confirmDeleteItem}
         confirmText="Remove"
       />
+
+      <BatchBreakdownDialog
+        open={batchBreakdown.open}
+        onOpenChange={(open) => setBatchBreakdown(prev => ({ ...prev, open }))}
+        branchItemId={batchBreakdown.itemId}
+        itemName={batchBreakdown.itemName}
+      />
+      />
     </div>
   );
 }
