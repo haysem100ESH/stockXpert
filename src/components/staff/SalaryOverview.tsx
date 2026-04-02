@@ -299,7 +299,7 @@ export default function SalaryOverview() {
                   <TableHead>Staff Name</TableHead>
                   <TableHead>Branch</TableHead>
                   <TableHead className="text-right">Sales This Month</TableHead>
-                  <TableHead className="text-right">Salary %</TableHead>
+                  <TableHead className="text-right">Salary Type</TableHead>
                   <TableHead className="text-right">Calculated Salary</TableHead>
                   <TableHead className="text-right">Paid Amount</TableHead>
                   <TableHead className="text-right">Unpaid Remaining</TableHead>
