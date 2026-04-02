@@ -186,7 +186,7 @@ export default function SalaryOverview() {
       const { error: expenseError } = await supabase
         .from('expenses')
         .insert({
-          description: `Salary Payment - ${staff.full_name} (${staff.salary_percentage}% of sales, ETB ${unpaidAmount.toFixed(2)})`,
+          description: `Salary Payment - ${staff.full_name} (${staff.salary_type === 'fixed' ? `Fixed ETB ${staff.salary_fixed_amount}` : `${staff.salary_percentage}% of sales`}, ETB ${unpaidAmount.toFixed(2)})`,
           amount: unpaidAmount,
           category: 'Salary Expense',
           branch_id: staff.branch_id || selectedBranch,
