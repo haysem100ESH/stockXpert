@@ -151,6 +151,7 @@ export default function SalaryOverview() {
   };
 
   const calculateTotalSalary = (staff: StaffSalaryInfo) => {
+    if (staff.salary_type === 'fixed') return staff.salary_fixed_amount;
     return (staff.individualSales * staff.salary_percentage) / 100;
   };
 
