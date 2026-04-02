@@ -6,7 +6,7 @@ import { Input } from '@/components/ui/input';
 import { Badge } from '@/components/ui/badge';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
-import { Search, Edit2, Plus, Trash2, Filter, Settings2, SlidersHorizontal, History } from 'lucide-react';
+import { Search, Edit2, Plus, Trash2, Filter, Settings2, SlidersHorizontal, History, Layers } from 'lucide-react';
 import { supabase } from '@/lib/db';
 import { useToast } from '@/hooks/use-toast';
 import { useAuth } from '@/hooks/useAuth';
@@ -16,6 +16,7 @@ import EditBranchItemDialog, { type BranchItem } from './EditBranchItemDialog';
 import { ConfirmationDialog } from '@/components/ui/confirmation-dialog';
 import CategoryManagement from './CategoryManagement';
 import StockEditHistory from './StockEditHistory';
+import BatchBreakdownDialog from './BatchBreakdownDialog';
 
 export default function StaffInventoryWithActions() {
   const [searchParams] = useSearchParams();
@@ -34,6 +35,7 @@ export default function StaffInventoryWithActions() {
     itemName: string;
   }>({ open: false, itemId: '', itemName: '' });
   const [hasBranches, setHasBranches] = useState(true);
+  const [batchBreakdown, setBatchBreakdown] = useState<{ open: boolean; itemId: string; itemName: string }>({ open: false, itemId: '', itemName: '' });
   const { toast } = useToast();
   const { profile } = useAuth();
   const { selectedBranch, branchType } = useBranchContext();
@@ -192,13 +194,34 @@ export default function StaffInventoryWithActions() {
 
   const confirmDeleteItem = async () => {
     try {
-      const { error } = await supabase.from('branch_items').delete().eq('id', deleteConfirmation.itemId);
+      const itemId = deleteConfirmation.itemId;
+
+      // Check if item has sales history (sale_items referencing this branch_item)
+      const { count: saleCount } = await supabase
+        .from('sale_items')
+        .select('id', { count: 'exact', head: true })
+        .eq('branch_item_id', itemId);
+
+      if ((saleCount ?? 0) > 0) {
+        toast({
+          title: 'Cannot Delete',
+          description: `This item has sales history and cannot be removed. You can set its stock to 0 instead.`,
+          variant: 'destructive',
+        });
+        setDeleteConfirmation({ open: false, itemId: '', itemName: '' });
+        return;
+      }
+
+      // Delete related inventory_batches first (no sales history means batches are unused)
+      await supabase.from('inventory_batches').delete().eq('branch_item_id', itemId);
+
+      const { error } = await supabase.from('branch_items').delete().eq('id', itemId);
       if (error) throw error;
-      setBranchItems(prev => prev.filter(i => i.id !== deleteConfirmation.itemId));
+      setBranchItems(prev => prev.filter(i => i.id !== itemId));
       toast({ title: 'Success', description: `${isPharmacy ? 'Medicine' : 'Item'} removed from branch` });
       setDeleteConfirmation({ open: false, itemId: '', itemName: '' });
     } catch (error) {
-      toast({ title: 'Error', description: `Failed to delete ${isPharmacy ? 'medicine' : 'item'}`, variant: 'destructive' });
+      toast({ title: 'Error', description: `Failed to delete ${isPharmacy ? 'medicine' : 'item'}. It may have related records.`, variant: 'destructive' });
     }
   };
 
@@ -231,6 +254,7 @@ export default function StaffInventoryWithActions() {
             {item.generic_name && <CardDescription>{item.generic_name}</CardDescription>}
           </div>
           <div className="flex space-x-1">
+            <Button size="sm" variant="ghost" onClick={() => setBatchBreakdown({ open: true, itemId: item.id, itemName: item.name })} title="View Batches"><Layers className="h-4 w-4" /></Button>
             <Button size="sm" variant="ghost" onClick={() => handleEditItem(item)} title="Edit"><Edit2 className="h-4 w-4" /></Button>
             <Button size="sm" variant="ghost" onClick={() => handleDeleteItem(item.id, item.name)} title="Remove"><Trash2 className="h-4 w-4" /></Button>
           </div>
@@ -408,6 +432,13 @@ export default function StaffInventoryWithActions() {
         description="This will remove the item from this branch's inventory. The master catalog entry will not be affected."
         onConfirm={confirmDeleteItem}
         confirmText="Remove"
+      />
+
+      <BatchBreakdownDialog
+        open={batchBreakdown.open}
+        onOpenChange={(open) => setBatchBreakdown(prev => ({ ...prev, open }))}
+        branchItemId={batchBreakdown.itemId}
+        itemName={batchBreakdown.itemName}
       />
     </div>
   );

@@ -16,6 +16,7 @@ import AddToCartDialog from './AddToCartDialog';
 import { useIsMobile } from '@/hooks/use-mobile';
 import { updateCreditScore, getCreditLimit } from '@/hooks/useCreditScore';
 import { isMeasurable } from '@/lib/itemTypes';
+import { deductFIFO, recordSaleItemBatches } from '@/lib/batchInventory';
 
 interface Medicine {
   id: string; // branch_items.id
@@ -612,26 +613,51 @@ export default function SalesManagement() {
         throw itemsError;
       }
 
-      // Stock deduction — update branch_items.quantity
+      // Stock deduction — FIFO batch deduction + branch_items sync
       for (const item of cart) {
+        let totalQtyToDeduct = 0;
         if (item.saleType === 'full_pack') {
-          await (supabase as any)
-            .from('branch_items')
-            .update({ quantity: item.stock_quantity - item.quantity, updated_at: new Date().toISOString() })
-            .eq('id', item.id);
+          totalQtyToDeduct = item.quantity;
         } else if (item.saleType === 'by_stripe' && item.stripesCount) {
-          // For strip-based sales from branch_items, deduct proportionally
           const medicine = medicines.find(m => m.id === item.id);
           if (!medicine?.units_per_pack) continue;
+          totalQtyToDeduct = item.stripesCount / medicine.units_per_pack;
+        }
 
-          const unitsPerPack = medicine.units_per_pack;
-          const packsToDeduct = item.stripesCount / unitsPerPack;
-          const newQty = Math.max(0, medicine.stock_quantity - packsToDeduct);
+        if (totalQtyToDeduct > 0) {
+          // Try FIFO batch deduction first
+          const { consumed, error: fifoErr } = await deductFIFO(item.id, totalQtyToDeduct);
 
-          await (supabase as any)
-            .from('branch_items')
-            .update({ quantity: newQty, updated_at: new Date().toISOString() })
-            .eq('id', item.id);
+          if (fifoErr || consumed.length === 0) {
+            // Fallback: direct branch_items update (for items without batches)
+            const currentMed = medicines.find(m => m.id === item.id);
+            if (currentMed) {
+              const newQty = Math.max(0, currentMed.stock_quantity - totalQtyToDeduct);
+              await (supabase as any)
+                .from('branch_items')
+                .update({ quantity: newQty, updated_at: new Date().toISOString() })
+                .eq('id', item.id);
+            }
+          }
+
+          // Record sale_item_batches for audit trail
+          if (consumed.length > 0) {
+            // Find the sale_item_id for this cart item
+            const saleItemForThis = saleItems.find((si: any) =>
+              si.branch_item_id === item.id
+            );
+            // We need the inserted sale_item id — fetch it
+            const { data: insertedSaleItems } = await (supabase as any)
+              .from('sale_items')
+              .select('id')
+              .eq('sale_id', saleData.id)
+              .eq('branch_item_id', item.id)
+              .limit(1);
+
+            if (insertedSaleItems && insertedSaleItems.length > 0) {
+              await recordSaleItemBatches(insertedSaleItems[0].id, consumed);
+            }
+          }
         }
       }
 

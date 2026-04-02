@@ -17,6 +17,7 @@ import {
   RefreshCw,
   Sun,
   Bell,
+  Layers,
 } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import ScoreOverview from './ScoreOverview';
@@ -29,6 +30,7 @@ import SeasonalPerformance from './SeasonalPerformance';
 import SeasonalInsights from './SeasonalInsights';
 import SeasonalTrendsWidget from './SeasonalTrendsWidget';
 import InventoryDashboard from '@/components/inventory/InventoryDashboard';
+import BatchAnalytics from '@/components/inventory/BatchAnalytics';
 
 export default function SmartInventoryDashboard() {
   const { items, summary, loading, isPharmacy, refetch } = useSmartInventory();
@@ -123,7 +125,7 @@ export default function SmartInventoryDashboard() {
 
       {/* Tabbed Content */}
       <Tabs defaultValue="alerts" className="space-y-4">
-        <TabsList className="grid w-full grid-cols-3 md:grid-cols-7 h-auto">
+        <TabsList className="grid w-full grid-cols-4 md:grid-cols-8 h-auto">
           <TabsTrigger value="alerts" className="gap-1">
             <Bell className="h-4 w-4" />
             <span className="hidden sm:inline">Alerts</span>
@@ -158,6 +160,10 @@ export default function SmartInventoryDashboard() {
             <Sun className="h-4 w-4" />
             <span className="hidden sm:inline">Seasonal</span>
           </TabsTrigger>
+          <TabsTrigger value="batches" className="gap-1">
+            <Layers className="h-4 w-4" />
+            <span className="hidden sm:inline">Batches</span>
+          </TabsTrigger>
           {isPharmacy && (
             <TabsTrigger value="expiry" className="gap-1">
               <CalendarDays className="h-4 w-4" />
@@ -190,6 +196,9 @@ export default function SmartInventoryDashboard() {
             loading={seasonal.loading}
             refetch={seasonal.refetch}
           />
+        </TabsContent>
+        <TabsContent value="batches">
+          <BatchAnalytics />
         </TabsContent>
         {isPharmacy && (
           <TabsContent value="expiry">

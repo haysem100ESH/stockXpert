@@ -251,10 +251,11 @@ export default function FinanceManagement() {
         seller: sale.sold_by ? sellersMap.get(sale.sold_by) || null : null,
       }));
 
-      // Fetch custom expenses
+      // Fetch custom expenses (exclude Stock Purchase - those are shown in inventory tab)
       let expensesQuery = supabase
         .from('expenses')
         .select('*')
+        .neq('category', 'Stock Purchase')
         .gte('created_at', queryStartDate.toISOString())
         .lte('created_at', queryEndDate.toISOString())
         .order('created_at', { ascending: false });
@@ -268,10 +269,10 @@ export default function FinanceManagement() {
       const { data: expensesData, error: expensesError } = await expensesQuery;
       if (expensesError) throw expensesError;
 
-      // Fetch inventory expenses from branch_items
+      // Fetch inventory expenses from inventory_batches (each batch = separate expense entry)
       let inventoryQuery = supabase
-        .from('branch_items')
-        .select('id, quantity, purchase_price, branch_id, created_at, medicines!inner(name)')
+        .from('inventory_batches')
+        .select('id, quantity, purchase_price, selling_price, branch_id, batch_number, created_at, medicines!inner(name)')
         .gte('created_at', queryStartDate.toISOString())
         .lte('created_at', queryEndDate.toISOString())
         .order('created_at', { ascending: false });
@@ -284,7 +285,10 @@ export default function FinanceManagement() {
 
       const { data: inventoryData } = await inventoryQuery;
 
-      // Fetch branch names for inventory expenses — only owner's branches
+      // Fallback: if inventory_batches table doesn't exist or returns null, use branch_items
+      let invExpenses: InventoryExpense[] = [];
+      
+      // Fetch branch names for inventory expenses
       let branchNameQuery = supabase
         .from('pharmacy_branches')
         .select('id, name');
@@ -294,15 +298,42 @@ export default function FinanceManagement() {
       const { data: branchesForNames } = await branchNameQuery;
       const branchNameMap = new Map((branchesForNames || []).map((b: any) => [b.id, b.name]));
 
-      const invExpenses: InventoryExpense[] = (inventoryData || []).map((bi: any) => ({
-        id: bi.id,
-        name: (bi.medicines as any)?.name || 'Unknown',
-        stock_quantity: bi.quantity,
-        purchase_price: Number(bi.purchase_price),
-        total_cost: Number(bi.purchase_price) * Number(bi.quantity),
-        branch_name: bi.branch_id ? branchNameMap.get(bi.branch_id) : undefined,
-        created_at: bi.created_at,
-      }));
+      if (inventoryData && inventoryData.length > 0) {
+        invExpenses = inventoryData.map((batch: any) => ({
+          id: batch.id,
+          name: `${(batch.medicines as any)?.name || 'Unknown'}${batch.batch_number ? ` [${batch.batch_number}]` : ''}`,
+          stock_quantity: Number(batch.quantity),
+          purchase_price: Number(batch.purchase_price),
+          total_cost: Number(batch.purchase_price) * Number(batch.quantity),
+          branch_name: batch.branch_id ? branchNameMap.get(batch.branch_id) : undefined,
+          created_at: batch.created_at,
+        }));
+      } else {
+        // Fallback to branch_items if no batches found
+        let fallbackQuery = supabase
+          .from('branch_items')
+          .select('id, quantity, purchase_price, branch_id, created_at, medicines!inner(name)')
+          .gte('created_at', queryStartDate.toISOString())
+          .lte('created_at', queryEndDate.toISOString())
+          .order('created_at', { ascending: false });
+
+        if (selectedBranch) {
+          fallbackQuery = fallbackQuery.eq('branch_id', selectedBranch);
+        } else if (ownerBranchIds.length > 0) {
+          fallbackQuery = fallbackQuery.in('branch_id', ownerBranchIds);
+        }
+
+        const { data: fallbackData } = await fallbackQuery;
+        invExpenses = (fallbackData || []).map((bi: any) => ({
+          id: bi.id,
+          name: (bi.medicines as any)?.name || 'Unknown',
+          stock_quantity: bi.quantity,
+          purchase_price: Number(bi.purchase_price),
+          total_cost: Number(bi.purchase_price) * Number(bi.quantity),
+          branch_name: bi.branch_id ? branchNameMap.get(bi.branch_id) : undefined,
+          created_at: bi.created_at,
+        }));
+      }
 
       setInventoryExpenses(invExpenses);
       setSales(salesWithSeller || []);

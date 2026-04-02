@@ -24,7 +24,9 @@ export default function EditStaffDialog({
     full_name: '',
     phone: '',
     branch_id: '',
-    salary_percentage: '0'
+    salary_type: 'percentage' as 'percentage' | 'fixed',
+    salary_percentage: '0',
+    salary_fixed_amount: '0'
   });
   const [branches, setBranches] = useState<Array<{ id: string; name: string }>>([]);
   const [loading, setLoading] = useState(false);
@@ -36,7 +38,9 @@ export default function EditStaffDialog({
         full_name: staff.full_name,
         phone: staff.phone || '',
         branch_id: staff.branch_id || '',
-        salary_percentage: String(staff.salary_percentage || 0)
+        salary_type: staff.salary_type || 'percentage',
+        salary_percentage: String(staff.salary_percentage || 0),
+        salary_fixed_amount: String(staff.salary_fixed_amount || 0)
       });
       fetchBranches();
     }
@@ -69,7 +73,9 @@ export default function EditStaffDialog({
           full_name: formData.full_name,
           phone: formData.phone || null,
           branch_id: formData.branch_id || null,
-          salary_percentage: parseFloat(formData.salary_percentage) || 0
+          salary_type: formData.salary_type,
+          salary_percentage: formData.salary_type === 'percentage' ? (parseFloat(formData.salary_percentage) || 0) : 0,
+          salary_fixed_amount: formData.salary_type === 'fixed' ? (parseFloat(formData.salary_fixed_amount) || 0) : 0
         })
         .eq('id', staff.id);
 
@@ -123,19 +129,51 @@ export default function EditStaffDialog({
           </div>
 
           <div className="space-y-2">
-            <Label htmlFor="salary_percentage">Salary Percentage (%)</Label>
-            <Input
-              id="salary_percentage"
-              type="number"
-              min="0"
-              max="100"
-              step="0.1"
-              value={formData.salary_percentage}
-              onChange={(e) => setFormData({ ...formData, salary_percentage: e.target.value })}
-              placeholder="e.g. 10"
-            />
-            <p className="text-xs text-muted-foreground">Percentage of monthly branch profit</p>
+            <Label>Salary Type</Label>
+            <Select
+              value={formData.salary_type}
+              onValueChange={(value) => setFormData({ ...formData, salary_type: value as 'percentage' | 'fixed' })}
+            >
+              <SelectTrigger>
+                <SelectValue />
+              </SelectTrigger>
+              <SelectContent>
+                <SelectItem value="percentage">Percentage of Sales</SelectItem>
+                <SelectItem value="fixed">Fixed Amount</SelectItem>
+              </SelectContent>
+            </Select>
           </div>
+
+          {formData.salary_type === 'percentage' ? (
+            <div className="space-y-2">
+              <Label htmlFor="salary_percentage">Salary Percentage (%)</Label>
+              <Input
+                id="salary_percentage"
+                type="number"
+                min="0"
+                max="100"
+                step="0.1"
+                value={formData.salary_percentage}
+                onChange={(e) => setFormData({ ...formData, salary_percentage: e.target.value })}
+                placeholder="e.g. 10"
+              />
+              <p className="text-xs text-muted-foreground">Percentage of individual monthly sales</p>
+            </div>
+          ) : (
+            <div className="space-y-2">
+              <Label htmlFor="salary_fixed_amount">Fixed Salary Amount (ETB)</Label>
+              <Input
+                id="salary_fixed_amount"
+                type="number"
+                min="0"
+                step="0.01"
+                value={formData.salary_fixed_amount}
+                onChange={(e) => setFormData({ ...formData, salary_fixed_amount: e.target.value })}
+                placeholder="e.g. 5000"
+              />
+              <p className="text-xs text-muted-foreground">Fixed monthly salary amount in ETB</p>
+            </div>
+          )}
 
           {branches.length > 0 && (
             <div className="space-y-2">

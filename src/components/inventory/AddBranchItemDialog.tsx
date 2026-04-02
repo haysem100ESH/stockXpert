@@ -9,6 +9,7 @@ import { Checkbox } from '@/components/ui/checkbox';
 import { Search, Loader2 } from 'lucide-react';
 import { supabase } from '@/lib/db';
 import { useToast } from '@/hooks/use-toast';
+import { createBatch } from '@/lib/batchInventory';
 import { useAuth } from '@/hooks/useAuth';
 import { useBranchContext } from '@/hooks/useBranchContext';
 
@@ -49,6 +50,7 @@ export default function AddBranchItemDialog({ open, onOpenChange, onItemAdded }:
   const [purchasePrice, setPurchasePrice] = useState('');
   const [quantity, setQuantity] = useState('');
   const [expiryDate, setExpiryDate] = useState('');
+  const [batchNumber, setBatchNumber] = useState('');
 
   const { toast } = useToast();
   const { profile } = useAuth();
@@ -71,6 +73,7 @@ export default function AddBranchItemDialog({ open, onOpenChange, onItemAdded }:
     setPurchasePrice('');
     setQuantity('');
     setExpiryDate('');
+    setBatchNumber('');
     setSelectedSupplierId('');
     setPaymentType('paid');
     setRecordInExpense(true);
@@ -174,26 +177,58 @@ export default function AddBranchItemDialog({ open, onOpenChange, onItemAdded }:
       const pp = parseFloat(purchasePrice);
       const qty = parseFloat(quantity);
 
-      // Insert into branch_items
-      const { error } = await supabase.from('branch_items').insert({
-        owner_id: profile?.id,
-        branch_id: selectedBranchId,
-        medicine_id: selectedItem.id,
-        selling_price: sp,
-        purchase_price: pp,
+      // Check if branch_item already exists for this medicine+branch
+      const { data: existingBI } = await supabase
+        .from('branch_items')
+        .select('id, quantity')
+        .eq('branch_id', selectedBranchId)
+        .eq('medicine_id', selectedItem.id)
+        .maybeSingle();
+
+      let branchItemId: string;
+
+      if (existingBI) {
+        // Branch item exists — just add a new batch
+        branchItemId = existingBI.id;
+      } else {
+        // Create new branch_item (quantity will be synced from batches)
+        const { data: newBI, error } = await supabase.from('branch_items').insert({
+          owner_id: profile?.id,
+          branch_id: selectedBranchId,
+          medicine_id: selectedItem.id,
+          selling_price: sp,
+          purchase_price: pp,
+          quantity: qty,
+          expiry_date: expiryDate || null,
+        }).select('id').single();
+
+        if (error) {
+          if (error.code === '23505') {
+            toast({ title: 'Error', description: 'This item already exists in this branch. Edit the existing entry instead.', variant: 'destructive' });
+          } else {
+            throw error;
+          }
+          setSubmitting(false);
+          return;
+        }
+        branchItemId = newBI.id;
+      }
+
+      // Create inventory batch
+      const { error: batchErr } = await createBatch({
+        branchId: selectedBranchId,
+        medicineId: selectedItem.id,
+        branchItemId,
+        supplierId: selectedSupplierId || null,
+        batchNumber: batchNumber || null,
         quantity: qty,
-        expiry_date: expiryDate || null,
+        purchasePrice: pp,
+        sellingPrice: sp,
+        expiryDate: expiryDate || null,
+        createdBy: user?.id || null,
       });
 
-      if (error) {
-        if (error.code === '23505') {
-          toast({ title: 'Error', description: 'This item already exists in this branch. Edit the existing entry instead.', variant: 'destructive' });
-        } else {
-          throw error;
-        }
-        setSubmitting(false);
-        return;
-      }
+      if (batchErr) throw batchErr;
 
       const totalAmount = qty * pp;
 
@@ -228,7 +263,7 @@ export default function AddBranchItemDialog({ open, onOpenChange, onItemAdded }:
       // Record expense
       if (recordInExpense && qty > 0 && pp > 0) {
         await supabase.from('expenses').insert({
-          description: `Purchase of ${selectedItem.name} (${qty} units)`,
+          description: `Purchase of ${selectedItem.name} (${qty} units)${batchNumber ? ` [Batch: ${batchNumber}]` : ''}`,
           amount: totalAmount,
           category: 'Stock Purchase',
           created_by: user?.id || null,
@@ -236,7 +271,7 @@ export default function AddBranchItemDialog({ open, onOpenChange, onItemAdded }:
         });
       }
 
-      toast({ title: 'Success', description: `${selectedItem.name} added to branch inventory` });
+      toast({ title: 'Success', description: `${selectedItem.name} added to branch inventory (Batch created)` });
       onItemAdded();
       onOpenChange(false);
     } catch (error: any) {
@@ -363,6 +398,11 @@ export default function AddBranchItemDialog({ open, onOpenChange, onItemAdded }:
                     onChange={e => setQuantity(e.target.value)}
                     placeholder="0"
                   />
+                </div>
+
+                <div className="space-y-2">
+                  <Label>Batch Number</Label>
+                  <Input value={batchNumber} onChange={e => setBatchNumber(e.target.value)} placeholder="e.g. BN-2026-001" />
                 </div>
 
                 <div className="space-y-2">

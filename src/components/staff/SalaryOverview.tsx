@@ -14,7 +14,9 @@ import { ConfirmationDialog } from '@/components/ui/confirmation-dialog';
 interface StaffSalaryInfo {
   id: string;
   full_name: string;
+  salary_type: 'percentage' | 'fixed';
   salary_percentage: number;
+  salary_fixed_amount: number;
   branch_id: string | null;
   branch_name?: string;
   individualSales: number;
@@ -97,7 +99,7 @@ export default function SalaryOverview() {
     // Fetch staff
     const { data: staffData } = await supabase
       .from('profiles')
-      .select('id, full_name, salary_percentage, branch_id')
+      .select('id, full_name, salary_percentage, salary_type, salary_fixed_amount, branch_id')
       .eq('role', 'staff')
       .in('branch_id', filteredBranchIds);
 
@@ -138,7 +140,9 @@ export default function SalaryOverview() {
 
     setStaffList((staffData || []).map((s: any) => ({
       ...s,
+      salary_type: s.salary_type || 'percentage',
       salary_percentage: Number(s.salary_percentage) || 0,
+      salary_fixed_amount: Number(s.salary_fixed_amount) || 0,
       branch_name: s.branch_id ? branchMap.get(s.branch_id) : undefined,
       individualSales: salesMap[s.id] || 0,
       totalPaid: paidTotalMap[s.id] || 0,
@@ -147,6 +151,7 @@ export default function SalaryOverview() {
   };
 
   const calculateTotalSalary = (staff: StaffSalaryInfo) => {
+    if (staff.salary_type === 'fixed') return staff.salary_fixed_amount;
     return (staff.individualSales * staff.salary_percentage) / 100;
   };
 
@@ -173,7 +178,7 @@ export default function SalaryOverview() {
           created_by: profile.id,
           month: selectedMonth,
           year: selectedYear,
-          notes: `Salary for ${staff.full_name} - ${selectedMonth}/${selectedYear} (Sales: ETB ${staff.individualSales.toFixed(2)}, Paid: ETB ${unpaidAmount.toFixed(2)})`,
+          notes: `Salary for ${staff.full_name} - ${selectedMonth}/${selectedYear} (${staff.salary_type === 'fixed' ? `Fixed: ETB ${staff.salary_fixed_amount}` : `Sales: ETB ${staff.individualSales.toFixed(2)}`}, Paid: ETB ${unpaidAmount.toFixed(2)})`,
         });
 
       if (salaryError) throw salaryError;
@@ -181,7 +186,7 @@ export default function SalaryOverview() {
       const { error: expenseError } = await supabase
         .from('expenses')
         .insert({
-          description: `Salary Payment - ${staff.full_name} (${staff.salary_percentage}% of sales, ETB ${unpaidAmount.toFixed(2)})`,
+          description: `Salary Payment - ${staff.full_name} (${staff.salary_type === 'fixed' ? `Fixed ETB ${staff.salary_fixed_amount}` : `${staff.salary_percentage}% of sales`}, ETB ${unpaidAmount.toFixed(2)})`,
           amount: unpaidAmount,
           category: 'Salary Expense',
           branch_id: staff.branch_id || selectedBranch,
@@ -294,7 +299,7 @@ export default function SalaryOverview() {
                   <TableHead>Staff Name</TableHead>
                   <TableHead>Branch</TableHead>
                   <TableHead className="text-right">Sales This Month</TableHead>
-                  <TableHead className="text-right">Salary %</TableHead>
+                  <TableHead className="text-right">Salary Type</TableHead>
                   <TableHead className="text-right">Calculated Salary</TableHead>
                   <TableHead className="text-right">Paid Amount</TableHead>
                   <TableHead className="text-right">Unpaid Remaining</TableHead>
@@ -312,7 +317,11 @@ export default function SalaryOverview() {
                       <TableCell className="font-medium">{staff.full_name}</TableCell>
                       <TableCell>{staff.branch_name || '—'}</TableCell>
                       <TableCell className="text-right">ETB {staff.individualSales.toFixed(2)}</TableCell>
-                      <TableCell className="text-right">{staff.salary_percentage}%</TableCell>
+                      <TableCell className="text-right">
+                        {staff.salary_type === 'fixed'
+                          ? `ETB ${staff.salary_fixed_amount.toFixed(2)}`
+                          : `${staff.salary_percentage}%`}
+                      </TableCell>
                       <TableCell className="text-right font-medium">ETB {totalSalary.toFixed(2)}</TableCell>
                       <TableCell className="text-right text-success">ETB {staff.totalPaid.toFixed(2)}</TableCell>
                       <TableCell className={`text-right font-semibold ${unpaid > 0 ? 'text-destructive' : 'text-success'}`}>
