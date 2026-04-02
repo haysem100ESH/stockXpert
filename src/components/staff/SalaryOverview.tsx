@@ -178,7 +178,7 @@ export default function SalaryOverview() {
           created_by: profile.id,
           month: selectedMonth,
           year: selectedYear,
-          notes: `Salary for ${staff.full_name} - ${selectedMonth}/${selectedYear} (Sales: ETB ${staff.individualSales.toFixed(2)}, Paid: ETB ${unpaidAmount.toFixed(2)})`,
+          notes: `Salary for ${staff.full_name} - ${selectedMonth}/${selectedYear} (${staff.salary_type === 'fixed' ? `Fixed: ETB ${staff.salary_fixed_amount}` : `Sales: ETB ${staff.individualSales.toFixed(2)}`}, Paid: ETB ${unpaidAmount.toFixed(2)})`,
         });
 
       if (salaryError) throw salaryError;
