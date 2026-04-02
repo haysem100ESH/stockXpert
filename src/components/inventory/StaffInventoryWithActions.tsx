@@ -194,13 +194,34 @@ export default function StaffInventoryWithActions() {
 
   const confirmDeleteItem = async () => {
     try {
-      const { error } = await supabase.from('branch_items').delete().eq('id', deleteConfirmation.itemId);
+      const itemId = deleteConfirmation.itemId;
+
+      // Check if item has sales history (sale_items referencing this branch_item)
+      const { count: saleCount } = await supabase
+        .from('sale_items')
+        .select('id', { count: 'exact', head: true })
+        .eq('branch_item_id', itemId);
+
+      if ((saleCount ?? 0) > 0) {
+        toast({
+          title: 'Cannot Delete',
+          description: `This item has sales history and cannot be removed. You can set its stock to 0 instead.`,
+          variant: 'destructive',
+        });
+        setDeleteConfirmation({ open: false, itemId: '', itemName: '' });
+        return;
+      }
+
+      // Delete related inventory_batches first (no sales history means batches are unused)
+      await supabase.from('inventory_batches').delete().eq('branch_item_id', itemId);
+
+      const { error } = await supabase.from('branch_items').delete().eq('id', itemId);
       if (error) throw error;
-      setBranchItems(prev => prev.filter(i => i.id !== deleteConfirmation.itemId));
+      setBranchItems(prev => prev.filter(i => i.id !== itemId));
       toast({ title: 'Success', description: `${isPharmacy ? 'Medicine' : 'Item'} removed from branch` });
       setDeleteConfirmation({ open: false, itemId: '', itemName: '' });
     } catch (error) {
-      toast({ title: 'Error', description: `Failed to delete ${isPharmacy ? 'medicine' : 'item'}`, variant: 'destructive' });
+      toast({ title: 'Error', description: `Failed to delete ${isPharmacy ? 'medicine' : 'item'}. It may have related records.`, variant: 'destructive' });
     }
   };
 
