@@ -73,7 +73,9 @@ export default function EditStaffDialog({
           full_name: formData.full_name,
           phone: formData.phone || null,
           branch_id: formData.branch_id || null,
-          salary_percentage: parseFloat(formData.salary_percentage) || 0
+          salary_type: formData.salary_type,
+          salary_percentage: formData.salary_type === 'percentage' ? (parseFloat(formData.salary_percentage) || 0) : 0,
+          salary_fixed_amount: formData.salary_type === 'fixed' ? (parseFloat(formData.salary_fixed_amount) || 0) : 0
         })
         .eq('id', staff.id);
 
