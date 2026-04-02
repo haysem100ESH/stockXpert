@@ -38,7 +38,9 @@ export default function EditStaffDialog({
         full_name: staff.full_name,
         phone: staff.phone || '',
         branch_id: staff.branch_id || '',
-        salary_percentage: String(staff.salary_percentage || 0)
+        salary_type: staff.salary_type || 'percentage',
+        salary_percentage: String(staff.salary_percentage || 0),
+        salary_fixed_amount: String(staff.salary_fixed_amount || 0)
       });
       fetchBranches();
     }
