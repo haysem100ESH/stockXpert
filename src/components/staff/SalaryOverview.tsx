@@ -14,7 +14,9 @@ import { ConfirmationDialog } from '@/components/ui/confirmation-dialog';
 interface StaffSalaryInfo {
   id: string;
   full_name: string;
+  salary_type: 'percentage' | 'fixed';
   salary_percentage: number;
+  salary_fixed_amount: number;
   branch_id: string | null;
   branch_name?: string;
   individualSales: number;
