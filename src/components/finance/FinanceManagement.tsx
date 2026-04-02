@@ -251,10 +251,11 @@ export default function FinanceManagement() {
         seller: sale.sold_by ? sellersMap.get(sale.sold_by) || null : null,
       }));
 
-      // Fetch custom expenses
+      // Fetch custom expenses (exclude Stock Purchase - those are shown in inventory tab)
       let expensesQuery = supabase
         .from('expenses')
         .select('*')
+        .neq('category', 'Stock Purchase')
         .gte('created_at', queryStartDate.toISOString())
         .lte('created_at', queryEndDate.toISOString())
         .order('created_at', { ascending: false });

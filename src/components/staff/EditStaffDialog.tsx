@@ -24,7 +24,9 @@ export default function EditStaffDialog({
     full_name: '',
     phone: '',
     branch_id: '',
-    salary_percentage: '0'
+    salary_type: 'percentage' as 'percentage' | 'fixed',
+    salary_percentage: '0',
+    salary_fixed_amount: '0'
   });
   const [branches, setBranches] = useState<Array<{ id: string; name: string }>>([]);
   const [loading, setLoading] = useState(false);
