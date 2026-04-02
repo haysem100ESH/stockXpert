@@ -99,7 +99,7 @@ export default function SalaryOverview() {
     // Fetch staff
     const { data: staffData } = await supabase
       .from('profiles')
-      .select('id, full_name, salary_percentage, branch_id')
+      .select('id, full_name, salary_percentage, salary_type, salary_fixed_amount, branch_id')
       .eq('role', 'staff')
       .in('branch_id', filteredBranchIds);
 
