@@ -140,7 +140,9 @@ export default function SalaryOverview() {
 
     setStaffList((staffData || []).map((s: any) => ({
       ...s,
+      salary_type: s.salary_type || 'percentage',
       salary_percentage: Number(s.salary_percentage) || 0,
+      salary_fixed_amount: Number(s.salary_fixed_amount) || 0,
       branch_name: s.branch_id ? branchMap.get(s.branch_id) : undefined,
       individualSales: salesMap[s.id] || 0,
       totalPaid: paidTotalMap[s.id] || 0,
