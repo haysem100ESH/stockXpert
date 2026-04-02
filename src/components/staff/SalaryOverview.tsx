@@ -317,7 +317,11 @@ export default function SalaryOverview() {
                       <TableCell className="font-medium">{staff.full_name}</TableCell>
                       <TableCell>{staff.branch_name || '—'}</TableCell>
                       <TableCell className="text-right">ETB {staff.individualSales.toFixed(2)}</TableCell>
-                      <TableCell className="text-right">{staff.salary_percentage}%</TableCell>
+                      <TableCell className="text-right">
+                        {staff.salary_type === 'fixed'
+                          ? `ETB ${staff.salary_fixed_amount.toFixed(2)}`
+                          : `${staff.salary_percentage}%`}
+                      </TableCell>
                       <TableCell className="text-right font-medium">ETB {totalSalary.toFixed(2)}</TableCell>
                       <TableCell className="text-right text-success">ETB {staff.totalPaid.toFixed(2)}</TableCell>
                       <TableCell className={`text-right font-semibold ${unpaid > 0 ? 'text-destructive' : 'text-success'}`}>
