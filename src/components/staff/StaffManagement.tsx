@@ -5,7 +5,7 @@ import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
 import { Badge } from '@/components/ui/badge';
 import { Dialog, DialogContent, DialogDescription, DialogHeader, DialogTitle } from '@/components/ui/dialog';
-import { Plus, Users, Phone, Mail, Edit, Trash2, Search, KeyRound, MapPin, BarChart3, UserCircle2 } from 'lucide-react';
+import { Plus, Users, Phone, Mail, Edit, Trash2, Search, KeyRound, MapPin, BarChart3, UserCircle2, Shield } from 'lucide-react';
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
 import { supabase } from '@/lib/db';
 import { useToast } from '@/hooks/use-toast';
@@ -22,6 +22,7 @@ import RecordAttendance from './attendance/RecordAttendance';
 import AttendanceDashboard from './attendance/AttendanceDashboard';
 import PerformanceDashboard from './performance/PerformanceDashboard';
 import FaceRegistration from './face/FaceRegistration';
+import StaffPermissionsEditor from './StaffPermissionsEditor';
 
 interface StaffMember {
   id: string;
@@ -49,6 +50,7 @@ export default function StaffManagement() {
   const [newPassword, setNewPassword] = useState('');
   const [resettingPassword, setResettingPassword] = useState(false);
   const [faceRegStaff, setFaceRegStaff] = useState<StaffMember | null>(null);
+  const [permissionsStaff, setPermissionsStaff] = useState<StaffMember | null>(null);
   const { toast } = useToast();
   const { profile } = useAuth();
   const { selectedBranch } = useBranchContext();
@@ -384,6 +386,10 @@ export default function StaffManagement() {
                 <BarChart3 className="h-4 w-4 mr-1" />
                 Performance
               </TabsTrigger>
+              <TabsTrigger value="access-control">
+                <Shield className="h-4 w-4 mr-1" />
+                Access Control
+              </TabsTrigger>
             </>
           )}
         </TabsList>
@@ -439,6 +445,35 @@ export default function StaffManagement() {
             </TabsContent>
             <TabsContent value="performance">
               <PerformanceDashboard />
+            </TabsContent>
+            <TabsContent value="access-control">
+              <Card>
+                <CardHeader>
+                  <CardTitle>Select Staff for Access Control</CardTitle>
+                  <CardDescription>Choose a staff member to manage their page-level permissions</CardDescription>
+                </CardHeader>
+                <CardContent className="space-y-4">
+                  <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-3">
+                    {staff.map((member) => (
+                      <Button
+                        key={member.id}
+                        variant={permissionsStaff?.id === member.id ? 'default' : 'outline'}
+                        className="justify-start h-auto py-3"
+                        onClick={() => setPermissionsStaff(member)}
+                      >
+                        <Shield className="h-4 w-4 mr-2 shrink-0" />
+                        <span className="truncate">{member.full_name}</span>
+                      </Button>
+                    ))}
+                  </div>
+                  {permissionsStaff && (
+                    <StaffPermissionsEditor
+                      staffId={permissionsStaff.id}
+                      staffName={permissionsStaff.full_name}
+                    />
+                  )}
+                </CardContent>
+              </Card>
             </TabsContent>
           </>
         )}
