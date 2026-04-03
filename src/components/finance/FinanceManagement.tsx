@@ -756,7 +756,7 @@ export default function FinanceManagement() {
             
             <Dialog open={showAddExpense} onOpenChange={setShowAddExpense}>
               <DialogTrigger asChild>
-                <Button size="sm">
+                <Button size="sm" disabled={readOnly}>
                   <Plus className="h-4 w-4 mr-1" />
                   Add Expense
                 </Button>
