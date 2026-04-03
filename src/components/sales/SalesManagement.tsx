@@ -464,6 +464,10 @@ export default function SalesManagement() {
   const creditCheck = getCreditCheckResult();
 
   const handleCheckout = () => {
+    if (readOnly) {
+      toast({ title: 'Read Only', description: 'You cannot make sales in read-only mode.', variant: 'destructive' });
+      return;
+    }
     if (!selectedBranch) {
       toast({ title: 'Branch Required', description: 'Please select a specific branch before selling.', variant: 'destructive' });
       return;
