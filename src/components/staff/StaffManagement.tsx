@@ -446,6 +446,35 @@ export default function StaffManagement() {
             <TabsContent value="performance">
               <PerformanceDashboard />
             </TabsContent>
+            <TabsContent value="access-control">
+              <Card>
+                <CardHeader>
+                  <CardTitle>Select Staff for Access Control</CardTitle>
+                  <CardDescription>Choose a staff member to manage their page-level permissions</CardDescription>
+                </CardHeader>
+                <CardContent className="space-y-4">
+                  <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-3">
+                    {staff.map((member) => (
+                      <Button
+                        key={member.id}
+                        variant={permissionsStaff?.id === member.id ? 'default' : 'outline'}
+                        className="justify-start h-auto py-3"
+                        onClick={() => setPermissionsStaff(member)}
+                      >
+                        <Shield className="h-4 w-4 mr-2 shrink-0" />
+                        <span className="truncate">{member.full_name}</span>
+                      </Button>
+                    ))}
+                  </div>
+                  {permissionsStaff && (
+                    <StaffPermissionsEditor
+                      staffId={permissionsStaff.id}
+                      staffName={permissionsStaff.full_name}
+                    />
+                  )}
+                </CardContent>
+              </Card>
+            </TabsContent>
           </>
         )}
       </Tabs>
