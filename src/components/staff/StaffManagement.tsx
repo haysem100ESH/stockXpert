@@ -22,6 +22,7 @@ import RecordAttendance from './attendance/RecordAttendance';
 import AttendanceDashboard from './attendance/AttendanceDashboard';
 import PerformanceDashboard from './performance/PerformanceDashboard';
 import FaceRegistration from './face/FaceRegistration';
+import StaffPermissionsEditor from './StaffPermissionsEditor';
 
 interface StaffMember {
   id: string;
