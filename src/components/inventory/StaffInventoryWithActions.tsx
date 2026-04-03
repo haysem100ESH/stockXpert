@@ -11,6 +11,7 @@ import { supabase } from '@/lib/db';
 import { useToast } from '@/hooks/use-toast';
 import { useAuth } from '@/hooks/useAuth';
 import { useBranchContext } from '@/hooks/useBranchContext';
+import { useReadOnly } from '@/hooks/useReadOnly';
 import AddBranchItemDialog from './AddBranchItemDialog';
 import EditBranchItemDialog, { type BranchItem } from './EditBranchItemDialog';
 import { ConfirmationDialog } from '@/components/ui/confirmation-dialog';
@@ -39,6 +40,7 @@ export default function StaffInventoryWithActions() {
   const { toast } = useToast();
   const { profile } = useAuth();
   const { selectedBranch, branchType } = useBranchContext();
+  const readOnly = useReadOnly();
   const isPharmacy = branchType === 'pharmacy';
 
   useEffect(() => {
@@ -255,8 +257,8 @@ export default function StaffInventoryWithActions() {
           </div>
           <div className="flex space-x-1">
             <Button size="sm" variant="ghost" onClick={() => setBatchBreakdown({ open: true, itemId: item.id, itemName: item.name })} title="View Batches"><Layers className="h-4 w-4" /></Button>
-            <Button size="sm" variant="ghost" onClick={() => handleEditItem(item)} title="Edit"><Edit2 className="h-4 w-4" /></Button>
-            <Button size="sm" variant="ghost" onClick={() => handleDeleteItem(item.id, item.name)} title="Remove"><Trash2 className="h-4 w-4" /></Button>
+            {!readOnly && <Button size="sm" variant="ghost" onClick={() => handleEditItem(item)} title="Edit"><Edit2 className="h-4 w-4" /></Button>}
+            {!readOnly && <Button size="sm" variant="ghost" onClick={() => handleDeleteItem(item.id, item.name)} title="Remove"><Trash2 className="h-4 w-4" /></Button>}
           </div>
         </div>
       </CardHeader>
@@ -310,7 +312,7 @@ export default function StaffInventoryWithActions() {
         <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3">
           <h2 className="text-xl sm:text-2xl font-bold">{isPharmacy ? 'Inventory Management' : 'Stock Management'}</h2>
           <div className="flex gap-2 flex-wrap">
-            <Button onClick={() => setShowAddDialog(true)} disabled={!hasBranches} size="sm">
+            <Button onClick={() => setShowAddDialog(true)} disabled={!hasBranches || readOnly} size="sm">
               <Plus className="h-4 w-4 mr-2" />
               Add Item
             </Button>

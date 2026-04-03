@@ -20,6 +20,7 @@ import { useToast } from '@/hooks/use-toast';
 import { useAuth } from '@/hooks/useAuth';
 import { useBranchContext } from '@/hooks/useBranchContext';
 import { useAdvancedMode } from '@/hooks/useAdvancedMode';
+import { useReadOnly } from '@/hooks/useReadOnly';
 
 import DebtManagement from './DebtManagement';
 import SalaryHistory from '@/components/staff/SalaryHistory';
@@ -126,6 +127,7 @@ export default function FinanceManagement() {
   const { toast } = useToast();
   const { selectedBranch } = useBranchContext();
   const { isAdvancedMode } = useAdvancedMode();
+  const readOnly = useReadOnly();
   const [showFinanceDetails, setShowFinanceDetails] = useState(false);
   
   const itemsPerPage = 15;
@@ -754,7 +756,7 @@ export default function FinanceManagement() {
             
             <Dialog open={showAddExpense} onOpenChange={setShowAddExpense}>
               <DialogTrigger asChild>
-                <Button size="sm">
+                <Button size="sm" disabled={readOnly}>
                   <Plus className="h-4 w-4 mr-1" />
                   Add Expense
                 </Button>
