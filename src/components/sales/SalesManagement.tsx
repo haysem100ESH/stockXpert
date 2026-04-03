@@ -861,10 +861,10 @@ export default function SalesManagement() {
             <Button
               onClick={() => addToCartInstant(medicine)}
               className="w-full"
-              disabled={medicine.stock_quantity === 0 || (isPharmacy && isExpired(medicine.expiry_date))}
+              disabled={readOnly || medicine.stock_quantity === 0 || (isPharmacy && isExpired(medicine.expiry_date))}
             >
               <Plus className="h-4 w-4 mr-2" />
-              {isPharmacy && isExpired(medicine.expiry_date) ? 'Expired' : 'Add to Cart'}
+              {readOnly ? 'Read Only' : isPharmacy && isExpired(medicine.expiry_date) ? 'Expired' : 'Add to Cart'}
             </Button>
           ) : (
             <p className="text-sm text-muted-foreground text-center py-2">

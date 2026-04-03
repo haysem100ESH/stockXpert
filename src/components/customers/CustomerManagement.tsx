@@ -276,12 +276,13 @@ export default function CustomerManagement() {
             <TabsTrigger value="debtors">Debtors ({debtors.length})</TabsTrigger>
           </TabsList>
           <Button onClick={() => {
+            if (readOnly) return;
             if (!selectedBranch) {
               toast({ title: 'Branch Required', description: 'Please select a specific branch before creating a customer.', variant: 'destructive' });
               return;
             }
             setShowAddDialog(true);
-          }} size="sm">
+          }} size="sm" disabled={readOnly}>
             <Plus className="h-4 w-4 mr-1" /> Add Customer
           </Button>
         </div>
