@@ -61,6 +61,7 @@ const App = () => {
       <ThemeProvider attribute="class" defaultTheme="light" enableSystem={false}>
       <AdvancedModeProvider>
       <AuthProvider>
+      <StaffPermissionsProvider>
         <TooltipProvider>
           <Toaster />
           <Sonner />
