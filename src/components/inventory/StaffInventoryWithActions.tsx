@@ -40,6 +40,7 @@ export default function StaffInventoryWithActions() {
   const { toast } = useToast();
   const { profile } = useAuth();
   const { selectedBranch, branchType } = useBranchContext();
+  const readOnly = useReadOnly();
   const isPharmacy = branchType === 'pharmacy';
 
   useEffect(() => {
