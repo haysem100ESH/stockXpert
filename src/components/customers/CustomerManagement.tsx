@@ -64,6 +64,7 @@ export default function CustomerManagement() {
   const [selectedCustomer, setSelectedCustomer] = useState<Customer | null>(null);
   const { selectedBranch } = useBranchContext();
   const { toast } = useToast();
+  const readOnly = useReadOnly();
 
   useEffect(() => { fetchCustomers(); }, [selectedBranch]);
 
