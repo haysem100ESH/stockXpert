@@ -35,6 +35,7 @@ import { useBranchContext } from "@/hooks/useBranchContext";
 import { useBranding } from "@/hooks/useBranding";
 import { useAdvancedMode } from "@/hooks/useAdvancedMode";
 import { Badge } from "@/components/ui/badge";
+import { useStaffPermissions, getPageNameForRoute } from "@/hooks/useStaffPermissions";
 
 export function AppSidebar() {
   const { state, setOpenMobile } = useSidebar();
