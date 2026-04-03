@@ -69,18 +69,18 @@ const App = () => {
           <BrowserRouter future={{ v7_startTransition: true, v7_relativeSplatPath: true }}>
             <Routes>
               <Route path="/auth" element={<Auth />} />
-              <Route path="/" element={<Layout><SubscriptionGuard><DashboardRouter /></SubscriptionGuard></Layout>} />
-              <Route path="/inventory" element={<Layout><SubscriptionGuard><InventoryPage /></SubscriptionGuard></Layout>} />
-              <Route path="/sales" element={<Layout><SubscriptionGuard><SalesPage /></SubscriptionGuard></Layout>} />
-              <Route path="/finance" element={<Layout><SubscriptionGuard><FinancePage /></SubscriptionGuard></Layout>} />
-              <Route path="/suppliers" element={<Layout><SubscriptionGuard><SuppliersPage /></SubscriptionGuard></Layout>} />
-              <Route path="/customers" element={<Layout><SubscriptionGuard><CustomersPage /></SubscriptionGuard></Layout>} />
-              <Route path="/staff" element={<Layout><SubscriptionGuard><StaffPage /></SubscriptionGuard></Layout>} />
+              <Route path="/" element={<Layout><SubscriptionGuard><PermissionGuard page="dashboard"><DashboardRouter /></PermissionGuard></SubscriptionGuard></Layout>} />
+              <Route path="/inventory" element={<Layout><SubscriptionGuard><PermissionGuard page="inventory"><InventoryPage /></PermissionGuard></SubscriptionGuard></Layout>} />
+              <Route path="/sales" element={<Layout><SubscriptionGuard><PermissionGuard page="sales"><SalesPage /></PermissionGuard></SubscriptionGuard></Layout>} />
+              <Route path="/finance" element={<Layout><SubscriptionGuard><PermissionGuard page="finance"><FinancePage /></PermissionGuard></SubscriptionGuard></Layout>} />
+              <Route path="/suppliers" element={<Layout><SubscriptionGuard><PermissionGuard page="suppliers"><SuppliersPage /></PermissionGuard></SubscriptionGuard></Layout>} />
+              <Route path="/customers" element={<Layout><SubscriptionGuard><PermissionGuard page="customers"><CustomersPage /></PermissionGuard></SubscriptionGuard></Layout>} />
+              <Route path="/staff" element={<Layout><SubscriptionGuard><PermissionGuard page="attendance"><StaffPage /></PermissionGuard></SubscriptionGuard></Layout>} />
               <Route path="/branches" element={<Layout><SubscriptionGuard><BranchPage /></SubscriptionGuard></Layout>} />
               
-              <Route path="/stock-movements" element={<Layout><SubscriptionGuard><StockMovementsPage /></SubscriptionGuard></Layout>} />
-              <Route path="/transfer-requests" element={<Layout><SubscriptionGuard><TransferRequestsPage /></SubscriptionGuard></Layout>} />
-              <Route path="/smart-inventory" element={<Layout><SubscriptionGuard><SmartInventoryPage /></SubscriptionGuard></Layout>} />
+              <Route path="/stock-movements" element={<Layout><SubscriptionGuard><PermissionGuard page="global_inventory"><StockMovementsPage /></PermissionGuard></SubscriptionGuard></Layout>} />
+              <Route path="/transfer-requests" element={<Layout><SubscriptionGuard><PermissionGuard page="transfers"><TransferRequestsPage /></PermissionGuard></SubscriptionGuard></Layout>} />
+              <Route path="/smart-inventory" element={<Layout><SubscriptionGuard><PermissionGuard page="smart_inventory"><SmartInventoryPage /></PermissionGuard></SubscriptionGuard></Layout>} />
               <Route path="/developer" element={<Layout><DeveloperPage /></Layout>} />
               <Route path="/account" element={<Layout><AccountPage /></Layout>} />
               {/* ADD ALL CUSTOM ROUTES ABOVE THE CATCH-ALL "*" ROUTE */}
