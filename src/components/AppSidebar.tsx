@@ -45,6 +45,7 @@ export function AppSidebar() {
   const { branchType } = useBranchContext();
   const branding = useBranding();
   const { isAdvancedMode } = useAdvancedMode();
+  const { canAccess } = useStaffPermissions();
   const currentPath = location.pathname;
 
   const isPharmacy = branchType === 'pharmacy';
