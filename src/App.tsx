@@ -10,6 +10,7 @@ import { AdvancedModeProvider } from "@/hooks/useAdvancedMode";
 import { StaffPermissionsProvider } from "@/hooks/useStaffPermissions";
 import Layout from "@/components/Layout";
 import SubscriptionGuard from "@/components/subscription/SubscriptionGuard";
+import PermissionGuard from "@/components/permissions/PermissionGuard";
 import Dashboard from "./pages/Dashboard";
 import InventoryPage from "./pages/InventoryPage";
 import SalesPage from "./pages/SalesPage";
