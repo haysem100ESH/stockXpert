@@ -49,6 +49,7 @@ export default function SupplierManagement() {
   const [supplierDebts, setSupplierDebts] = useState<Record<string, number>>({});
   const { toast } = useToast();
   const { profile } = useAuth();
+  const readOnly = useReadOnly();
   const { selectedBranch } = useBranchContext();
   
   const itemsPerPage = 15;
