@@ -190,13 +190,15 @@ export default function CustomerManagement() {
               <DropdownMenuItem onClick={() => openDetail(c)}>
                 <Eye className="mr-2 h-4 w-4" /> View Details
               </DropdownMenuItem>
-              <DropdownMenuItem onClick={() => openEdit(c)}>
-                <Edit className="mr-2 h-4 w-4" /> Edit
-              </DropdownMenuItem>
+              {!readOnly && (
+                <DropdownMenuItem onClick={() => openEdit(c)}>
+                  <Edit className="mr-2 h-4 w-4" /> Edit
+                </DropdownMenuItem>
+              )}
               <DropdownMenuItem onClick={() => openLedger(c)}>
                 <FileText className="mr-2 h-4 w-4" /> Ledger
               </DropdownMenuItem>
-              {c.totalDebt > 0 && (
+              {!readOnly && c.totalDebt > 0 && (
                 <DropdownMenuItem onClick={() => openPayment(c)}>
                   <CreditCard className="mr-2 h-4 w-4" /> Record Payment
                 </DropdownMenuItem>
