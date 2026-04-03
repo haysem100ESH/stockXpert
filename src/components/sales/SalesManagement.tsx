@@ -17,6 +17,7 @@ import { useIsMobile } from '@/hooks/use-mobile';
 import { updateCreditScore, getCreditLimit } from '@/hooks/useCreditScore';
 import { isMeasurable } from '@/lib/itemTypes';
 import { deductFIFO, recordSaleItemBatches } from '@/lib/batchInventory';
+import { useReadOnly } from '@/hooks/useReadOnly';
 
 interface Medicine {
   id: string; // branch_items.id

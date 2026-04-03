@@ -11,6 +11,7 @@ import { supabase } from '@/lib/db';
 import { useToast } from '@/hooks/use-toast';
 import { useAuth } from '@/hooks/useAuth';
 import { useBranchContext } from '@/hooks/useBranchContext';
+import { useReadOnly } from '@/hooks/useReadOnly';
 import AddBranchItemDialog from './AddBranchItemDialog';
 import EditBranchItemDialog, { type BranchItem } from './EditBranchItemDialog';
 import { ConfirmationDialog } from '@/components/ui/confirmation-dialog';

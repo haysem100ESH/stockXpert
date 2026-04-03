@@ -21,6 +21,7 @@ import RecordPaymentDialog from './RecordPaymentDialog';
 import CustomerDetailDialog from './CustomerDetailDialog';
 import CustomerLedgerDialog from './CustomerLedgerDialog';
 import DebtorExpandableList from './DebtorExpandableList';
+import { useReadOnly } from '@/hooks/useReadOnly';
 
 interface Customer {
   id: string;

@@ -20,6 +20,7 @@ import SupplierCreditors from './SupplierCreditors';
 import SupplierAnalytics from './SupplierAnalytics';
 import SupplierIntelligenceDashboard from './SupplierIntelligenceDashboard';
 import { ConfirmationDialog } from '@/components/ui/confirmation-dialog';
+import { useReadOnly } from '@/hooks/useReadOnly';
 
 interface Supplier {
   id: string;

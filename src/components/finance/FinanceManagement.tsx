@@ -20,6 +20,7 @@ import { useToast } from '@/hooks/use-toast';
 import { useAuth } from '@/hooks/useAuth';
 import { useBranchContext } from '@/hooks/useBranchContext';
 import { useAdvancedMode } from '@/hooks/useAdvancedMode';
+import { useReadOnly } from '@/hooks/useReadOnly';
 
 import DebtManagement from './DebtManagement';
 import SalaryHistory from '@/components/staff/SalaryHistory';
