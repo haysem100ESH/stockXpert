@@ -142,7 +142,7 @@ export default function SupplierManagement() {
               <Search className="absolute left-2 top-2.5 h-4 w-4 text-muted-foreground" />
               <Input placeholder="Search suppliers..." value={searchTerm} onChange={(e) => setSearchTerm(e.target.value)} className="pl-8" />
             </div>
-            {profile?.role === 'owner' && (
+            {profile?.role === 'owner' && !readOnly && (
               <Button onClick={() => setShowAddDialog(true)}><Plus className="h-4 w-4 mr-2" />Add Supplier</Button>
             )}
           </div>
