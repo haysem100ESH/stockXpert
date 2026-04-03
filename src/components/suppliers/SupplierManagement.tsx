@@ -20,6 +20,7 @@ import SupplierCreditors from './SupplierCreditors';
 import SupplierAnalytics from './SupplierAnalytics';
 import SupplierIntelligenceDashboard from './SupplierIntelligenceDashboard';
 import { ConfirmationDialog } from '@/components/ui/confirmation-dialog';
+import { useReadOnly } from '@/hooks/useReadOnly';
 
 interface Supplier {
   id: string;
@@ -48,6 +49,7 @@ export default function SupplierManagement() {
   const [supplierDebts, setSupplierDebts] = useState<Record<string, number>>({});
   const { toast } = useToast();
   const { profile } = useAuth();
+  const readOnly = useReadOnly();
   const { selectedBranch } = useBranchContext();
   
   const itemsPerPage = 15;
@@ -140,7 +142,7 @@ export default function SupplierManagement() {
               <Search className="absolute left-2 top-2.5 h-4 w-4 text-muted-foreground" />
               <Input placeholder="Search suppliers..." value={searchTerm} onChange={(e) => setSearchTerm(e.target.value)} className="pl-8" />
             </div>
-            {profile?.role === 'owner' && (
+            {profile?.role === 'owner' && !readOnly && (
               <Button onClick={() => setShowAddDialog(true)}><Plus className="h-4 w-4 mr-2" />Add Supplier</Button>
             )}
           </div>
@@ -165,11 +167,13 @@ export default function SupplierManagement() {
                       <DropdownMenuTrigger asChild>
                         <Button variant="ghost" size="sm"><MoreVertical className="h-4 w-4" /></Button>
                       </DropdownMenuTrigger>
-                      <DropdownMenuContent align="end">
-                        <DropdownMenuItem onClick={() => setPurchaseDialog({ open: true, supplierId: supplier.id, supplierName: supplier.name })}>
-                          <ShoppingCart className="h-4 w-4 mr-2" /> Record Purchase
-                        </DropdownMenuItem>
-                        {(supplierDebts[supplier.id] || 0) > 0 && (
+                       <DropdownMenuContent align="end">
+                        {!readOnly && (
+                          <DropdownMenuItem onClick={() => setPurchaseDialog({ open: true, supplierId: supplier.id, supplierName: supplier.name })}>
+                            <ShoppingCart className="h-4 w-4 mr-2" /> Record Purchase
+                          </DropdownMenuItem>
+                        )}
+                        {!readOnly && (supplierDebts[supplier.id] || 0) > 0 && (
                           <DropdownMenuItem onClick={() => setPaymentDialog({ open: true, supplierId: supplier.id, supplierName: supplier.name, debt: supplierDebts[supplier.id] || 0 })}>
                             <CreditCard className="h-4 w-4 mr-2" /> Record Payment
                           </DropdownMenuItem>
@@ -177,10 +181,12 @@ export default function SupplierManagement() {
                         <DropdownMenuItem onClick={() => setLedgerDialog({ open: true, supplierId: supplier.id, supplierName: supplier.name })}>
                           <FileText className="h-4 w-4 mr-2" /> View Ledger
                         </DropdownMenuItem>
-                        <DropdownMenuItem onClick={() => handleEditSupplier(supplier)}>
-                          <Edit className="h-4 w-4 mr-2" /> Edit
-                        </DropdownMenuItem>
-                        {profile?.role === 'owner' && (
+                        {!readOnly && (
+                          <DropdownMenuItem onClick={() => handleEditSupplier(supplier)}>
+                            <Edit className="h-4 w-4 mr-2" /> Edit
+                          </DropdownMenuItem>
+                        )}
+                        {!readOnly && profile?.role === 'owner' && (
                           <DropdownMenuItem onClick={() => handleDeleteSupplier(supplier.id, supplier.name)} className="text-destructive">
                             <Trash2 className="h-4 w-4 mr-2" /> Delete
                           </DropdownMenuItem>

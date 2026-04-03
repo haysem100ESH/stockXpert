@@ -17,6 +17,7 @@ import { useIsMobile } from '@/hooks/use-mobile';
 import { updateCreditScore, getCreditLimit } from '@/hooks/useCreditScore';
 import { isMeasurable } from '@/lib/itemTypes';
 import { deductFIFO, recordSaleItemBatches } from '@/lib/batchInventory';
+import { useReadOnly } from '@/hooks/useReadOnly';
 
 interface Medicine {
   id: string; // branch_items.id
@@ -70,6 +71,7 @@ export default function SalesManagement() {
   const { toast } = useToast();
   const { selectedBranch, branchType } = useBranchContext();
   const isMobile = useIsMobile();
+  const readOnly = useReadOnly();
   const [isSmallScreen, setIsSmallScreen] = useState(false);
   const isPharmacy = branchType === 'pharmacy';
 
@@ -462,6 +464,10 @@ export default function SalesManagement() {
   const creditCheck = getCreditCheckResult();
 
   const handleCheckout = () => {
+    if (readOnly) {
+      toast({ title: 'Read Only', description: 'You cannot make sales in read-only mode.', variant: 'destructive' });
+      return;
+    }
     if (!selectedBranch) {
       toast({ title: 'Branch Required', description: 'Please select a specific branch before selling.', variant: 'destructive' });
       return;
@@ -859,10 +865,10 @@ export default function SalesManagement() {
             <Button
               onClick={() => addToCartInstant(medicine)}
               className="w-full"
-              disabled={medicine.stock_quantity === 0 || (isPharmacy && isExpired(medicine.expiry_date))}
+              disabled={readOnly || medicine.stock_quantity === 0 || (isPharmacy && isExpired(medicine.expiry_date))}
             >
               <Plus className="h-4 w-4 mr-2" />
-              {isPharmacy && isExpired(medicine.expiry_date) ? 'Expired' : 'Add to Cart'}
+              {readOnly ? 'Read Only' : isPharmacy && isExpired(medicine.expiry_date) ? 'Expired' : 'Add to Cart'}
             </Button>
           ) : (
             <p className="text-sm text-muted-foreground text-center py-2">

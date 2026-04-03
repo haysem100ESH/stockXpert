@@ -21,6 +21,7 @@ import RecordPaymentDialog from './RecordPaymentDialog';
 import CustomerDetailDialog from './CustomerDetailDialog';
 import CustomerLedgerDialog from './CustomerLedgerDialog';
 import DebtorExpandableList from './DebtorExpandableList';
+import { useReadOnly } from '@/hooks/useReadOnly';
 
 interface Customer {
   id: string;
@@ -63,6 +64,7 @@ export default function CustomerManagement() {
   const [selectedCustomer, setSelectedCustomer] = useState<Customer | null>(null);
   const { selectedBranch } = useBranchContext();
   const { toast } = useToast();
+  const readOnly = useReadOnly();
 
   useEffect(() => { fetchCustomers(); }, [selectedBranch]);
 
@@ -188,13 +190,15 @@ export default function CustomerManagement() {
               <DropdownMenuItem onClick={() => openDetail(c)}>
                 <Eye className="mr-2 h-4 w-4" /> View Details
               </DropdownMenuItem>
-              <DropdownMenuItem onClick={() => openEdit(c)}>
-                <Edit className="mr-2 h-4 w-4" /> Edit
-              </DropdownMenuItem>
+              {!readOnly && (
+                <DropdownMenuItem onClick={() => openEdit(c)}>
+                  <Edit className="mr-2 h-4 w-4" /> Edit
+                </DropdownMenuItem>
+              )}
               <DropdownMenuItem onClick={() => openLedger(c)}>
                 <FileText className="mr-2 h-4 w-4" /> Ledger
               </DropdownMenuItem>
-              {c.totalDebt > 0 && (
+              {!readOnly && c.totalDebt > 0 && (
                 <DropdownMenuItem onClick={() => openPayment(c)}>
                   <CreditCard className="mr-2 h-4 w-4" /> Record Payment
                 </DropdownMenuItem>
@@ -224,7 +228,7 @@ export default function CustomerManagement() {
     {
       id: 'actions',
       header: 'Actions',
-      cell: ({ row }) => (
+      cell: ({ row }) => readOnly ? null : (
         <Button size="sm" variant="outline" onClick={() => openPayment(row.original)}>
           <CreditCard className="h-3 w-3 mr-1" /> Record Payment
         </Button>
@@ -272,12 +276,13 @@ export default function CustomerManagement() {
             <TabsTrigger value="debtors">Debtors ({debtors.length})</TabsTrigger>
           </TabsList>
           <Button onClick={() => {
+            if (readOnly) return;
             if (!selectedBranch) {
               toast({ title: 'Branch Required', description: 'Please select a specific branch before creating a customer.', variant: 'destructive' });
               return;
             }
             setShowAddDialog(true);
-          }} size="sm">
+          }} size="sm" disabled={readOnly}>
             <Plus className="h-4 w-4 mr-1" /> Add Customer
           </Button>
         </div>

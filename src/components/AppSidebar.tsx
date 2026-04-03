@@ -35,6 +35,7 @@ import { useBranchContext } from "@/hooks/useBranchContext";
 import { useBranding } from "@/hooks/useBranding";
 import { useAdvancedMode } from "@/hooks/useAdvancedMode";
 import { Badge } from "@/components/ui/badge";
+import { useStaffPermissions, getPageNameForRoute } from "@/hooks/useStaffPermissions";
 
 export function AppSidebar() {
   const { state, setOpenMobile } = useSidebar();
@@ -44,6 +45,7 @@ export function AppSidebar() {
   const { branchType } = useBranchContext();
   const branding = useBranding();
   const { isAdvancedMode } = useAdvancedMode();
+  const { canAccess } = useStaffPermissions();
   const currentPath = location.pathname;
 
   const isPharmacy = branchType === 'pharmacy';
@@ -91,10 +93,13 @@ export function AppSidebar() {
   const hiddenInSimpleMode = ['/smart-inventory', '/staff', '/transfer-requests', '/stock-movements'];
   
   const navItems = getNavItems().filter(item => {
-    if (isAdvancedMode) return true;
-    // For staff, '/staff' is Attendance - hide it in simple mode
-    // For owner, '/stock-movements' is Global Inventory - hide it in simple mode
-    return !hiddenInSimpleMode.includes(item.url);
+    if (!isAdvancedMode && hiddenInSimpleMode.includes(item.url)) return false;
+    // For staff, filter by permissions
+    if (profile?.role === 'staff') {
+      const pageName = getPageNameForRoute(item.url);
+      if (pageName && !canAccess(pageName)) return false;
+    }
+    return true;
   });
   const isCollapsed = state === "collapsed";
 
