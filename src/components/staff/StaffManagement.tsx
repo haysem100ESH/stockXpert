@@ -386,6 +386,10 @@ export default function StaffManagement() {
                 <BarChart3 className="h-4 w-4 mr-1" />
                 Performance
               </TabsTrigger>
+              <TabsTrigger value="access-control">
+                <Shield className="h-4 w-4 mr-1" />
+                Access Control
+              </TabsTrigger>
             </>
           )}
         </TabsList>
