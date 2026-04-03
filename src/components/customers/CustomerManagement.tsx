@@ -228,7 +228,7 @@ export default function CustomerManagement() {
     {
       id: 'actions',
       header: 'Actions',
-      cell: ({ row }) => (
+      cell: ({ row }) => readOnly ? null : (
         <Button size="sm" variant="outline" onClick={() => openPayment(row.original)}>
           <CreditCard className="h-3 w-3 mr-1" /> Record Payment
         </Button>
