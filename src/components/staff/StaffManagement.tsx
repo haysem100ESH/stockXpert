@@ -5,7 +5,7 @@ import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
 import { Badge } from '@/components/ui/badge';
 import { Dialog, DialogContent, DialogDescription, DialogHeader, DialogTitle } from '@/components/ui/dialog';
-import { Plus, Users, Phone, Mail, Edit, Trash2, Search, KeyRound, MapPin, BarChart3, UserCircle2 } from 'lucide-react';
+import { Plus, Users, Phone, Mail, Edit, Trash2, Search, KeyRound, MapPin, BarChart3, UserCircle2, Shield } from 'lucide-react';
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
 import { supabase } from '@/lib/db';
 import { useToast } from '@/hooks/use-toast';
