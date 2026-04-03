@@ -71,6 +71,7 @@ export default function SalesManagement() {
   const { toast } = useToast();
   const { selectedBranch, branchType } = useBranchContext();
   const isMobile = useIsMobile();
+  const readOnly = useReadOnly();
   const [isSmallScreen, setIsSmallScreen] = useState(false);
   const isPharmacy = branchType === 'pharmacy';
 
