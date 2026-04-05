@@ -6,12 +6,13 @@ import { Label } from '@/components/ui/label';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
 import { Badge } from '@/components/ui/badge';
 import { Checkbox } from '@/components/ui/checkbox';
-import { Search, Loader2 } from 'lucide-react';
+import { Search, Loader2, Plus } from 'lucide-react';
 import { supabase } from '@/lib/db';
 import { useToast } from '@/hooks/use-toast';
 import { createBatch } from '@/lib/batchInventory';
 import { useAuth } from '@/hooks/useAuth';
 import { useBranchContext } from '@/hooks/useBranchContext';
+import CreateCustomItemDialog from './CreateCustomItemDialog';
 
 interface CatalogItem {
   id: string;
@@ -38,6 +39,7 @@ export default function AddBranchItemDialog({ open, onOpenChange, onItemAdded }:
   const [submitting, setSubmitting] = useState(false);
   const [searchTerm, setSearchTerm] = useState('');
   const [selectedItem, setSelectedItem] = useState<CatalogItem | null>(null);
+  const [showCustomDialog, setShowCustomDialog] = useState(false);
   const [branches, setBranches] = useState<Array<{ id: string; name: string }>>([]);
   const [selectedBranchId, setSelectedBranchId] = useState<string>('');
   const [suppliers, setSuppliers] = useState<Array<{ id: string; name: string }>>([]);
@@ -84,8 +86,18 @@ export default function AddBranchItemDialog({ open, onOpenChange, onItemAdded }:
     setLoading(true);
 
     try {
-      // Flow: owner → owner_item_groups → grouped_items → grouped_item_members → medicines
-      const ownerId = profile.role === 'staff' ? null : profile.id;
+      // Resolve owner ID (staff → look up via branch)
+      let ownerId: string | null = null;
+      if (profile.role === 'owner' || profile.role === 'developer') {
+        ownerId = profile.id;
+      } else if (profile.role === 'staff' && profile.branch_id) {
+        const { data: branch } = await supabase
+          .from('pharmacy_branches')
+          .select('pharmacy_owner_id')
+          .eq('id', profile.branch_id)
+          .single();
+        ownerId = branch?.pharmacy_owner_id || null;
+      }
       
       if (!ownerId) {
         setCatalogItems([]);
@@ -282,6 +294,7 @@ export default function AddBranchItemDialog({ open, onOpenChange, onItemAdded }:
   };
 
   return (
+    <>
     <Dialog open={open} onOpenChange={onOpenChange}>
       <DialogContent className="max-w-2xl max-h-[90vh] overflow-y-auto">
         <DialogHeader>
@@ -295,14 +308,19 @@ export default function AddBranchItemDialog({ open, onOpenChange, onItemAdded }:
           {/* Step 1: Search and select item */}
           {!selectedItem ? (
             <div className="space-y-3">
-              <div className="relative">
-                <Search className="absolute left-2 top-2.5 h-4 w-4 text-muted-foreground" />
-                <Input
-                  value={searchTerm}
-                  onChange={e => setSearchTerm(e.target.value)}
-                  placeholder="Search catalog items by name, generic name, or category..."
-                  className="pl-8"
-                />
+              <div className="flex gap-2">
+                <div className="relative flex-1">
+                  <Search className="absolute left-2 top-2.5 h-4 w-4 text-muted-foreground" />
+                  <Input
+                    value={searchTerm}
+                    onChange={e => setSearchTerm(e.target.value)}
+                    placeholder="Search catalog items..."
+                    className="pl-8"
+                  />
+                </div>
+                <Button variant="outline" size="sm" className="shrink-0" onClick={() => setShowCustomDialog(true)}>
+                  <Plus className="h-4 w-4 mr-1" /> Custom Item
+                </Button>
               </div>
 
               {loading ? (
@@ -458,5 +476,15 @@ export default function AddBranchItemDialog({ open, onOpenChange, onItemAdded }:
         </div>
       </DialogContent>
     </Dialog>
+
+    <CreateCustomItemDialog
+      open={showCustomDialog}
+      onOpenChange={setShowCustomDialog}
+      onItemCreated={(item) => {
+        setCatalogItems(prev => [item as CatalogItem, ...prev]);
+        setSelectedItem(item as CatalogItem);
+      }}
+    />
+    </>
   );
 }
