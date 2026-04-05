@@ -39,6 +39,7 @@ export default function AddBranchItemDialog({ open, onOpenChange, onItemAdded }:
   const [submitting, setSubmitting] = useState(false);
   const [searchTerm, setSearchTerm] = useState('');
   const [selectedItem, setSelectedItem] = useState<CatalogItem | null>(null);
+  const [showCustomDialog, setShowCustomDialog] = useState(false);
   const [branches, setBranches] = useState<Array<{ id: string; name: string }>>([]);
   const [selectedBranchId, setSelectedBranchId] = useState<string>('');
   const [suppliers, setSuppliers] = useState<Array<{ id: string; name: string }>>([]);
@@ -296,14 +297,19 @@ export default function AddBranchItemDialog({ open, onOpenChange, onItemAdded }:
           {/* Step 1: Search and select item */}
           {!selectedItem ? (
             <div className="space-y-3">
-              <div className="relative">
-                <Search className="absolute left-2 top-2.5 h-4 w-4 text-muted-foreground" />
-                <Input
-                  value={searchTerm}
-                  onChange={e => setSearchTerm(e.target.value)}
-                  placeholder="Search catalog items by name, generic name, or category..."
-                  className="pl-8"
-                />
+              <div className="flex gap-2">
+                <div className="relative flex-1">
+                  <Search className="absolute left-2 top-2.5 h-4 w-4 text-muted-foreground" />
+                  <Input
+                    value={searchTerm}
+                    onChange={e => setSearchTerm(e.target.value)}
+                    placeholder="Search catalog items..."
+                    className="pl-8"
+                  />
+                </div>
+                <Button variant="outline" size="sm" className="shrink-0" onClick={() => setShowCustomDialog(true)}>
+                  <Plus className="h-4 w-4 mr-1" /> Custom Item
+                </Button>
               </div>
 
               {loading ? (
