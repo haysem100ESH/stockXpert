@@ -465,5 +465,15 @@ export default function AddBranchItemDialog({ open, onOpenChange, onItemAdded }:
         </div>
       </DialogContent>
     </Dialog>
+
+    <CreateCustomItemDialog
+      open={showCustomDialog}
+      onOpenChange={setShowCustomDialog}
+      onItemCreated={(item) => {
+        setCatalogItems(prev => [item as CatalogItem, ...prev]);
+        setSelectedItem(item as CatalogItem);
+      }}
+    />
+    </>
   );
 }
