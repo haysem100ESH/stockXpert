@@ -86,8 +86,18 @@ export default function AddBranchItemDialog({ open, onOpenChange, onItemAdded }:
     setLoading(true);
 
     try {
-      // Flow: owner → owner_item_groups → grouped_items → grouped_item_members → medicines
-      const ownerId = profile.role === 'staff' ? null : profile.id;
+      // Resolve owner ID (staff → look up via branch)
+      let ownerId: string | null = null;
+      if (profile.role === 'owner' || profile.role === 'developer') {
+        ownerId = profile.id;
+      } else if (profile.role === 'staff' && profile.branch_id) {
+        const { data: branch } = await supabase
+          .from('pharmacy_branches')
+          .select('pharmacy_owner_id')
+          .eq('id', profile.branch_id)
+          .single();
+        ownerId = branch?.pharmacy_owner_id || null;
+      }
       
       if (!ownerId) {
         setCatalogItems([]);
