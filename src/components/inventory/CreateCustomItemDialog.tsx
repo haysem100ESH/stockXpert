@@ -56,7 +56,17 @@ export default function CreateCustomItemDialog({ open, onOpenChange, onItemCreat
 
     setSubmitting(true);
     try {
-      const ownerId = profile?.role === 'staff' ? profile?.pharmacy_owner_id : profile?.id;
+      let ownerId = profile?.id;
+
+      // If staff, resolve owner via branch
+      if (profile?.role === 'staff' && profile?.branch_id) {
+        const { data: branch } = await supabase
+          .from('pharmacy_branches')
+          .select('pharmacy_owner_id')
+          .eq('id', profile.branch_id)
+          .single();
+        ownerId = branch?.pharmacy_owner_id || undefined;
+      }
 
       // Insert into medicines table
       const { data: newMed, error } = await supabase.from('medicines').insert({
