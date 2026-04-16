@@ -39,6 +39,7 @@ import { useSeasonalPerformance } from '@/hooks/useSeasonalPerformance';
 import SeasonalTrendsWidget from '@/components/smart-inventory/SeasonalTrendsWidget';
 import ScoreOverview from '@/components/smart-inventory/ScoreOverview';
 import { useSmartInventory } from '@/hooks/useSmartInventory';
+import { useOwnerBranchIds } from '@/hooks/useOwnerBranchIds';
 
 interface DashboardStats {
   totalRevenue: number;
@@ -93,13 +94,15 @@ export default function OwnerDashboard() {
   const { toast } = useToast();
   const { selectedBranch, branchType } = useBranchContext();
   const { profile } = useAuth();
+  // Cached owner-branch lookup — replaces 10+ duplicate network calls per page.
+  const { branchIds: cachedOwnerBranchIds } = useOwnerBranchIds();
   const isPharmacy = branchType === 'pharmacy';
   const { topSeasonalThisMonth, currentMonthName, isPharmacy: seasonalIsPharmacy } = useSeasonalPerformance();
   const { summary: smartSummary } = useSmartInventory();
 
   useEffect(() => {
     fetchDashboardStats();
-  }, [selectedBranch, profile, dateFilter]);
+  }, [selectedBranch, profile, dateFilter, cachedOwnerBranchIds]);
 
   const fetchDashboardStats = async () => {
     try {
@@ -118,14 +121,10 @@ export default function OwnerDashboard() {
 
       const medicineCategories = ['tablet', 'capsule', 'syrup', 'injection', 'cream', 'ointment', 'drops', 'inhaler'];
 
-      // Owner isolation: fetch owner's branch IDs when "All Branches"
+      // Owner isolation: read cached branch IDs (was a fresh DB query per render).
       let ownerBranchIds: string[] = [];
       if (!selectedBranch && profile?.role === 'owner' && profile?.id) {
-        const { data: ownerBranches } = await supabase
-          .from('pharmacy_branches')
-          .select('id')
-          .eq('pharmacy_owner_id', profile.id);
-        ownerBranchIds = (ownerBranches || []).map((b: any) => b.id);
+        ownerBranchIds = cachedOwnerBranchIds;
       }
       
       // If owner has no branches yet, show empty data
@@ -162,10 +161,9 @@ export default function OwnerDashboard() {
         saleItemsQuery = saleItemsQuery.in('sales.branch_id', ownerBranchIds);
       }
 
-      // Fetch data
-      const { data: salesData } = await salesQuery;
-      const { data: branchItemsData } = await branchItemsQuery;
-      const { data: saleItemsData } = await saleItemsQuery;
+      // Fetch the three primary datasets in parallel (was 3 sequential awaits).
+      const [{ data: salesData }, { data: branchItemsData }, { data: saleItemsData }] =
+        await Promise.all([salesQuery, branchItemsQuery, saleItemsQuery]);
       
       const totalRevenue = salesData?.reduce((sum, sale) => sum + Number(sale.total_amount), 0) || 0;
       const totalProducts = branchItemsData?.length || 0;

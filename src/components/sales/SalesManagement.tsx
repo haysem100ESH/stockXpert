@@ -10,6 +10,7 @@ import { supabase } from '@/lib/db';
 import { useToast } from '@/hooks/use-toast';
 import { useAuth } from '@/hooks/useAuth';
 import { useBranchContext } from '@/hooks/useBranchContext';
+import { useOwnerBranchIds } from '@/hooks/useOwnerBranchIds';
 import { ConfirmationDialog } from '@/components/ui/confirmation-dialog';
 import CartSlider from './CartSlider';
 import AddToCartDialog from './AddToCartDialog';
@@ -70,6 +71,7 @@ export default function SalesManagement() {
   const { profile } = useAuth();
   const { toast } = useToast();
   const { selectedBranch, branchType } = useBranchContext();
+  const { branchIds: cachedOwnerBranchIds } = useOwnerBranchIds();
   const isMobile = useIsMobile();
   const readOnly = useReadOnly();
   const [isSmallScreen, setIsSmallScreen] = useState(false);
@@ -86,7 +88,7 @@ export default function SalesManagement() {
 
   const itemsPerPage = 16;
 
-  useEffect(() => { fetchMedicines(); fetchCustomers(); }, [selectedBranch]);
+  useEffect(() => { fetchMedicines(); fetchCustomers(); }, [selectedBranch, cachedOwnerBranchIds]);
 
   useEffect(() => {
     const filtered = medicines.filter(medicine => {
@@ -118,16 +120,12 @@ export default function SalesManagement() {
 
   const fetchMedicines = async () => {
     try {
-      // Get branch IDs for this user
+      // Get branch IDs (cached owner-branch lookup avoids duplicate fetches).
       let branchIds: string[] = [];
       if (selectedBranch) {
         branchIds = [selectedBranch];
       } else if (!selectedBranch && profile?.role === 'owner' && profile?.id) {
-        const { data: ownerBranches } = await (supabase as any)
-          .from('pharmacy_branches')
-          .select('id')
-          .eq('pharmacy_owner_id', profile.id);
-        branchIds = (ownerBranches || []).map((b: any) => b.id);
+        branchIds = cachedOwnerBranchIds;
       } else if (profile?.branch_id) {
         branchIds = [profile.branch_id];
       }
@@ -206,14 +204,10 @@ export default function SalesManagement() {
     try {
       // Fetch customers — note: current_debt does NOT exist on the customers table;
       // we compute debt from the sales table instead.
-      // Filter customers by owner's branches when "All Branches"
+      // Filter customers by owner's branches when "All Branches" (cached lookup).
       let custBranchIds: string[] = [];
       if (!selectedBranch && profile?.role === 'owner' && profile?.id) {
-        const { data: ownerBranches } = await (supabase as any)
-          .from('pharmacy_branches')
-          .select('id')
-          .eq('pharmacy_owner_id', profile.id);
-        custBranchIds = (ownerBranches || []).map((b: any) => b.id);
+        custBranchIds = cachedOwnerBranchIds;
       }
 
       // If owner has no branches yet, show empty customers
