@@ -39,6 +39,7 @@ import { useSeasonalPerformance } from '@/hooks/useSeasonalPerformance';
 import SeasonalTrendsWidget from '@/components/smart-inventory/SeasonalTrendsWidget';
 import ScoreOverview from '@/components/smart-inventory/ScoreOverview';
 import { useSmartInventory } from '@/hooks/useSmartInventory';
+import { useOwnerBranchIds } from '@/hooks/useOwnerBranchIds';
 
 interface DashboardStats {
   totalRevenue: number;
