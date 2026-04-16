@@ -1,0 +1,136 @@
+/**
+ * useBranchInventory
+ * ----------------------------------------------------------------------------
+ * TanStack Query–powered fetch + cache for the staff/owner inventory list
+ * (`branch_items` joined with `medicines` + branch names).
+ *
+ * Why:
+ * - Previously the list re-fetched on every mount (3 sequential queries) which
+ *   made navigating away and back feel sluggish.
+ * - With React Query the second visit hydrates instantly from cache while the
+ *   list quietly revalidates in the background.
+ *
+ * Cache key: ['branch-inventory', { ownerId, selectedBranch, staffBranchId }]
+ * Stale time: 60s. Pull-to-refresh invalidates everything globally, so any
+ * external mutation can simply invalidate this key.
+ */
+import { useEffect } from 'react';
+import { useQuery, useQueryClient } from '@tanstack/react-query';
+import { supabase } from '@/lib/db';
+import { useAuth } from './useAuth';
+import { useBranchContext } from './useBranchContext';
+import { useOwnerBranchIds } from './useOwnerBranchIds';
+import type { BranchItem } from '@/components/inventory/EditBranchItemDialog';
+
+export type EnrichedBranchItem = BranchItem & { branch_name?: string };
+
+interface FetchArgs {
+  branchIds: string[];
+}
+
+async function fetchBranchInventory({ branchIds }: FetchArgs): Promise<EnrichedBranchItem[]> {
+  if (branchIds.length === 0) return [];
+
+  // 1. Fetch branch_items, medicines, and branch names in parallel where possible.
+  const { data: items, error } = await supabase
+    .from('branch_items')
+    .select('id, medicine_id, branch_id, owner_id, selling_price, purchase_price, quantity, expiry_date')
+    .in('branch_id', branchIds)
+    .order('created_at', { ascending: false });
+
+  if (error) throw error;
+  if (!items || items.length === 0) return [];
+
+  const medicineIds = [...new Set(items.map((i: any) => i.medicine_id))];
+  const allBranchIds = [...new Set(items.map((i: any) => i.branch_id))];
+
+  const [medsRes, branchesRes] = await Promise.all([
+    supabase
+      .from('medicines')
+      .select('id, name, generic_name, category, manufacturer, batch_number, item_type, unit_label, units_per_pack')
+      .in('id', medicineIds),
+    supabase
+      .from('pharmacy_branches')
+      .select('id, name')
+      .in('id', allBranchIds),
+  ]);
+
+  const medMap: Record<string, any> = {};
+  (medsRes.data || []).forEach((m: any) => { medMap[m.id] = m; });
+  const branchMap: Record<string, string> = {};
+  (branchesRes.data || []).forEach((b: any) => { branchMap[b.id] = b.name; });
+
+  return items.map((item: any) => {
+    const med = medMap[item.medicine_id] || {};
+    return {
+      ...item,
+      name: med.name || 'Unknown',
+      generic_name: med.generic_name,
+      category: med.category || 'Uncategorized',
+      manufacturer: med.manufacturer,
+      batch_number: med.batch_number,
+      item_type: med.item_type,
+      unit_label: med.unit_label,
+      units_per_pack: med.units_per_pack,
+      branch_name: branchMap[item.branch_id],
+    } as EnrichedBranchItem;
+  });
+}
+
+export const BRANCH_INVENTORY_KEY = (scope: { ownerId?: string; selectedBranch?: string | null; staffBranchId?: string | null }) =>
+  ['branch-inventory', scope] as const;
+
+export function useBranchInventory() {
+  const { profile } = useAuth();
+  const { selectedBranch } = useBranchContext();
+  const { branchIds: cachedOwnerBranchIds, isLoading: ownerBranchesLoading } = useOwnerBranchIds();
+  const queryClient = useQueryClient();
+
+  // Resolve the branch scope.
+  let branchIds: string[] = [];
+  if (selectedBranch) {
+    branchIds = [selectedBranch];
+  } else if (profile?.role === 'owner') {
+    branchIds = cachedOwnerBranchIds;
+  } else if (profile?.branch_id) {
+    branchIds = [profile.branch_id];
+  }
+
+  const enabled = !!profile && (profile.role !== 'owner' || !ownerBranchesLoading);
+
+  const queryKey = BRANCH_INVENTORY_KEY({
+    ownerId: profile?.role === 'owner' ? profile.id : undefined,
+    selectedBranch,
+    staffBranchId: profile?.role !== 'owner' ? profile?.branch_id : undefined,
+  });
+
+  const query = useQuery({
+    queryKey,
+    queryFn: () => fetchBranchInventory({ branchIds }),
+    enabled,
+    staleTime: 60 * 1000,
+    gcTime: 5 * 60 * 1000,
+    placeholderData: (prev) => prev, // keep previous data on key change → instant hydration
+  });
+
+  // Listen to legacy 'app:refresh' (pull-to-refresh) events for parity.
+  useEffect(() => {
+    const handler = () => queryClient.invalidateQueries({ queryKey: ['branch-inventory'] });
+    window.addEventListener('app:refresh', handler);
+    return () => window.removeEventListener('app:refresh', handler);
+  }, [queryClient]);
+
+  return {
+    items: query.data ?? [],
+    loading: query.isLoading,
+    isFetching: query.isFetching,
+    refetch: query.refetch,
+    /** Imperatively remove a row from the cache (used after delete). */
+    removeItemFromCache: (id: string) => {
+      queryClient.setQueryData<EnrichedBranchItem[]>(queryKey, (prev) =>
+        (prev ?? []).filter((i) => i.id !== id)
+      );
+    },
+    invalidate: () => queryClient.invalidateQueries({ queryKey: ['branch-inventory'] }),
+  };
+}
