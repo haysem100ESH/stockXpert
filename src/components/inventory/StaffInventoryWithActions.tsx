@@ -71,114 +71,34 @@ export default function StaffInventoryWithActions() {
     }
   };
 
-  useEffect(() => {
+  // Derive filtered list with useMemo (no extra state, no effect-thrash).
+  const filteredItems = useMemo(() => {
     const medicineCategories = ['tablet', 'capsule', 'syrup', 'injection', 'cream', 'ointment', 'drops', 'inhaler'];
-    
-    const filtered = branchItems.filter(item => {
-      const matchesSearch = item.name.toLowerCase().includes(searchTerm.toLowerCase()) ||
-        (item.generic_name || '').toLowerCase().includes(searchTerm.toLowerCase());
-      
+    const term = searchTerm.toLowerCase();
+    return branchItems.filter(item => {
+      const matchesSearch = item.name.toLowerCase().includes(term) ||
+        (item.generic_name || '').toLowerCase().includes(term);
       let matchesCategory = true;
       if (categoryFilter === 'medicines_only') {
         matchesCategory = medicineCategories.includes(item.category);
       } else if (categoryFilter !== 'all') {
         matchesCategory = item.category === categoryFilter;
       }
-      
       return matchesSearch && matchesCategory;
     });
-    setFilteredItems(filtered);
   }, [branchItems, searchTerm, categoryFilter]);
 
-  const fetchBranchItems = async () => {
-    try {
-      // Get branch IDs for this owner
-      let branchIds: string[] = [];
-      if (selectedBranch) {
-        branchIds = [selectedBranch];
-      } else if (profile?.role === 'owner' && profile?.id) {
-        const { data: ownerBranches } = await supabase
-          .from('pharmacy_branches')
-          .select('id')
-          .eq('pharmacy_owner_id', profile.id);
-        branchIds = (ownerBranches || []).map((b: any) => b.id);
-      } else if (profile?.branch_id) {
-        branchIds = [profile.branch_id];
-      }
+  // Reset to page 1 whenever filters change.
+  useEffect(() => { setCurrentPage(1); }, [searchTerm, categoryFilter, selectedBranch]);
 
-      if (branchIds.length === 0) {
-        setBranchItems([]);
-        setLoading(false);
-        return;
-      }
-
-      // Fetch branch_items
-      let query = supabase
-        .from('branch_items')
-        .select('id, medicine_id, branch_id, owner_id, selling_price, purchase_price, quantity, expiry_date')
-        .in('branch_id', branchIds)
-        .order('created_at', { ascending: false });
-
-      const { data: items, error } = await query;
-      if (error) throw error;
-
-      if (!items || items.length === 0) {
-        setBranchItems([]);
-        setLoading(false);
-        return;
-      }
-
-      // Fetch medicine details
-      const medicineIds = [...new Set(items.map((i: any) => i.medicine_id))];
-      const { data: meds } = await supabase
-        .from('medicines')
-        .select('id, name, generic_name, category, manufacturer, batch_number, item_type, unit_label, units_per_pack')
-        .in('id', medicineIds);
-
-      const medMap: Record<string, any> = {};
-      (meds || []).forEach((m: any) => { medMap[m.id] = m; });
-
-      // Fetch branch names
-      const allBranchIds = [...new Set(items.map((i: any) => i.branch_id))];
-      const branchMap: Record<string, string> = {};
-      if (allBranchIds.length > 0) {
-        const { data: branches } = await supabase
-          .from('pharmacy_branches')
-          .select('id, name')
-          .in('id', allBranchIds);
-        (branches || []).forEach((b: any) => { branchMap[b.id] = b.name; });
-      }
-
-      const merged: BranchItem[] = items.map((item: any) => {
-        const med = medMap[item.medicine_id] || {};
-        return {
-          ...item,
-          name: med.name || 'Unknown',
-          generic_name: med.generic_name,
-          category: med.category || 'Uncategorized',
-          manufacturer: med.manufacturer,
-          batch_number: med.batch_number,
-          item_type: med.item_type,
-          unit_label: med.unit_label,
-          units_per_pack: med.units_per_pack,
-          branch_name: branchMap[item.branch_id],
-        };
-      });
-
-      setBranchItems(merged);
-    } catch (error) {
-      toast({
-        title: 'Error',
-        description: `Failed to fetch ${isPharmacy ? 'medicines' : 'items'}`,
-        variant: 'destructive',
-      });
-    } finally {
-      setLoading(false);
-    }
-  };
+  const totalPages = Math.max(1, Math.ceil(filteredItems.length / ITEMS_PER_PAGE));
+  const paginatedItems = useMemo(() => {
+    const start = (currentPage - 1) * ITEMS_PER_PAGE;
+    return filteredItems.slice(start, start + ITEMS_PER_PAGE);
+  }, [filteredItems, currentPage]);
 
   const handleItemAdded = () => {
-    fetchBranchItems();
+    refetch();
     setShowAddDialog(false);
   };
 
@@ -187,7 +107,7 @@ export default function StaffInventoryWithActions() {
   };
 
   const handleItemUpdated = () => {
-    fetchBranchItems();
+    refetch();
     setEditingItem(null);
   };
 
@@ -220,7 +140,8 @@ export default function StaffInventoryWithActions() {
 
       const { error } = await supabase.from('branch_items').delete().eq('id', itemId);
       if (error) throw error;
-      setBranchItems(prev => prev.filter(i => i.id !== itemId));
+      // Optimistically remove from cache so UI updates instantly.
+      removeItemFromCache(itemId);
       toast({ title: 'Success', description: `${isPharmacy ? 'Medicine' : 'Item'} removed from branch` });
       setDeleteConfirmation({ open: false, itemId: '', itemName: '' });
     } catch (error) {
