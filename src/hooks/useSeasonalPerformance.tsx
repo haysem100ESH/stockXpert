@@ -2,6 +2,7 @@ import { useState, useEffect, useMemo } from 'react';
 import { supabase } from '@/lib/db';
 import { useAuth } from '@/hooks/useAuth';
 import { useBranchContext } from '@/hooks/useBranchContext';
+import { useOwnerBranchIds } from '@/hooks/useOwnerBranchIds';
 
 export interface MonthlyData {
   month: number; // 1-12
@@ -65,6 +66,7 @@ export function useSeasonalPerformance() {
   const [loading, setLoading] = useState(true);
   const { profile } = useAuth();
   const { selectedBranch, branchType } = useBranchContext();
+  const { branchIds: cachedOwnerBranchIds } = useOwnerBranchIds();
   const isPharmacy = branchType === 'pharmacy';
   const currentMonth = new Date().getMonth() + 1; // 1-12
 
@@ -77,11 +79,7 @@ export function useSeasonalPerformance() {
       if (selectedBranch) {
         branchIds = [selectedBranch];
       } else if (profile.role === 'owner' && profile.id) {
-        const { data: branches } = await supabase
-          .from('pharmacy_branches')
-          .select('id')
-          .eq('pharmacy_owner_id', profile.id);
-        branchIds = (branches || []).map((b: any) => b.id);
+        branchIds = cachedOwnerBranchIds;
       } else if (profile.branch_id) {
         branchIds = [profile.branch_id];
       }
