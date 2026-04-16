@@ -1,4 +1,4 @@
-import { useState, useEffect } from 'react';
+import { useState, useEffect, useMemo } from 'react';
 import { useSearchParams } from 'react-router-dom';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
@@ -6,12 +6,14 @@ import { Input } from '@/components/ui/input';
 import { Badge } from '@/components/ui/badge';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
+import { Pagination, PaginationContent, PaginationItem, PaginationLink, PaginationNext, PaginationPrevious } from '@/components/ui/pagination';
 import { Search, Edit2, Plus, Trash2, Filter, Settings2, SlidersHorizontal, History, Layers } from 'lucide-react';
 import { supabase } from '@/lib/db';
 import { useToast } from '@/hooks/use-toast';
 import { useAuth } from '@/hooks/useAuth';
 import { useBranchContext } from '@/hooks/useBranchContext';
 import { useReadOnly } from '@/hooks/useReadOnly';
+import { useBranchInventory } from '@/hooks/useBranchInventory';
 import AddBranchItemDialog from './AddBranchItemDialog';
 import EditBranchItemDialog, { type BranchItem } from './EditBranchItemDialog';
 import { ConfirmationDialog } from '@/components/ui/confirmation-dialog';
@@ -19,15 +21,15 @@ import CategoryManagement from './CategoryManagement';
 import StockEditHistory from './StockEditHistory';
 import BatchBreakdownDialog from './BatchBreakdownDialog';
 
+const ITEMS_PER_PAGE = 24;
+
 export default function StaffInventoryWithActions() {
   const [searchParams] = useSearchParams();
   const initialTab = searchParams.get('tab') || 'inventory';
   const [activeTab, setActiveTab] = useState(initialTab);
-  const [branchItems, setBranchItems] = useState<BranchItem[]>([]);
-  const [filteredItems, setFilteredItems] = useState<BranchItem[]>([]);
   const [searchTerm, setSearchTerm] = useState('');
   const [categoryFilter, setCategoryFilter] = useState('all');
-  const [loading, setLoading] = useState(true);
+  const [currentPage, setCurrentPage] = useState(1);
   const [showAddDialog, setShowAddDialog] = useState(false);
   const [editingItem, setEditingItem] = useState<BranchItem | null>(null);
   const [deleteConfirmation, setDeleteConfirmation] = useState<{
@@ -43,17 +45,16 @@ export default function StaffInventoryWithActions() {
   const readOnly = useReadOnly();
   const isPharmacy = branchType === 'pharmacy';
 
+  // Cache-first fetch via TanStack Query — instant hydration on revisit.
+  const { items: branchItems, loading, refetch, removeItemFromCache } = useBranchInventory();
+
   useEffect(() => {
     const tab = searchParams.get('tab');
     if (tab) setActiveTab(tab);
   }, [searchParams]);
 
   useEffect(() => {
-    if (profile) {
-      setLoading(true);
-      fetchBranchItems();
-      checkBranches();
-    }
+    if (profile) checkBranches();
   }, [selectedBranch, profile?.id]);
 
   const checkBranches = async () => {
@@ -70,114 +71,34 @@ export default function StaffInventoryWithActions() {
     }
   };
 
-  useEffect(() => {
+  // Derive filtered list with useMemo (no extra state, no effect-thrash).
+  const filteredItems = useMemo(() => {
     const medicineCategories = ['tablet', 'capsule', 'syrup', 'injection', 'cream', 'ointment', 'drops', 'inhaler'];
-    
-    const filtered = branchItems.filter(item => {
-      const matchesSearch = item.name.toLowerCase().includes(searchTerm.toLowerCase()) ||
-        (item.generic_name || '').toLowerCase().includes(searchTerm.toLowerCase());
-      
+    const term = searchTerm.toLowerCase();
+    return branchItems.filter(item => {
+      const matchesSearch = item.name.toLowerCase().includes(term) ||
+        (item.generic_name || '').toLowerCase().includes(term);
       let matchesCategory = true;
       if (categoryFilter === 'medicines_only') {
         matchesCategory = medicineCategories.includes(item.category);
       } else if (categoryFilter !== 'all') {
         matchesCategory = item.category === categoryFilter;
       }
-      
       return matchesSearch && matchesCategory;
     });
-    setFilteredItems(filtered);
   }, [branchItems, searchTerm, categoryFilter]);
 
-  const fetchBranchItems = async () => {
-    try {
-      // Get branch IDs for this owner
-      let branchIds: string[] = [];
-      if (selectedBranch) {
-        branchIds = [selectedBranch];
-      } else if (profile?.role === 'owner' && profile?.id) {
-        const { data: ownerBranches } = await supabase
-          .from('pharmacy_branches')
-          .select('id')
-          .eq('pharmacy_owner_id', profile.id);
-        branchIds = (ownerBranches || []).map((b: any) => b.id);
-      } else if (profile?.branch_id) {
-        branchIds = [profile.branch_id];
-      }
+  // Reset to page 1 whenever filters change.
+  useEffect(() => { setCurrentPage(1); }, [searchTerm, categoryFilter, selectedBranch]);
 
-      if (branchIds.length === 0) {
-        setBranchItems([]);
-        setLoading(false);
-        return;
-      }
-
-      // Fetch branch_items
-      let query = supabase
-        .from('branch_items')
-        .select('id, medicine_id, branch_id, owner_id, selling_price, purchase_price, quantity, expiry_date')
-        .in('branch_id', branchIds)
-        .order('created_at', { ascending: false });
-
-      const { data: items, error } = await query;
-      if (error) throw error;
-
-      if (!items || items.length === 0) {
-        setBranchItems([]);
-        setLoading(false);
-        return;
-      }
-
-      // Fetch medicine details
-      const medicineIds = [...new Set(items.map((i: any) => i.medicine_id))];
-      const { data: meds } = await supabase
-        .from('medicines')
-        .select('id, name, generic_name, category, manufacturer, batch_number, item_type, unit_label, units_per_pack')
-        .in('id', medicineIds);
-
-      const medMap: Record<string, any> = {};
-      (meds || []).forEach((m: any) => { medMap[m.id] = m; });
-
-      // Fetch branch names
-      const allBranchIds = [...new Set(items.map((i: any) => i.branch_id))];
-      const branchMap: Record<string, string> = {};
-      if (allBranchIds.length > 0) {
-        const { data: branches } = await supabase
-          .from('pharmacy_branches')
-          .select('id, name')
-          .in('id', allBranchIds);
-        (branches || []).forEach((b: any) => { branchMap[b.id] = b.name; });
-      }
-
-      const merged: BranchItem[] = items.map((item: any) => {
-        const med = medMap[item.medicine_id] || {};
-        return {
-          ...item,
-          name: med.name || 'Unknown',
-          generic_name: med.generic_name,
-          category: med.category || 'Uncategorized',
-          manufacturer: med.manufacturer,
-          batch_number: med.batch_number,
-          item_type: med.item_type,
-          unit_label: med.unit_label,
-          units_per_pack: med.units_per_pack,
-          branch_name: branchMap[item.branch_id],
-        };
-      });
-
-      setBranchItems(merged);
-    } catch (error) {
-      toast({
-        title: 'Error',
-        description: `Failed to fetch ${isPharmacy ? 'medicines' : 'items'}`,
-        variant: 'destructive',
-      });
-    } finally {
-      setLoading(false);
-    }
-  };
+  const totalPages = Math.max(1, Math.ceil(filteredItems.length / ITEMS_PER_PAGE));
+  const paginatedItems = useMemo(() => {
+    const start = (currentPage - 1) * ITEMS_PER_PAGE;
+    return filteredItems.slice(start, start + ITEMS_PER_PAGE);
+  }, [filteredItems, currentPage]);
 
   const handleItemAdded = () => {
-    fetchBranchItems();
+    refetch();
     setShowAddDialog(false);
   };
 
@@ -186,7 +107,7 @@ export default function StaffInventoryWithActions() {
   };
 
   const handleItemUpdated = () => {
-    fetchBranchItems();
+    refetch();
     setEditingItem(null);
   };
 
@@ -219,7 +140,8 @@ export default function StaffInventoryWithActions() {
 
       const { error } = await supabase.from('branch_items').delete().eq('id', itemId);
       if (error) throw error;
-      setBranchItems(prev => prev.filter(i => i.id !== itemId));
+      // Optimistically remove from cache so UI updates instantly.
+      removeItemFromCache(itemId);
       toast({ title: 'Success', description: `${isPharmacy ? 'Medicine' : 'Item'} removed from branch` });
       setDeleteConfirmation({ open: false, itemId: '', itemName: '' });
     } catch (error) {
@@ -365,11 +287,11 @@ export default function StaffInventoryWithActions() {
             </div>
           </div>
 
-          {/* Group by branch when "All Branches" */}
+          {/* Group by branch when "All Branches" — operates on the paginated slice */}
           {!selectedBranch && branchItems.some((i: any) => i.branch_name) ? (
             (() => {
               const grouped: Record<string, (BranchItem & { branch_name?: string })[]> = {};
-              filteredItems.forEach((i: any) => {
+              paginatedItems.forEach((i: any) => {
                 const key = i.branch_name || 'Unknown Branch';
                 if (!grouped[key]) grouped[key] = [];
                 grouped[key].push(i);
@@ -388,8 +310,33 @@ export default function StaffInventoryWithActions() {
             })()
           ) : (
             <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
-              {filteredItems.map(item => renderItemCard(item))}
+              {paginatedItems.map(item => renderItemCard(item))}
             </div>
+          )}
+
+          {/* Pagination controls */}
+          {totalPages > 1 && (
+            <Pagination>
+              <PaginationContent>
+                <PaginationItem>
+                  <PaginationPrevious
+                    onClick={() => setCurrentPage(p => Math.max(1, p - 1))}
+                    className={currentPage === 1 ? 'pointer-events-none opacity-50' : 'cursor-pointer'}
+                  />
+                </PaginationItem>
+                <PaginationItem>
+                  <PaginationLink isActive>
+                    {currentPage} / {totalPages}
+                  </PaginationLink>
+                </PaginationItem>
+                <PaginationItem>
+                  <PaginationNext
+                    onClick={() => setCurrentPage(p => Math.min(totalPages, p + 1))}
+                    className={currentPage === totalPages ? 'pointer-events-none opacity-50' : 'cursor-pointer'}
+                  />
+                </PaginationItem>
+              </PaginationContent>
+            </Pagination>
           )}
 
           {filteredItems.length === 0 && (
