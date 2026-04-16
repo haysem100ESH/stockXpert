@@ -118,7 +118,7 @@ export function useSmartInventory() {
 
   useEffect(() => {
     fetchData();
-  }, [selectedBranch, profile]);
+  }, [selectedBranch, profile, cachedOwnerBranchIds]);
 
   const fetchData = async () => {
     if (!profile) return;

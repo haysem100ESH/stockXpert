@@ -192,7 +192,7 @@ export function useSeasonalPerformance() {
 
   useEffect(() => {
     fetchData();
-  }, [selectedBranch, profile]);
+  }, [selectedBranch, profile, cachedOwnerBranchIds]);
 
   const topSeasonalThisMonth = useMemo(() => {
     return items

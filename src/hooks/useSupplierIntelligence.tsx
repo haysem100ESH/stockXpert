@@ -251,7 +251,7 @@ export function useSupplierIntelligence() {
 
   useEffect(() => {
     fetchData();
-  }, [selectedBranch, profile]);
+  }, [selectedBranch, profile, cachedOwnerBranchIds]);
 
   // Dependence risks: suppliers with >40% share
   const dependenceRisks = useMemo(() =>
