@@ -1,4 +1,4 @@
-import { useState, useEffect } from 'react';
+import { useState, useEffect, useMemo } from 'react';
 import { useSearchParams } from 'react-router-dom';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
@@ -6,12 +6,14 @@ import { Input } from '@/components/ui/input';
 import { Badge } from '@/components/ui/badge';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
+import { Pagination, PaginationContent, PaginationItem, PaginationLink, PaginationNext, PaginationPrevious } from '@/components/ui/pagination';
 import { Search, Edit2, Plus, Trash2, Filter, Settings2, SlidersHorizontal, History, Layers } from 'lucide-react';
 import { supabase } from '@/lib/db';
 import { useToast } from '@/hooks/use-toast';
 import { useAuth } from '@/hooks/useAuth';
 import { useBranchContext } from '@/hooks/useBranchContext';
 import { useReadOnly } from '@/hooks/useReadOnly';
+import { useBranchInventory } from '@/hooks/useBranchInventory';
 import AddBranchItemDialog from './AddBranchItemDialog';
 import EditBranchItemDialog, { type BranchItem } from './EditBranchItemDialog';
 import { ConfirmationDialog } from '@/components/ui/confirmation-dialog';
@@ -19,15 +21,15 @@ import CategoryManagement from './CategoryManagement';
 import StockEditHistory from './StockEditHistory';
 import BatchBreakdownDialog from './BatchBreakdownDialog';
 
+const ITEMS_PER_PAGE = 24;
+
 export default function StaffInventoryWithActions() {
   const [searchParams] = useSearchParams();
   const initialTab = searchParams.get('tab') || 'inventory';
   const [activeTab, setActiveTab] = useState(initialTab);
-  const [branchItems, setBranchItems] = useState<BranchItem[]>([]);
-  const [filteredItems, setFilteredItems] = useState<BranchItem[]>([]);
   const [searchTerm, setSearchTerm] = useState('');
   const [categoryFilter, setCategoryFilter] = useState('all');
-  const [loading, setLoading] = useState(true);
+  const [currentPage, setCurrentPage] = useState(1);
   const [showAddDialog, setShowAddDialog] = useState(false);
   const [editingItem, setEditingItem] = useState<BranchItem | null>(null);
   const [deleteConfirmation, setDeleteConfirmation] = useState<{
@@ -43,17 +45,16 @@ export default function StaffInventoryWithActions() {
   const readOnly = useReadOnly();
   const isPharmacy = branchType === 'pharmacy';
 
+  // Cache-first fetch via TanStack Query — instant hydration on revisit.
+  const { items: branchItems, loading, refetch, removeItemFromCache } = useBranchInventory();
+
   useEffect(() => {
     const tab = searchParams.get('tab');
     if (tab) setActiveTab(tab);
   }, [searchParams]);
 
   useEffect(() => {
-    if (profile) {
-      setLoading(true);
-      fetchBranchItems();
-      checkBranches();
-    }
+    if (profile) checkBranches();
   }, [selectedBranch, profile?.id]);
 
   const checkBranches = async () => {
