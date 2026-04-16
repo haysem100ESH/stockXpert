@@ -1,4 +1,4 @@
-import { useState, useEffect } from 'react';
+import { useState } from 'react';
 import { ColumnDef } from '@tanstack/react-table';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
@@ -8,11 +8,10 @@ import {
   DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuTrigger,
 } from '@/components/ui/dropdown-menu';
 import { DataTable } from '@/components/ui/data-table';
-import { Search, Plus, Users, DollarSign, AlertTriangle, Edit, CreditCard, Eye, MoreHorizontal, FileText } from 'lucide-react';
-import { supabase } from '@/lib/db';
+import { Plus, Users, DollarSign, AlertTriangle, Edit, CreditCard, Eye, MoreHorizontal, FileText } from 'lucide-react';
 import { useToast } from '@/hooks/use-toast';
 import { useBranchContext } from '@/hooks/useBranchContext';
-import { getCreditLimit } from '@/hooks/useCreditScore';
+import { useCustomers, type CustomerRow } from '@/hooks/useCustomers';
 import CreditScoreBadge from './CreditScoreBadge';
 import DebtProgressBar from './DebtProgressBar';
 import AddCustomerDialog from './AddCustomerDialog';
@@ -23,19 +22,7 @@ import CustomerLedgerDialog from './CustomerLedgerDialog';
 import DebtorExpandableList from './DebtorExpandableList';
 import { useReadOnly } from '@/hooks/useReadOnly';
 
-interface Customer {
-  id: string;
-  name: string;
-  phone?: string | null;
-  notes?: string | null;
-  created_at: string;
-  totalPurchases: number;
-  totalPaid: number;
-  totalDebt: number;
-  lastPurchaseDate?: string;
-  credit_score: number;
-  max_credit_limit: number;
-}
+type Customer = CustomerRow;
 
 type PaymentStatus = 'No Sales' | 'Paid' | 'Partial' | 'Unpaid';
 
@@ -54,8 +41,6 @@ function getPaymentStatus(c: Customer): PaymentStatus {
 }
 
 export default function CustomerManagement() {
-  const [customers, setCustomers] = useState<Customer[]>([]);
-  const [loading, setLoading] = useState(true);
   const [showAddDialog, setShowAddDialog] = useState(false);
   const [showEditDialog, setShowEditDialog] = useState(false);
   const [showPaymentDialog, setShowPaymentDialog] = useState(false);
@@ -66,78 +51,9 @@ export default function CustomerManagement() {
   const { toast } = useToast();
   const readOnly = useReadOnly();
 
-  useEffect(() => { fetchCustomers(); }, [selectedBranch]);
-
-  const fetchCustomers = async () => {
-    setLoading(true);
-    try {
-      let query = (supabase as any).from('customers').select('*').order('name');
-      if (selectedBranch) query = query.eq('branch_id', selectedBranch);
-      const { data: customersData, error } = await query;
-      if (error) throw error;
-
-      // Safely extract non-null IDs only
-      const customerIds: string[] = (customersData || [])
-        .map((c: any) => c.id)
-        .filter((id: any) => id !== null && id !== undefined && typeof id === 'string');
-
-      let debtMap: Record<string, number> = {};
-      let allSalesData: any[] = [];
-
-      if (customerIds.length > 0) {
-        // Batch fetch debt from customer_credits
-        const { data: creditsData } = await (supabase as any)
-          .from('customer_credits')
-          .select('customer_id, total_debt')
-          .in('customer_id', customerIds);
-
-        for (const credit of creditsData || []) {
-          if (credit.customer_id) {
-            debtMap[credit.customer_id] = Math.max(0, Number(credit.total_debt) || 0);
-          }
-        }
-
-        // Batch fetch sales for totals & last purchase date
-        const { data: salesData } = await (supabase as any)
-          .from('sales')
-          .select('customer_id, total_amount, created_at')
-          .in('customer_id', customerIds)
-          .order('created_at', { ascending: false });
-
-        allSalesData = (salesData || []).filter((s: any) => s.customer_id !== null);
-      }
-      // Fetch latest credit scores from credit_logs as source of truth
-      const { data: creditLogs } = await (supabase as any)
-        .from('credit_logs')
-        .select('customer_id, new_score, created_at')
-        .in('customer_id', customerIds)
-        .order('created_at', { ascending: false });
-
-      const latestScoreMap: Record<string, number> = {};
-      for (const log of creditLogs || []) {
-        if (!latestScoreMap[log.customer_id]) {
-          latestScoreMap[log.customer_id] = log.new_score;
-        }
-      }
-
-      const enriched: Customer[] = (customersData || []).map((c: any) => {
-        const custSales = allSalesData.filter((s: any) => s.customer_id === c.id);
-        const totalPurchases = custSales.reduce((s: number, r: any) => s + Number(r.total_amount), 0);
-        const lastPurchaseDate = custSales[0]?.created_at;
-        const totalDebt = debtMap[c.id] || 0;
-        const totalPaid = Math.max(0, totalPurchases - totalDebt);
-        const creditScore = latestScoreMap[c.id] ?? c.credit_score ?? 50;
-        const maxCreditLimit = c.max_credit_limit ?? getCreditLimit(creditScore);
-        return { ...c, totalPurchases, totalPaid, totalDebt, lastPurchaseDate, credit_score: creditScore, max_credit_limit: maxCreditLimit };
-      });
-
-      setCustomers(enriched);
-    } catch {
-      toast({ title: 'Error', description: 'Failed to fetch customers', variant: 'destructive' });
-    } finally {
-      setLoading(false);
-    }
-  };
+  // Cache-first fetch via TanStack Query — instant hydration on revisit.
+  const { customers, loading, refetch } = useCustomers();
+  const fetchCustomers = () => { refetch(); };
 
   const openEdit = (c: Customer) => { setSelectedCustomer(c); setShowEditDialog(true); };
   const openPayment = (c: Customer) => { setSelectedCustomer(c); setShowPaymentDialog(true); };
