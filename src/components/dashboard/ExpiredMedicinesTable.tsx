@@ -8,6 +8,7 @@ import { useToast } from '@/hooks/use-toast';
 import { ConfirmationDialog } from '@/components/ui/confirmation-dialog';
 import { useBranchContext } from '@/hooks/useBranchContext';
 import { useAuth } from '@/hooks/useAuth';
+import { useOwnerBranchIds } from '@/hooks/useOwnerBranchIds';
 
 interface ExpiredMedicine {
   id: string;
@@ -25,20 +26,18 @@ export default function ExpiredMedicinesTable() {
   const { toast } = useToast();
   const { selectedBranch } = useBranchContext();
   const { profile } = useAuth();
+  const { branchIds: cachedOwnerBranchIds } = useOwnerBranchIds();
 
   useEffect(() => {
     fetchExpiredMedicines();
-  }, [selectedBranch]);
+  }, [selectedBranch, cachedOwnerBranchIds]);
 
   const fetchExpiredMedicines = async () => {
     try {
+      // Use cached owner branches (avoids duplicate network calls).
       let ownerBranchIds: string[] = [];
       if (!selectedBranch && profile?.role === 'owner' && profile?.id) {
-        const { data: ownerBranches } = await supabase
-          .from('pharmacy_branches')
-          .select('id')
-          .eq('pharmacy_owner_id', profile.id);
-        ownerBranchIds = (ownerBranches || []).map((b: any) => b.id);
+        ownerBranchIds = cachedOwnerBranchIds;
       }
 
       if (!selectedBranch && ownerBranchIds.length === 0 && profile?.role === 'owner') {

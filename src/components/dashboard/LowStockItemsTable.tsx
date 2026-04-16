@@ -6,6 +6,7 @@ import { Package } from 'lucide-react';
 import { supabase } from '@/lib/db';
 import { useBranchContext } from '@/hooks/useBranchContext';
 import { useAuth } from '@/hooks/useAuth';
+import { useOwnerBranchIds } from '@/hooks/useOwnerBranchIds';
 
 interface LowStockItem {
   id: string;
@@ -19,20 +20,18 @@ export default function LowStockItemsTable() {
   const [loading, setLoading] = useState(true);
   const { selectedBranch } = useBranchContext();
   const { profile } = useAuth();
+  const { branchIds: cachedOwnerBranchIds } = useOwnerBranchIds();
 
   useEffect(() => {
     fetchLowStockItems();
-  }, [selectedBranch]);
+  }, [selectedBranch, cachedOwnerBranchIds]);
 
   const fetchLowStockItems = async () => {
     try {
+      // Use cached owner branches.
       let ownerBranchIds: string[] = [];
       if (!selectedBranch && profile?.role === 'owner' && profile?.id) {
-        const { data: ownerBranches } = await supabase
-          .from('pharmacy_branches')
-          .select('id')
-          .eq('pharmacy_owner_id', profile.id);
-        ownerBranchIds = (ownerBranches || []).map((b: any) => b.id);
+        ownerBranchIds = cachedOwnerBranchIds;
       }
 
       if (!selectedBranch && ownerBranchIds.length === 0 && profile?.role === 'owner') {
