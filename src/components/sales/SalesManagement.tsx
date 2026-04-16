@@ -88,7 +88,7 @@ export default function SalesManagement() {
 
   const itemsPerPage = 16;
 
-  useEffect(() => { fetchMedicines(); fetchCustomers(); }, [selectedBranch]);
+  useEffect(() => { fetchMedicines(); fetchCustomers(); }, [selectedBranch, cachedOwnerBranchIds]);
 
   useEffect(() => {
     const filtered = medicines.filter(medicine => {
