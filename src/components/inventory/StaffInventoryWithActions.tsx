@@ -287,11 +287,11 @@ export default function StaffInventoryWithActions() {
             </div>
           </div>
 
-          {/* Group by branch when "All Branches" */}
+          {/* Group by branch when "All Branches" — operates on the paginated slice */}
           {!selectedBranch && branchItems.some((i: any) => i.branch_name) ? (
             (() => {
               const grouped: Record<string, (BranchItem & { branch_name?: string })[]> = {};
-              filteredItems.forEach((i: any) => {
+              paginatedItems.forEach((i: any) => {
                 const key = i.branch_name || 'Unknown Branch';
                 if (!grouped[key]) grouped[key] = [];
                 grouped[key].push(i);
@@ -310,8 +310,33 @@ export default function StaffInventoryWithActions() {
             })()
           ) : (
             <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
-              {filteredItems.map(item => renderItemCard(item))}
+              {paginatedItems.map(item => renderItemCard(item))}
             </div>
+          )}
+
+          {/* Pagination controls */}
+          {totalPages > 1 && (
+            <Pagination>
+              <PaginationContent>
+                <PaginationItem>
+                  <PaginationPrevious
+                    onClick={() => setCurrentPage(p => Math.max(1, p - 1))}
+                    className={currentPage === 1 ? 'pointer-events-none opacity-50' : 'cursor-pointer'}
+                  />
+                </PaginationItem>
+                <PaginationItem>
+                  <PaginationLink isActive>
+                    {currentPage} / {totalPages}
+                  </PaginationLink>
+                </PaginationItem>
+                <PaginationItem>
+                  <PaginationNext
+                    onClick={() => setCurrentPage(p => Math.min(totalPages, p + 1))}
+                    className={currentPage === totalPages ? 'pointer-events-none opacity-50' : 'cursor-pointer'}
+                  />
+                </PaginationItem>
+              </PaginationContent>
+            </Pagination>
           )}
 
           {filteredItems.length === 0 && (
