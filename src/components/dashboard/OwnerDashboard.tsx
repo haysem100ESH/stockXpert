@@ -94,6 +94,8 @@ export default function OwnerDashboard() {
   const { toast } = useToast();
   const { selectedBranch, branchType } = useBranchContext();
   const { profile } = useAuth();
+  // Cached owner-branch lookup — replaces 10+ duplicate network calls per page.
+  const { branchIds: cachedOwnerBranchIds } = useOwnerBranchIds();
   const isPharmacy = branchType === 'pharmacy';
   const { topSeasonalThisMonth, currentMonthName, isPharmacy: seasonalIsPharmacy } = useSeasonalPerformance();
   const { summary: smartSummary } = useSmartInventory();
