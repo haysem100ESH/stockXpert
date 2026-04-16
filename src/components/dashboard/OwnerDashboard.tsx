@@ -119,14 +119,10 @@ export default function OwnerDashboard() {
 
       const medicineCategories = ['tablet', 'capsule', 'syrup', 'injection', 'cream', 'ointment', 'drops', 'inhaler'];
 
-      // Owner isolation: fetch owner's branch IDs when "All Branches"
+      // Owner isolation: read cached branch IDs (was a fresh DB query per render).
       let ownerBranchIds: string[] = [];
       if (!selectedBranch && profile?.role === 'owner' && profile?.id) {
-        const { data: ownerBranches } = await supabase
-          .from('pharmacy_branches')
-          .select('id')
-          .eq('pharmacy_owner_id', profile.id);
-        ownerBranchIds = (ownerBranches || []).map((b: any) => b.id);
+        ownerBranchIds = cachedOwnerBranchIds;
       }
       
       // If owner has no branches yet, show empty data
@@ -163,10 +159,9 @@ export default function OwnerDashboard() {
         saleItemsQuery = saleItemsQuery.in('sales.branch_id', ownerBranchIds);
       }
 
-      // Fetch data
-      const { data: salesData } = await salesQuery;
-      const { data: branchItemsData } = await branchItemsQuery;
-      const { data: saleItemsData } = await saleItemsQuery;
+      // Fetch the three primary datasets in parallel (was 3 sequential awaits).
+      const [{ data: salesData }, { data: branchItemsData }, { data: saleItemsData }] =
+        await Promise.all([salesQuery, branchItemsQuery, saleItemsQuery]);
       
       const totalRevenue = salesData?.reduce((sum, sale) => sum + Number(sale.total_amount), 0) || 0;
       const totalProducts = branchItemsData?.length || 0;
