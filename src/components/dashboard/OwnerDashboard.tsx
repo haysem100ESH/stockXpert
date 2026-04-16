@@ -102,7 +102,7 @@ export default function OwnerDashboard() {
 
   useEffect(() => {
     fetchDashboardStats();
-  }, [selectedBranch, profile, dateFilter]);
+  }, [selectedBranch, profile, dateFilter, cachedOwnerBranchIds]);
 
   const fetchDashboardStats = async () => {
     try {
