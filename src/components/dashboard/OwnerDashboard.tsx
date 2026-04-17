@@ -159,7 +159,7 @@ export default function OwnerDashboard() {
         <h1 className="text-2xl md:text-3xl font-bold">{isPharmacy ? 'Pharmacy Dashboard' : 'Inventory Dashboard'}</h1>
         
         <div className="flex items-center gap-4">
-          <Select value={dateFilter} onValueChange={setDateFilter}>
+          <Select value={dateFilter} onValueChange={(v) => setDateFilter(v as DateFilter)}>
             <SelectTrigger className="w-32">
               <SelectValue />
             </SelectTrigger>
