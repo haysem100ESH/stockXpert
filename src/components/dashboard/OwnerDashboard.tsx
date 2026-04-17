@@ -40,6 +40,7 @@ import SeasonalTrendsWidget from '@/components/smart-inventory/SeasonalTrendsWid
 import ScoreOverview from '@/components/smart-inventory/ScoreOverview';
 import { useSmartInventory } from '@/hooks/useSmartInventory';
 import { useOwnerBranchIds } from '@/hooks/useOwnerBranchIds';
+import { useDashboardStats, type DateFilter } from '@/hooks/useDashboardStats';
 
 interface DashboardStats {
   totalRevenue: number;
@@ -70,291 +71,28 @@ interface PaymentMethodData {
 }
 
 export default function OwnerDashboard() {
-  const [stats, setStats] = useState<DashboardStats>({
-    totalRevenue: 0,
-    totalProducts: 0,
-    totalMedicines: 0,
-    totalItems: 0,
-    totalSoldItems: 0,
-    lowStockItems: 0,
-    outOfStockItems: 0,
-    expiredItems: 0
-  });
-  const [categorySales, setCategorySales] = useState<CategorySalesData[]>([]);
-  const [medicinesCategorySales, setMedicinesCategorySales] = useState<CategorySalesData[]>([]);
-  const [itemsCategorySales, setItemsCategorySales] = useState<CategorySalesData[]>([]);
-  const [productPerformance, setProductPerformance] = useState<ProductPerformanceData[]>([]);
-  const [topMedicines, setTopMedicines] = useState<ProductPerformanceData[]>([]);
-  const [topItems, setTopItems] = useState<ProductPerformanceData[]>([]);
-  const [paymentMethodData, setPaymentMethodData] = useState<PaymentMethodData[]>([]);
-  const [creditOverview, setCreditOverview] = useState<{ avgScore: number; atRisk: number; totalExposure: number; totalCustomers: number }>({ avgScore: 0, atRisk: 0, totalExposure: 0, totalCustomers: 0 });
-  const [loading, setLoading] = useState(true);
   const [sendingTestMessage, setSendingTestMessage] = useState(false);
-  const [dateFilter, setDateFilter] = useState('monthly');
+  const [dateFilter, setDateFilter] = useState<DateFilter>('monthly');
   const { toast } = useToast();
   const { selectedBranch, branchType } = useBranchContext();
   const { profile } = useAuth();
-  // Cached owner-branch lookup — replaces 10+ duplicate network calls per page.
-  const { branchIds: cachedOwnerBranchIds } = useOwnerBranchIds();
   const isPharmacy = branchType === 'pharmacy';
   const { topSeasonalThisMonth, currentMonthName, isPharmacy: seasonalIsPharmacy } = useSeasonalPerformance();
   const { summary: smartSummary } = useSmartInventory();
 
-  useEffect(() => {
-    fetchDashboardStats();
-  }, [selectedBranch, profile, dateFilter, cachedOwnerBranchIds]);
-
-  const fetchDashboardStats = async () => {
-    try {
-      // Get date range based on filter
-      const now = new Date();
-      let startDate = new Date();
-      if (dateFilter === 'daily') {
-        startDate.setHours(0, 0, 0, 0);
-      } else if (dateFilter === 'weekly') {
-        startDate.setDate(now.getDate() - 7);
-      } else if (dateFilter === 'monthly') {
-        startDate.setMonth(now.getMonth() - 1);
-      } else if (dateFilter === 'yearly') {
-        startDate.setFullYear(now.getFullYear() - 1);
-      }
-
-      const medicineCategories = ['tablet', 'capsule', 'syrup', 'injection', 'cream', 'ointment', 'drops', 'inhaler'];
-
-      // Owner isolation: read cached branch IDs (was a fresh DB query per render).
-      let ownerBranchIds: string[] = [];
-      if (!selectedBranch && profile?.role === 'owner' && profile?.id) {
-        ownerBranchIds = cachedOwnerBranchIds;
-      }
-      
-      // If owner has no branches yet, show empty data
-      if (!selectedBranch && ownerBranchIds.length === 0 && profile?.role === 'owner') {
-        setStats({ totalRevenue: 0, totalProducts: 0, totalMedicines: 0, totalItems: 0, totalSoldItems: 0, lowStockItems: 0, outOfStockItems: 0, expiredItems: 0 });
-        setCategorySales([]); setMedicinesCategorySales([]); setItemsCategorySales([]);
-        setProductPerformance([]); setTopMedicines([]); setTopItems([]); setPaymentMethodData([]);
-        setLoading(false);
-        return;
-      }
-
-      // Build queries - use branch_items for inventory stats
-      let salesQuery = supabase.from('sales').select('total_amount, payment_method, discount_amount, branch_id, created_at')
-        .gte('created_at', startDate.toISOString())
-        .lte('created_at', now.toISOString());
-      let branchItemsQuery = supabase
-        .from('branch_items')
-        .select('id, quantity, expiry_date, medicines!inner(category, minimum_stock_level)');
-      let saleItemsQuery = supabase
-        .from('sale_items')
-        .select(`
-          quantity,
-          sales!inner(branch_id, created_at)
-        `);
-
-      // Filter by specific branch or owner's branches
-      if (selectedBranch) {
-        salesQuery = salesQuery.eq('branch_id', selectedBranch);
-        branchItemsQuery = branchItemsQuery.eq('branch_id', selectedBranch);
-        saleItemsQuery = saleItemsQuery.eq('sales.branch_id', selectedBranch);
-      } else if (ownerBranchIds.length > 0) {
-        salesQuery = salesQuery.in('branch_id', ownerBranchIds);
-        branchItemsQuery = branchItemsQuery.in('branch_id', ownerBranchIds);
-        saleItemsQuery = saleItemsQuery.in('sales.branch_id', ownerBranchIds);
-      }
-
-      // Fetch the three primary datasets in parallel (was 3 sequential awaits).
-      const [{ data: salesData }, { data: branchItemsData }, { data: saleItemsData }] =
-        await Promise.all([salesQuery, branchItemsQuery, saleItemsQuery]);
-      
-      const totalRevenue = salesData?.reduce((sum, sale) => sum + Number(sale.total_amount), 0) || 0;
-      const totalProducts = branchItemsData?.length || 0;
-      const totalMedicines = branchItemsData?.filter((bi: any) => medicineCategories.includes(bi.medicines?.category)).length || 0;
-      const totalItems = branchItemsData?.filter((bi: any) => !medicineCategories.includes(bi.medicines?.category)).length || 0;
-      const lowStockItems = branchItemsData?.filter(
-        (bi: any) => bi.quantity <= (bi.medicines?.minimum_stock_level || 0) && bi.quantity > 0
-      ).length || 0;
-      const outOfStockItems = branchItemsData?.filter((bi: any) => bi.quantity === 0).length || 0;
-      const totalSoldItems = saleItemsData?.reduce((sum, item) => sum + item.quantity, 0) || 0;
-
-      // Count expired items from branch_items
-      const today = new Date().toISOString().split('T')[0];
-      const expiredItems = branchItemsData?.filter((bi: any) => bi.expiry_date && bi.quantity > 0 && bi.expiry_date <= today).length || 0;
-
-      // Fetch sales data with items for charts
-      let salesWithItemsQuery = supabase
-        .from('sales')
-        .select(`
-          *,
-          sale_items (
-            quantity,
-            medicine_id,
-            medicines (name, category)
-          )
-        `)
-        .gte('created_at', startDate.toISOString())
-        .lte('created_at', now.toISOString());
-      
-      if (selectedBranch) {
-        salesWithItemsQuery = salesWithItemsQuery.eq('branch_id', selectedBranch);
-      } else if (ownerBranchIds.length > 0) {
-        salesWithItemsQuery = salesWithItemsQuery.in('branch_id', ownerBranchIds);
-      }
-
-      const { data: salesWithItems } = await salesWithItemsQuery;
-
-      // Process category sales data (all)
-      const categoryMap = new Map<string, { sales: number; revenue: number }>();
-      const medicineCategoryMap = new Map<string, { sales: number; revenue: number }>();
-      const itemCategoryMap = new Map<string, { sales: number; revenue: number }>();
-      
-      salesWithItems?.forEach(sale => {
-        sale.sale_items?.forEach((item: any) => {
-          if (item.medicines) {
-            const category = item.medicines.category;
-            const isMedicine = medicineCategories.includes(category);
-            const existing = categoryMap.get(category) || { sales: 0, revenue: 0 };
-            const itemRevenue = (Number(sale.total_amount) * item.quantity) / 
-              (sale.sale_items?.reduce((sum: number, si: any) => sum + si.quantity, 0) || 1);
-            
-            categoryMap.set(category, {
-              sales: existing.sales + item.quantity,
-              revenue: existing.revenue + itemRevenue
-            });
-
-            // Separate into medicine and item categories
-            if (isMedicine) {
-              const medExisting = medicineCategoryMap.get(category) || { sales: 0, revenue: 0 };
-              medicineCategoryMap.set(category, {
-                sales: medExisting.sales + item.quantity,
-                revenue: medExisting.revenue + itemRevenue
-              });
-            } else {
-              const itemExisting = itemCategoryMap.get(category) || { sales: 0, revenue: 0 };
-              itemCategoryMap.set(category, {
-                sales: itemExisting.sales + item.quantity,
-                revenue: itemExisting.revenue + itemRevenue
-              });
-            }
-          }
-        });
-      });
-
-      const categorySalesArray = Array.from(categoryMap.entries()).map(([category, data]) => ({
-        category,
-        ...data
-      }));
-
-      const medicinesCategorySalesArray = Array.from(medicineCategoryMap.entries()).map(([category, data]) => ({
-        category,
-        ...data
-      }));
-
-      const itemsCategorySalesArray = Array.from(itemCategoryMap.entries()).map(([category, data]) => ({
-        category,
-        ...data
-      }));
-
-      // Process product performance data
-      const productMap = new Map<string, { sales: number; revenue: number; category: string }>();
-      salesWithItems?.forEach(sale => {
-        sale.sale_items?.forEach((item: any) => {
-          if (item.medicines) {
-            const name = item.medicines.name;
-            const category = item.medicines.category;
-            const existing = productMap.get(name) || { sales: 0, revenue: 0, category };
-            const itemRevenue = (Number(sale.total_amount) * item.quantity) / 
-              (sale.sale_items?.reduce((sum: number, si: any) => sum + si.quantity, 0) || 1);
-            productMap.set(name, {
-              sales: existing.sales + item.quantity,
-              revenue: existing.revenue + itemRevenue,
-              category
-            });
-          }
-        });
-      });
-
-      const productPerformanceArray = Array.from(productMap.entries())
-        .map(([name, data]) => ({ name, ...data }))
-        .sort((a, b) => b.sales - a.sales)
-        .slice(0, 10);
-
-      const topMedicinesArray = Array.from(productMap.entries())
-        .filter(([_, data]) => medicineCategories.includes(data.category))
-        .map(([name, data]) => ({ name, sales: data.sales, revenue: data.revenue }))
-        .sort((a, b) => b.sales - a.sales)
-        .slice(0, 10);
-
-      const topItemsArray = Array.from(productMap.entries())
-        .filter(([_, data]) => !medicineCategories.includes(data.category))
-        .map(([name, data]) => ({ name, sales: data.sales, revenue: data.revenue }))
-        .sort((a, b) => b.sales - a.sales)
-        .slice(0, 10);
-
-      // Process payment method data
-      const paymentMap = new Map<string, number>();
-      salesData?.forEach(sale => {
-        const method = sale.payment_method || 'Cash';
-        const amount = Number(sale.total_amount) - (Number(sale.discount_amount) || 0);
-        paymentMap.set(method, (paymentMap.get(method) || 0) + amount);
-      });
-
-      const paymentMethodArray = Array.from(paymentMap.entries()).map(([method, amount]) => ({
-        method,
-        amount
-      }));
-
-      setStats({
-        totalRevenue,
-        totalProducts,
-        totalMedicines,
-        totalItems,
-        totalSoldItems,
-        lowStockItems,
-        outOfStockItems,
-        expiredItems
-      });
-      setCategorySales(categorySalesArray);
-      setMedicinesCategorySales(medicinesCategorySalesArray);
-      setItemsCategorySales(itemsCategorySalesArray);
-      setProductPerformance(productPerformanceArray);
-      setTopMedicines(topMedicinesArray);
-      setTopItems(topItemsArray);
-      setPaymentMethodData(paymentMethodArray);
-
-      // Fetch credit overview
-      let custQuery = supabase.from('customers').select('id, credit_score, max_credit_limit, branch_id');
-      if (selectedBranch) {
-        custQuery = custQuery.eq('branch_id', selectedBranch);
-      } else if (ownerBranchIds.length > 0) {
-        custQuery = custQuery.in('branch_id', ownerBranchIds);
-      }
-      const { data: custData } = await custQuery;
-      if (custData && custData.length > 0) {
-        const scores = custData.map((c: any) => c.credit_score ?? 50);
-        const avgScore = Math.round(scores.reduce((a: number, b: number) => a + b, 0) / scores.length);
-        const atRisk = scores.filter((s: number) => s < 30).length;
-        // Fetch total exposure (sum of unpaid debts)
-        let salesQ = supabase.from('sales').select('total_amount, amount_paid, customer_id').not('customer_id', 'is', null);
-        if (selectedBranch) salesQ = salesQ.eq('branch_id', selectedBranch);
-        else if (ownerBranchIds.length > 0) salesQ = salesQ.in('branch_id', ownerBranchIds);
-        const { data: salesDebt } = await salesQ;
-        const custIds = new Set(custData.map((c: any) => c.id));
-        const totalExposure = (salesDebt || [])
-          .filter((s: any) => custIds.has(s.customer_id))
-          .reduce((sum: number, s: any) => sum + Math.max(0, Number(s.total_amount) - Number(s.amount_paid || 0)), 0);
-        setCreditOverview({ avgScore, atRisk, totalExposure, totalCustomers: custData.length });
-      } else {
-        setCreditOverview({ avgScore: 0, atRisk: 0, totalExposure: 0, totalCustomers: 0 });
-      }
-    } catch (error) {
-      toast({
-        title: "Error",
-        description: "Failed to fetch dashboard statistics",
-        variant: "destructive"
-      });
-    } finally {
-      setLoading(false);
-    }
-  };
+  // TanStack Query–cached overview data (instant hydration on revisit / filter change).
+  const { data: overview, loading } = useDashboardStats(dateFilter);
+  const {
+    stats,
+    categorySales,
+    medicinesCategorySales,
+    itemsCategorySales,
+    productPerformance,
+    topMedicines,
+    topItems,
+    paymentMethodData,
+    creditOverview,
+  } = overview;
 
   const handleConnectTelegram = () => {
     window.open('https://t.me/pharmaXpertbot', '_blank');
