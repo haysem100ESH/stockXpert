@@ -10,7 +10,7 @@ import { supabase } from '@/lib/db';
 import { useToast } from '@/hooks/use-toast';
 import { useAuth } from '@/hooks/useAuth';
 import { useBranchContext } from '@/hooks/useBranchContext';
-import { useOwnerBranchIds } from '@/hooks/useOwnerBranchIds';
+import { useSalesInventory } from '@/hooks/useSalesInventory';
 import { ConfirmationDialog } from '@/components/ui/confirmation-dialog';
 import CartSlider from './CartSlider';
 import AddToCartDialog from './AddToCartDialog';
@@ -48,19 +48,18 @@ interface CartItem extends Medicine {
 type ChangeAction = 'keep_profit' | 'deduct_debt' | 'give_change' | null;
 
 export default function SalesManagement() {
-  const [medicines, setMedicines] = useState<Medicine[]>([]);
+  // TanStack Query–cached product list + customers (instant hydration on revisit).
+  const { medicines, customers, loading, invalidate: invalidateSalesCache } = useSalesInventory();
   const [filteredMedicines, setFilteredMedicines] = useState<Medicine[]>([]);
   const [paginatedMedicines, setPaginatedMedicines] = useState<Medicine[]>([]);
   const [cart, setCart] = useState<CartItem[]>([]);
   const [searchTerm, setSearchTerm] = useState('');
   const [categoryFilter, setCategoryFilter] = useState<string>('all');
   const [currentPage, setCurrentPage] = useState(1);
-  const [loading, setLoading] = useState(true);
   const [processing, setProcessing] = useState(false);
   const [paymentMethod, setPaymentMethod] = useState<string>('Cash');
   const [discountPercent, setDiscountPercent] = useState<number>(0);
   const [showCheckoutConfirm, setShowCheckoutConfirm] = useState(false);
-  const [customers, setCustomers] = useState<{id: string; name: string; phone?: string | null; computed_debt?: number; credit_score?: number; max_credit_limit?: number}[]>([]);
   const [selectedCustomerId, setSelectedCustomerId] = useState<string>('none');
   const [amountReceived, setAmountReceived] = useState<string>('');
   const [changeAction, setChangeAction] = useState<ChangeAction>(null);
@@ -71,7 +70,6 @@ export default function SalesManagement() {
   const { profile } = useAuth();
   const { toast } = useToast();
   const { selectedBranch, branchType } = useBranchContext();
-  const { branchIds: cachedOwnerBranchIds } = useOwnerBranchIds();
   const isMobile = useIsMobile();
   const readOnly = useReadOnly();
   const [isSmallScreen, setIsSmallScreen] = useState(false);
@@ -87,8 +85,6 @@ export default function SalesManagement() {
   }, []);
 
   const itemsPerPage = 16;
-
-  useEffect(() => { fetchMedicines(); fetchCustomers(); }, [selectedBranch, cachedOwnerBranchIds]);
 
   useEffect(() => {
     const filtered = medicines.filter(medicine => {
