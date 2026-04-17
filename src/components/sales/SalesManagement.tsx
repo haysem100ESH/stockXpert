@@ -15,7 +15,7 @@ import { ConfirmationDialog } from '@/components/ui/confirmation-dialog';
 import CartSlider from './CartSlider';
 import AddToCartDialog from './AddToCartDialog';
 import { useIsMobile } from '@/hooks/use-mobile';
-import { updateCreditScore, getCreditLimit } from '@/hooks/useCreditScore';
+import { updateCreditScore } from '@/hooks/useCreditScore';
 import { isMeasurable } from '@/lib/itemTypes';
 import { deductFIFO, recordSaleItemBatches } from '@/lib/batchInventory';
 import { useReadOnly } from '@/hooks/useReadOnly';
@@ -631,8 +631,8 @@ export default function SalesManagement() {
       setChangeAction(null);
       setKeepChangeOption('profit');
       setCartOpen(false);
-      fetchMedicines();
-      fetchCustomers();
+      // Revalidate cached product list + customers (debt may have changed).
+      invalidateSalesCache();
     } catch (error: any) {
       console.error('[Checkout Error]', error);
       toast({
