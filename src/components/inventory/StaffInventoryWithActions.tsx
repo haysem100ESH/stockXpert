@@ -40,6 +40,7 @@ export default function StaffInventoryWithActions() {
   }>({ open: false, itemId: '', itemName: '' });
   const [hasBranches, setHasBranches] = useState(true);
   const [batchBreakdown, setBatchBreakdown] = useState<{ open: boolean; itemId: string; itemName: string }>({ open: false, itemId: '', itemName: '' });
+  const [adjustingItem, setAdjustingItem] = useState<BranchItem | null>(null);
   const { toast } = useToast();
   const { profile } = useAuth();
   const { selectedBranch, branchType } = useBranchContext();
