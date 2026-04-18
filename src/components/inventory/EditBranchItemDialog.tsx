@@ -57,6 +57,15 @@ export default function EditBranchItemDialog({ open, onOpenChange, item, onItemU
   const [loading, setLoading] = useState(false);
   const { toast } = useToast();
   const { profile } = useAuth();
+  const { branchType } = useBranchContext();
+  const { categories: customCategories } = useCustomCategories(branchType === 'general' ? 'general' : 'pharmacy');
+
+  // Build dropdown list: include current value if not in custom list so user never loses the existing category
+  const categoryOptions = (() => {
+    const set = new Set<string>(customCategories);
+    if (category && category.trim()) set.add(category.trim());
+    return Array.from(set).sort((a, b) => a.localeCompare(b));
+  })();
 
   useEffect(() => {
     if (item && open) {
