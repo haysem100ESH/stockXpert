@@ -90,11 +90,25 @@ export function useSeasonalPerformance() {
         return;
       }
 
-      // Fetch all medicines
+      // Fetch branch_items for the selected branches, then resolve master catalog
+      // (medicines) details. The legacy `medicines.branch_id` column is null for
+      // master catalog items, which is why the previous direct query returned [].
+      const { data: branchItems } = await supabase
+        .from('branch_items')
+        .select('medicine_id, branch_id')
+        .in('branch_id', branchIds);
+
+      const medIds = [...new Set((branchItems || []).map((bi: any) => bi.medicine_id))];
+      if (medIds.length === 0) {
+        setItems([]);
+        setLoading(false);
+        return;
+      }
+
       const { data: medicines } = await supabase
         .from('medicines')
-        .select('id, name, category, branch_id')
-        .in('branch_id', branchIds);
+        .select('id, name, category')
+        .in('id', medIds);
 
       if (!medicines || medicines.length === 0) {
         setItems([]);
@@ -102,7 +116,7 @@ export function useSeasonalPerformance() {
         return;
       }
 
-      // Fetch all historical sales (up to 12 months back)
+      // Fetch all historical sales (up to 12 months back), scoped to the branches.
       const oneYearAgo = new Date();
       oneYearAgo.setFullYear(oneYearAgo.getFullYear() - 1);
 
