@@ -20,6 +20,7 @@ import { ConfirmationDialog } from '@/components/ui/confirmation-dialog';
 import CategoryManagement from './CategoryManagement';
 import StockEditHistory from './StockEditHistory';
 import BatchBreakdownDialog from './BatchBreakdownDialog';
+import StockAdjustmentDialog from './StockAdjustmentDialog';
 
 const ITEMS_PER_PAGE = 24;
 
