@@ -216,6 +216,44 @@ export default function EditBranchItemDialog({ open, onOpenChange, item, onItemU
 
       if (error) throw error;
 
+      // Log every changed field to stock_edit_history
+      try {
+        const changes: Array<{ field: string; oldVal: any; newVal: any }> = [];
+        if (parseFloat(sellingPrice) !== Number(item.selling_price)) {
+          changes.push({ field: 'selling_price', oldVal: item.selling_price, newVal: parseFloat(sellingPrice) });
+        }
+        if (parseFloat(purchasePrice) !== Number(item.purchase_price)) {
+          changes.push({ field: 'purchase_price', oldVal: item.purchase_price, newVal: parseFloat(purchasePrice) });
+        }
+        if ((expiryDate || null) !== (item.expiry_date || null)) {
+          changes.push({ field: 'expiry_date', oldVal: item.expiry_date || '—', newVal: expiryDate || '—' });
+        }
+        if (itemName !== (item.name || '')) changes.push({ field: 'name', oldVal: item.name, newVal: itemName });
+        if (genericName !== (item.generic_name || '')) changes.push({ field: 'generic_name', oldVal: item.generic_name || '—', newVal: genericName || '—' });
+        if (category !== (item.category || '')) changes.push({ field: 'category', oldVal: item.category, newVal: category });
+        if (manufacturer !== (item.manufacturer || '')) changes.push({ field: 'manufacturer', oldVal: item.manufacturer || '—', newVal: manufacturer || '—' });
+        if (batchNumber !== (item.batch_number || '')) changes.push({ field: 'batch_number', oldVal: item.batch_number || '—', newVal: batchNumber || '—' });
+        if (unitLabel !== (item.unit_label || '')) changes.push({ field: 'unit_label', oldVal: item.unit_label || '—', newVal: unitLabel || '—' });
+
+        if (changes.length > 0) {
+          const rows = changes.map(c => ({
+            medicine_id: item.medicine_id,
+            branch_id: item.branch_id || null,
+            action_type: 'Item Modified',
+            field_name: c.field,
+            old_value: String(c.oldVal ?? ''),
+            new_value: String(c.newVal ?? ''),
+            reason: 'Edited via Edit Item dialog',
+            done_by: profile?.id || null,
+            done_by_name: profile?.full_name || 'Unknown',
+            item_name: itemName || item.name,
+          }));
+          await (supabase as any).from('stock_edit_history').insert(rows);
+        }
+      } catch (logErr) {
+        console.warn('Failed to log edit history:', logErr);
+      }
+
       toast({ title: 'Success', description: 'Item updated successfully' });
       onItemUpdated();
       onOpenChange(false);
