@@ -398,9 +398,11 @@ export default function StaffInventoryWithActions() {
         onOpenChange={(open) => { if (!open) setAdjustingItem(null); }}
         medicine={adjustingItem ? {
           id: adjustingItem.id,
+          medicine_id: (adjustingItem as any).medicine_id,
           name: adjustingItem.name,
           stock_quantity: adjustingItem.quantity,
           purchase_price: adjustingItem.purchase_price,
+          selling_price: (adjustingItem as any).selling_price,
           branch_id: adjustingItem.branch_id,
           item_type: (adjustingItem as any).item_type,
           unit_label: (adjustingItem as any).unit_label,

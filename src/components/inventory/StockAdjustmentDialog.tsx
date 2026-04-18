@@ -1,22 +1,24 @@
-import { useState } from 'react';
+import { useState, useEffect } from 'react';
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogFooter, DialogDescription } from '@/components/ui/dialog';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
 import { Textarea } from '@/components/ui/textarea';
-import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
+import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
 import { Checkbox } from '@/components/ui/checkbox';
 import { supabase } from '@/lib/db';
 import { useToast } from '@/hooks/use-toast';
 import { useAuth } from '@/hooks/useAuth';
 import { useBranchContext } from '@/hooks/useBranchContext';
-import { createBatch, syncBranchItemQuantity } from '@/lib/batchInventory';
+import { createBatch, deductFIFO } from '@/lib/batchInventory';
 
 interface Medicine {
-  id: string;
+  id: string;                // branch_items.id
+  medicine_id?: string;      // medicines.id (REAL FK target)
   name: string;
   stock_quantity: number;
   purchase_price: number;
+  selling_price?: number;
   branch_id?: string;
   item_type?: string;
   unit_label?: string;
@@ -29,35 +31,73 @@ interface StockAdjustmentDialogProps {
   onAdjusted: () => void;
 }
 
+type Mode = 'adjust' | 'new_batch';
+
 export default function StockAdjustmentDialog({ open, onOpenChange, medicine, onAdjusted }: StockAdjustmentDialogProps) {
+  const [mode, setMode] = useState<Mode>('adjust');
+  // Adjust mode
   const [adjustmentType, setAdjustmentType] = useState<'increase' | 'decrease'>('increase');
   const [quantity, setQuantity] = useState('');
   const [reason, setReason] = useState('');
   const [deductFromExpense, setDeductFromExpense] = useState(false);
+  // New batch mode
+  const [batchQty, setBatchQty] = useState('');
+  const [batchPurchasePrice, setBatchPurchasePrice] = useState('');
+  const [batchSellingPrice, setBatchSellingPrice] = useState('');
+  const [batchExpiry, setBatchExpiry] = useState('');
+  const [batchNumber, setBatchNumber] = useState('');
+  const [batchRecordExpense, setBatchRecordExpense] = useState(true);
+
   const [saving, setSaving] = useState(false);
   const { toast } = useToast();
   const { profile } = useAuth();
   const { selectedBranch } = useBranchContext();
 
+  useEffect(() => {
+    if (open && medicine) {
+      // Prefill new-batch defaults from current item
+      setBatchPurchasePrice(String(medicine.purchase_price ?? ''));
+      setBatchSellingPrice(String(medicine.selling_price ?? medicine.purchase_price ?? ''));
+    }
+  }, [open, medicine]);
+
   const resetForm = () => {
+    setMode('adjust');
     setAdjustmentType('increase');
     setQuantity('');
     setReason('');
     setDeductFromExpense(false);
+    setBatchQty('');
+    setBatchPurchasePrice('');
+    setBatchSellingPrice('');
+    setBatchExpiry('');
+    setBatchNumber('');
+    setBatchRecordExpense(true);
   };
 
-  const handleSubmit = async () => {
-    if (!medicine || !reason.trim()) {
+  // Resolve real medicine_id (FK target). Falls back to lookup if not provided.
+  const resolveMedicineId = async (): Promise<string | null> => {
+    if (!medicine) return null;
+    if (medicine.medicine_id) return medicine.medicine_id;
+    const { data } = await supabase
+      .from('branch_items')
+      .select('medicine_id')
+      .eq('id', medicine.id)
+      .maybeSingle();
+    return (data as any)?.medicine_id || null;
+  };
+
+  const handleAdjust = async () => {
+    if (!medicine) return;
+    if (!reason.trim()) {
       toast({ title: 'Error', description: 'Reason is required.', variant: 'destructive' });
       return;
     }
-
     const qty = parseFloat(quantity);
     if (isNaN(qty) || qty <= 0) {
       toast({ title: 'Error', description: 'Enter a valid quantity greater than 0.', variant: 'destructive' });
       return;
     }
-
     if (adjustmentType === 'decrease' && qty > medicine.stock_quantity) {
       toast({ title: 'Error', description: 'Cannot decrease more than current stock.', variant: 'destructive' });
       return;
@@ -65,51 +105,45 @@ export default function StockAdjustmentDialog({ open, onOpenChange, medicine, on
 
     setSaving(true);
     try {
-      const newStock = adjustmentType === 'increase'
-        ? medicine.stock_quantity + qty
-        : medicine.stock_quantity - qty;
+      const branchId = medicine.branch_id || selectedBranch;
+      const medicineId = await resolveMedicineId();
 
-      // Update stock on branch_items (medicine.id is branch_items.id)
-      const { error: updateErr } = await supabase
-        .from('branch_items')
-        .update({ quantity: newStock, updated_at: new Date().toISOString() })
-        .eq('id', medicine.id);
-      if (updateErr) {
-        // Fallback to medicines table
-        const { error: fallbackErr } = await supabase
-          .from('medicines')
-          .update({ stock_quantity: newStock })
-          .eq('id', medicine.id);
-        if (fallbackErr) throw fallbackErr;
-      }
-
-      // Create a batch for stock increase
       if (adjustmentType === 'increase') {
-        const branchId = medicine.branch_id || selectedBranch;
-        if (branchId) {
-          // Try to create a batch — non-critical if it fails
-          try {
-            await createBatch({
-              branchId,
-              medicineId: medicine.id,
-              branchItemId: medicine.id, // branch_items.id
-              quantity: qty,
-              purchasePrice: medicine.purchase_price,
-              sellingPrice: medicine.purchase_price, // use purchase as default
-              createdBy: profile?.id || null,
-            });
-          } catch (e) {
-            console.warn('Batch creation failed during stock adjustment:', e);
+        // Create a batch (preferred path so FIFO sees it). syncBranchItemQuantity inside createBatch updates branch_items.quantity.
+        if (medicineId && branchId) {
+          const { error: batchErr } = await createBatch({
+            branchId,
+            medicineId,
+            branchItemId: medicine.id,
+            quantity: qty,
+            purchasePrice: medicine.purchase_price || 0,
+            sellingPrice: medicine.selling_price || medicine.purchase_price || 0,
+            createdBy: profile?.id || null,
+          });
+          if (batchErr) {
+            // Fallback: direct quantity update
+            const newStock = medicine.stock_quantity + qty;
+            await supabase.from('branch_items').update({ quantity: newStock, updated_at: new Date().toISOString() }).eq('id', medicine.id);
           }
+        } else {
+          const newStock = medicine.stock_quantity + qty;
+          const { error } = await supabase.from('branch_items').update({ quantity: newStock, updated_at: new Date().toISOString() }).eq('id', medicine.id);
+          if (error) throw error;
+        }
+      } else {
+        // Decrease: FIFO deduct from oldest batches first
+        const { error: fifoErr } = await deductFIFO(medicine.id, qty);
+        if (fifoErr) {
+          // Fallback to direct update if no batches
+          const newStock = medicine.stock_quantity - qty;
+          await supabase.from('branch_items').update({ quantity: newStock, updated_at: new Date().toISOString() }).eq('id', medicine.id);
         }
       }
 
-      // Record adjustment
-      const branchId = medicine.branch_id || selectedBranch;
-      const { error: logErr } = await supabase
-        .from('inventory_stock_adjustments')
-        .insert({
-          medicine_id: medicine.id,
+      // Log adjustment (use real medicine_id to satisfy FK)
+      if (medicineId) {
+        const { error: logErr } = await supabase.from('inventory_stock_adjustments').insert({
+          medicine_id: medicineId,
           branch_id: branchId,
           adjustment_type: adjustmentType,
           quantity: qty,
@@ -117,7 +151,8 @@ export default function StockAdjustmentDialog({ open, onOpenChange, medicine, on
           deduct_from_expense: adjustmentType === 'decrease' ? deductFromExpense : false,
           created_by: profile?.id || null,
         });
-      if (logErr) throw logErr;
+        if (logErr) console.warn('Failed to log adjustment:', logErr);
+      }
 
       // Auto-record expense for measurable items on stock increase
       if (adjustmentType === 'increase' && medicine.item_type === 'measurable' && medicine.purchase_price > 0) {
@@ -156,68 +191,194 @@ export default function StockAdjustmentDialog({ open, onOpenChange, medicine, on
     }
   };
 
+  const handleAddBatch = async () => {
+    if (!medicine) return;
+    const qty = parseFloat(batchQty);
+    const pp = parseFloat(batchPurchasePrice);
+    const sp = parseFloat(batchSellingPrice);
+    if (isNaN(qty) || qty <= 0) {
+      toast({ title: 'Error', description: 'Enter a valid quantity.', variant: 'destructive' });
+      return;
+    }
+    if (isNaN(pp) || pp < 0) {
+      toast({ title: 'Error', description: 'Enter a valid purchase price.', variant: 'destructive' });
+      return;
+    }
+    if (isNaN(sp) || sp < 0) {
+      toast({ title: 'Error', description: 'Enter a valid selling price.', variant: 'destructive' });
+      return;
+    }
+
+    setSaving(true);
+    try {
+      const branchId = medicine.branch_id || selectedBranch;
+      const medicineId = await resolveMedicineId();
+      if (!medicineId || !branchId) {
+        throw new Error('Could not resolve medicine or branch context.');
+      }
+
+      const { error: batchErr } = await createBatch({
+        branchId,
+        medicineId,
+        branchItemId: medicine.id,
+        quantity: qty,
+        purchasePrice: pp,
+        sellingPrice: sp,
+        expiryDate: batchExpiry || null,
+        batchNumber: batchNumber.trim() || null,
+        createdBy: profile?.id || null,
+      });
+      if (batchErr) throw batchErr;
+
+      // Log as an "increase" stock adjustment for audit
+      const { error: logErr } = await supabase.from('inventory_stock_adjustments').insert({
+        medicine_id: medicineId,
+        branch_id: branchId,
+        adjustment_type: 'increase',
+        quantity: qty,
+        reason: `New batch added${batchNumber ? ` (Batch #${batchNumber})` : ''}${batchExpiry ? ` exp ${batchExpiry}` : ''}`,
+        deduct_from_expense: false,
+        created_by: profile?.id || null,
+      });
+      if (logErr) console.warn('Failed to log batch addition:', logErr);
+
+      // Record purchase expense
+      if (batchRecordExpense && pp > 0) {
+        const expenseAmount = qty * pp;
+        const unit = (medicine.unit_label || 'unit').toUpperCase();
+        await supabase.from('expenses').insert({
+          description: `Purchase of ${medicine.name} (${qty} ${unit})${batchNumber ? ` – Batch #${batchNumber}` : ''}`,
+          amount: expenseAmount,
+          category: 'Stock Purchase',
+          created_by: profile?.id || null,
+          branch_id: branchId,
+        });
+      }
+
+      toast({ title: 'Success', description: 'New batch added. It will be sold via FIFO based on expiry.' });
+      resetForm();
+      onOpenChange(false);
+      onAdjusted();
+    } catch (err: any) {
+      console.error('Add batch error:', err);
+      toast({ title: 'Error', description: err.message || 'Failed to add batch.', variant: 'destructive' });
+    } finally {
+      setSaving(false);
+    }
+  };
+
   return (
     <Dialog open={open} onOpenChange={(o) => { if (!o) resetForm(); onOpenChange(o); }}>
-      <DialogContent className="sm:max-w-md">
+      <DialogContent className="sm:max-w-md max-h-[90vh] overflow-y-auto">
         <DialogHeader>
           <DialogTitle>Adjust Stock – {medicine?.name}</DialogTitle>
           <DialogDescription>Current stock: {medicine?.stock_quantity ?? 0}</DialogDescription>
         </DialogHeader>
 
-        <div className="space-y-4">
-          <div>
-            <Label>Adjustment Type</Label>
-            <Select value={adjustmentType} onValueChange={(v) => setAdjustmentType(v as 'increase' | 'decrease')}>
-              <SelectTrigger>
-                <SelectValue />
-              </SelectTrigger>
-              <SelectContent>
-                <SelectItem value="increase">Increase Stock</SelectItem>
-                <SelectItem value="decrease">Decrease Stock</SelectItem>
-              </SelectContent>
-            </Select>
-          </div>
+        <Tabs value={mode} onValueChange={(v) => setMode(v as Mode)} className="w-full">
+          <TabsList className="grid w-full grid-cols-2">
+            <TabsTrigger value="adjust">Increase / Decrease</TabsTrigger>
+            <TabsTrigger value="new_batch">Add New Batch</TabsTrigger>
+          </TabsList>
 
-          <div>
-            <Label>Quantity</Label>
-            <Input
-              type="number"
-              min="0.01"
-              step="any"
-              value={quantity}
-              onChange={(e) => setQuantity(e.target.value)}
-              placeholder="Enter quantity"
-            />
-          </div>
+          <TabsContent value="adjust" className="space-y-4 mt-4">
+            <div className="flex gap-2">
+              <Button
+                type="button"
+                variant={adjustmentType === 'increase' ? 'default' : 'outline'}
+                className="flex-1"
+                onClick={() => setAdjustmentType('increase')}
+              >
+                Increase
+              </Button>
+              <Button
+                type="button"
+                variant={adjustmentType === 'decrease' ? 'default' : 'outline'}
+                className="flex-1"
+                onClick={() => setAdjustmentType('decrease')}
+              >
+                Decrease
+              </Button>
+            </div>
 
-          <div>
-            <Label>Reason (required)</Label>
-            <Textarea
-              value={reason}
-              onChange={(e) => setReason(e.target.value)}
-              placeholder="Enter reason for adjustment"
-            />
-          </div>
+            <div>
+              <Label>Quantity</Label>
+              <Input type="number" min="0.01" step="any" value={quantity} onChange={(e) => setQuantity(e.target.value)} placeholder="Enter quantity" />
+            </div>
 
-          {adjustmentType === 'decrease' && (
+            <div>
+              <Label>Reason (required)</Label>
+              <Textarea value={reason} onChange={(e) => setReason(e.target.value)} placeholder="Enter reason for adjustment" />
+            </div>
+
+            {adjustmentType === 'decrease' && (
+              <div className="flex items-center space-x-2 rounded-md border p-3">
+                <Checkbox id="deduct-expense" checked={deductFromExpense} onCheckedChange={(c) => setDeductFromExpense(!!c)} />
+                <Label htmlFor="deduct-expense" className="text-sm cursor-pointer">
+                  Deduct cost from expenses (ETB {quantity ? (parseFloat(quantity) * (medicine?.purchase_price || 0)).toFixed(2) : '0.00'})
+                </Label>
+              </div>
+            )}
+
+            <p className="text-xs text-muted-foreground">
+              {adjustmentType === 'increase'
+                ? 'Increases will be added to a batch using the current purchase/selling price.'
+                : 'Decreases consume oldest batches first (FIFO).'}
+            </p>
+          </TabsContent>
+
+          <TabsContent value="new_batch" className="space-y-4 mt-4">
+            <p className="text-xs text-muted-foreground">
+              Add a fresh batch with its own price &amp; expiry. Sales will deduct it via FIFO (earliest expiry first).
+            </p>
+
+            <div className="grid grid-cols-2 gap-3">
+              <div>
+                <Label>Quantity *</Label>
+                <Input type="number" min="0.01" step="any" value={batchQty} onChange={(e) => setBatchQty(e.target.value)} />
+              </div>
+              <div>
+                <Label>Batch Number</Label>
+                <Input value={batchNumber} onChange={(e) => setBatchNumber(e.target.value)} placeholder="Optional" />
+              </div>
+            </div>
+
+            <div className="grid grid-cols-2 gap-3">
+              <div>
+                <Label>Purchase Price *</Label>
+                <Input type="number" min="0" step="0.01" value={batchPurchasePrice} onChange={(e) => setBatchPurchasePrice(e.target.value)} />
+              </div>
+              <div>
+                <Label>Selling Price *</Label>
+                <Input type="number" min="0" step="0.01" value={batchSellingPrice} onChange={(e) => setBatchSellingPrice(e.target.value)} />
+              </div>
+            </div>
+
+            <div>
+              <Label>Expiry Date</Label>
+              <Input type="date" value={batchExpiry} onChange={(e) => setBatchExpiry(e.target.value)} />
+            </div>
+
             <div className="flex items-center space-x-2 rounded-md border p-3">
-              <Checkbox
-                id="deduct-expense"
-                checked={deductFromExpense}
-                onCheckedChange={(checked) => setDeductFromExpense(!!checked)}
-              />
-              <Label htmlFor="deduct-expense" className="text-sm cursor-pointer">
-                Deduct cost from expenses (ETB {quantity ? (parseFloat(quantity) * (medicine?.purchase_price || 0)).toFixed(2) : '0.00'})
+              <Checkbox id="batch-expense" checked={batchRecordExpense} onCheckedChange={(c) => setBatchRecordExpense(!!c)} />
+              <Label htmlFor="batch-expense" className="text-sm cursor-pointer">
+                Record as expense (ETB {batchQty && batchPurchasePrice ? (parseFloat(batchQty) * parseFloat(batchPurchasePrice)).toFixed(2) : '0.00'})
               </Label>
             </div>
-          )}
-        </div>
+          </TabsContent>
+        </Tabs>
 
         <DialogFooter>
           <Button variant="outline" onClick={() => { resetForm(); onOpenChange(false); }}>Cancel</Button>
-          <Button onClick={handleSubmit} disabled={saving || !reason.trim() || !quantity}>
-            {saving ? 'Saving...' : 'Confirm'}
-          </Button>
+          {mode === 'adjust' ? (
+            <Button onClick={handleAdjust} disabled={saving || !reason.trim() || !quantity}>
+              {saving ? 'Saving...' : 'Confirm'}
+            </Button>
+          ) : (
+            <Button onClick={handleAddBatch} disabled={saving || !batchQty || !batchPurchasePrice || !batchSellingPrice}>
+              {saving ? 'Adding...' : 'Add Batch'}
+            </Button>
+          )}
         </DialogFooter>
       </DialogContent>
     </Dialog>
