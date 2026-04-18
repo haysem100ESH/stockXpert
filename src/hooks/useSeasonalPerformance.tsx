@@ -122,7 +122,7 @@ export function useSeasonalPerformance() {
 
       const { data: salesData } = await supabase
         .from('sale_items')
-        .select('medicine_id, pack_quantity, strip_quantity, created_at, sales!inner(branch_id)')
+        .select('medicine_id, pack_quantity, strip_quantity, quantity, created_at, sales!inner(branch_id)')
         .in('sales.branch_id', branchIds)
         .gte('created_at', oneYearAgo.toISOString());
 
@@ -133,7 +133,9 @@ export function useSeasonalPerformance() {
         const id = sale.medicine_id;
         const saleDate = new Date(sale.created_at);
         const month = saleDate.getMonth() + 1; // 1-12
-        const qty = (sale.pack_quantity || 0) + (sale.strip_quantity || 0);
+        // Support both legacy `quantity` column and pack/strip split
+        const packStripQty = (sale.pack_quantity || 0) + (sale.strip_quantity || 0);
+        const qty = packStripQty > 0 ? packStripQty : (sale.quantity || 0);
 
         if (!monthlyMap[id]) monthlyMap[id] = {};
         if (!monthlyMap[id][month]) monthlyMap[id][month] = { qty: 0, freq: 0 };
