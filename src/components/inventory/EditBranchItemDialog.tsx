@@ -290,7 +290,22 @@ export default function EditBranchItemDialog({ open, onOpenChange, item, onItemU
               <div className="grid grid-cols-2 gap-4">
                 <div className="space-y-2">
                   <Label>Category *</Label>
-                  <Input value={category} onChange={e => setCategory(e.target.value)} required />
+                  <Select value={category} onValueChange={setCategory}>
+                    <SelectTrigger>
+                      <SelectValue placeholder="Select a category" />
+                    </SelectTrigger>
+                    <SelectContent className="max-h-60">
+                      {categoryOptions.length === 0 ? (
+                        <div className="px-2 py-1.5 text-sm text-muted-foreground">
+                          No categories yet. Create some in the Categories page.
+                        </div>
+                      ) : (
+                        categoryOptions.map(c => (
+                          <SelectItem key={c} value={c}>{c}</SelectItem>
+                        ))
+                      )}
+                    </SelectContent>
+                  </Select>
                 </div>
                 <div className="space-y-2">
                   <Label>Manufacturer / Brand</Label>
