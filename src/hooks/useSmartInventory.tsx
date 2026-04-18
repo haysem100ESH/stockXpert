@@ -195,13 +195,13 @@ export function useSmartInventory() {
 
       const { data: recentSales } = await supabase
         .from('sale_items')
-        .select('medicine_id, pack_quantity, strip_quantity, created_at, sales!inner(branch_id)')
+        .select('medicine_id, quantity, pack_quantity, strip_quantity, created_at, sales!inner(branch_id)')
         .in('sales.branch_id', branchIds)
         .gte('created_at', sixtyDaysAgo.toISOString());
 
       const { data: yearlySales } = await supabase
         .from('sale_items')
-        .select('medicine_id, pack_quantity, strip_quantity, created_at, sales!inner(branch_id)')
+        .select('medicine_id, quantity, pack_quantity, strip_quantity, created_at, sales!inner(branch_id)')
         .in('sales.branch_id', branchIds)
         .gte('created_at', oneYearAgo.toISOString());
 
@@ -211,7 +211,8 @@ export function useSmartInventory() {
         const id = sale.medicine_id;
         if (!monthlyMap[id]) monthlyMap[id] = new Array(12).fill(0);
         const month = new Date(sale.created_at).getMonth();
-        const qty = (sale.pack_quantity || 0) + (sale.strip_quantity || 0);
+        const packStripQty = (sale.pack_quantity || 0) + (sale.strip_quantity || 0);
+        const qty = packStripQty > 0 ? packStripQty : (sale.quantity || 0);
         monthlyMap[id][month] += qty;
       });
 
@@ -226,7 +227,8 @@ export function useSmartInventory() {
         const id = sale.medicine_id;
         if (!salesMap[id]) salesMap[id] = { totalQty30: 0, totalQty60: 0, lastSaleDate: null };
 
-        const qty = (sale.pack_quantity || 0) + (sale.strip_quantity || 0);
+        const packStripQty = (sale.pack_quantity || 0) + (sale.strip_quantity || 0);
+        const qty = packStripQty > 0 ? packStripQty : (sale.quantity || 0);
         const saleDate = new Date(sale.created_at);
 
         salesMap[id].totalQty60 += qty;
