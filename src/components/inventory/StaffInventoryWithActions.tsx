@@ -7,7 +7,7 @@ import { Badge } from '@/components/ui/badge';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
 import { Pagination, PaginationContent, PaginationItem, PaginationLink, PaginationNext, PaginationPrevious } from '@/components/ui/pagination';
-import { Search, Edit2, Plus, Trash2, Filter, Settings2, SlidersHorizontal, History, Layers } from 'lucide-react';
+import { Search, Edit2, Plus, Trash2, Filter, Settings2, SlidersHorizontal, History, Layers, PackagePlus } from 'lucide-react';
 import { supabase } from '@/lib/db';
 import { useToast } from '@/hooks/use-toast';
 import { useAuth } from '@/hooks/useAuth';
@@ -20,6 +20,7 @@ import { ConfirmationDialog } from '@/components/ui/confirmation-dialog';
 import CategoryManagement from './CategoryManagement';
 import StockEditHistory from './StockEditHistory';
 import BatchBreakdownDialog from './BatchBreakdownDialog';
+import StockAdjustmentDialog from './StockAdjustmentDialog';
 
 const ITEMS_PER_PAGE = 24;
 
@@ -39,6 +40,7 @@ export default function StaffInventoryWithActions() {
   }>({ open: false, itemId: '', itemName: '' });
   const [hasBranches, setHasBranches] = useState(true);
   const [batchBreakdown, setBatchBreakdown] = useState<{ open: boolean; itemId: string; itemName: string }>({ open: false, itemId: '', itemName: '' });
+  const [adjustingItem, setAdjustingItem] = useState<BranchItem | null>(null);
   const { toast } = useToast();
   const { profile } = useAuth();
   const { selectedBranch, branchType } = useBranchContext();
@@ -179,6 +181,7 @@ export default function StaffInventoryWithActions() {
           </div>
           <div className="flex space-x-1">
             <Button size="sm" variant="ghost" onClick={() => setBatchBreakdown({ open: true, itemId: item.id, itemName: item.name })} title="View Batches"><Layers className="h-4 w-4" /></Button>
+            {!readOnly && <Button size="sm" variant="ghost" onClick={() => setAdjustingItem(item)} title="Adjust Stock"><PackagePlus className="h-4 w-4" /></Button>}
             {!readOnly && <Button size="sm" variant="ghost" onClick={() => handleEditItem(item)} title="Edit"><Edit2 className="h-4 w-4" /></Button>}
             {!readOnly && <Button size="sm" variant="ghost" onClick={() => handleDeleteItem(item.id, item.name)} title="Remove"><Trash2 className="h-4 w-4" /></Button>}
           </div>
@@ -388,6 +391,21 @@ export default function StaffInventoryWithActions() {
         onOpenChange={(open) => setBatchBreakdown(prev => ({ ...prev, open }))}
         branchItemId={batchBreakdown.itemId}
         itemName={batchBreakdown.itemName}
+      />
+
+      <StockAdjustmentDialog
+        open={!!adjustingItem}
+        onOpenChange={(open) => { if (!open) setAdjustingItem(null); }}
+        medicine={adjustingItem ? {
+          id: adjustingItem.id,
+          name: adjustingItem.name,
+          stock_quantity: adjustingItem.quantity,
+          purchase_price: adjustingItem.purchase_price,
+          branch_id: adjustingItem.branch_id,
+          item_type: (adjustingItem as any).item_type,
+          unit_label: (adjustingItem as any).unit_label,
+        } : null}
+        onAdjusted={() => { setAdjustingItem(null); refetch(); }}
       />
     </div>
   );
