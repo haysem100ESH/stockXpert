@@ -251,9 +251,15 @@ export function useSmartInventory() {
         const predictedDemand14 = adc * 14 * seasonalMult;
 
         const safetyStock = predictedDemand14 * 0.2;
-        const needsReorder = med.stock_quantity < predictedDemand14;
+        const minLevel = med.minimum_stock_level || 0;
+        // Reorder if either predicted 14-day demand exceeds stock, OR stock is below the
+        // configured minimum (covers low-stock items that have not sold recently).
+        const belowMin = minLevel > 0 && med.stock_quantity < minLevel;
+        const needsReorder = med.stock_quantity < predictedDemand14 || belowMin;
+        // Target restock = enough to cover demand+safety, but never less than the minimum.
+        const target = Math.max(predictedDemand14 + safetyStock, minLevel);
         const suggestedReorder = needsReorder
-          ? Math.ceil(predictedDemand14 - med.stock_quantity + safetyStock)
+          ? Math.max(1, Math.ceil(target - med.stock_quantity))
           : 0;
 
         const daysRemaining = adc > 0 ? Math.round(med.stock_quantity / adc) : null;
@@ -310,7 +316,7 @@ export function useSmartInventory() {
   // Derived summaries
   const summary = useMemo(() => {
     const topDemand = [...items].sort((a, b) => b.adc - a.adc).slice(0, 10);
-    const reorderItems = items.filter(i => i.needsReorder && i.currentStock > 0);
+    const reorderItems = items.filter(i => i.needsReorder);
     const stockOutAlerts = items.filter(i => i.stockOutRisk);
     const deadStock = items.filter(i => i.isDeadStock);
     const expiryAlerts = items.filter(i => i.expiryAlertLevel !== 'none');
