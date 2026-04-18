@@ -316,7 +316,7 @@ export function useSmartInventory() {
   // Derived summaries
   const summary = useMemo(() => {
     const topDemand = [...items].sort((a, b) => b.adc - a.adc).slice(0, 10);
-    const reorderItems = items.filter(i => i.needsReorder && i.currentStock > 0);
+    const reorderItems = items.filter(i => i.needsReorder);
     const stockOutAlerts = items.filter(i => i.stockOutRisk);
     const deadStock = items.filter(i => i.isDeadStock);
     const expiryAlerts = items.filter(i => i.expiryAlertLevel !== 'none');
