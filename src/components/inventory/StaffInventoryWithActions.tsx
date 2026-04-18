@@ -392,6 +392,21 @@ export default function StaffInventoryWithActions() {
         branchItemId={batchBreakdown.itemId}
         itemName={batchBreakdown.itemName}
       />
+
+      <StockAdjustmentDialog
+        open={!!adjustingItem}
+        onOpenChange={(open) => { if (!open) setAdjustingItem(null); }}
+        medicine={adjustingItem ? {
+          id: adjustingItem.id,
+          name: adjustingItem.name,
+          stock_quantity: adjustingItem.quantity,
+          purchase_price: adjustingItem.purchase_price,
+          branch_id: adjustingItem.branch_id,
+          item_type: (adjustingItem as any).item_type,
+          unit_label: (adjustingItem as any).unit_label,
+        } : null}
+        onAdjusted={() => { setAdjustingItem(null); refetch(); }}
+      />
     </div>
   );
 }
