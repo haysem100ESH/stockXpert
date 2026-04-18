@@ -89,6 +89,9 @@ export default function StockEditHistory() {
     switch (action) {
       case 'Item Created': return 'default';
       case 'Item Modified': return 'secondary';
+      case 'Stock Increased': return 'default';
+      case 'Stock Decreased': return 'destructive';
+      case 'New Batch Added': return 'default';
       case 'Open Pack Units Adjusted': return 'outline';
       case 'Open Pack Units Added': return 'secondary';
       case 'Open Pack Units Removed': return 'destructive';

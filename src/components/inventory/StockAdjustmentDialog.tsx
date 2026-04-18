@@ -154,6 +154,26 @@ export default function StockAdjustmentDialog({ open, onOpenChange, medicine, on
         if (logErr) console.warn('Failed to log adjustment:', logErr);
       }
 
+      // Log to stock_edit_history (visible in Stock Edit History page)
+      try {
+        const oldStock = medicine.stock_quantity;
+        const newStock = adjustmentType === 'increase' ? oldStock + qty : oldStock - qty;
+        await (supabase as any).from('stock_edit_history').insert({
+          medicine_id: medicineId,
+          branch_id: branchId || null,
+          action_type: adjustmentType === 'increase' ? 'Stock Increased' : 'Stock Decreased',
+          field_name: 'stock_quantity',
+          old_value: String(oldStock),
+          new_value: String(newStock),
+          reason: reason.trim(),
+          done_by: profile?.id || null,
+          done_by_name: profile?.full_name || 'Unknown',
+          item_name: medicine.name,
+        });
+      } catch (e) {
+        console.warn('Failed to log to stock_edit_history:', e);
+      }
+
       // Auto-record expense for measurable items on stock increase
       if (adjustmentType === 'increase' && medicine.item_type === 'measurable' && medicine.purchase_price > 0) {
         const expenseAmount = qty * medicine.purchase_price;
@@ -241,6 +261,26 @@ export default function StockAdjustmentDialog({ open, onOpenChange, medicine, on
         created_by: profile?.id || null,
       });
       if (logErr) console.warn('Failed to log batch addition:', logErr);
+
+      // Log to stock_edit_history (visible in Stock Edit History page)
+      try {
+        const oldStock = medicine.stock_quantity;
+        const newStock = oldStock + qty;
+        await (supabase as any).from('stock_edit_history').insert({
+          medicine_id: medicineId,
+          branch_id: branchId || null,
+          action_type: 'New Batch Added',
+          field_name: 'stock_quantity',
+          old_value: String(oldStock),
+          new_value: String(newStock),
+          reason: `Added ${qty} units${batchNumber ? ` · Batch #${batchNumber}` : ''}${batchExpiry ? ` · exp ${batchExpiry}` : ''} · PP ${pp} / SP ${sp}`,
+          done_by: profile?.id || null,
+          done_by_name: profile?.full_name || 'Unknown',
+          item_name: medicine.name,
+        });
+      } catch (e) {
+        console.warn('Failed to log to stock_edit_history:', e);
+      }
 
       // Record purchase expense
       if (batchRecordExpense && pp > 0) {

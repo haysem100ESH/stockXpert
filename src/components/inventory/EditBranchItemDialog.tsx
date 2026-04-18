@@ -5,10 +5,13 @@ import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
 import { Badge } from '@/components/ui/badge';
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
+import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
 import { Loader2 } from 'lucide-react';
 import { supabase } from '@/lib/db';
 import { useToast } from '@/hooks/use-toast';
 import { useAuth } from '@/hooks/useAuth';
+import { useBranchContext } from '@/hooks/useBranchContext';
+import { useCustomCategories } from '@/hooks/useCustomCategories';
 
 export interface BranchItem {
   id: string;
@@ -54,6 +57,15 @@ export default function EditBranchItemDialog({ open, onOpenChange, item, onItemU
   const [loading, setLoading] = useState(false);
   const { toast } = useToast();
   const { profile } = useAuth();
+  const { branchType } = useBranchContext();
+  const { categories: customCategories } = useCustomCategories(branchType === 'general' ? 'general' : 'pharmacy');
+
+  // Build dropdown list: include current value if not in custom list so user never loses the existing category
+  const categoryOptions = (() => {
+    const set = new Set<string>(customCategories);
+    if (category && category.trim()) set.add(category.trim());
+    return Array.from(set).sort((a, b) => a.localeCompare(b));
+  })();
 
   useEffect(() => {
     if (item && open) {
@@ -204,6 +216,44 @@ export default function EditBranchItemDialog({ open, onOpenChange, item, onItemU
 
       if (error) throw error;
 
+      // Log every changed field to stock_edit_history
+      try {
+        const changes: Array<{ field: string; oldVal: any; newVal: any }> = [];
+        if (parseFloat(sellingPrice) !== Number(item.selling_price)) {
+          changes.push({ field: 'selling_price', oldVal: item.selling_price, newVal: parseFloat(sellingPrice) });
+        }
+        if (parseFloat(purchasePrice) !== Number(item.purchase_price)) {
+          changes.push({ field: 'purchase_price', oldVal: item.purchase_price, newVal: parseFloat(purchasePrice) });
+        }
+        if ((expiryDate || null) !== (item.expiry_date || null)) {
+          changes.push({ field: 'expiry_date', oldVal: item.expiry_date || '—', newVal: expiryDate || '—' });
+        }
+        if (itemName !== (item.name || '')) changes.push({ field: 'name', oldVal: item.name, newVal: itemName });
+        if (genericName !== (item.generic_name || '')) changes.push({ field: 'generic_name', oldVal: item.generic_name || '—', newVal: genericName || '—' });
+        if (category !== (item.category || '')) changes.push({ field: 'category', oldVal: item.category, newVal: category });
+        if (manufacturer !== (item.manufacturer || '')) changes.push({ field: 'manufacturer', oldVal: item.manufacturer || '—', newVal: manufacturer || '—' });
+        if (batchNumber !== (item.batch_number || '')) changes.push({ field: 'batch_number', oldVal: item.batch_number || '—', newVal: batchNumber || '—' });
+        if (unitLabel !== (item.unit_label || '')) changes.push({ field: 'unit_label', oldVal: item.unit_label || '—', newVal: unitLabel || '—' });
+
+        if (changes.length > 0) {
+          const rows = changes.map(c => ({
+            medicine_id: item.medicine_id,
+            branch_id: item.branch_id || null,
+            action_type: 'Item Modified',
+            field_name: c.field,
+            old_value: String(c.oldVal ?? ''),
+            new_value: String(c.newVal ?? ''),
+            reason: 'Edited via Edit Item dialog',
+            done_by: profile?.id || null,
+            done_by_name: profile?.full_name || 'Unknown',
+            item_name: itemName || item.name,
+          }));
+          await (supabase as any).from('stock_edit_history').insert(rows);
+        }
+      } catch (logErr) {
+        console.warn('Failed to log edit history:', logErr);
+      }
+
       toast({ title: 'Success', description: 'Item updated successfully' });
       onItemUpdated();
       onOpenChange(false);
@@ -278,7 +328,22 @@ export default function EditBranchItemDialog({ open, onOpenChange, item, onItemU
               <div className="grid grid-cols-2 gap-4">
                 <div className="space-y-2">
                   <Label>Category *</Label>
-                  <Input value={category} onChange={e => setCategory(e.target.value)} required />
+                  <Select value={category} onValueChange={setCategory}>
+                    <SelectTrigger>
+                      <SelectValue placeholder="Select a category" />
+                    </SelectTrigger>
+                    <SelectContent className="max-h-60">
+                      {categoryOptions.length === 0 ? (
+                        <div className="px-2 py-1.5 text-sm text-muted-foreground">
+                          No categories yet. Create some in the Categories page.
+                        </div>
+                      ) : (
+                        categoryOptions.map(c => (
+                          <SelectItem key={c} value={c}>{c}</SelectItem>
+                        ))
+                      )}
+                    </SelectContent>
+                  </Select>
                 </div>
                 <div className="space-y-2">
                   <Label>Manufacturer / Brand</Label>
