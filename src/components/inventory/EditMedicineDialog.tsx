@@ -71,6 +71,9 @@ export default function EditMedicineDialog({
     branch_id: '',
     item_type: 'full_pcs' as 'full_pcs' | 'measurable',
   });
+  const [packagingMode, setPackagingMode] = useState<'with_strip' | 'no_strip'>('no_strip');
+  const [stripsPerPack, setStripsPerPack] = useState('');
+  const [unitsPerStrip, setUnitsPerStrip] = useState('');
   const [measurableUnit, setMeasurableUnit] = useState<string>('kg');
   const [recordInExpense, setRecordInExpense] = useState(true);
   const [originalRecordInExpense, setOriginalRecordInExpense] = useState(true);
