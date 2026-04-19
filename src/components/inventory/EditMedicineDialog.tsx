@@ -166,6 +166,24 @@ export default function EditMedicineDialog({
     try {
       const isMeas = medicineData.item_type === 'measurable';
       const unitLabel = isMeas ? measurableUnit : (medicineData.unit_label || 'strip');
+
+      // Compute units_per_pack: strip mode → strips × units/strip
+      let computedUnitsPerPack: number | null = null;
+      if (!isMeas) {
+        if (packagingMode === 'with_strip') {
+          const sp = parseInt(stripsPerPack);
+          const ups = parseInt(unitsPerStrip);
+          if (!sp || !ups || sp < 1 || ups < 1) {
+            toast({ title: 'Error', description: 'Strips per item and total items are required for strip packaging', variant: 'destructive' });
+            setLoading(false);
+            return;
+          }
+          computedUnitsPerPack = sp * ups;
+        } else if (medicineData.units_per_pack) {
+          computedUnitsPerPack = parseInt(medicineData.units_per_pack);
+        }
+      }
+
       const updateData: any = {
         name: medicineData.name,
         generic_name: medicineData.generic_name || null,
@@ -177,11 +195,13 @@ export default function EditMedicineDialog({
         selling_price: parseFloat(medicineData.selling_price),
         
         minimum_stock_level: parseInt(medicineData.minimum_stock_level),
-        units_per_pack: !isMeas && medicineData.units_per_pack ? parseInt(medicineData.units_per_pack) : null,
+        units_per_pack: computedUnitsPerPack,
         unit_label: unitLabel,
         expiry_date: isPharmacy ? (medicineData.expiry_date || null) : null,
         expiry_alert_enabled: isPharmacy ? medicineData.expiry_alert_enabled : false,
         item_type: medicineData.item_type,
+        strips_per_pack: !isMeas && packagingMode === 'with_strip' ? parseInt(stripsPerPack) : null,
+        units_per_strip: !isMeas && packagingMode === 'with_strip' ? parseInt(unitsPerStrip) : null,
       };
       
       if (userRole === 'owner' && medicineData.branch_id) {
