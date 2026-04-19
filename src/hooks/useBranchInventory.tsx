@@ -47,7 +47,7 @@ async function fetchBranchInventory({ branchIds }: FetchArgs): Promise<EnrichedB
   const [medsRes, branchesRes] = await Promise.all([
     supabase
       .from('medicines')
-      .select('id, name, generic_name, category, manufacturer, batch_number, item_type, unit_label, units_per_pack')
+      .select('id, name, generic_name, category, manufacturer, batch_number, item_type, unit_label, units_per_pack, strips_per_pack, units_per_strip')
       .in('id', medicineIds),
     supabase
       .from('pharmacy_branches')
