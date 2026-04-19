@@ -46,6 +46,9 @@ export default function CreateCustomItemDialog({ open, onOpenChange, onItemCreat
     setManufacturer('');
     setItemType('full_pcs');
     setUnitLabel('');
+    setPackagingMode('no_strip');
+    setStripsPerPack('');
+    setUnitsPerStrip('');
     setUnitsPack('');
     setMinStock('');
   };
