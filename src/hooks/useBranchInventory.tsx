@@ -72,6 +72,8 @@ async function fetchBranchInventory({ branchIds }: FetchArgs): Promise<EnrichedB
       item_type: med.item_type,
       unit_label: med.unit_label,
       units_per_pack: med.units_per_pack,
+      strips_per_pack: med.strips_per_pack,
+      units_per_strip: med.units_per_strip,
       branch_name: branchMap[item.branch_id],
     } as EnrichedBranchItem;
   });
