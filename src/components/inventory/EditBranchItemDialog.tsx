@@ -56,6 +56,12 @@ export default function EditBranchItemDialog({ open, onOpenChange, item, onItemU
   const [batchNumber, setBatchNumber] = useState('');
   const [unitLabel, setUnitLabel] = useState('');
 
+  // Strip packaging
+  const [packagingMode, setPackagingMode] = useState<'with_strip' | 'no_strip'>('no_strip');
+  const [stripsPerPack, setStripsPerPack] = useState('');
+  const [unitsPerStrip, setUnitsPerStrip] = useState('');
+  const [unitsPerPack, setUnitsPerPack] = useState('');
+
   const [loading, setLoading] = useState(false);
   const { toast } = useToast();
   const { profile } = useAuth();
