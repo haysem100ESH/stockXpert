@@ -71,6 +71,9 @@ export default function EditMedicineDialog({
     branch_id: '',
     item_type: 'full_pcs' as 'full_pcs' | 'measurable',
   });
+  const [packagingMode, setPackagingMode] = useState<'with_strip' | 'no_strip'>('no_strip');
+  const [stripsPerPack, setStripsPerPack] = useState('');
+  const [unitsPerStrip, setUnitsPerStrip] = useState('');
   const [measurableUnit, setMeasurableUnit] = useState<string>('kg');
   const [recordInExpense, setRecordInExpense] = useState(true);
   const [originalRecordInExpense, setOriginalRecordInExpense] = useState(true);
@@ -108,12 +111,19 @@ export default function EditMedicineDialog({
 
   useEffect(() => {
     if (medicine && open) {
-      const medicineWithBranch = medicine as MedicineWithBranch & { units_per_pack?: number; unit_label?: string; item_type?: string };
+      const medicineWithBranch = medicine as MedicineWithBranch & { units_per_pack?: number; unit_label?: string; item_type?: string; strips_per_pack?: number; units_per_strip?: number };
       const unitLbl = medicineWithBranch.unit_label || 'strip';
       const isMeas = (medicineWithBranch.item_type === 'measurable') || MEASURABLE_UNIT_OPTIONS.some(o => o.value === unitLbl.toLowerCase());
       if (isMeas) {
         setMeasurableUnit(unitLbl.toLowerCase());
       }
+
+      // Detect strip packaging from persisted columns
+      const hasStripBreakdown = !!(medicineWithBranch.strips_per_pack && medicineWithBranch.units_per_strip);
+      setPackagingMode(hasStripBreakdown ? 'with_strip' : 'no_strip');
+      setStripsPerPack(hasStripBreakdown ? String(medicineWithBranch.strips_per_pack) : '');
+      setUnitsPerStrip(hasStripBreakdown ? String(medicineWithBranch.units_per_strip) : '');
+
       setMedicineData({
         name: medicine.name || '',
         generic_name: medicine.generic_name || '',
@@ -156,6 +166,24 @@ export default function EditMedicineDialog({
     try {
       const isMeas = medicineData.item_type === 'measurable';
       const unitLabel = isMeas ? measurableUnit : (medicineData.unit_label || 'strip');
+
+      // Compute units_per_pack: strip mode → strips × units/strip
+      let computedUnitsPerPack: number | null = null;
+      if (!isMeas) {
+        if (packagingMode === 'with_strip') {
+          const sp = parseInt(stripsPerPack);
+          const ups = parseInt(unitsPerStrip);
+          if (!sp || !ups || sp < 1 || ups < 1) {
+            toast({ title: 'Error', description: 'Strips per item and total items are required for strip packaging', variant: 'destructive' });
+            setLoading(false);
+            return;
+          }
+          computedUnitsPerPack = sp * ups;
+        } else if (medicineData.units_per_pack) {
+          computedUnitsPerPack = parseInt(medicineData.units_per_pack);
+        }
+      }
+
       const updateData: any = {
         name: medicineData.name,
         generic_name: medicineData.generic_name || null,
@@ -167,11 +195,13 @@ export default function EditMedicineDialog({
         selling_price: parseFloat(medicineData.selling_price),
         
         minimum_stock_level: parseInt(medicineData.minimum_stock_level),
-        units_per_pack: !isMeas && medicineData.units_per_pack ? parseInt(medicineData.units_per_pack) : null,
+        units_per_pack: computedUnitsPerPack,
         unit_label: unitLabel,
         expiry_date: isPharmacy ? (medicineData.expiry_date || null) : null,
         expiry_alert_enabled: isPharmacy ? medicineData.expiry_alert_enabled : false,
         item_type: medicineData.item_type,
+        strips_per_pack: !isMeas && packagingMode === 'with_strip' ? parseInt(stripsPerPack) : null,
+        units_per_strip: !isMeas && packagingMode === 'with_strip' ? parseInt(unitsPerStrip) : null,
       };
       
       if (userRole === 'owner' && medicineData.branch_id) {
@@ -357,17 +387,49 @@ export default function EditMedicineDialog({
             </div>
           )}
 
-          {/* Unit Label & Units Per Pack — only for Full PCS */}
+          {/* Unit Label & Packaging — only for Full PCS */}
           {medicineData.item_type === 'full_pcs' && (
             <>
               <div className="space-y-2">
                 <Label htmlFor="unit_label">Unit Label</Label>
                 <Input id="unit_label" value={medicineData.unit_label} onChange={(e) => setMedicineData({ ...medicineData, unit_label: e.target.value })} placeholder="e.g. strip, piece, bottle" />
               </div>
+
               <div className="space-y-2">
-                <Label htmlFor="units_per_pack">Units Per Stock</Label>
-                <Input id="units_per_pack" type="number" min="1" value={medicineData.units_per_pack} onChange={(e) => setMedicineData({ ...medicineData, units_per_pack: e.target.value })} placeholder="Leave empty if not sold by unit" />
+                <Label>Packaging *</Label>
+                <Select value={packagingMode} onValueChange={(val) => setPackagingMode(val as 'with_strip' | 'no_strip')}>
+                  <SelectTrigger><SelectValue /></SelectTrigger>
+                  <SelectContent>
+                    <SelectItem value="no_strip">No strip (loose pieces)</SelectItem>
+                    <SelectItem value="with_strip">With strip (e.g. tablets in blister)</SelectItem>
+                  </SelectContent>
+                </Select>
               </div>
+
+              {packagingMode === 'with_strip' ? (
+                <>
+                  <div className="grid grid-cols-2 gap-4">
+                    <div className="space-y-2">
+                      <Label>Strips per Item *</Label>
+                      <Input type="number" min="1" value={stripsPerPack} onChange={(e) => setStripsPerPack(e.target.value)} placeholder="e.g. 10" />
+                    </div>
+                    <div className="space-y-2">
+                      <Label>Total Items *</Label>
+                      <Input type="number" min="1" value={unitsPerStrip} onChange={(e) => setUnitsPerStrip(e.target.value)} placeholder="e.g. 10" />
+                    </div>
+                  </div>
+                  {stripsPerPack && unitsPerStrip && parseInt(stripsPerPack) > 0 && parseInt(unitsPerStrip) > 0 && (
+                    <div className="text-xs text-muted-foreground -mt-2">
+                      Total: {parseInt(stripsPerPack) * parseInt(unitsPerStrip)} units per pack
+                    </div>
+                  )}
+                </>
+              ) : (
+                <div className="space-y-2">
+                  <Label htmlFor="units_per_pack">Units Per Stock</Label>
+                  <Input id="units_per_pack" type="number" min="1" value={medicineData.units_per_pack} onChange={(e) => setMedicineData({ ...medicineData, units_per_pack: e.target.value })} placeholder="Leave empty if not sold by unit" />
+                </div>
+              )}
             </>
           )}
 

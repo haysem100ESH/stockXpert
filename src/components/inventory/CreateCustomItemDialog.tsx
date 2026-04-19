@@ -90,16 +90,24 @@ export default function CreateCustomItemDialog({ open, onOpenChange, onItemCreat
       }
 
       // Insert into medicines table
-      const { data: newMed, error } = await supabase.from('medicines').insert({
+      const insertPayload: any = {
         name: name.trim(),
         generic_name: genericName.trim() || null,
         category: finalCategory,
         manufacturer: manufacturer.trim() || null,
         item_type: itemType,
-        unit_label: itemType === 'measurable' ? unitLabel : null,
+        unit_label: itemType === 'measurable' ? unitLabel : 'strip',
         units_per_pack: computedUnitsPerPack,
         minimum_stock_level: minStock ? parseInt(minStock) : null,
-      }).select('id, name, generic_name, category, manufacturer, item_type, unit_label, units_per_pack, minimum_stock_level').single();
+      };
+
+      // Persist strip breakdown when applicable
+      if (itemType === 'full_pcs' && packagingMode === 'with_strip') {
+        insertPayload.strips_per_pack = parseInt(stripsPerPack);
+        insertPayload.units_per_strip = parseInt(unitsPerStrip);
+      }
+
+      const { data: newMed, error } = await supabase.from('medicines').insert(insertPayload).select('id, name, generic_name, category, manufacturer, item_type, unit_label, units_per_pack, minimum_stock_level').single();
 
       if (error) throw error;
 

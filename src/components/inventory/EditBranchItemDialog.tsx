@@ -31,6 +31,8 @@ export interface BranchItem {
   item_type?: string;
   unit_label?: string;
   units_per_pack?: number;
+  strips_per_pack?: number;
+  units_per_strip?: number;
 }
 
 interface EditBranchItemDialogProps {
@@ -53,6 +55,12 @@ export default function EditBranchItemDialog({ open, onOpenChange, item, onItemU
   const [manufacturer, setManufacturer] = useState('');
   const [batchNumber, setBatchNumber] = useState('');
   const [unitLabel, setUnitLabel] = useState('');
+
+  // Strip packaging
+  const [packagingMode, setPackagingMode] = useState<'with_strip' | 'no_strip'>('no_strip');
+  const [stripsPerPack, setStripsPerPack] = useState('');
+  const [unitsPerStrip, setUnitsPerStrip] = useState('');
+  const [unitsPerPack, setUnitsPerPack] = useState('');
 
   const [loading, setLoading] = useState(false);
   const { toast } = useToast();
@@ -78,24 +86,58 @@ export default function EditBranchItemDialog({ open, onOpenChange, item, onItemU
       setManufacturer(item.manufacturer || '');
       setBatchNumber(item.batch_number || '');
       setUnitLabel(item.unit_label || '');
+
+      const hasStrip = !!(item.strips_per_pack && item.units_per_strip);
+      setPackagingMode(hasStrip ? 'with_strip' : 'no_strip');
+      setStripsPerPack(hasStrip ? String(item.strips_per_pack) : '');
+      setUnitsPerStrip(hasStrip ? String(item.units_per_strip) : '');
+      setUnitsPerPack(item.units_per_pack ? String(item.units_per_pack) : '');
     }
   }, [item, open]);
 
+  const computeUnitsPerPack = (): number | null => {
+    if (packagingMode === 'with_strip') {
+      const sp = parseInt(stripsPerPack);
+      const ups = parseInt(unitsPerStrip);
+      if (sp > 0 && ups > 0) return sp * ups;
+      return null;
+    }
+    return unitsPerPack ? parseInt(unitsPerPack) : null;
+  };
+
   const catalogFieldsChanged = () => {
     if (!item) return false;
+    const newUpp = computeUnitsPerPack();
+    const oldStripsPerPack = item.strips_per_pack || null;
+    const oldUnitsPerStrip = item.units_per_strip || null;
+    const newStripsPerPack = packagingMode === 'with_strip' && stripsPerPack ? parseInt(stripsPerPack) : null;
+    const newUnitsPerStrip = packagingMode === 'with_strip' && unitsPerStrip ? parseInt(unitsPerStrip) : null;
     return (
       itemName !== (item.name || '') ||
       genericName !== (item.generic_name || '') ||
       category !== (item.category || '') ||
       manufacturer !== (item.manufacturer || '') ||
       batchNumber !== (item.batch_number || '') ||
-      unitLabel !== (item.unit_label || '')
+      unitLabel !== (item.unit_label || '') ||
+      newUpp !== (item.units_per_pack || null) ||
+      newStripsPerPack !== oldStripsPerPack ||
+      newUnitsPerStrip !== oldUnitsPerStrip
     );
   };
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
     if (!item) return;
+
+    if (packagingMode === 'with_strip') {
+      const sp = parseInt(stripsPerPack);
+      const ups = parseInt(unitsPerStrip);
+      if (!sp || !ups || sp < 1 || ups < 1) {
+        toast({ title: 'Error', description: 'Strips per item and total items are required for strip packaging', variant: 'destructive' });
+        return;
+      }
+    }
+
     setLoading(true);
 
     try {
@@ -116,6 +158,9 @@ export default function EditBranchItemDialog({ open, onOpenChange, item, onItemU
           manufacturer: manufacturer.trim() || null,
           batch_number: batchNumber.trim() || null,
           unit_label: unitLabel.trim() || null,
+          units_per_pack: computeUnitsPerPack(),
+          strips_per_pack: packagingMode === 'with_strip' ? parseInt(stripsPerPack) : null,
+          units_per_strip: packagingMode === 'with_strip' ? parseInt(unitsPerStrip) : null,
         };
 
         // Check if other owners also reference this medicine
@@ -361,6 +406,43 @@ export default function EditBranchItemDialog({ open, onOpenChange, item, onItemU
                   <Input value={unitLabel} onChange={e => setUnitLabel(e.target.value)} placeholder="e.g. tablets, ml" />
                 </div>
               </div>
+
+              {/* Packaging mode */}
+              <div className="space-y-2">
+                <Label>Packaging *</Label>
+                <Select value={packagingMode} onValueChange={(val) => setPackagingMode(val as 'with_strip' | 'no_strip')}>
+                  <SelectTrigger><SelectValue /></SelectTrigger>
+                  <SelectContent>
+                    <SelectItem value="no_strip">No strip (loose pieces)</SelectItem>
+                    <SelectItem value="with_strip">With strip (e.g. tablets in blister)</SelectItem>
+                  </SelectContent>
+                </Select>
+              </div>
+
+              {packagingMode === 'with_strip' ? (
+                <>
+                  <div className="grid grid-cols-2 gap-4">
+                    <div className="space-y-2">
+                      <Label>Strips per Item *</Label>
+                      <Input type="number" min="1" value={stripsPerPack} onChange={e => setStripsPerPack(e.target.value)} placeholder="e.g. 10" />
+                    </div>
+                    <div className="space-y-2">
+                      <Label>Total Items *</Label>
+                      <Input type="number" min="1" value={unitsPerStrip} onChange={e => setUnitsPerStrip(e.target.value)} placeholder="e.g. 10" />
+                    </div>
+                  </div>
+                  {stripsPerPack && unitsPerStrip && parseInt(stripsPerPack) > 0 && parseInt(unitsPerStrip) > 0 && (
+                    <p className="text-xs text-muted-foreground -mt-2">
+                      Total: {parseInt(stripsPerPack) * parseInt(unitsPerStrip)} units per pack
+                    </p>
+                  )}
+                </>
+              ) : (
+                <div className="space-y-2">
+                  <Label>Units per Pack</Label>
+                  <Input type="number" min="1" value={unitsPerPack} onChange={e => setUnitsPerPack(e.target.value)} placeholder="Leave empty if not sold by unit" />
+                </div>
+              )}
 
               {catalogFieldsChanged() && (
                 <p className="text-xs text-muted-foreground bg-muted/50 p-2 rounded">
