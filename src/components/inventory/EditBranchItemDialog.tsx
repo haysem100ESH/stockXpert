@@ -407,6 +407,43 @@ export default function EditBranchItemDialog({ open, onOpenChange, item, onItemU
                 </div>
               </div>
 
+              {/* Packaging mode */}
+              <div className="space-y-2">
+                <Label>Packaging *</Label>
+                <Select value={packagingMode} onValueChange={(val) => setPackagingMode(val as 'with_strip' | 'no_strip')}>
+                  <SelectTrigger><SelectValue /></SelectTrigger>
+                  <SelectContent>
+                    <SelectItem value="no_strip">No strip (loose pieces)</SelectItem>
+                    <SelectItem value="with_strip">With strip (e.g. tablets in blister)</SelectItem>
+                  </SelectContent>
+                </Select>
+              </div>
+
+              {packagingMode === 'with_strip' ? (
+                <>
+                  <div className="grid grid-cols-2 gap-4">
+                    <div className="space-y-2">
+                      <Label>Strips per Item *</Label>
+                      <Input type="number" min="1" value={stripsPerPack} onChange={e => setStripsPerPack(e.target.value)} placeholder="e.g. 10" />
+                    </div>
+                    <div className="space-y-2">
+                      <Label>Total Items *</Label>
+                      <Input type="number" min="1" value={unitsPerStrip} onChange={e => setUnitsPerStrip(e.target.value)} placeholder="e.g. 10" />
+                    </div>
+                  </div>
+                  {stripsPerPack && unitsPerStrip && parseInt(stripsPerPack) > 0 && parseInt(unitsPerStrip) > 0 && (
+                    <p className="text-xs text-muted-foreground -mt-2">
+                      Total: {parseInt(stripsPerPack) * parseInt(unitsPerStrip)} units per pack
+                    </p>
+                  )}
+                </>
+              ) : (
+                <div className="space-y-2">
+                  <Label>Units per Pack</Label>
+                  <Input type="number" min="1" value={unitsPerPack} onChange={e => setUnitsPerPack(e.target.value)} placeholder="Leave empty if not sold by unit" />
+                </div>
+              )}
+
               {catalogFieldsChanged() && (
                 <p className="text-xs text-muted-foreground bg-muted/50 p-2 rounded">
                   ℹ️ Item info changes are scoped to your account only and won't affect other users.
