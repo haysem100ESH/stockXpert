@@ -95,21 +95,49 @@ export default function EditBranchItemDialog({ open, onOpenChange, item, onItemU
     }
   }, [item, open]);
 
+  const computeUnitsPerPack = (): number | null => {
+    if (packagingMode === 'with_strip') {
+      const sp = parseInt(stripsPerPack);
+      const ups = parseInt(unitsPerStrip);
+      if (sp > 0 && ups > 0) return sp * ups;
+      return null;
+    }
+    return unitsPerPack ? parseInt(unitsPerPack) : null;
+  };
+
   const catalogFieldsChanged = () => {
     if (!item) return false;
+    const newUpp = computeUnitsPerPack();
+    const oldStripsPerPack = item.strips_per_pack || null;
+    const oldUnitsPerStrip = item.units_per_strip || null;
+    const newStripsPerPack = packagingMode === 'with_strip' && stripsPerPack ? parseInt(stripsPerPack) : null;
+    const newUnitsPerStrip = packagingMode === 'with_strip' && unitsPerStrip ? parseInt(unitsPerStrip) : null;
     return (
       itemName !== (item.name || '') ||
       genericName !== (item.generic_name || '') ||
       category !== (item.category || '') ||
       manufacturer !== (item.manufacturer || '') ||
       batchNumber !== (item.batch_number || '') ||
-      unitLabel !== (item.unit_label || '')
+      unitLabel !== (item.unit_label || '') ||
+      newUpp !== (item.units_per_pack || null) ||
+      newStripsPerPack !== oldStripsPerPack ||
+      newUnitsPerStrip !== oldUnitsPerStrip
     );
   };
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
     if (!item) return;
+
+    if (packagingMode === 'with_strip') {
+      const sp = parseInt(stripsPerPack);
+      const ups = parseInt(unitsPerStrip);
+      if (!sp || !ups || sp < 1 || ups < 1) {
+        toast({ title: 'Error', description: 'Strips per item and total items are required for strip packaging', variant: 'destructive' });
+        return;
+      }
+    }
+
     setLoading(true);
 
     try {
@@ -130,6 +158,9 @@ export default function EditBranchItemDialog({ open, onOpenChange, item, onItemU
           manufacturer: manufacturer.trim() || null,
           batch_number: batchNumber.trim() || null,
           unit_label: unitLabel.trim() || null,
+          units_per_pack: computeUnitsPerPack(),
+          strips_per_pack: packagingMode === 'with_strip' ? parseInt(stripsPerPack) : null,
+          units_per_strip: packagingMode === 'with_strip' ? parseInt(unitsPerStrip) : null,
         };
 
         // Check if other owners also reference this medicine
