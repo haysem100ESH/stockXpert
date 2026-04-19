@@ -26,6 +26,9 @@ export default function CreateCustomItemDialog({ open, onOpenChange, onItemCreat
   const [manufacturer, setManufacturer] = useState('');
   const [itemType, setItemType] = useState<'full_pcs' | 'measurable'>('full_pcs');
   const [unitLabel, setUnitLabel] = useState('');
+  const [packagingMode, setPackagingMode] = useState<'with_strip' | 'no_strip'>('no_strip');
+  const [stripsPerPack, setStripsPerPack] = useState('');
+  const [unitsPerStrip, setUnitsPerStrip] = useState('');
   const [unitsPack, setUnitsPack] = useState('');
   const [minStock, setMinStock] = useState('');
   const [submitting, setSubmitting] = useState(false);
