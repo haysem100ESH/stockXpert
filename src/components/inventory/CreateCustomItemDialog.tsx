@@ -217,16 +217,54 @@ export default function CreateCustomItemDialog({ open, onOpenChange, onItemCreat
             )}
           </div>
 
-          <div className="grid grid-cols-2 gap-4">
+          {/* Strip packaging — only for countable items */}
+          {itemType === 'full_pcs' && (
             <div className="space-y-2">
-              <Label>Units per Pack</Label>
-              <Input type="number" min="1" value={unitsPack} onChange={e => setUnitsPack(e.target.value)} placeholder="e.g. 10" />
+              <Label>Packaging *</Label>
+              <Select value={packagingMode} onValueChange={val => setPackagingMode(val as 'with_strip' | 'no_strip')}>
+                <SelectTrigger><SelectValue /></SelectTrigger>
+                <SelectContent>
+                  <SelectItem value="no_strip">No strip (loose pieces)</SelectItem>
+                  <SelectItem value="with_strip">With strip (e.g. tablets in blister)</SelectItem>
+                </SelectContent>
+              </Select>
             </div>
-            <div className="space-y-2">
-              <Label>Minimum Stock Level</Label>
-              <Input type="number" min="0" value={minStock} onChange={e => setMinStock(e.target.value)} placeholder="e.g. 5" />
+          )}
+
+          {itemType === 'full_pcs' && packagingMode === 'with_strip' ? (
+            <>
+              <div className="grid grid-cols-2 gap-4">
+                <div className="space-y-2">
+                  <Label>Strips per Pack *</Label>
+                  <Input type="number" min="1" value={stripsPerPack} onChange={e => setStripsPerPack(e.target.value)} placeholder="e.g. 10" />
+                </div>
+                <div className="space-y-2">
+                  <Label>Units per Strip *</Label>
+                  <Input type="number" min="1" value={unitsPerStrip} onChange={e => setUnitsPerStrip(e.target.value)} placeholder="e.g. 10" />
+                </div>
+              </div>
+              {stripsPerPack && unitsPerStrip && parseInt(stripsPerPack) > 0 && parseInt(unitsPerStrip) > 0 && (
+                <div className="text-xs text-muted-foreground -mt-2">
+                  Total: {parseInt(stripsPerPack) * parseInt(unitsPerStrip)} units per pack
+                </div>
+              )}
+              <div className="space-y-2">
+                <Label>Minimum Stock Level</Label>
+                <Input type="number" min="0" value={minStock} onChange={e => setMinStock(e.target.value)} placeholder="e.g. 5" />
+              </div>
+            </>
+          ) : (
+            <div className="grid grid-cols-2 gap-4">
+              <div className="space-y-2">
+                <Label>Units per Pack</Label>
+                <Input type="number" min="1" value={unitsPack} onChange={e => setUnitsPack(e.target.value)} placeholder="e.g. 10" />
+              </div>
+              <div className="space-y-2">
+                <Label>Minimum Stock Level</Label>
+                <Input type="number" min="0" value={minStock} onChange={e => setMinStock(e.target.value)} placeholder="e.g. 5" />
+              </div>
             </div>
-          </div>
+          )}
 
           <Button onClick={handleCreate} disabled={submitting} className="w-full">
             {submitting && <Loader2 className="h-4 w-4 animate-spin mr-2" />}
