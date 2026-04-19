@@ -86,6 +86,12 @@ export default function EditBranchItemDialog({ open, onOpenChange, item, onItemU
       setManufacturer(item.manufacturer || '');
       setBatchNumber(item.batch_number || '');
       setUnitLabel(item.unit_label || '');
+
+      const hasStrip = !!(item.strips_per_pack && item.units_per_strip);
+      setPackagingMode(hasStrip ? 'with_strip' : 'no_strip');
+      setStripsPerPack(hasStrip ? String(item.strips_per_pack) : '');
+      setUnitsPerStrip(hasStrip ? String(item.units_per_strip) : '');
+      setUnitsPerPack(item.units_per_pack ? String(item.units_per_pack) : '');
     }
   }, [item, open]);
 
