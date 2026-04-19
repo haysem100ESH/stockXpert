@@ -111,12 +111,19 @@ export default function EditMedicineDialog({
 
   useEffect(() => {
     if (medicine && open) {
-      const medicineWithBranch = medicine as MedicineWithBranch & { units_per_pack?: number; unit_label?: string; item_type?: string };
+      const medicineWithBranch = medicine as MedicineWithBranch & { units_per_pack?: number; unit_label?: string; item_type?: string; strips_per_pack?: number; units_per_strip?: number };
       const unitLbl = medicineWithBranch.unit_label || 'strip';
       const isMeas = (medicineWithBranch.item_type === 'measurable') || MEASURABLE_UNIT_OPTIONS.some(o => o.value === unitLbl.toLowerCase());
       if (isMeas) {
         setMeasurableUnit(unitLbl.toLowerCase());
       }
+
+      // Detect strip packaging from persisted columns
+      const hasStripBreakdown = !!(medicineWithBranch.strips_per_pack && medicineWithBranch.units_per_strip);
+      setPackagingMode(hasStripBreakdown ? 'with_strip' : 'no_strip');
+      setStripsPerPack(hasStripBreakdown ? String(medicineWithBranch.strips_per_pack) : '');
+      setUnitsPerStrip(hasStripBreakdown ? String(medicineWithBranch.units_per_strip) : '');
+
       setMedicineData({
         name: medicine.name || '',
         generic_name: medicine.generic_name || '',
