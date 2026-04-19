@@ -74,6 +74,21 @@ export default function CreateCustomItemDialog({ open, onOpenChange, onItemCreat
         ownerId = branch?.pharmacy_owner_id || undefined;
       }
 
+      // Compute units_per_pack: if "with strip" → strips × units/strip, else manual input
+      let computedUnitsPerPack: number | null = null;
+      if (itemType === 'full_pcs' && packagingMode === 'with_strip') {
+        const sp = parseInt(stripsPerPack);
+        const ups = parseInt(unitsPerStrip);
+        if (!sp || !ups || sp < 1 || ups < 1) {
+          toast({ title: 'Error', description: 'Strips per pack and units per strip are required', variant: 'destructive' });
+          setSubmitting(false);
+          return;
+        }
+        computedUnitsPerPack = sp * ups;
+      } else if (unitsPack) {
+        computedUnitsPerPack = parseInt(unitsPack);
+      }
+
       // Insert into medicines table
       const { data: newMed, error } = await supabase.from('medicines').insert({
         name: name.trim(),
@@ -82,7 +97,7 @@ export default function CreateCustomItemDialog({ open, onOpenChange, onItemCreat
         manufacturer: manufacturer.trim() || null,
         item_type: itemType,
         unit_label: itemType === 'measurable' ? unitLabel : null,
-        units_per_pack: unitsPack ? parseInt(unitsPack) : null,
+        units_per_pack: computedUnitsPerPack,
         minimum_stock_level: minStock ? parseInt(minStock) : null,
       }).select('id, name, generic_name, category, manufacturer, item_type, unit_label, units_per_pack, minimum_stock_level').single();
 
