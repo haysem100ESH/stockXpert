@@ -31,6 +31,8 @@ export interface BranchItem {
   item_type?: string;
   unit_label?: string;
   units_per_pack?: number;
+  strips_per_pack?: number;
+  units_per_strip?: number;
 }
 
 interface EditBranchItemDialogProps {
