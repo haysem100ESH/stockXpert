@@ -7,7 +7,7 @@ import { Badge } from '@/components/ui/badge';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
 import { Pagination, PaginationContent, PaginationItem, PaginationLink, PaginationNext, PaginationPrevious } from '@/components/ui/pagination';
-import { Search, Edit2, Plus, Trash2, Filter, Settings2, SlidersHorizontal, History, Layers, PackagePlus } from 'lucide-react';
+import { Search, Edit2, Plus, Trash2, Filter, Settings2, SlidersHorizontal, History, Layers, PackagePlus, Upload } from 'lucide-react';
 import { supabase } from '@/lib/db';
 import { useToast } from '@/hooks/use-toast';
 import { useAuth } from '@/hooks/useAuth';
@@ -21,6 +21,7 @@ import CategoryManagement from './CategoryManagement';
 import StockEditHistory from './StockEditHistory';
 import BatchBreakdownDialog from './BatchBreakdownDialog';
 import StockAdjustmentDialog from './StockAdjustmentDialog';
+import ImportCsvDialog from './ImportCsvDialog';
 
 const ITEMS_PER_PAGE = 24;
 
@@ -32,6 +33,7 @@ export default function StaffInventoryWithActions() {
   const [categoryFilter, setCategoryFilter] = useState('all');
   const [currentPage, setCurrentPage] = useState(1);
   const [showAddDialog, setShowAddDialog] = useState(false);
+  const [showImportDialog, setShowImportDialog] = useState(false);
   const [editingItem, setEditingItem] = useState<BranchItem | null>(null);
   const [deleteConfirmation, setDeleteConfirmation] = useState<{
     open: boolean;
@@ -237,6 +239,10 @@ export default function StaffInventoryWithActions() {
         <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3">
           <h2 className="text-xl sm:text-2xl font-bold">{isPharmacy ? 'Inventory Management' : 'Stock Management'}</h2>
           <div className="flex gap-2 flex-wrap">
+            <Button onClick={() => setShowImportDialog(true)} disabled={!hasBranches || readOnly} size="sm" variant="outline">
+              <Upload className="h-4 w-4 mr-2" />
+              Import CSV
+            </Button>
             <Button onClick={() => setShowAddDialog(true)} disabled={!hasBranches || readOnly} size="sm">
               <Plus className="h-4 w-4 mr-2" />
               Add Item
@@ -368,6 +374,12 @@ export default function StaffInventoryWithActions() {
         open={showAddDialog}
         onOpenChange={setShowAddDialog}
         onItemAdded={handleItemAdded}
+      />
+
+      <ImportCsvDialog
+        open={showImportDialog}
+        onOpenChange={setShowImportDialog}
+        onImported={() => { refetch(); setShowImportDialog(false); }}
       />
 
       <EditBranchItemDialog
