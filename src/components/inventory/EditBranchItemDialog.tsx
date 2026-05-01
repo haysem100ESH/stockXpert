@@ -405,6 +405,36 @@ export default function EditBranchItemDialog({ open, onOpenChange, item, onItemU
                 <Input value={genericName} onChange={e => setGenericName(e.target.value)} placeholder="Optional" />
               </div>
 
+              {isPharmacy && (
+                <>
+                  <div className="grid grid-cols-2 gap-4">
+                    <div className="space-y-2">
+                      <Label>Strength</Label>
+                      <Input value={strength} onChange={e => setStrength(e.target.value)} placeholder="e.g. 500mg" />
+                    </div>
+                    <div className="space-y-2">
+                      <Label>Medicine Group</Label>
+                      <Select value={medicineGroup || undefined} onValueChange={setMedicineGroup}>
+                        <SelectTrigger><SelectValue placeholder="Select group" /></SelectTrigger>
+                        <SelectContent>
+                          {(() => {
+                            const names = new Set(medicineGroups.map(g => g.name));
+                            if (medicineGroup && !names.has(medicineGroup) && medicineGroup !== '__custom__') names.add(medicineGroup);
+                            return Array.from(names).sort().map(n => (
+                              <SelectItem key={n} value={n}>{n}</SelectItem>
+                            ));
+                          })()}
+                          <SelectItem value="__custom__">+ Custom Group</SelectItem>
+                        </SelectContent>
+                      </Select>
+                    </div>
+                  </div>
+                  {medicineGroup === '__custom__' && (
+                    <Input value={customGroup} onChange={e => setCustomGroup(e.target.value)} placeholder="Enter new group name" />
+                  )}
+                </>
+              )}
+
               <div className="grid grid-cols-2 gap-4">
                 <div className="space-y-2">
                   <Label>Category *</Label>
