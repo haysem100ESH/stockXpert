@@ -302,6 +302,21 @@ export default function StaffInventoryWithActions() {
                 </SelectContent>
               </Select>
             </div>
+            {isPharmacy && getUniqueGroups().length > 0 && (
+              <div className="flex items-center space-x-2">
+                <Select value={groupFilter} onValueChange={setGroupFilter}>
+                  <SelectTrigger className="w-full sm:w-48">
+                    <SelectValue placeholder="Filter by group" />
+                  </SelectTrigger>
+                  <SelectContent>
+                    <SelectItem value="all">All Groups</SelectItem>
+                    {getUniqueGroups().map(g => (
+                      <SelectItem key={g} value={g}>{g}</SelectItem>
+                    ))}
+                  </SelectContent>
+                </Select>
+              </div>
+            )}
           </div>
 
           {/* Group by branch when "All Branches" — operates on the paginated slice */}
