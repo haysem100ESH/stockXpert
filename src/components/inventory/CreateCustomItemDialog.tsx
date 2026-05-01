@@ -10,6 +10,7 @@ import { useToast } from '@/hooks/use-toast';
 import { useAuth } from '@/hooks/useAuth';
 import { useBranchContext } from '@/hooks/useBranchContext';
 import { useCustomCategories } from '@/hooks/useCustomCategories';
+import { useMedicineGroups } from '@/hooks/useMedicineGroups';
 import { MEASURABLE_UNIT_OPTIONS } from '@/lib/itemTypes';
 
 interface CreateCustomItemDialogProps {
@@ -21,6 +22,9 @@ interface CreateCustomItemDialogProps {
 export default function CreateCustomItemDialog({ open, onOpenChange, onItemCreated }: CreateCustomItemDialogProps) {
   const [name, setName] = useState('');
   const [genericName, setGenericName] = useState('');
+  const [strength, setStrength] = useState('');
+  const [medicineGroup, setMedicineGroup] = useState('');
+  const [customGroup, setCustomGroup] = useState('');
   const [category, setCategory] = useState('');
   const [customCategory, setCustomCategory] = useState('');
   const [manufacturer, setManufacturer] = useState('');
@@ -36,11 +40,16 @@ export default function CreateCustomItemDialog({ open, onOpenChange, onItemCreat
   const { toast } = useToast();
   const { profile } = useAuth();
   const { branchType } = useBranchContext();
-  const { categories } = useCustomCategories(branchType === 'pharmacy' ? 'pharmacy' : 'general');
+  const isPharmacy = branchType === 'pharmacy';
+  const { categories } = useCustomCategories(isPharmacy ? 'pharmacy' : 'general');
+  const { groups: medicineGroups, addGroup } = useMedicineGroups();
 
   const resetForm = () => {
     setName('');
     setGenericName('');
+    setStrength('');
+    setMedicineGroup('');
+    setCustomGroup('');
     setCategory('');
     setCustomCategory('');
     setManufacturer('');
@@ -89,6 +98,20 @@ export default function CreateCustomItemDialog({ open, onOpenChange, onItemCreat
         computedUnitsPerPack = parseInt(unitsPack);
       }
 
+      // Resolve final group: pharmacy mode only
+      let finalGroup: string | null = null;
+      if (isPharmacy) {
+        if (medicineGroup === '__custom__') {
+          const custom = customGroup.trim();
+          if (custom) {
+            await addGroup(custom);
+            finalGroup = custom;
+          }
+        } else if (medicineGroup) {
+          finalGroup = medicineGroup;
+        }
+      }
+
       // Insert into medicines table
       const insertPayload: any = {
         name: name.trim(),
@@ -100,6 +123,12 @@ export default function CreateCustomItemDialog({ open, onOpenChange, onItemCreat
         units_per_pack: computedUnitsPerPack,
         minimum_stock_level: minStock ? parseInt(minStock) : null,
       };
+
+      // Pharmacy-only fields
+      if (isPharmacy) {
+        insertPayload.strength = strength.trim() || null;
+        insertPayload.medicine_group = finalGroup;
+      }
 
       // Persist strip breakdown when applicable
       if (itemType === 'full_pcs' && packagingMode === 'with_strip') {
@@ -176,6 +205,32 @@ export default function CreateCustomItemDialog({ open, onOpenChange, onItemCreat
             <Label>Generic Name</Label>
             <Input value={genericName} onChange={e => setGenericName(e.target.value)} placeholder="e.g. Acetaminophen" />
           </div>
+
+          {isPharmacy && (
+            <>
+              <div className="grid grid-cols-2 gap-4">
+                <div className="space-y-2">
+                  <Label>Strength</Label>
+                  <Input value={strength} onChange={e => setStrength(e.target.value)} placeholder="e.g. 500mg, 250mg/5ml" />
+                </div>
+                <div className="space-y-2">
+                  <Label>Medicine Group</Label>
+                  <Select value={medicineGroup} onValueChange={setMedicineGroup}>
+                    <SelectTrigger><SelectValue placeholder="Select group" /></SelectTrigger>
+                    <SelectContent>
+                      {medicineGroups.map(g => (
+                        <SelectItem key={g.id} value={g.name}>{g.name}</SelectItem>
+                      ))}
+                      <SelectItem value="__custom__">+ Custom Group</SelectItem>
+                    </SelectContent>
+                  </Select>
+                </div>
+              </div>
+              {medicineGroup === '__custom__' && (
+                <Input value={customGroup} onChange={e => setCustomGroup(e.target.value)} placeholder="Enter new group name (e.g. NSAIDS and anti-pain)" />
+              )}
+            </>
+          )}
 
           <div className="space-y-2">
             <Label>Category *</Label>

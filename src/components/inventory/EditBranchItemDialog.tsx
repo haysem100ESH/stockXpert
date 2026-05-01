@@ -12,6 +12,7 @@ import { useToast } from '@/hooks/use-toast';
 import { useAuth } from '@/hooks/useAuth';
 import { useBranchContext } from '@/hooks/useBranchContext';
 import { useCustomCategories } from '@/hooks/useCustomCategories';
+import { useMedicineGroups } from '@/hooks/useMedicineGroups';
 
 export interface BranchItem {
   id: string;
@@ -33,6 +34,8 @@ export interface BranchItem {
   units_per_pack?: number;
   strips_per_pack?: number;
   units_per_strip?: number;
+  medicine_group?: string | null;
+  strength?: string | null;
 }
 
 interface EditBranchItemDialogProps {
@@ -55,6 +58,9 @@ export default function EditBranchItemDialog({ open, onOpenChange, item, onItemU
   const [manufacturer, setManufacturer] = useState('');
   const [batchNumber, setBatchNumber] = useState('');
   const [unitLabel, setUnitLabel] = useState('');
+  const [strength, setStrength] = useState('');
+  const [medicineGroup, setMedicineGroup] = useState('');
+  const [customGroup, setCustomGroup] = useState('');
 
   // Strip packaging
   const [packagingMode, setPackagingMode] = useState<'with_strip' | 'no_strip'>('no_strip');
@@ -66,7 +72,9 @@ export default function EditBranchItemDialog({ open, onOpenChange, item, onItemU
   const { toast } = useToast();
   const { profile } = useAuth();
   const { branchType } = useBranchContext();
+  const isPharmacy = branchType === 'pharmacy';
   const { categories: customCategories } = useCustomCategories(branchType === 'general' ? 'general' : 'pharmacy');
+  const { groups: medicineGroups, addGroup } = useMedicineGroups();
 
   // Build dropdown list: include current value if not in custom list so user never loses the existing category
   const categoryOptions = (() => {
@@ -86,6 +94,9 @@ export default function EditBranchItemDialog({ open, onOpenChange, item, onItemU
       setManufacturer(item.manufacturer || '');
       setBatchNumber(item.batch_number || '');
       setUnitLabel(item.unit_label || '');
+      setStrength(item.strength || '');
+      setMedicineGroup(item.medicine_group || '');
+      setCustomGroup('');
 
       const hasStrip = !!(item.strips_per_pack && item.units_per_strip);
       setPackagingMode(hasStrip ? 'with_strip' : 'no_strip');
@@ -112,6 +123,8 @@ export default function EditBranchItemDialog({ open, onOpenChange, item, onItemU
     const oldUnitsPerStrip = item.units_per_strip || null;
     const newStripsPerPack = packagingMode === 'with_strip' && stripsPerPack ? parseInt(stripsPerPack) : null;
     const newUnitsPerStrip = packagingMode === 'with_strip' && unitsPerStrip ? parseInt(unitsPerStrip) : null;
+    const oldGroup = item.medicine_group || '';
+    const newGroup = medicineGroup === '__custom__' ? customGroup.trim() : (medicineGroup || '');
     return (
       itemName !== (item.name || '') ||
       genericName !== (item.generic_name || '') ||
@@ -121,7 +134,11 @@ export default function EditBranchItemDialog({ open, onOpenChange, item, onItemU
       unitLabel !== (item.unit_label || '') ||
       newUpp !== (item.units_per_pack || null) ||
       newStripsPerPack !== oldStripsPerPack ||
-      newUnitsPerStrip !== oldUnitsPerStrip
+      newUnitsPerStrip !== oldUnitsPerStrip ||
+      (isPharmacy && (
+        strength !== (item.strength || '') ||
+        newGroup !== oldGroup
+      ))
     );
   };
 
@@ -151,7 +168,21 @@ export default function EditBranchItemDialog({ open, onOpenChange, item, onItemU
 
       // If catalog fields changed, we need clone-on-write
       if (catalogFieldsChanged()) {
-        const newMedicineData = {
+        // Resolve final group name (pharmacy only)
+        let resolvedGroup: string | null = null;
+        if (isPharmacy) {
+          if (medicineGroup === '__custom__') {
+            const cg = customGroup.trim();
+            if (cg) {
+              await addGroup(cg);
+              resolvedGroup = cg;
+            }
+          } else if (medicineGroup) {
+            resolvedGroup = medicineGroup;
+          }
+        }
+
+        const newMedicineData: any = {
           name: itemName.trim(),
           generic_name: genericName.trim() || null,
           category: category.trim(),
@@ -162,6 +193,10 @@ export default function EditBranchItemDialog({ open, onOpenChange, item, onItemU
           strips_per_pack: packagingMode === 'with_strip' ? parseInt(stripsPerPack) : null,
           units_per_strip: packagingMode === 'with_strip' ? parseInt(unitsPerStrip) : null,
         };
+        if (isPharmacy) {
+          newMedicineData.strength = strength.trim() || null;
+          newMedicineData.medicine_group = resolvedGroup;
+        }
 
         // Check if other owners also reference this medicine
         const { data: otherBranchItems } = await supabase
@@ -369,6 +404,36 @@ export default function EditBranchItemDialog({ open, onOpenChange, item, onItemU
                 <Label>Generic Name</Label>
                 <Input value={genericName} onChange={e => setGenericName(e.target.value)} placeholder="Optional" />
               </div>
+
+              {isPharmacy && (
+                <>
+                  <div className="grid grid-cols-2 gap-4">
+                    <div className="space-y-2">
+                      <Label>Strength</Label>
+                      <Input value={strength} onChange={e => setStrength(e.target.value)} placeholder="e.g. 500mg" />
+                    </div>
+                    <div className="space-y-2">
+                      <Label>Medicine Group</Label>
+                      <Select value={medicineGroup || undefined} onValueChange={setMedicineGroup}>
+                        <SelectTrigger><SelectValue placeholder="Select group" /></SelectTrigger>
+                        <SelectContent>
+                          {(() => {
+                            const names = new Set(medicineGroups.map(g => g.name));
+                            if (medicineGroup && !names.has(medicineGroup) && medicineGroup !== '__custom__') names.add(medicineGroup);
+                            return Array.from(names).sort().map(n => (
+                              <SelectItem key={n} value={n}>{n}</SelectItem>
+                            ));
+                          })()}
+                          <SelectItem value="__custom__">+ Custom Group</SelectItem>
+                        </SelectContent>
+                      </Select>
+                    </div>
+                  </div>
+                  {medicineGroup === '__custom__' && (
+                    <Input value={customGroup} onChange={e => setCustomGroup(e.target.value)} placeholder="Enter new group name" />
+                  )}
+                </>
+              )}
 
               <div className="grid grid-cols-2 gap-4">
                 <div className="space-y-2">

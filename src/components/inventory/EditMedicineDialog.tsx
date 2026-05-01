@@ -10,6 +10,7 @@ import { supabase } from '@/lib/db';
 import { useToast } from '@/hooks/use-toast';
 import { useBranchContext } from '@/hooks/useBranchContext';
 import { useCustomCategories } from '@/hooks/useCustomCategories';
+import { useMedicineGroups } from '@/hooks/useMedicineGroups';
 import { MEASURABLE_UNIT_OPTIONS } from '@/lib/itemTypes';
 
 interface Medicine {
@@ -26,6 +27,8 @@ interface Medicine {
   minimum_stock_level: number;
   expiry_date?: string;
   expiry_alert_enabled?: boolean;
+  medicine_group?: string | null;
+  strength?: string | null;
 }
 
 interface EditMedicineDialogProps {
@@ -50,6 +53,7 @@ export default function EditMedicineDialog({
   
   const { categories: pharmacyCategories, loading: pharmLoading } = useCustomCategories('pharmacy');
   const { categories: generalCategories, loading: genLoading } = useCustomCategories('general');
+  const { groups: medicineGroups, addGroup } = useMedicineGroups();
   const categoriesLoading = pharmLoading || genLoading;
   const allCategories = [...new Set([...pharmacyCategories, ...generalCategories])].sort();
 
@@ -70,7 +74,10 @@ export default function EditMedicineDialog({
     expiry_alert_enabled: true,
     branch_id: '',
     item_type: 'full_pcs' as 'full_pcs' | 'measurable',
+    strength: '',
+    medicine_group: '',
   });
+  const [customGroup, setCustomGroup] = useState('');
   const [packagingMode, setPackagingMode] = useState<'with_strip' | 'no_strip'>('no_strip');
   const [stripsPerPack, setStripsPerPack] = useState('');
   const [unitsPerStrip, setUnitsPerStrip] = useState('');
@@ -141,7 +148,10 @@ export default function EditMedicineDialog({
         expiry_alert_enabled: medicine.expiry_alert_enabled ?? true,
         branch_id: medicineWithBranch.branch_id || '',
         item_type: isMeas ? 'measurable' : ((medicineWithBranch.item_type as 'full_pcs' | 'measurable') || 'full_pcs'),
+        strength: medicine.strength || '',
+        medicine_group: medicine.medicine_group || '',
       });
+      setCustomGroup('');
 
       // Check if an expense exists for this item
       (async () => {
@@ -184,6 +194,20 @@ export default function EditMedicineDialog({
         }
       }
 
+      // Resolve medicine group (pharmacy mode)
+      let resolvedGroup: string | null = null;
+      if (isPharmacy) {
+        if (medicineData.medicine_group === '__custom__') {
+          const cg = customGroup.trim();
+          if (cg) {
+            await addGroup(cg);
+            resolvedGroup = cg;
+          }
+        } else if (medicineData.medicine_group) {
+          resolvedGroup = medicineData.medicine_group;
+        }
+      }
+
       const updateData: any = {
         name: medicineData.name,
         generic_name: medicineData.generic_name || null,
@@ -202,6 +226,9 @@ export default function EditMedicineDialog({
         item_type: medicineData.item_type,
         strips_per_pack: !isMeas && packagingMode === 'with_strip' ? parseInt(stripsPerPack) : null,
         units_per_strip: !isMeas && packagingMode === 'with_strip' ? parseInt(unitsPerStrip) : null,
+        // Pharmacy-only fields
+        strength: isPharmacy ? (medicineData.strength.trim() || null) : null,
+        medicine_group: isPharmacy ? resolvedGroup : null,
       };
       
       if (userRole === 'owner' && medicineData.branch_id) {
@@ -289,6 +316,38 @@ export default function EditMedicineDialog({
             <Label htmlFor="generic_name">{isPharmacy ? 'Generic Name' : 'Description'}</Label>
             <Input id="generic_name" value={medicineData.generic_name} onChange={(e) => setMedicineData({ ...medicineData, generic_name: e.target.value })} />
           </div>
+
+          {isPharmacy && (
+            <>
+              <div className="grid grid-cols-2 gap-4">
+                <div className="space-y-2">
+                  <Label>Strength</Label>
+                  <Input value={medicineData.strength} onChange={(e) => setMedicineData({ ...medicineData, strength: e.target.value })} placeholder="e.g. 500mg" />
+                </div>
+                <div className="space-y-2">
+                  <Label>Medicine Group</Label>
+                  <Select value={medicineData.medicine_group || undefined} onValueChange={(v) => setMedicineData({ ...medicineData, medicine_group: v })}>
+                    <SelectTrigger><SelectValue placeholder="Select group" /></SelectTrigger>
+                    <SelectContent>
+                      {(() => {
+                        const names = new Set(medicineGroups.map(g => g.name));
+                        if (medicineData.medicine_group && !names.has(medicineData.medicine_group) && medicineData.medicine_group !== '__custom__') {
+                          names.add(medicineData.medicine_group);
+                        }
+                        return Array.from(names).sort().map(n => (
+                          <SelectItem key={n} value={n}>{n}</SelectItem>
+                        ));
+                      })()}
+                      <SelectItem value="__custom__">+ Custom Group</SelectItem>
+                    </SelectContent>
+                  </Select>
+                </div>
+              </div>
+              {medicineData.medicine_group === '__custom__' && (
+                <Input value={customGroup} onChange={(e) => setCustomGroup(e.target.value)} placeholder="Enter new group name" />
+              )}
+            </>
+          )}
 
           <div className="space-y-2">
             <Label htmlFor="category">Category *</Label>

@@ -22,6 +22,7 @@ import StockEditHistory from './StockEditHistory';
 import BatchBreakdownDialog from './BatchBreakdownDialog';
 import StockAdjustmentDialog from './StockAdjustmentDialog';
 import ImportCsvDialog from './ImportCsvDialog';
+import { formatMedicineName, formatPackaging } from '@/lib/medicineDisplay';
 
 const ITEMS_PER_PAGE = 24;
 
@@ -31,6 +32,7 @@ export default function StaffInventoryWithActions() {
   const [activeTab, setActiveTab] = useState(initialTab);
   const [searchTerm, setSearchTerm] = useState('');
   const [categoryFilter, setCategoryFilter] = useState('all');
+  const [groupFilter, setGroupFilter] = useState('all');
   const [currentPage, setCurrentPage] = useState(1);
   const [showAddDialog, setShowAddDialog] = useState(false);
   const [showImportDialog, setShowImportDialog] = useState(false);
@@ -79,18 +81,21 @@ export default function StaffInventoryWithActions() {
   const filteredItems = useMemo(() => {
     const medicineCategories = ['tablet', 'capsule', 'syrup', 'injection', 'cream', 'ointment', 'drops', 'inhaler'];
     const term = searchTerm.toLowerCase();
-    return branchItems.filter(item => {
+    return branchItems.filter((item: any) => {
       const matchesSearch = item.name.toLowerCase().includes(term) ||
-        (item.generic_name || '').toLowerCase().includes(term);
+        (item.generic_name || '').toLowerCase().includes(term) ||
+        (item.strength || '').toLowerCase().includes(term) ||
+        (item.medicine_group || '').toLowerCase().includes(term);
       let matchesCategory = true;
       if (categoryFilter === 'medicines_only') {
         matchesCategory = medicineCategories.includes(item.category);
       } else if (categoryFilter !== 'all') {
         matchesCategory = item.category === categoryFilter;
       }
-      return matchesSearch && matchesCategory;
+      const matchesGroup = groupFilter === 'all' || (item.medicine_group || '') === groupFilter;
+      return matchesSearch && matchesCategory && matchesGroup;
     });
-  }, [branchItems, searchTerm, categoryFilter]);
+  }, [branchItems, searchTerm, categoryFilter, groupFilter]);
 
   // Reset to page 1 whenever filters change.
   useEffect(() => { setCurrentPage(1); }, [searchTerm, categoryFilter, selectedBranch]);
@@ -156,6 +161,7 @@ export default function StaffInventoryWithActions() {
   const isOutOfStock = (item: BranchItem) => item.quantity === 0;
   const isLowStock = (item: BranchItem) => item.quantity > 0 && item.quantity <= 10;
   const getUniqueCategories = () => [...new Set(branchItems.map(i => i.category))].sort();
+  const getUniqueGroups = () => [...new Set(branchItems.map((i: any) => i.medicine_group).filter(Boolean))].sort() as string[];
 
   const isExpired = (item: BranchItem) => {
     if (!item.expiry_date) return false;
@@ -173,12 +179,12 @@ export default function StaffInventoryWithActions() {
     return new Date(item.expiry_date) <= thirtyDaysFromNow;
   };
 
-  const renderItemCard = (item: BranchItem & { branch_name?: string }) => (
+  const renderItemCard = (item: BranchItem & { branch_name?: string; medicine_group?: string | null; strength?: string | null }) => (
     <Card key={item.id} className={isExpired(item) ? 'border-destructive/30 bg-destructive/5' : ''}>
       <CardHeader>
         <div className="flex justify-between items-start">
           <div className="flex-1">
-            <CardTitle className="text-lg">{item.name}</CardTitle>
+            <CardTitle className="text-lg">{isPharmacy ? formatMedicineName(item.name, item.strength) : item.name}</CardTitle>
             {item.generic_name && <CardDescription>{item.generic_name}</CardDescription>}
           </div>
           <div className="flex space-x-1">
@@ -192,6 +198,8 @@ export default function StaffInventoryWithActions() {
       <CardContent>
         <div className="space-y-2">
           <div className="flex justify-between text-sm"><span>Category:</span><Badge variant="outline">{item.category}</Badge></div>
+          {isPharmacy && item.medicine_group && <div className="flex justify-between text-sm"><span>Group:</span><Badge variant="secondary" className="text-xs">{item.medicine_group}</Badge></div>}
+          {isPharmacy && formatPackaging(item.strips_per_pack, item.units_per_strip, item.units_per_pack) && <div className="flex justify-between text-sm"><span>Packaging:</span><span className="font-mono text-xs">{formatPackaging(item.strips_per_pack, item.units_per_strip, item.units_per_pack)}</span></div>}
           {isPharmacy && item.batch_number && <div className="flex justify-between text-sm"><span>Batch:</span><span>{item.batch_number}</span></div>}
           {item.manufacturer && <div className="flex justify-between text-sm"><span>{isPharmacy ? 'Manufacturer' : 'Brand'}:</span><span>{item.manufacturer}</span></div>}
           <div className="flex justify-between text-sm"><span>Selling Price:</span><span className="font-medium">ETB {item.selling_price}</span></div>
@@ -294,6 +302,21 @@ export default function StaffInventoryWithActions() {
                 </SelectContent>
               </Select>
             </div>
+            {isPharmacy && getUniqueGroups().length > 0 && (
+              <div className="flex items-center space-x-2">
+                <Select value={groupFilter} onValueChange={setGroupFilter}>
+                  <SelectTrigger className="w-full sm:w-48">
+                    <SelectValue placeholder="Filter by group" />
+                  </SelectTrigger>
+                  <SelectContent>
+                    <SelectItem value="all">All Groups</SelectItem>
+                    {getUniqueGroups().map(g => (
+                      <SelectItem key={g} value={g}>{g}</SelectItem>
+                    ))}
+                  </SelectContent>
+                </Select>
+              </div>
+            )}
           </div>
 
           {/* Group by branch when "All Branches" — operates on the paginated slice */}

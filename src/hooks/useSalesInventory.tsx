@@ -39,6 +39,8 @@ export interface SalesMedicine {
   item_type?: string;
   branch_id?: string;
   branch_name?: string;
+  medicine_group?: string | null;
+  strength?: string | null;
 }
 
 export interface SalesCustomer {
@@ -68,7 +70,7 @@ async function fetchSalesInventory(branchIds: string[]): Promise<SalesMedicine[]
   const [medsRes, branchesRes] = await Promise.all([
     (supabase as any)
       .from('medicines')
-      .select('id, name, generic_name, category, item_type, unit_label, units_per_pack')
+      .select('id, name, generic_name, category, item_type, unit_label, units_per_pack, medicine_group, strength')
       .in('id', medicineIds),
     allBranchIds.length > 0
       ? (supabase as any).from('pharmacy_branches').select('id, name').in('id', allBranchIds)
@@ -98,6 +100,8 @@ async function fetchSalesInventory(branchIds: string[]): Promise<SalesMedicine[]
       item_type: med.item_type,
       branch_id: item.branch_id,
       branch_name: branchMap[item.branch_id],
+      medicine_group: med.medicine_group,
+      strength: med.strength,
     } as SalesMedicine;
   });
 }

@@ -41,11 +41,16 @@ interface ParsedRow {
   stock_quantity: number;
   minimum_stock_level: number;
   expiry_date: string | null;
+  // Pharmacy-only (optional)
+  medicine_group: string | null;
+  strength: string | null;
 }
 
 const HEADERS = [
   'name',
   'generic_name',
+  'medicine_group',
+  'strength',
   'category',
   'manufacturer',
   'batch_number',
@@ -62,16 +67,23 @@ const HEADERS = [
   'expiry_date',
 ];
 
+// Pharmacy-only optional columns (may be missing in older templates / general branch)
+const OPTIONAL_HEADERS = new Set(['medicine_group', 'strength']);
+
+// Order matches HEADERS exactly:
+// name, generic_name, medicine_group, strength, category, manufacturer, batch_number,
+// item_type, unit_label, packaging_mode, strips_per_pack, units_per_strip, units_per_pack,
+// purchase_price, selling_price, stock_quantity, minimum_stock_level, expiry_date
 const SAMPLE_PHARMACY = [
-  ['Paracetamol 500mg', 'Acetaminophen', 'tablet', 'GSK', 'BN-001', 'full_pcs', 'strip', 'with_strip', '10', '10', '', '5.00', '8.50', '20', '5', '2026-12-31'],
-  ['Amoxicillin Syrup 100ml', 'Amoxicillin', 'syrup', 'Pfizer', 'BN-AMX-2026', 'full_pcs', 'bottle', 'no_strip', '', '', '1', '45.00', '70.00', '15', '3', '2026-08-15'],
-  ['Cough Drops', '', 'tablet', 'Halls', '', 'full_pcs', 'piece', 'no_strip', '', '', '', '0.50', '1.00', '100', '20', ''],
+  ['Paracetamol',      'Acetaminophen', 'NSAIDS and anti-pain', '500mg',    'tablet',  'GSK',        'BN-001',      'full_pcs',   'strip',  'with_strip', '10', '10', '',  '5.00',  '8.50',  '20',  '5',  '2026-12-31'],
+  ['Amoxicillin Syrup','Amoxicillin',   'Antibiotics',          '250mg/5ml','syrup',   'Pfizer',     'BN-AMX-2026', 'full_pcs',   'bottle', 'no_strip',   '',   '',   '1', '45.00', '70.00', '15',  '3',  '2026-08-15'],
+  ['Cough Drops',      '',              '',                     '',         'tablet',  'Halls',      '',            'full_pcs',   'piece',  'no_strip',   '',   '',   '',  '0.50',  '1.00',  '100', '20', ''],
 ];
 
 const SAMPLE_GENERAL = [
-  ['Rice', '', 'grocery', 'Local Farm', '', 'measurable', 'kg', 'no_strip', '', '', '', '40.00', '55.00', '500', '50', ''],
-  ['Cooking Oil 1L', '', 'grocery', 'Shemu', '', 'full_pcs', 'bottle', 'no_strip', '', '', '1', '120.00', '150.00', '60', '10', '2027-01-31'],
-  ['Soap Bar', '', 'cleaning', 'Lifebuoy', '', 'full_pcs', 'piece', 'no_strip', '', '', '', '15.00', '20.00', '120', '20', ''],
+  ['Rice',           '', '', '', 'grocery',  'Local Farm', '',  'measurable', 'kg',     'no_strip', '', '', '',  '40.00',  '55.00',  '500', '50', ''],
+  ['Cooking Oil 1L', '', '', '', 'grocery',  'Shemu',      '',  'full_pcs',   'bottle', 'no_strip', '', '', '1', '120.00', '150.00', '60',  '10', '2027-01-31'],
+  ['Soap Bar',       '', '', '', 'cleaning', 'Lifebuoy',   '',  'full_pcs',   'piece',  'no_strip', '', '', '',  '15.00',  '20.00',  '120', '20', ''],
 ];
 
 function escapeCsv(v: string): string {
@@ -181,11 +193,11 @@ export default function ImportCsvDialog({ open, onOpenChange, onImported }: Impo
     }
 
     const headerRow = rows[0].map(h => h.trim().toLowerCase());
-    const missing = HEADERS.filter(h => !headerRow.includes(h));
+    const missing = HEADERS.filter(h => !headerRow.includes(h) && !OPTIONAL_HEADERS.has(h));
     if (missing.length > 0) {
       return { ok: [], errs: [`Missing required column(s): ${missing.join(', ')}. Please use the provided template.`] };
     }
-    const idx = (h: string) => headerRow.indexOf(h);
+    const idx = (h: string) => headerRow.indexOf(h); // returns -1 if optional and absent
 
     // Fetch existing medicines (catalog) to detect duplicates by name+manufacturer
     const { data: existingMeds } = await supabase
@@ -268,6 +280,9 @@ export default function ImportCsvDialog({ open, onOpenChange, onImported }: Impo
       const generic_name = get('generic_name') || null;
       const manufacturer = get('manufacturer') || null;
       const batch_number = get('batch_number') || null;
+      // Pharmacy-only optional fields
+      const medicine_group = isPharmacy ? (get('medicine_group') || null) : null;
+      const strength = isPharmacy ? (get('strength') || null) : null;
 
       const key = `${name.toLowerCase()}|${(manufacturer || '').toLowerCase()}`;
       if (seenInFile.has(key)) rowErrors.push('Duplicate row in CSV (same name + manufacturer)');
@@ -295,6 +310,8 @@ export default function ImportCsvDialog({ open, onOpenChange, onImported }: Impo
         stock_quantity: isNaN(stock_quantity) ? 0 : stock_quantity,
         minimum_stock_level: isNaN(minimum_stock_level) ? 0 : minimum_stock_level,
         expiry_date,
+        medicine_group,
+        strength,
       });
     }
 
@@ -392,6 +409,10 @@ export default function ImportCsvDialog({ open, onOpenChange, onImported }: Impo
           if (row.packaging_mode === 'with_strip') {
             medPayload.strips_per_pack = row.strips_per_pack;
             medPayload.units_per_strip = row.units_per_strip;
+          }
+          if (isPharmacy) {
+            medPayload.medicine_group = row.medicine_group;
+            medPayload.strength = row.strength;
           }
 
           const { data: newMed, error: medErr } = await supabase
