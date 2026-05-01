@@ -194,6 +194,20 @@ export default function EditMedicineDialog({
         }
       }
 
+      // Resolve medicine group (pharmacy mode)
+      let resolvedGroup: string | null = null;
+      if (isPharmacy) {
+        if (medicineData.medicine_group === '__custom__') {
+          const cg = customGroup.trim();
+          if (cg) {
+            await addGroup(cg);
+            resolvedGroup = cg;
+          }
+        } else if (medicineData.medicine_group) {
+          resolvedGroup = medicineData.medicine_group;
+        }
+      }
+
       const updateData: any = {
         name: medicineData.name,
         generic_name: medicineData.generic_name || null,
@@ -212,6 +226,9 @@ export default function EditMedicineDialog({
         item_type: medicineData.item_type,
         strips_per_pack: !isMeas && packagingMode === 'with_strip' ? parseInt(stripsPerPack) : null,
         units_per_strip: !isMeas && packagingMode === 'with_strip' ? parseInt(unitsPerStrip) : null,
+        // Pharmacy-only fields
+        strength: isPharmacy ? (medicineData.strength.trim() || null) : null,
+        medicine_group: isPharmacy ? resolvedGroup : null,
       };
       
       if (userRole === 'owner' && medicineData.branch_id) {
