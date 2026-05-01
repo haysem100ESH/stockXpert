@@ -22,7 +22,11 @@ import { useBranchContext } from './useBranchContext';
 import { useOwnerBranchIds } from './useOwnerBranchIds';
 import type { BranchItem } from '@/components/inventory/EditBranchItemDialog';
 
-export type EnrichedBranchItem = BranchItem & { branch_name?: string };
+export type EnrichedBranchItem = BranchItem & {
+  branch_name?: string;
+  medicine_group?: string | null;
+  strength?: string | null;
+};
 
 interface FetchArgs {
   branchIds: string[];
@@ -47,7 +51,7 @@ async function fetchBranchInventory({ branchIds }: FetchArgs): Promise<EnrichedB
   const [medsRes, branchesRes] = await Promise.all([
     supabase
       .from('medicines')
-      .select('id, name, generic_name, category, manufacturer, batch_number, item_type, unit_label, units_per_pack, strips_per_pack, units_per_strip')
+      .select('id, name, generic_name, category, manufacturer, batch_number, item_type, unit_label, units_per_pack, strips_per_pack, units_per_strip, medicine_group, strength')
       .in('id', medicineIds),
     supabase
       .from('pharmacy_branches')
@@ -74,6 +78,8 @@ async function fetchBranchInventory({ branchIds }: FetchArgs): Promise<EnrichedB
       units_per_pack: med.units_per_pack,
       strips_per_pack: med.strips_per_pack,
       units_per_strip: med.units_per_strip,
+      medicine_group: med.medicine_group,
+      strength: med.strength,
       branch_name: branchMap[item.branch_id],
     } as EnrichedBranchItem;
   });
