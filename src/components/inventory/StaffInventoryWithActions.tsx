@@ -179,7 +179,7 @@ export default function StaffInventoryWithActions() {
     return new Date(item.expiry_date) <= thirtyDaysFromNow;
   };
 
-  const renderItemCard = (item: BranchItem & { branch_name?: string }) => (
+  const renderItemCard = (item: BranchItem & { branch_name?: string; medicine_group?: string | null; strength?: string | null }) => (
     <Card key={item.id} className={isExpired(item) ? 'border-destructive/30 bg-destructive/5' : ''}>
       <CardHeader>
         <div className="flex justify-between items-start">
