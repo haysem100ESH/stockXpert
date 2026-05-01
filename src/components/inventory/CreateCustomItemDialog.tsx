@@ -98,6 +98,20 @@ export default function CreateCustomItemDialog({ open, onOpenChange, onItemCreat
         computedUnitsPerPack = parseInt(unitsPack);
       }
 
+      // Resolve final group: pharmacy mode only
+      let finalGroup: string | null = null;
+      if (isPharmacy) {
+        if (medicineGroup === '__custom__') {
+          const custom = customGroup.trim();
+          if (custom) {
+            await addGroup(custom);
+            finalGroup = custom;
+          }
+        } else if (medicineGroup) {
+          finalGroup = medicineGroup;
+        }
+      }
+
       // Insert into medicines table
       const insertPayload: any = {
         name: name.trim(),
@@ -109,6 +123,12 @@ export default function CreateCustomItemDialog({ open, onOpenChange, onItemCreat
         units_per_pack: computedUnitsPerPack,
         minimum_stock_level: minStock ? parseInt(minStock) : null,
       };
+
+      // Pharmacy-only fields
+      if (isPharmacy) {
+        insertPayload.strength = strength.trim() || null;
+        insertPayload.medicine_group = finalGroup;
+      }
 
       // Persist strip breakdown when applicable
       if (itemType === 'full_pcs' && packagingMode === 'with_strip') {
