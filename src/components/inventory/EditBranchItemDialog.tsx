@@ -123,6 +123,8 @@ export default function EditBranchItemDialog({ open, onOpenChange, item, onItemU
     const oldUnitsPerStrip = item.units_per_strip || null;
     const newStripsPerPack = packagingMode === 'with_strip' && stripsPerPack ? parseInt(stripsPerPack) : null;
     const newUnitsPerStrip = packagingMode === 'with_strip' && unitsPerStrip ? parseInt(unitsPerStrip) : null;
+    const oldGroup = item.medicine_group || '';
+    const newGroup = medicineGroup === '__custom__' ? customGroup.trim() : (medicineGroup || '');
     return (
       itemName !== (item.name || '') ||
       genericName !== (item.generic_name || '') ||
@@ -132,7 +134,11 @@ export default function EditBranchItemDialog({ open, onOpenChange, item, onItemU
       unitLabel !== (item.unit_label || '') ||
       newUpp !== (item.units_per_pack || null) ||
       newStripsPerPack !== oldStripsPerPack ||
-      newUnitsPerStrip !== oldUnitsPerStrip
+      newUnitsPerStrip !== oldUnitsPerStrip ||
+      (isPharmacy && (
+        strength !== (item.strength || '') ||
+        newGroup !== oldGroup
+      ))
     );
   };
 
@@ -162,7 +168,21 @@ export default function EditBranchItemDialog({ open, onOpenChange, item, onItemU
 
       // If catalog fields changed, we need clone-on-write
       if (catalogFieldsChanged()) {
-        const newMedicineData = {
+        // Resolve final group name (pharmacy only)
+        let resolvedGroup: string | null = null;
+        if (isPharmacy) {
+          if (medicineGroup === '__custom__') {
+            const cg = customGroup.trim();
+            if (cg) {
+              await addGroup(cg);
+              resolvedGroup = cg;
+            }
+          } else if (medicineGroup) {
+            resolvedGroup = medicineGroup;
+          }
+        }
+
+        const newMedicineData: any = {
           name: itemName.trim(),
           generic_name: genericName.trim() || null,
           category: category.trim(),
@@ -173,6 +193,10 @@ export default function EditBranchItemDialog({ open, onOpenChange, item, onItemU
           strips_per_pack: packagingMode === 'with_strip' ? parseInt(stripsPerPack) : null,
           units_per_strip: packagingMode === 'with_strip' ? parseInt(unitsPerStrip) : null,
         };
+        if (isPharmacy) {
+          newMedicineData.strength = strength.trim() || null;
+          newMedicineData.medicine_group = resolvedGroup;
+        }
 
         // Check if other owners also reference this medicine
         const { data: otherBranchItems } = await supabase
