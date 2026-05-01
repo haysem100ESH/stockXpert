@@ -10,6 +10,7 @@ import { useToast } from '@/hooks/use-toast';
 import { useAuth } from '@/hooks/useAuth';
 import { useBranchContext } from '@/hooks/useBranchContext';
 import { useCustomCategories } from '@/hooks/useCustomCategories';
+import { useMedicineGroups } from '@/hooks/useMedicineGroups';
 import { MEASURABLE_UNIT_OPTIONS } from '@/lib/itemTypes';
 
 interface CreateCustomItemDialogProps {
@@ -21,6 +22,9 @@ interface CreateCustomItemDialogProps {
 export default function CreateCustomItemDialog({ open, onOpenChange, onItemCreated }: CreateCustomItemDialogProps) {
   const [name, setName] = useState('');
   const [genericName, setGenericName] = useState('');
+  const [strength, setStrength] = useState('');
+  const [medicineGroup, setMedicineGroup] = useState('');
+  const [customGroup, setCustomGroup] = useState('');
   const [category, setCategory] = useState('');
   const [customCategory, setCustomCategory] = useState('');
   const [manufacturer, setManufacturer] = useState('');
@@ -36,11 +40,16 @@ export default function CreateCustomItemDialog({ open, onOpenChange, onItemCreat
   const { toast } = useToast();
   const { profile } = useAuth();
   const { branchType } = useBranchContext();
-  const { categories } = useCustomCategories(branchType === 'pharmacy' ? 'pharmacy' : 'general');
+  const isPharmacy = branchType === 'pharmacy';
+  const { categories } = useCustomCategories(isPharmacy ? 'pharmacy' : 'general');
+  const { groups: medicineGroups, addGroup } = useMedicineGroups();
 
   const resetForm = () => {
     setName('');
     setGenericName('');
+    setStrength('');
+    setMedicineGroup('');
+    setCustomGroup('');
     setCategory('');
     setCustomCategory('');
     setManufacturer('');
