@@ -410,6 +410,10 @@ export default function ImportCsvDialog({ open, onOpenChange, onImported }: Impo
             medPayload.strips_per_pack = row.strips_per_pack;
             medPayload.units_per_strip = row.units_per_strip;
           }
+          if (isPharmacy) {
+            medPayload.medicine_group = row.medicine_group;
+            medPayload.strength = row.strength;
+          }
 
           const { data: newMed, error: medErr } = await supabase
             .from('medicines')
