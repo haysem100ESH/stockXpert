@@ -22,6 +22,7 @@ import StockEditHistory from './StockEditHistory';
 import BatchBreakdownDialog from './BatchBreakdownDialog';
 import StockAdjustmentDialog from './StockAdjustmentDialog';
 import ImportCsvDialog from './ImportCsvDialog';
+import { formatMedicineName, formatPackaging } from '@/lib/medicineDisplay';
 
 const ITEMS_PER_PAGE = 24;
 
@@ -31,6 +32,7 @@ export default function StaffInventoryWithActions() {
   const [activeTab, setActiveTab] = useState(initialTab);
   const [searchTerm, setSearchTerm] = useState('');
   const [categoryFilter, setCategoryFilter] = useState('all');
+  const [groupFilter, setGroupFilter] = useState('all');
   const [currentPage, setCurrentPage] = useState(1);
   const [showAddDialog, setShowAddDialog] = useState(false);
   const [showImportDialog, setShowImportDialog] = useState(false);
@@ -79,18 +81,21 @@ export default function StaffInventoryWithActions() {
   const filteredItems = useMemo(() => {
     const medicineCategories = ['tablet', 'capsule', 'syrup', 'injection', 'cream', 'ointment', 'drops', 'inhaler'];
     const term = searchTerm.toLowerCase();
-    return branchItems.filter(item => {
+    return branchItems.filter((item: any) => {
       const matchesSearch = item.name.toLowerCase().includes(term) ||
-        (item.generic_name || '').toLowerCase().includes(term);
+        (item.generic_name || '').toLowerCase().includes(term) ||
+        (item.strength || '').toLowerCase().includes(term) ||
+        (item.medicine_group || '').toLowerCase().includes(term);
       let matchesCategory = true;
       if (categoryFilter === 'medicines_only') {
         matchesCategory = medicineCategories.includes(item.category);
       } else if (categoryFilter !== 'all') {
         matchesCategory = item.category === categoryFilter;
       }
-      return matchesSearch && matchesCategory;
+      const matchesGroup = groupFilter === 'all' || (item.medicine_group || '') === groupFilter;
+      return matchesSearch && matchesCategory && matchesGroup;
     });
-  }, [branchItems, searchTerm, categoryFilter]);
+  }, [branchItems, searchTerm, categoryFilter, groupFilter]);
 
   // Reset to page 1 whenever filters change.
   useEffect(() => { setCurrentPage(1); }, [searchTerm, categoryFilter, selectedBranch]);
@@ -156,6 +161,7 @@ export default function StaffInventoryWithActions() {
   const isOutOfStock = (item: BranchItem) => item.quantity === 0;
   const isLowStock = (item: BranchItem) => item.quantity > 0 && item.quantity <= 10;
   const getUniqueCategories = () => [...new Set(branchItems.map(i => i.category))].sort();
+  const getUniqueGroups = () => [...new Set(branchItems.map((i: any) => i.medicine_group).filter(Boolean))].sort() as string[];
 
   const isExpired = (item: BranchItem) => {
     if (!item.expiry_date) return false;
