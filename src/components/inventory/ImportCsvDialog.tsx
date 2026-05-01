@@ -41,11 +41,16 @@ interface ParsedRow {
   stock_quantity: number;
   minimum_stock_level: number;
   expiry_date: string | null;
+  // Pharmacy-only (optional)
+  medicine_group: string | null;
+  strength: string | null;
 }
 
 const HEADERS = [
   'name',
   'generic_name',
+  'medicine_group',
+  'strength',
   'category',
   'manufacturer',
   'batch_number',
@@ -61,6 +66,9 @@ const HEADERS = [
   'minimum_stock_level',
   'expiry_date',
 ];
+
+// Pharmacy-only optional columns (may be missing in older templates / general branch)
+const OPTIONAL_HEADERS = new Set(['medicine_group', 'strength']);
 
 const SAMPLE_PHARMACY = [
   ['Paracetamol 500mg', 'Acetaminophen', 'tablet', 'GSK', 'BN-001', 'full_pcs', 'strip', 'with_strip', '10', '10', '', '5.00', '8.50', '20', '5', '2026-12-31'],
