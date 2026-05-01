@@ -193,11 +193,11 @@ export default function ImportCsvDialog({ open, onOpenChange, onImported }: Impo
     }
 
     const headerRow = rows[0].map(h => h.trim().toLowerCase());
-    const missing = HEADERS.filter(h => !headerRow.includes(h));
+    const missing = HEADERS.filter(h => !headerRow.includes(h) && !OPTIONAL_HEADERS.has(h));
     if (missing.length > 0) {
       return { ok: [], errs: [`Missing required column(s): ${missing.join(', ')}. Please use the provided template.`] };
     }
-    const idx = (h: string) => headerRow.indexOf(h);
+    const idx = (h: string) => headerRow.indexOf(h); // returns -1 if optional and absent
 
     // Fetch existing medicines (catalog) to detect duplicates by name+manufacturer
     const { data: existingMeds } = await supabase
