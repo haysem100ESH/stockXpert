@@ -12,6 +12,7 @@ import { useToast } from '@/hooks/use-toast';
 import { useAuth } from '@/hooks/useAuth';
 import { useBranchContext } from '@/hooks/useBranchContext';
 import { useCustomCategories } from '@/hooks/useCustomCategories';
+import { useMedicineGroups } from '@/hooks/useMedicineGroups';
 
 export interface BranchItem {
   id: string;
@@ -57,6 +58,9 @@ export default function EditBranchItemDialog({ open, onOpenChange, item, onItemU
   const [manufacturer, setManufacturer] = useState('');
   const [batchNumber, setBatchNumber] = useState('');
   const [unitLabel, setUnitLabel] = useState('');
+  const [strength, setStrength] = useState('');
+  const [medicineGroup, setMedicineGroup] = useState('');
+  const [customGroup, setCustomGroup] = useState('');
 
   // Strip packaging
   const [packagingMode, setPackagingMode] = useState<'with_strip' | 'no_strip'>('no_strip');
@@ -68,7 +72,9 @@ export default function EditBranchItemDialog({ open, onOpenChange, item, onItemU
   const { toast } = useToast();
   const { profile } = useAuth();
   const { branchType } = useBranchContext();
+  const isPharmacy = branchType === 'pharmacy';
   const { categories: customCategories } = useCustomCategories(branchType === 'general' ? 'general' : 'pharmacy');
+  const { groups: medicineGroups, addGroup } = useMedicineGroups();
 
   // Build dropdown list: include current value if not in custom list so user never loses the existing category
   const categoryOptions = (() => {
