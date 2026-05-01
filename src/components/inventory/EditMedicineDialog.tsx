@@ -10,6 +10,7 @@ import { supabase } from '@/lib/db';
 import { useToast } from '@/hooks/use-toast';
 import { useBranchContext } from '@/hooks/useBranchContext';
 import { useCustomCategories } from '@/hooks/useCustomCategories';
+import { useMedicineGroups } from '@/hooks/useMedicineGroups';
 import { MEASURABLE_UNIT_OPTIONS } from '@/lib/itemTypes';
 
 interface Medicine {
@@ -26,6 +27,8 @@ interface Medicine {
   minimum_stock_level: number;
   expiry_date?: string;
   expiry_alert_enabled?: boolean;
+  medicine_group?: string | null;
+  strength?: string | null;
 }
 
 interface EditMedicineDialogProps {
@@ -50,6 +53,7 @@ export default function EditMedicineDialog({
   
   const { categories: pharmacyCategories, loading: pharmLoading } = useCustomCategories('pharmacy');
   const { categories: generalCategories, loading: genLoading } = useCustomCategories('general');
+  const { groups: medicineGroups, addGroup } = useMedicineGroups();
   const categoriesLoading = pharmLoading || genLoading;
   const allCategories = [...new Set([...pharmacyCategories, ...generalCategories])].sort();
 
@@ -70,7 +74,10 @@ export default function EditMedicineDialog({
     expiry_alert_enabled: true,
     branch_id: '',
     item_type: 'full_pcs' as 'full_pcs' | 'measurable',
+    strength: '',
+    medicine_group: '',
   });
+  const [customGroup, setCustomGroup] = useState('');
   const [packagingMode, setPackagingMode] = useState<'with_strip' | 'no_strip'>('no_strip');
   const [stripsPerPack, setStripsPerPack] = useState('');
   const [unitsPerStrip, setUnitsPerStrip] = useState('');
@@ -141,7 +148,10 @@ export default function EditMedicineDialog({
         expiry_alert_enabled: medicine.expiry_alert_enabled ?? true,
         branch_id: medicineWithBranch.branch_id || '',
         item_type: isMeas ? 'measurable' : ((medicineWithBranch.item_type as 'full_pcs' | 'measurable') || 'full_pcs'),
+        strength: medicine.strength || '',
+        medicine_group: medicine.medicine_group || '',
       });
+      setCustomGroup('');
 
       // Check if an expense exists for this item
       (async () => {
