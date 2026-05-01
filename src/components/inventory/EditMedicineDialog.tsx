@@ -317,6 +317,38 @@ export default function EditMedicineDialog({
             <Input id="generic_name" value={medicineData.generic_name} onChange={(e) => setMedicineData({ ...medicineData, generic_name: e.target.value })} />
           </div>
 
+          {isPharmacy && (
+            <>
+              <div className="grid grid-cols-2 gap-4">
+                <div className="space-y-2">
+                  <Label>Strength</Label>
+                  <Input value={medicineData.strength} onChange={(e) => setMedicineData({ ...medicineData, strength: e.target.value })} placeholder="e.g. 500mg" />
+                </div>
+                <div className="space-y-2">
+                  <Label>Medicine Group</Label>
+                  <Select value={medicineData.medicine_group || undefined} onValueChange={(v) => setMedicineData({ ...medicineData, medicine_group: v })}>
+                    <SelectTrigger><SelectValue placeholder="Select group" /></SelectTrigger>
+                    <SelectContent>
+                      {(() => {
+                        const names = new Set(medicineGroups.map(g => g.name));
+                        if (medicineData.medicine_group && !names.has(medicineData.medicine_group) && medicineData.medicine_group !== '__custom__') {
+                          names.add(medicineData.medicine_group);
+                        }
+                        return Array.from(names).sort().map(n => (
+                          <SelectItem key={n} value={n}>{n}</SelectItem>
+                        ));
+                      })()}
+                      <SelectItem value="__custom__">+ Custom Group</SelectItem>
+                    </SelectContent>
+                  </Select>
+                </div>
+              </div>
+              {medicineData.medicine_group === '__custom__' && (
+                <Input value={customGroup} onChange={(e) => setCustomGroup(e.target.value)} placeholder="Enter new group name" />
+              )}
+            </>
+          )}
+
           <div className="space-y-2">
             <Label htmlFor="category">Category *</Label>
             <Select 
