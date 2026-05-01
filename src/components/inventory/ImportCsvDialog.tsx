@@ -70,16 +70,20 @@ const HEADERS = [
 // Pharmacy-only optional columns (may be missing in older templates / general branch)
 const OPTIONAL_HEADERS = new Set(['medicine_group', 'strength']);
 
+// Order matches HEADERS exactly:
+// name, generic_name, medicine_group, strength, category, manufacturer, batch_number,
+// item_type, unit_label, packaging_mode, strips_per_pack, units_per_strip, units_per_pack,
+// purchase_price, selling_price, stock_quantity, minimum_stock_level, expiry_date
 const SAMPLE_PHARMACY = [
-  ['Paracetamol 500mg', 'Acetaminophen', 'tablet', 'GSK', 'BN-001', 'full_pcs', 'strip', 'with_strip', '10', '10', '', '5.00', '8.50', '20', '5', '2026-12-31'],
-  ['Amoxicillin Syrup 100ml', 'Amoxicillin', 'syrup', 'Pfizer', 'BN-AMX-2026', 'full_pcs', 'bottle', 'no_strip', '', '', '1', '45.00', '70.00', '15', '3', '2026-08-15'],
-  ['Cough Drops', '', 'tablet', 'Halls', '', 'full_pcs', 'piece', 'no_strip', '', '', '', '0.50', '1.00', '100', '20', ''],
+  ['Paracetamol',      'Acetaminophen', 'NSAIDS and anti-pain', '500mg',    'tablet',  'GSK',        'BN-001',      'full_pcs',   'strip',  'with_strip', '10', '10', '',  '5.00',  '8.50',  '20',  '5',  '2026-12-31'],
+  ['Amoxicillin Syrup','Amoxicillin',   'Antibiotics',          '250mg/5ml','syrup',   'Pfizer',     'BN-AMX-2026', 'full_pcs',   'bottle', 'no_strip',   '',   '',   '1', '45.00', '70.00', '15',  '3',  '2026-08-15'],
+  ['Cough Drops',      '',              '',                     '',         'tablet',  'Halls',      '',            'full_pcs',   'piece',  'no_strip',   '',   '',   '',  '0.50',  '1.00',  '100', '20', ''],
 ];
 
 const SAMPLE_GENERAL = [
-  ['Rice', '', 'grocery', 'Local Farm', '', 'measurable', 'kg', 'no_strip', '', '', '', '40.00', '55.00', '500', '50', ''],
-  ['Cooking Oil 1L', '', 'grocery', 'Shemu', '', 'full_pcs', 'bottle', 'no_strip', '', '', '1', '120.00', '150.00', '60', '10', '2027-01-31'],
-  ['Soap Bar', '', 'cleaning', 'Lifebuoy', '', 'full_pcs', 'piece', 'no_strip', '', '', '', '15.00', '20.00', '120', '20', ''],
+  ['Rice',           '', '', '', 'grocery',  'Local Farm', '',  'measurable', 'kg',     'no_strip', '', '', '',  '40.00',  '55.00',  '500', '50', ''],
+  ['Cooking Oil 1L', '', '', '', 'grocery',  'Shemu',      '',  'full_pcs',   'bottle', 'no_strip', '', '', '1', '120.00', '150.00', '60',  '10', '2027-01-31'],
+  ['Soap Bar',       '', '', '', 'cleaning', 'Lifebuoy',   '',  'full_pcs',   'piece',  'no_strip', '', '', '',  '15.00',  '20.00',  '120', '20', ''],
 ];
 
 function escapeCsv(v: string): string {
