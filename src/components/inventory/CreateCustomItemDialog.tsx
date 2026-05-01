@@ -206,6 +206,32 @@ export default function CreateCustomItemDialog({ open, onOpenChange, onItemCreat
             <Input value={genericName} onChange={e => setGenericName(e.target.value)} placeholder="e.g. Acetaminophen" />
           </div>
 
+          {isPharmacy && (
+            <>
+              <div className="grid grid-cols-2 gap-4">
+                <div className="space-y-2">
+                  <Label>Strength</Label>
+                  <Input value={strength} onChange={e => setStrength(e.target.value)} placeholder="e.g. 500mg, 250mg/5ml" />
+                </div>
+                <div className="space-y-2">
+                  <Label>Medicine Group</Label>
+                  <Select value={medicineGroup} onValueChange={setMedicineGroup}>
+                    <SelectTrigger><SelectValue placeholder="Select group" /></SelectTrigger>
+                    <SelectContent>
+                      {medicineGroups.map(g => (
+                        <SelectItem key={g.id} value={g.name}>{g.name}</SelectItem>
+                      ))}
+                      <SelectItem value="__custom__">+ Custom Group</SelectItem>
+                    </SelectContent>
+                  </Select>
+                </div>
+              </div>
+              {medicineGroup === '__custom__' && (
+                <Input value={customGroup} onChange={e => setCustomGroup(e.target.value)} placeholder="Enter new group name (e.g. NSAIDS and anti-pain)" />
+              )}
+            </>
+          )}
+
           <div className="space-y-2">
             <Label>Category *</Label>
             <Select value={category} onValueChange={setCategory}>
