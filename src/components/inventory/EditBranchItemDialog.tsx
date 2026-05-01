@@ -33,6 +33,8 @@ export interface BranchItem {
   units_per_pack?: number;
   strips_per_pack?: number;
   units_per_strip?: number;
+  medicine_group?: string | null;
+  strength?: string | null;
 }
 
 interface EditBranchItemDialogProps {
