@@ -94,6 +94,9 @@ export default function EditBranchItemDialog({ open, onOpenChange, item, onItemU
       setManufacturer(item.manufacturer || '');
       setBatchNumber(item.batch_number || '');
       setUnitLabel(item.unit_label || '');
+      setStrength(item.strength || '');
+      setMedicineGroup(item.medicine_group || '');
+      setCustomGroup('');
 
       const hasStrip = !!(item.strips_per_pack && item.units_per_strip);
       setPackagingMode(hasStrip ? 'with_strip' : 'no_strip');
