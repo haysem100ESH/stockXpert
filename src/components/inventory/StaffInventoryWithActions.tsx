@@ -184,7 +184,7 @@ export default function StaffInventoryWithActions() {
       <CardHeader>
         <div className="flex justify-between items-start">
           <div className="flex-1">
-            <CardTitle className="text-lg">{item.name}</CardTitle>
+            <CardTitle className="text-lg">{isPharmacy ? formatMedicineName(item.name, item.strength) : item.name}</CardTitle>
             {item.generic_name && <CardDescription>{item.generic_name}</CardDescription>}
           </div>
           <div className="flex space-x-1">
@@ -198,6 +198,8 @@ export default function StaffInventoryWithActions() {
       <CardContent>
         <div className="space-y-2">
           <div className="flex justify-between text-sm"><span>Category:</span><Badge variant="outline">{item.category}</Badge></div>
+          {isPharmacy && item.medicine_group && <div className="flex justify-between text-sm"><span>Group:</span><Badge variant="secondary" className="text-xs">{item.medicine_group}</Badge></div>}
+          {isPharmacy && formatPackaging(item.strips_per_pack, item.units_per_strip, item.units_per_pack) && <div className="flex justify-between text-sm"><span>Packaging:</span><span className="font-mono text-xs">{formatPackaging(item.strips_per_pack, item.units_per_strip, item.units_per_pack)}</span></div>}
           {isPharmacy && item.batch_number && <div className="flex justify-between text-sm"><span>Batch:</span><span>{item.batch_number}</span></div>}
           {item.manufacturer && <div className="flex justify-between text-sm"><span>{isPharmacy ? 'Manufacturer' : 'Brand'}:</span><span>{item.manufacturer}</span></div>}
           <div className="flex justify-between text-sm"><span>Selling Price:</span><span className="font-medium">ETB {item.selling_price}</span></div>
