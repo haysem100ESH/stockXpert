@@ -280,6 +280,9 @@ export default function ImportCsvDialog({ open, onOpenChange, onImported }: Impo
       const generic_name = get('generic_name') || null;
       const manufacturer = get('manufacturer') || null;
       const batch_number = get('batch_number') || null;
+      // Pharmacy-only optional fields
+      const medicine_group = isPharmacy ? (get('medicine_group') || null) : null;
+      const strength = isPharmacy ? (get('strength') || null) : null;
 
       const key = `${name.toLowerCase()}|${(manufacturer || '').toLowerCase()}`;
       if (seenInFile.has(key)) rowErrors.push('Duplicate row in CSV (same name + manufacturer)');
@@ -307,6 +310,8 @@ export default function ImportCsvDialog({ open, onOpenChange, onImported }: Impo
         stock_quantity: isNaN(stock_quantity) ? 0 : stock_quantity,
         minimum_stock_level: isNaN(minimum_stock_level) ? 0 : minimum_stock_level,
         expiry_date,
+        medicine_group,
+        strength,
       });
     }
 
