@@ -898,7 +898,7 @@ export default function ImportCsvDialog({ open, onOpenChange, onImported }: Impo
 
             {duplicates.length > 0 && rowsWithErrors.length === 0 && (
               <div className="space-y-2 rounded-lg border p-3 bg-warning/5">
-                <p className="text-sm font-medium">⚠️ {duplicates.length} item(s) match existing catalog entries (same name + manufacturer):</p>
+                <p className="text-sm font-medium">⚠️ {duplicates.length} item(s) match existing catalog entries (same name + manufacturer + strength + batch number):</p>
                 <ul className="text-xs text-muted-foreground list-disc pl-4 max-h-24 overflow-y-auto">
                   {duplicates.slice(0, 8).map(d => <li key={d.rowIndex}>Row {d.rowIndex}: {d.name} {d.manufacturer ? `(${d.manufacturer})` : ''}</li>)}
                   {duplicates.length > 8 && <li>…and {duplicates.length - 8} more</li>}
