@@ -762,7 +762,7 @@ export default function ImportCsvDialog({ open, onOpenChange, onImported }: Impo
         <DialogHeader>
           <DialogTitle className="flex items-center gap-2">
             <FileSpreadsheet className="h-5 w-5" />
-            Import {isPharmacy ? 'Medicines' : 'Items'} from CSV
+            Import {isPharmacy ? 'Medicines' : 'Items'} from CSV / Excel
           </DialogTitle>
           <DialogDescription>
             Download the template, fill it with your items, then upload to bulk-create inventory.
