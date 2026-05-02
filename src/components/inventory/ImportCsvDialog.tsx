@@ -578,6 +578,9 @@ export default function ImportCsvDialog({ open, onOpenChange, onImported }: Impo
                 <p><strong>item_type:</strong> <code>full_pcs</code> or <code>measurable</code>.</p>
                 <p><strong>packaging_mode:</strong> <code>no_strip</code> or <code>with_strip</code>. If <code>with_strip</code>, fill <code>strips_per_pack</code> and <code>units_per_strip</code>.</p>
                 <p><strong>Measurable units:</strong> {MEASURABLE_UNITS.join(', ')}. Date format: YYYY-MM-DD.</p>
+                {isPharmacy && (
+                  <p className="pt-1 border-t mt-1"><strong>💊 Pharmacy composition:</strong> Leave <code>name</code> empty on a row to add it as an <em>active ingredient</em> of the medicine on the row above. Use <code>generic_name</code> + <code>strength</code> for each ingredient. See template for example (Snip → Paracetamol + Pseudoephedrine + Chlorophenaramine).</p>
+                )}
               </AlertDescription>
             </Alert>
 
