@@ -786,12 +786,14 @@ export default function ImportCsvDialog({ open, onOpenChange, onImported }: Impo
             <Alert>
               <AlertCircle className="h-4 w-4" />
               <AlertDescription className="text-xs space-y-1">
-                <p><strong>Required columns:</strong> name, category, item_type, purchase_price, selling_price, stock_quantity.</p>
-                <p><strong>item_type:</strong> <code>full_pcs</code> or <code>measurable</code>.</p>
-                <p><strong>packaging_mode:</strong> <code>no_strip</code> or <code>with_strip</code>. If <code>with_strip</code>, fill <code>strips_per_pack</code> and <code>units_per_strip</code>.</p>
-                <p><strong>Measurable units:</strong> {MEASURABLE_UNITS.join(', ')}. Date format: YYYY-MM-DD.</p>
+                <p><strong>Accepted files:</strong> .csv, .xlsx, .xls. Real-world headers like <code>NAME OF ITEMS</code>, <code>CATAGORY</code>, <code>BACH NO</code>, <code>EX-DATE</code>, <code>PERCHASING PRICE (strip)</code>, <code>QUANTITY (PK)</code> are auto-detected.</p>
+                <p><strong>Required:</strong> name, purchase_price, selling_price, stock_quantity.</p>
+                <p><strong>Packaging:</strong> use <code>3*10</code> / <code>6*10</code> for strip layouts (auto-converted). Prices in <em>per-strip</em> are auto-multiplied to per-pack.</p>
                 {isPharmacy && (
-                  <p className="pt-1 border-t mt-1"><strong>💊 Pharmacy composition:</strong> Leave <code>name</code> empty on a row to add it as an <em>active ingredient</em> of the medicine on the row above. Use <code>generic_name</code> + <code>strength</code> for each ingredient. See template for example (Snip → Paracetamol + Pseudoephedrine + Chlorophenaramine).</p>
+                  <>
+                    <p className="pt-1 border-t mt-1"><strong>💊 GROUP inheritance:</strong> Fill <code>GROUP</code> only on the first item of a group; subsequent rows inherit it until the next group.</p>
+                    <p><strong>💊 Composition:</strong> Leave <code>NAME OF ITEMS</code> empty on a row to add it as an <em>active ingredient</em> of the medicine above (just fill GENERIC NAME + STRENGTH).</p>
+                  </>
                 )}
               </AlertDescription>
             </Alert>
@@ -807,7 +809,7 @@ export default function ImportCsvDialog({ open, onOpenChange, onImported }: Impo
                 <input
                   ref={fileRef}
                   type="file"
-                  accept=".csv,text/csv"
+                  accept=".csv,.xlsx,.xls,text/csv,application/vnd.openxmlformats-officedocument.spreadsheetml.sheet,application/vnd.ms-excel"
                   className="hidden"
                   onChange={handleFile}
                 />
@@ -819,8 +821,8 @@ export default function ImportCsvDialog({ open, onOpenChange, onImported }: Impo
                   disabled={!selectedBranchId}
                 >
                   <Upload className="h-5 w-5" />
-                  <span className="font-medium">Upload CSV</span>
-                  <span className="text-xs opacity-80">{selectedBranchId ? 'Choose file…' : 'Select branch first'}</span>
+                  <span className="font-medium">Upload CSV / Excel</span>
+                  <span className="text-xs opacity-80">{selectedBranchId ? 'Choose .csv, .xlsx or .xls…' : 'Select branch first'}</span>
                 </Button>
               </label>
             </div>
