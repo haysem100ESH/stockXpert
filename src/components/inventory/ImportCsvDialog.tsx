@@ -478,8 +478,8 @@ export default function ImportCsvDialog({ open, onOpenChange, onImported }: Impo
       if (item_type === 'full_pcs' && packaging_mode === 'with_strip') {
         const sp = parseInt(get(cells, 'strips_per_pack')) || strips_per_pack;
         const ups = parseInt(get(cells, 'units_per_strip')) || units_per_strip;
-        if (!sp || sp < 1) rowErrors.push('strips_per_pack must be ≥ 1 when packaging is strip layout');
-        if (!ups || ups < 1) rowErrors.push('units_per_strip must be ≥ 1 when packaging is strip layout');
+        if (!sp || sp < 1) rowErrors.push(`column "STRIPS PER PACK" must be ≥ 1 (PACKAGING MODE "${packagingRaw}" looks like a strip layout)`);
+        if (!ups || ups < 1) rowErrors.push(`column "UNITS PER STRIP" must be ≥ 1 (PACKAGING MODE "${packagingRaw}" looks like a strip layout)`);
         if (sp && ups) {
           strips_per_pack = sp;
           units_per_strip = ups;
