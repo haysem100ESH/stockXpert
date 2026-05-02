@@ -1,4 +1,5 @@
 import { useState, useEffect, useRef } from 'react';
+import * as XLSX from 'xlsx';
 import { Dialog, DialogContent, DialogDescription, DialogHeader, DialogTitle } from '@/components/ui/dialog';
 import { Button } from '@/components/ui/button';
 import { Label } from '@/components/ui/label';
@@ -12,6 +13,170 @@ import { useAuth } from '@/hooks/useAuth';
 import { useBranchContext } from '@/hooks/useBranchContext';
 import { createBatch } from '@/lib/batchInventory';
 import { MEASURABLE_UNITS } from '@/lib/itemTypes';
+
+// ---------------------------------------------------------------------------
+// Real-world header aliases. Users upload sheets with messy / typo'd headers
+// (CATAGORY, BACH NO, EX-DATE, "PERCHASING PRICE (strip)" ...). We normalize
+// any column whose header — after lowercasing, stripping punctuation and
+// collapsing whitespace — matches one of these aliases to our canonical key.
+// ---------------------------------------------------------------------------
+const HEADER_ALIASES: Record<string, string> = {
+  // canonical
+  name: 'name', 'name of items': 'name', 'item name': 'name', 'product name': 'name',
+  generic_name: 'generic_name', 'generic name': 'generic_name', generic: 'generic_name',
+  medicine_group: 'medicine_group', group: 'medicine_group', 'medicine group': 'medicine_group',
+  strength: 'strength',
+  category: 'category', catagory: 'category', cat: 'category',
+  manufacturer: 'manufacturer', mfg: 'manufacturer', maker: 'manufacturer', brand: 'manufacturer',
+  batch_number: 'batch_number', 'batch no': 'batch_number', 'bach no': 'batch_number', batch: 'batch_number', 'batch number': 'batch_number',
+  item_type: 'item_type', 'item type': 'item_type', type: 'item_type',
+  unit_label: 'unit_label', 'unit by label': 'unit_label', 'unit label': 'unit_label', unit: 'unit_label',
+  packaging_mode: 'packaging_mode', 'packaging mode': 'packaging_mode', packaging: 'packaging_mode', pack: 'packaging_mode',
+  strips_per_pack: 'strips_per_pack', 'strips per pack': 'strips_per_pack',
+  units_per_strip: 'units_per_strip', 'units per strip': 'units_per_strip',
+  units_per_pack: 'units_per_pack', 'units per pack': 'units_per_pack', 'unit per pack': 'units_per_pack',
+  purchase_price: 'purchase_price', 'purchase price': 'purchase_price', 'perchasing price': 'purchase_price',
+  'perchasing price strip': 'purchase_price', 'purchase price strip': 'purchase_price',
+  'cost price': 'purchase_price', cost: 'purchase_price',
+  selling_price: 'selling_price', 'selling price': 'selling_price', 'selling price strip': 'selling_price',
+  price: 'selling_price', sale: 'selling_price', 'sale price': 'selling_price',
+  stock_quantity: 'stock_quantity', 'stock quantity': 'stock_quantity', quantity: 'stock_quantity',
+  'quantity pk': 'stock_quantity', qty: 'stock_quantity', stock: 'stock_quantity',
+  minimum_stock_level: 'minimum_stock_level', 'minimum stock level': 'minimum_stock_level',
+  'min stock': 'minimum_stock_level', 'minimum stock': 'minimum_stock_level', 'reorder level': 'minimum_stock_level',
+  expiry_date: 'expiry_date', 'expiry date': 'expiry_date', 'ex date': 'expiry_date', 'exp date': 'expiry_date',
+  expiry: 'expiry_date', expiration: 'expiry_date',
+};
+
+function normalizeHeader(h: string): string {
+  return String(h || '')
+    .toLowerCase()
+    .replace(/[()._\-\/\\*:]/g, ' ')
+    .replace(/\s+/g, ' ')
+    .trim();
+}
+
+function canonicalHeader(h: string): string | null {
+  const n = normalizeHeader(h);
+  if (!n) return null;
+  if (HEADER_ALIASES[n]) return HEADER_ALIASES[n];
+  // Fallback: try removing trailing words like "strip", "pk"
+  const stripped = n.replace(/\s+(strip|pk|pack)$/g, '').trim();
+  return HEADER_ALIASES[stripped] || null;
+}
+
+// Parse a "PACKAGING MODE" cell like "3*10", "3x10", "3×10", "1*1", "30g", "100ml".
+// Returns { stripsPerPack, unitsPerStrip } if it looks like a strip layout.
+function parsePackagingMode(s: string): { stripsPerPack: number | null; unitsPerStrip: number | null; isStripLayout: boolean } {
+  if (!s) return { stripsPerPack: null, unitsPerStrip: null, isStripLayout: false };
+  const m = s.trim().match(/^(\d+)\s*[x*×]\s*(\d+)$/i);
+  if (!m) return { stripsPerPack: null, unitsPerStrip: null, isStripLayout: false };
+  const a = parseInt(m[1]);
+  const b = parseInt(m[2]);
+  // Treat 1*1 as "no real strip layout"
+  if (a === 1 && b === 1) return { stripsPerPack: null, unitsPerStrip: null, isStripLayout: false };
+  return { stripsPerPack: a, unitsPerStrip: b, isStripLayout: true };
+}
+
+// "1 PK", "3 tubes", "5 vials", "2pk" → 1, 3, 5, 2
+function parseLeadingInt(s: string): number | null {
+  if (!s) return null;
+  const m = String(s).trim().match(/^(\d+(?:\.\d+)?)/);
+  if (!m) return null;
+  const v = parseFloat(m[1]);
+  return isNaN(v) ? null : Math.round(v);
+}
+
+// Strength may be a percentage stored as a number (0.0116 → "1.16%"), a date
+// (2/30/2027 — invalid date), or a normal string like "500mg".
+function normalizeStrength(raw: any): string | null {
+  if (raw == null || raw === '') return null;
+  if (typeof raw === 'number') {
+    // Treat numbers <=1 as fraction → percentage
+    if (raw > 0 && raw <= 1) return `${+(raw * 100).toFixed(2)}%`;
+    return String(raw);
+  }
+  return String(raw).trim() || null;
+}
+
+// Robust date parser: handles ISO (2026-07-26), DMY (30/10/2027), MDY (10/30/2027),
+// and Excel Date objects. Returns YYYY-MM-DD or null on invalid (incl. 2/30/...).
+function parseExpiryDate(raw: any): { iso: string | null; valid: boolean; hadValue: boolean } {
+  if (raw == null || raw === '') return { iso: null, valid: true, hadValue: false };
+  if (raw instanceof Date) {
+    if (isNaN(raw.getTime())) return { iso: null, valid: false, hadValue: true };
+    return { iso: raw.toISOString().slice(0, 10), valid: true, hadValue: true };
+  }
+  const s = String(raw).trim();
+  if (!s) return { iso: null, valid: true, hadValue: false };
+  // ISO yyyy-mm-dd
+  let m = s.match(/^(\d{4})-(\d{1,2})-(\d{1,2})$/);
+  if (m) {
+    const [, y, mo, d] = m;
+    return validateDate(+y, +mo, +d);
+  }
+  // d/m/y or m/d/y or d-m-y
+  m = s.match(/^(\d{1,2})[\/\-\.](\d{1,2})[\/\-\.](\d{2,4})$/);
+  if (m) {
+    let [, a, b, y] = m;
+    let yr = +y;
+    if (yr < 100) yr += 2000;
+    const ai = +a, bi = +b;
+    // Prefer DMY when first part > 12 (unambiguous), else try DMY first then MDY
+    if (ai > 12) return validateDate(yr, bi, ai);
+    if (bi > 12) return validateDate(yr, ai, bi);
+    // Ambiguous: try DMY (matches the user's sheet locale: 30/10/2027)
+    const dmy = validateDate(yr, bi, ai);
+    if (dmy.valid) return dmy;
+    return validateDate(yr, ai, bi);
+  }
+  // Last resort: native Date
+  const d = new Date(s);
+  if (!isNaN(d.getTime())) return { iso: d.toISOString().slice(0, 10), valid: true, hadValue: true };
+  return { iso: null, valid: false, hadValue: true };
+}
+
+function validateDate(y: number, mo: number, d: number): { iso: string | null; valid: boolean; hadValue: boolean } {
+  if (mo < 1 || mo > 12 || d < 1 || d > 31) return { iso: null, valid: false, hadValue: true };
+  const dt = new Date(Date.UTC(y, mo - 1, d));
+  if (dt.getUTCFullYear() !== y || dt.getUTCMonth() !== mo - 1 || dt.getUTCDate() !== d) {
+    return { iso: null, valid: false, hadValue: true };
+  }
+  return { iso: dt.toISOString().slice(0, 10), valid: true, hadValue: true };
+}
+
+// Map freetext item type ("Tablet", "GEL", "INJECTION", "powder", "suspension")
+// to our schema's full_pcs / measurable. Liquids/creams/gels = measurable.
+function inferItemType(itemTypeText: string, unitLabel: string): 'full_pcs' | 'measurable' {
+  const t = (itemTypeText + ' ' + unitLabel).toLowerCase();
+  if (/(gel|cream|ointment|syrup|suspension|drop|spray|lotion|powder|liquid|tube|bottle|ml|gram|\bg\b|kg)/.test(t)) {
+    // Tubes & bottles in this catalog still ship as discrete units → keep full_pcs
+    if (/(tube|bottle|sachet|vial|ampoule|amp)/.test(t) && !/(ml|gram|\bg\b|kg)/.test(t)) {
+      return 'full_pcs';
+    }
+    if (/(ml|gram|\bg\b|kg|liquid|powder)/.test(t)) return 'measurable';
+  }
+  return 'full_pcs';
+}
+
+function inferUnitLabel(itemType: 'full_pcs' | 'measurable', rawUnit: string, packagingText: string): string {
+  const u = (rawUnit || '').toLowerCase().trim();
+  if (itemType === 'measurable') {
+    if (/ml/.test(packagingText)) return 'ml';
+    if (/(g|gram)/.test(packagingText)) return 'g';
+    if (MEASURABLE_UNITS.includes(u as any)) return u;
+    return 'g';
+  }
+  // full_pcs
+  if (!u) return 'piece';
+  if (u === 'pk') return 'pack';
+  if (u === 'tube') return 'tube';
+  if (u === 'vial') return 'vial';
+  if (u === 'bottle') return 'bottle';
+  if (u === 'sachet') return 'sachet';
+  if (u === 'strip') return 'strip';
+  return u;
+}
 
 interface ImportCsvDialogProps {
   open: boolean;
@@ -200,18 +365,41 @@ export default function ImportCsvDialog({ open, onOpenChange, onImported }: Impo
     URL.revokeObjectURL(url);
   };
 
-  const validateAndNormalize = async (rows: string[][]): Promise<{ ok: ParsedRow[]; errs: string[] }> => {
+  const validateAndNormalize = async (rows: any[][]): Promise<{ ok: ParsedRow[]; errs: string[] }> => {
     const errs: string[] = [];
     if (rows.length < 2) {
-      return { ok: [], errs: ['CSV is empty or has no data rows.'] };
+      return { ok: [], errs: ['File is empty or has no data rows.'] };
     }
 
-    const headerRow = rows[0].map(h => h.trim().toLowerCase());
-    const missing = HEADERS.filter(h => !headerRow.includes(h) && !OPTIONAL_HEADERS.has(h));
-    if (missing.length > 0) {
-      return { ok: [], errs: [`Missing required column(s): ${missing.join(', ')}. Please use the provided template.`] };
+    // Build header → canonical-key map by alias matching. Unknown columns are ignored.
+    const rawHeaders = rows[0].map((h: any) => String(h ?? ''));
+    const headerToKey: Record<number, string> = {};
+    rawHeaders.forEach((h, i) => {
+      const k = canonicalHeader(h);
+      if (k) headerToKey[i] = k;
+    });
+    const keyIndex: Record<string, number> = {};
+    Object.entries(headerToKey).forEach(([i, k]) => {
+      if (keyIndex[k] === undefined) keyIndex[k] = +i;
+    });
+
+    // Required columns
+    const required = ['name', 'purchase_price', 'selling_price', 'stock_quantity'];
+    const missingReq = required.filter(k => keyIndex[k] === undefined);
+    if (missingReq.length > 0) {
+      return { ok: [], errs: [`Missing required column(s): ${missingReq.join(', ')}. Recognized headers: ${Object.values(headerToKey).join(', ') || '(none)'}.`] };
     }
-    const idx = (h: string) => headerRow.indexOf(h); // returns -1 if optional and absent
+    const get = (cells: any[], k: string): string => {
+      const i = keyIndex[k];
+      if (i === undefined) return '';
+      const v = cells[i];
+      if (v == null) return '';
+      return String(v).trim();
+    };
+    const getRaw = (cells: any[], k: string): any => {
+      const i = keyIndex[k];
+      return i === undefined ? '' : cells[i];
+    };
 
     // Fetch existing medicines (catalog) to detect duplicates by name+manufacturer
     const { data: existingMeds } = await supabase
@@ -224,24 +412,21 @@ export default function ImportCsvDialog({ open, onOpenChange, onImported }: Impo
 
     const seenInFile = new Set<string>();
     const out: ParsedRow[] = [];
+    let groupCarry: string | null = null; // GROUP cell only filled on first row of a group
 
     for (let r = 1; r < rows.length; r++) {
-      const cells = rows[r];
-      const get = (k: string) => (cells[idx(k)] ?? '').trim();
+      const cells = rows[r] || [];
+      if (!cells.some((c: any) => c != null && String(c).trim() !== '')) continue; // blank row
       const rowErrors: string[] = [];
 
-      const name = get('name');
-      const generic_name_raw = get('generic_name');
+      const name = get(cells, 'name');
+      const generic_name_raw = get(cells, 'generic_name');
+      const groupCell = get(cells, 'medicine_group');
+      if (groupCell) groupCarry = groupCell;
 
-      // ---------------------------------------------------------------
-      // PHARMACY HIERARCHY: a row with empty NAME but a generic_name is
-      // an active-ingredient continuation of the previous medicine.
-      // ---------------------------------------------------------------
+      // Pharmacy hierarchy: empty NAME but ingredient continuation
       if (isPharmacy && !name) {
-        if (!generic_name_raw) {
-          // Truly blank row → ignore silently
-          continue;
-        }
+        if (!generic_name_raw) continue; // truly blank
         const parent = out[out.length - 1];
         if (!parent) {
           errs.push(`Row ${r + 1}: ingredient row "${generic_name_raw}" has no parent medicine above it.`);
@@ -250,86 +435,104 @@ export default function ImportCsvDialog({ open, onOpenChange, onImported }: Impo
         parent.active_ingredients.push({
           rowIndex: r + 1,
           ingredient_name: generic_name_raw,
-          strength: get('strength') || null,
+          strength: normalizeStrength(getRaw(cells, 'strength')),
         });
         continue;
       }
 
       if (!name) rowErrors.push('name is required');
 
-      const category = get('category') || (isPharmacy ? 'tablet' : 'other');
-      const itemTypeRaw = (get('item_type') || 'full_pcs').toLowerCase();
-      const item_type: 'full_pcs' | 'measurable' = itemTypeRaw === 'measurable' ? 'measurable' : 'full_pcs';
+      const itemTypeRaw = get(cells, 'item_type');
+      const unitLabelRaw = get(cells, 'unit_label');
+      const packagingRaw = get(cells, 'packaging_mode');
 
-      const unitLabelRaw = get('unit_label').toLowerCase();
-      const unit_label = unitLabelRaw || (item_type === 'measurable' ? 'kg' : 'piece');
+      const item_type: 'full_pcs' | 'measurable' = (() => {
+        const v = itemTypeRaw.toLowerCase();
+        if (v === 'measurable' || v === 'full_pcs') return v as any;
+        return inferItemType(itemTypeRaw, unitLabelRaw);
+      })();
+      const unit_label = inferUnitLabel(item_type, unitLabelRaw, packagingRaw);
       if (item_type === 'measurable' && !MEASURABLE_UNITS.includes(unit_label as any)) {
         rowErrors.push(`unit_label "${unit_label}" must be one of: ${MEASURABLE_UNITS.join(', ')}`);
       }
 
-      const packagingRaw = (get('packaging_mode') || 'no_strip').toLowerCase();
-      const packaging_mode: 'with_strip' | 'no_strip' = packagingRaw === 'with_strip' ? 'with_strip' : 'no_strip';
-
+      // Packaging: accept canonical (with_strip/no_strip) OR real-world like "3*10".
+      let packaging_mode: 'with_strip' | 'no_strip' = 'no_strip';
       let strips_per_pack: number | null = null;
       let units_per_strip: number | null = null;
       let units_per_pack: number | null = null;
 
+      if (packagingRaw === 'with_strip' || packagingRaw === 'no_strip') {
+        packaging_mode = packagingRaw;
+      } else {
+        const parsed = parsePackagingMode(packagingRaw);
+        if (parsed.isStripLayout) {
+          packaging_mode = 'with_strip';
+          strips_per_pack = parsed.stripsPerPack;
+          units_per_strip = parsed.unitsPerStrip;
+          units_per_pack = (parsed.stripsPerPack || 0) * (parsed.unitsPerStrip || 0);
+        }
+      }
+
+      // Allow explicit columns to override / fill in
       if (item_type === 'full_pcs' && packaging_mode === 'with_strip') {
-        const sp = parseInt(get('strips_per_pack'));
-        const ups = parseInt(get('units_per_strip'));
-        if (!sp || sp < 1) rowErrors.push('strips_per_pack must be ≥ 1 when packaging_mode=with_strip');
-        if (!ups || ups < 1) rowErrors.push('units_per_strip must be ≥ 1 when packaging_mode=with_strip');
+        const sp = parseInt(get(cells, 'strips_per_pack')) || strips_per_pack;
+        const ups = parseInt(get(cells, 'units_per_strip')) || units_per_strip;
+        if (!sp || sp < 1) rowErrors.push('strips_per_pack must be ≥ 1 when packaging is strip layout');
+        if (!ups || ups < 1) rowErrors.push('units_per_strip must be ≥ 1 when packaging is strip layout');
         if (sp && ups) {
           strips_per_pack = sp;
           units_per_strip = ups;
           units_per_pack = sp * ups;
         }
       } else {
-        const upp = get('units_per_pack');
+        const upp = get(cells, 'units_per_pack');
         if (upp) {
           const v = parseInt(upp);
           if (!isNaN(v) && v >= 1) units_per_pack = v;
         }
       }
 
-      const purchaseRaw = get('purchase_price');
-      const sellingRaw = get('selling_price');
-      const purchase_price = parseFloat(purchaseRaw);
-      const selling_price = parseFloat(sellingRaw);
+      const purchaseRaw = get(cells, 'purchase_price');
+      const sellingRaw = get(cells, 'selling_price');
+      let purchase_price = parseFloat(purchaseRaw);
+      let selling_price = parseFloat(sellingRaw);
       if (!purchaseRaw || isNaN(purchase_price) || purchase_price < 0) rowErrors.push('purchase_price is required and must be ≥ 0');
       if (!sellingRaw || isNaN(selling_price) || selling_price < 0) rowErrors.push('selling_price is required and must be ≥ 0');
 
-      const stockRaw = get('stock_quantity');
+      // Per-strip → per-pack conversion (user choice: prices labeled "(strip)" → multiply by strips_per_pack)
+      if (packaging_mode === 'with_strip' && strips_per_pack && strips_per_pack > 1) {
+        if (!isNaN(purchase_price)) purchase_price = +(purchase_price * strips_per_pack).toFixed(2);
+        if (!isNaN(selling_price)) selling_price = +(selling_price * strips_per_pack).toFixed(2);
+      }
+
+      const stockRaw = get(cells, 'stock_quantity');
       const stock_quantity = item_type === 'measurable' ? parseFloat(stockRaw) : parseInt(stockRaw);
       if (!stockRaw || isNaN(stock_quantity) || stock_quantity < 0) rowErrors.push('stock_quantity is required and must be ≥ 0');
 
-      const minRaw = get('minimum_stock_level');
-      const minimum_stock_level = minRaw ? parseInt(minRaw) : 0;
-      if (minRaw && (isNaN(minimum_stock_level) || minimum_stock_level < 0)) rowErrors.push('minimum_stock_level must be ≥ 0');
+      const minRaw = get(cells, 'minimum_stock_level');
+      // accept "1 PK", "3 tubes" etc.
+      const minimum_stock_level = minRaw ? (parseLeadingInt(minRaw) ?? 0) : 0;
 
-      const expiryRaw = get('expiry_date');
-      let expiry_date: string | null = null;
-      if (expiryRaw) {
-        const d = new Date(expiryRaw);
-        if (isNaN(d.getTime())) rowErrors.push('expiry_date must be a valid date (YYYY-MM-DD)');
-        else expiry_date = expiryRaw;
+      const expRaw = getRaw(cells, 'expiry_date');
+      const expParsed = parseExpiryDate(expRaw);
+      if (expParsed.hadValue && !expParsed.valid) {
+        rowErrors.push(`expiry_date "${String(expRaw)}" is not a valid date`);
       }
+      const expiry_date = expParsed.iso;
 
       const generic_name = generic_name_raw || null;
-      const manufacturer = get('manufacturer') || null;
-      const batch_number = get('batch_number') || null;
-      // Pharmacy-only optional fields
-      const medicine_group = isPharmacy ? (get('medicine_group') || null) : null;
-      const strength = isPharmacy ? (get('strength') || null) : null;
+      const manufacturer = get(cells, 'manufacturer') || null;
+      const batch_number = get(cells, 'batch_number') || null;
+      const category = get(cells, 'category') || (isPharmacy ? 'tablet' : 'other');
+      const medicine_group = isPharmacy ? (groupCell || groupCarry || null) : null;
+      const strength = isPharmacy ? normalizeStrength(getRaw(cells, 'strength')) : null;
 
       const key = `${name.toLowerCase()}|${(manufacturer || '').toLowerCase()}`;
-      if (seenInFile.has(key)) rowErrors.push('Duplicate row in CSV (same name + manufacturer)');
+      if (seenInFile.has(key)) rowErrors.push('Duplicate row in file (same name + manufacturer)');
       seenInFile.add(key);
       const isDuplicate = name ? existingKey.has(key) : false;
 
-      // Seed active_ingredients with the first ingredient (the medicine's own
-      // generic_name + strength), so "Snip / Paracetamol 325mg" becomes the
-      // first ingredient automatically.
       const initialIngredients: ActiveIngredient[] = [];
       if (isPharmacy && generic_name_raw) {
         initialIngredients.push({
@@ -341,7 +544,7 @@ export default function ImportCsvDialog({ open, onOpenChange, onImported }: Impo
 
       out.push({
         rowIndex: r + 1,
-        raw: Object.fromEntries(headerRow.map((h, i) => [h, cells[i] ?? ''])),
+        raw: Object.fromEntries(rawHeaders.map((h, i) => [String(h), cells[i] != null ? String(cells[i]) : ''])),
         errors: rowErrors,
         isDuplicate,
         name,
@@ -379,14 +582,23 @@ export default function ImportCsvDialog({ open, onOpenChange, onImported }: Impo
     }
 
     try {
-      const text = await file.text();
-      const rows = parseCsv(text);
+      const isExcel = /\.(xlsx|xls)$/i.test(file.name);
+      let rows: any[][];
+      if (isExcel) {
+        const buf = await file.arrayBuffer();
+        const wb = XLSX.read(buf, { type: 'array', cellDates: true });
+        const ws = wb.Sheets[wb.SheetNames[0]];
+        rows = XLSX.utils.sheet_to_json<any[]>(ws, { header: 1, raw: true, defval: '' });
+      } else {
+        const text = await file.text();
+        rows = parseCsv(text);
+      }
       const { ok, errs } = await validateAndNormalize(rows);
       setParsedRows(ok);
       setParseErrors(errs);
       setStep('preview');
     } catch (err: any) {
-      toast({ title: 'Error', description: err.message || 'Failed to read CSV', variant: 'destructive' });
+      toast({ title: 'Error', description: err.message || 'Failed to read file', variant: 'destructive' });
     } finally {
       e.target.value = '';
     }
@@ -550,7 +762,7 @@ export default function ImportCsvDialog({ open, onOpenChange, onImported }: Impo
         <DialogHeader>
           <DialogTitle className="flex items-center gap-2">
             <FileSpreadsheet className="h-5 w-5" />
-            Import {isPharmacy ? 'Medicines' : 'Items'} from CSV
+            Import {isPharmacy ? 'Medicines' : 'Items'} from CSV / Excel
           </DialogTitle>
           <DialogDescription>
             Download the template, fill it with your items, then upload to bulk-create inventory.
@@ -574,12 +786,14 @@ export default function ImportCsvDialog({ open, onOpenChange, onImported }: Impo
             <Alert>
               <AlertCircle className="h-4 w-4" />
               <AlertDescription className="text-xs space-y-1">
-                <p><strong>Required columns:</strong> name, category, item_type, purchase_price, selling_price, stock_quantity.</p>
-                <p><strong>item_type:</strong> <code>full_pcs</code> or <code>measurable</code>.</p>
-                <p><strong>packaging_mode:</strong> <code>no_strip</code> or <code>with_strip</code>. If <code>with_strip</code>, fill <code>strips_per_pack</code> and <code>units_per_strip</code>.</p>
-                <p><strong>Measurable units:</strong> {MEASURABLE_UNITS.join(', ')}. Date format: YYYY-MM-DD.</p>
+                <p><strong>Accepted files:</strong> .csv, .xlsx, .xls. Real-world headers like <code>NAME OF ITEMS</code>, <code>CATAGORY</code>, <code>BACH NO</code>, <code>EX-DATE</code>, <code>PERCHASING PRICE (strip)</code>, <code>QUANTITY (PK)</code> are auto-detected.</p>
+                <p><strong>Required:</strong> name, purchase_price, selling_price, stock_quantity.</p>
+                <p><strong>Packaging:</strong> use <code>3*10</code> / <code>6*10</code> for strip layouts (auto-converted). Prices in <em>per-strip</em> are auto-multiplied to per-pack.</p>
                 {isPharmacy && (
-                  <p className="pt-1 border-t mt-1"><strong>💊 Pharmacy composition:</strong> Leave <code>name</code> empty on a row to add it as an <em>active ingredient</em> of the medicine on the row above. Use <code>generic_name</code> + <code>strength</code> for each ingredient. See template for example (Snip → Paracetamol + Pseudoephedrine + Chlorophenaramine).</p>
+                  <>
+                    <p className="pt-1 border-t mt-1"><strong>💊 GROUP inheritance:</strong> Fill <code>GROUP</code> only on the first item of a group; subsequent rows inherit it until the next group.</p>
+                    <p><strong>💊 Composition:</strong> Leave <code>NAME OF ITEMS</code> empty on a row to add it as an <em>active ingredient</em> of the medicine above (just fill GENERIC NAME + STRENGTH).</p>
+                  </>
                 )}
               </AlertDescription>
             </Alert>
@@ -595,7 +809,7 @@ export default function ImportCsvDialog({ open, onOpenChange, onImported }: Impo
                 <input
                   ref={fileRef}
                   type="file"
-                  accept=".csv,text/csv"
+                  accept=".csv,.xlsx,.xls,text/csv,application/vnd.openxmlformats-officedocument.spreadsheetml.sheet,application/vnd.ms-excel"
                   className="hidden"
                   onChange={handleFile}
                 />
@@ -607,8 +821,8 @@ export default function ImportCsvDialog({ open, onOpenChange, onImported }: Impo
                   disabled={!selectedBranchId}
                 >
                   <Upload className="h-5 w-5" />
-                  <span className="font-medium">Upload CSV</span>
-                  <span className="text-xs opacity-80">{selectedBranchId ? 'Choose file…' : 'Select branch first'}</span>
+                  <span className="font-medium">Upload CSV / Excel</span>
+                  <span className="text-xs opacity-80">{selectedBranchId ? 'Choose .csv, .xlsx or .xls…' : 'Select branch first'}</span>
                 </Button>
               </label>
             </div>
