@@ -994,9 +994,31 @@ export default function ImportCsvDialog({ open, onOpenChange, onImported }: Impo
         )}
 
         {step === 'importing' && (
-          <div className="flex flex-col items-center justify-center py-10 gap-3">
+          <div className="flex flex-col items-center justify-center py-8 gap-4">
             <Loader2 className="h-8 w-8 animate-spin text-primary" />
-            <p className="text-sm text-muted-foreground">Importing items, please wait…</p>
+            <div className="w-full space-y-2">
+              <div className="flex justify-between text-sm">
+                <span className="font-medium">
+                  Importing {importProgress.current} of {importProgress.total}…
+                </span>
+                <span className="text-muted-foreground">
+                  {importProgress.total > 0 ? Math.round((importProgress.current / importProgress.total) * 100) : 0}%
+                </span>
+              </div>
+              <Progress value={importProgress.total > 0 ? (importProgress.current / importProgress.total) * 100 : 0} />
+              {importProgress.currentName && (
+                <p className="text-xs text-muted-foreground truncate">
+                  Adding: <span className="font-medium text-foreground">{importProgress.currentName}</span>
+                </p>
+              )}
+              <div className="flex gap-4 text-xs pt-1">
+                <span className="text-green-600">✓ {importProgress.success} succeeded</span>
+                {importProgress.failed > 0 && <span className="text-destructive">✗ {importProgress.failed} failed</span>}
+              </div>
+            </div>
+            <p className="text-xs text-muted-foreground">
+              Adding to: <strong>{branches.find(b => b.id === selectedBranchId)?.name || 'selected branch'}</strong>
+            </p>
           </div>
         )}
       </DialogContent>
