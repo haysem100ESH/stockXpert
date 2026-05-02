@@ -862,14 +862,19 @@ export default function ImportCsvDialog({ open, onOpenChange, onImported }: Impo
               <Alert variant="destructive">
                 <AlertCircle className="h-4 w-4" />
                 <AlertDescription>
-                  <p className="font-semibold mb-1">Fix these errors before importing — the entire file will be rejected:</p>
-                  <ul className="list-disc pl-4 text-xs max-h-40 overflow-y-auto space-y-1">
-                    {rowsWithErrors.slice(0, 20).map(r => (
+                  <p className="font-semibold mb-1">
+                    Found {rowsWithErrors.length} row(s) with problems. Fix these in your sheet, then re-upload — the entire file is rejected until all rows are valid:
+                  </p>
+                  <ul className="list-disc pl-4 text-xs max-h-60 overflow-y-auto space-y-1.5">
+                    {rowsWithErrors.slice(0, 50).map(r => (
                       <li key={r.rowIndex}>
-                        <strong>Row {r.rowIndex}</strong> ({r.name || '(no name)'}): {r.errors.join('; ')}
+                        <strong>Row {r.rowIndex}</strong>{r.name ? ` — "${r.name}"` : ''}:
+                        <ul className="list-[circle] pl-4 mt-0.5">
+                          {r.errors.map((err, i) => <li key={i}>{err}</li>)}
+                        </ul>
                       </li>
                     ))}
-                    {rowsWithErrors.length > 20 && <li>…and {rowsWithErrors.length - 20} more</li>}
+                    {rowsWithErrors.length > 50 && <li>…and {rowsWithErrors.length - 50} more row(s) with problems</li>}
                   </ul>
                 </AlertDescription>
               </Alert>
