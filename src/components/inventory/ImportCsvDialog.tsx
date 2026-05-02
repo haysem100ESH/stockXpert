@@ -324,6 +324,7 @@ export default function ImportCsvDialog({ open, onOpenChange, onImported }: Impo
   const [parseErrors, setParseErrors] = useState<string[]>([]);
   const [duplicateAction, setDuplicateAction] = useState<'skip' | 'create_new'>('skip');
   const [submitting, setSubmitting] = useState(false);
+  const [importProgress, setImportProgress] = useState({ current: 0, total: 0, success: 0, failed: 0, currentName: '' });
 
   useEffect(() => {
     if (!open) return;
