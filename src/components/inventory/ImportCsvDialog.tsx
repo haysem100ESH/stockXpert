@@ -430,7 +430,7 @@ export default function ImportCsvDialog({ open, onOpenChange, onImported }: Impo
     const out: ParsedRow[] = [];
     let groupCarry: string | null = null; // GROUP cell only filled on first row of a group
 
-    for (let r = 1; r < rows.length; r++) {
+    for (let r = headerRowIdx + 1; r < rows.length; r++) {
       const cells = rows[r] || [];
       if (!cells.some((c: any) => c != null && String(c).trim() !== '')) continue; // blank row
       const rowErrors: string[] = [];
