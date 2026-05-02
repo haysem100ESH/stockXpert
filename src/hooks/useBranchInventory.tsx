@@ -26,6 +26,7 @@ export type EnrichedBranchItem = BranchItem & {
   branch_name?: string;
   medicine_group?: string | null;
   strength?: string | null;
+  active_ingredients?: Array<{ ingredient_name: string; strength: string | null }>;
 };
 
 interface FetchArgs {
