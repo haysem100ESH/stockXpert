@@ -517,7 +517,7 @@ export default function ImportCsvDialog({ open, onOpenChange, onImported }: Impo
       const expRaw = getRaw(cells, 'expiry_date');
       const expParsed = parseExpiryDate(expRaw);
       if (expParsed.hadValue && !expParsed.valid) {
-        rowErrors.push(`expiry_date "${String(expRaw)}" is not a valid date`);
+        rowErrors.push(`column "EX-DATE" = "${String(expRaw)}" is not a valid date (use DD/MM/YYYY or YYYY-MM-DD; check that the day actually exists in that month)`);
       }
       const expiry_date = expParsed.iso;
 
