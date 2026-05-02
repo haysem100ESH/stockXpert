@@ -432,13 +432,11 @@ export default function ImportCsvDialog({ open, onOpenChange, onImported }: Impo
     const out: ParsedRow[] = [];
     let groupCarry: string | null = null; // GROUP cell only filled on first row of a group
 
-    // Helper: which "data" columns (beyond medicine_group/strength/generic_name)
-    // carry meaningful values? Used to decide whether a name-less row is just a
-    // continuation/blank vs an attempt at a new item.
+    // Helper: which columns prove a name-less row is trying to be a standalone
+    // item? Category/group/packaging cells alone are often copied down in Excel
+    // and should not turn ingredient/separator rows into invalid items.
     const hasItemData = (cells: any[]): boolean => {
-      const dataKeys = ['category', 'manufacturer', 'batch_number', 'item_type', 'unit_label',
-        'packaging_mode', 'strips_per_pack', 'units_per_strip', 'units_per_pack',
-        'purchase_price', 'selling_price', 'stock_quantity', 'minimum_stock_level', 'expiry_date'];
+      const dataKeys = ['manufacturer', 'batch_number', 'purchase_price', 'selling_price', 'stock_quantity', 'expiry_date'];
       return dataKeys.some(k => get(cells, k) !== '');
     };
 
