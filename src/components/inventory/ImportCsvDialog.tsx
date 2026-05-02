@@ -508,7 +508,7 @@ export default function ImportCsvDialog({ open, onOpenChange, onImported }: Impo
 
       const stockRaw = get(cells, 'stock_quantity');
       const stock_quantity = item_type === 'measurable' ? parseFloat(stockRaw) : parseInt(stockRaw);
-      if (!stockRaw || isNaN(stock_quantity) || stock_quantity < 0) rowErrors.push('stock_quantity is required and must be ≥ 0');
+      if (!stockRaw || isNaN(stock_quantity) || stock_quantity < 0) rowErrors.push(`column "QUANTITY (PK)" = "${stockRaw}" is missing or not a valid number ≥ 0`);
 
       const minRaw = get(cells, 'minimum_stock_level');
       // accept "1 PK", "3 tubes" etc.
