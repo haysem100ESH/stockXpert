@@ -497,8 +497,8 @@ export default function ImportCsvDialog({ open, onOpenChange, onImported }: Impo
       const sellingRaw = get(cells, 'selling_price');
       let purchase_price = parseFloat(purchaseRaw);
       let selling_price = parseFloat(sellingRaw);
-      if (!purchaseRaw || isNaN(purchase_price) || purchase_price < 0) rowErrors.push('purchase_price is required and must be ≥ 0');
-      if (!sellingRaw || isNaN(selling_price) || selling_price < 0) rowErrors.push('selling_price is required and must be ≥ 0');
+      if (!purchaseRaw || isNaN(purchase_price) || purchase_price < 0) rowErrors.push(`column "PERCHASING PRICE (strip)" = "${purchaseRaw}" is missing or not a valid number ≥ 0`);
+      if (!sellingRaw || isNaN(selling_price) || selling_price < 0) rowErrors.push(`column "SELLING PRICE (strip)" = "${sellingRaw}" is missing or not a valid number ≥ 0`);
 
       // Per-strip → per-pack conversion (user choice: prices labeled "(strip)" → multiply by strips_per_pack)
       if (packaging_mode === 'with_strip' && strips_per_pack && strips_per_pack > 1) {
