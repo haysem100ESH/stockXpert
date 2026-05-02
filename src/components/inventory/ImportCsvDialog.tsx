@@ -707,7 +707,14 @@ export default function ImportCsvDialog({ open, onOpenChange, onImported }: Impo
                     {parsedRows.slice(0, 50).map(r => (
                       <tr key={r.rowIndex} className="border-t">
                         <td className="p-2">{r.rowIndex}</td>
-                        <td className="p-2">{r.name || <span className="text-destructive">—</span>}</td>
+                        <td className="p-2">
+                          {r.name || <span className="text-destructive">—</span>}
+                          {isPharmacy && r.active_ingredients.length > 0 && (
+                            <div className="text-[10px] text-muted-foreground mt-0.5">
+                              Contains: {r.active_ingredients.map(i => i.ingredient_name + (i.strength ? ` ${i.strength}` : '')).join(' + ')}
+                            </div>
+                          )}
+                        </td>
                         <td className="p-2">{r.item_type}{r.packaging_mode === 'with_strip' && ' (strip)'}</td>
                         <td className="p-2">{r.stock_quantity} {r.unit_label}</td>
                         <td className="p-2">{r.purchase_price} / {r.selling_price}</td>
