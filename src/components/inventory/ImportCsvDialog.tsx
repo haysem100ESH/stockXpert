@@ -371,8 +371,23 @@ export default function ImportCsvDialog({ open, onOpenChange, onImported }: Impo
       return { ok: [], errs: ['File is empty or has no data rows.'] };
     }
 
+    // Auto-detect the header row: skip leading rows that are blank, or that
+    // contain a single title cell (e.g. "Drug List 2026"), and stop at the
+    // first row whose cells map to ≥3 known canonical columns.
+    let headerRowIdx = 0;
+    let bestRecognized = 0;
+    for (let i = 0; i < Math.min(rows.length, 10); i++) {
+      const cells = rows[i] || [];
+      const recognized = cells.reduce((n: number, h: any) => n + (canonicalHeader(String(h ?? '')) ? 1 : 0), 0);
+      if (recognized > bestRecognized) {
+        bestRecognized = recognized;
+        headerRowIdx = i;
+      }
+      if (recognized >= 3) break;
+    }
+
     // Build header → canonical-key map by alias matching. Unknown columns are ignored.
-    const rawHeaders = rows[0].map((h: any) => String(h ?? ''));
+    const rawHeaders = rows[headerRowIdx].map((h: any) => String(h ?? ''));
     const headerToKey: Record<number, string> = {};
     rawHeaders.forEach((h, i) => {
       const k = canonicalHeader(h);
@@ -387,7 +402,8 @@ export default function ImportCsvDialog({ open, onOpenChange, onImported }: Impo
     const required = ['name', 'purchase_price', 'selling_price', 'stock_quantity'];
     const missingReq = required.filter(k => keyIndex[k] === undefined);
     if (missingReq.length > 0) {
-      return { ok: [], errs: [`Missing required column(s): ${missingReq.join(', ')}. Recognized headers: ${Object.values(headerToKey).join(', ') || '(none)'}.`] };
+      const recognizedList = Object.values(headerToKey).join(', ') || '(none)';
+      return { ok: [], errs: [`Missing required column(s): ${missingReq.join(', ')}. Header row detected at row ${headerRowIdx + 1}. Recognized headers: ${recognizedList}. Tip: make sure your header row is the first non-empty row and column names match (e.g. "NAME OF ITEMS", "PERCHASING PRICE (strip)", "QUANTITY (PK)").`] };
     }
     const get = (cells: any[], k: string): string => {
       const i = keyIndex[k];
@@ -414,7 +430,7 @@ export default function ImportCsvDialog({ open, onOpenChange, onImported }: Impo
     const out: ParsedRow[] = [];
     let groupCarry: string | null = null; // GROUP cell only filled on first row of a group
 
-    for (let r = 1; r < rows.length; r++) {
+    for (let r = headerRowIdx + 1; r < rows.length; r++) {
       const cells = rows[r] || [];
       if (!cells.some((c: any) => c != null && String(c).trim() !== '')) continue; // blank row
       const rowErrors: string[] = [];
