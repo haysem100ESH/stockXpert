@@ -19,6 +19,12 @@ interface ImportCsvDialogProps {
   onImported: () => void;
 }
 
+interface ActiveIngredient {
+  rowIndex: number;
+  ingredient_name: string;
+  strength: string | null;
+}
+
 interface ParsedRow {
   rowIndex: number;
   raw: Record<string, string>;
@@ -44,6 +50,8 @@ interface ParsedRow {
   // Pharmacy-only (optional)
   medicine_group: string | null;
   strength: string | null;
+  // Pharmacy hierarchical composition (rows with empty name attach here)
+  active_ingredients: ActiveIngredient[];
 }
 
 const HEADERS = [
