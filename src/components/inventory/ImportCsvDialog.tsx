@@ -664,8 +664,11 @@ export default function ImportCsvDialog({ open, onOpenChange, onImported }: Impo
       let success = 0;
       let failed = 0;
       const failures: string[] = [];
+      setImportProgress({ current: 0, total: toImport.length, success: 0, failed: 0, currentName: '' });
 
-      for (const row of toImport) {
+      for (let idx = 0; idx < toImport.length; idx++) {
+        const row = toImport[idx];
+        setImportProgress(p => ({ ...p, current: idx, currentName: row.name }));
         try {
           let medicineId: string | null = null;
 
@@ -685,7 +688,10 @@ export default function ImportCsvDialog({ open, onOpenChange, onImported }: Impo
             minimum_stock_level: row.minimum_stock_level,
             purchase_price: row.purchase_price,
             selling_price: row.selling_price,
-            stock_quantity: 0,
+            stock_quantity: row.stock_quantity,
+            branch_id: selectedBranchId,
+            created_by: user?.id || null,
+            expiry_date: row.expiry_date,
           };
           if (row.packaging_mode === 'with_strip') {
             medPayload.strips_per_pack = row.strips_per_pack;
@@ -749,14 +755,19 @@ export default function ImportCsvDialog({ open, onOpenChange, onImported }: Impo
           }
 
           success++;
+          setImportProgress(p => ({ ...p, success: p.success + 1 }));
         } catch (e: any) {
           failed++;
           failures.push(`Row ${row.rowIndex} (${row.name}): ${e.message || 'unknown error'}`);
+          setImportProgress(p => ({ ...p, failed: p.failed + 1 }));
         }
       }
 
+      setImportProgress(p => ({ ...p, current: toImport.length, currentName: '' }));
+      const branchName = branches.find(b => b.id === selectedBranchId)?.name || 'selected branch';
+
       if (failed === 0) {
-        toast({ title: 'Import complete', description: `${success} item(s) imported successfully.` });
+        toast({ title: '✅ Import complete', description: `${success} item(s) successfully added to ${branchName}.` });
       } else {
         toast({
           title: 'Import finished with errors',
