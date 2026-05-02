@@ -1,4 +1,5 @@
 import { useState, useEffect, useRef } from 'react';
+import * as XLSX from 'xlsx';
 import { Dialog, DialogContent, DialogDescription, DialogHeader, DialogTitle } from '@/components/ui/dialog';
 import { Button } from '@/components/ui/button';
 import { Label } from '@/components/ui/label';
@@ -12,6 +13,170 @@ import { useAuth } from '@/hooks/useAuth';
 import { useBranchContext } from '@/hooks/useBranchContext';
 import { createBatch } from '@/lib/batchInventory';
 import { MEASURABLE_UNITS } from '@/lib/itemTypes';
+
+// ---------------------------------------------------------------------------
+// Real-world header aliases. Users upload sheets with messy / typo'd headers
+// (CATAGORY, BACH NO, EX-DATE, "PERCHASING PRICE (strip)" ...). We normalize
+// any column whose header — after lowercasing, stripping punctuation and
+// collapsing whitespace — matches one of these aliases to our canonical key.
+// ---------------------------------------------------------------------------
+const HEADER_ALIASES: Record<string, string> = {
+  // canonical
+  name: 'name', 'name of items': 'name', 'item name': 'name', 'product name': 'name',
+  generic_name: 'generic_name', 'generic name': 'generic_name', generic: 'generic_name',
+  medicine_group: 'medicine_group', group: 'medicine_group', 'medicine group': 'medicine_group',
+  strength: 'strength',
+  category: 'category', catagory: 'category', cat: 'category',
+  manufacturer: 'manufacturer', mfg: 'manufacturer', maker: 'manufacturer', brand: 'manufacturer',
+  batch_number: 'batch_number', 'batch no': 'batch_number', 'bach no': 'batch_number', batch: 'batch_number', 'batch number': 'batch_number',
+  item_type: 'item_type', 'item type': 'item_type', type: 'item_type',
+  unit_label: 'unit_label', 'unit by label': 'unit_label', 'unit label': 'unit_label', unit: 'unit_label',
+  packaging_mode: 'packaging_mode', 'packaging mode': 'packaging_mode', packaging: 'packaging_mode', pack: 'packaging_mode',
+  strips_per_pack: 'strips_per_pack', 'strips per pack': 'strips_per_pack',
+  units_per_strip: 'units_per_strip', 'units per strip': 'units_per_strip',
+  units_per_pack: 'units_per_pack', 'units per pack': 'units_per_pack', 'unit per pack': 'units_per_pack',
+  purchase_price: 'purchase_price', 'purchase price': 'purchase_price', 'perchasing price': 'purchase_price',
+  'perchasing price strip': 'purchase_price', 'purchase price strip': 'purchase_price',
+  'cost price': 'purchase_price', cost: 'purchase_price',
+  selling_price: 'selling_price', 'selling price': 'selling_price', 'selling price strip': 'selling_price',
+  price: 'selling_price', sale: 'selling_price', 'sale price': 'selling_price',
+  stock_quantity: 'stock_quantity', 'stock quantity': 'stock_quantity', quantity: 'stock_quantity',
+  'quantity pk': 'stock_quantity', qty: 'stock_quantity', stock: 'stock_quantity',
+  minimum_stock_level: 'minimum_stock_level', 'minimum stock level': 'minimum_stock_level',
+  'min stock': 'minimum_stock_level', 'minimum stock': 'minimum_stock_level', 'reorder level': 'minimum_stock_level',
+  expiry_date: 'expiry_date', 'expiry date': 'expiry_date', 'ex date': 'expiry_date', 'exp date': 'expiry_date',
+  expiry: 'expiry_date', expiration: 'expiry_date',
+};
+
+function normalizeHeader(h: string): string {
+  return String(h || '')
+    .toLowerCase()
+    .replace(/[()._\-\/\\*:]/g, ' ')
+    .replace(/\s+/g, ' ')
+    .trim();
+}
+
+function canonicalHeader(h: string): string | null {
+  const n = normalizeHeader(h);
+  if (!n) return null;
+  if (HEADER_ALIASES[n]) return HEADER_ALIASES[n];
+  // Fallback: try removing trailing words like "strip", "pk"
+  const stripped = n.replace(/\s+(strip|pk|pack)$/g, '').trim();
+  return HEADER_ALIASES[stripped] || null;
+}
+
+// Parse a "PACKAGING MODE" cell like "3*10", "3x10", "3×10", "1*1", "30g", "100ml".
+// Returns { stripsPerPack, unitsPerStrip } if it looks like a strip layout.
+function parsePackagingMode(s: string): { stripsPerPack: number | null; unitsPerStrip: number | null; isStripLayout: boolean } {
+  if (!s) return { stripsPerPack: null, unitsPerStrip: null, isStripLayout: false };
+  const m = s.trim().match(/^(\d+)\s*[x*×]\s*(\d+)$/i);
+  if (!m) return { stripsPerPack: null, unitsPerStrip: null, isStripLayout: false };
+  const a = parseInt(m[1]);
+  const b = parseInt(m[2]);
+  // Treat 1*1 as "no real strip layout"
+  if (a === 1 && b === 1) return { stripsPerPack: null, unitsPerStrip: null, isStripLayout: false };
+  return { stripsPerPack: a, unitsPerStrip: b, isStripLayout: true };
+}
+
+// "1 PK", "3 tubes", "5 vials", "2pk" → 1, 3, 5, 2
+function parseLeadingInt(s: string): number | null {
+  if (!s) return null;
+  const m = String(s).trim().match(/^(\d+(?:\.\d+)?)/);
+  if (!m) return null;
+  const v = parseFloat(m[1]);
+  return isNaN(v) ? null : Math.round(v);
+}
+
+// Strength may be a percentage stored as a number (0.0116 → "1.16%"), a date
+// (2/30/2027 — invalid date), or a normal string like "500mg".
+function normalizeStrength(raw: any): string | null {
+  if (raw == null || raw === '') return null;
+  if (typeof raw === 'number') {
+    // Treat numbers <=1 as fraction → percentage
+    if (raw > 0 && raw <= 1) return `${+(raw * 100).toFixed(2)}%`;
+    return String(raw);
+  }
+  return String(raw).trim() || null;
+}
+
+// Robust date parser: handles ISO (2026-07-26), DMY (30/10/2027), MDY (10/30/2027),
+// and Excel Date objects. Returns YYYY-MM-DD or null on invalid (incl. 2/30/...).
+function parseExpiryDate(raw: any): { iso: string | null; valid: boolean; hadValue: boolean } {
+  if (raw == null || raw === '') return { iso: null, valid: true, hadValue: false };
+  if (raw instanceof Date) {
+    if (isNaN(raw.getTime())) return { iso: null, valid: false, hadValue: true };
+    return { iso: raw.toISOString().slice(0, 10), valid: true, hadValue: true };
+  }
+  const s = String(raw).trim();
+  if (!s) return { iso: null, valid: true, hadValue: false };
+  // ISO yyyy-mm-dd
+  let m = s.match(/^(\d{4})-(\d{1,2})-(\d{1,2})$/);
+  if (m) {
+    const [, y, mo, d] = m;
+    return validateDate(+y, +mo, +d);
+  }
+  // d/m/y or m/d/y or d-m-y
+  m = s.match(/^(\d{1,2})[\/\-\.](\d{1,2})[\/\-\.](\d{2,4})$/);
+  if (m) {
+    let [, a, b, y] = m;
+    let yr = +y;
+    if (yr < 100) yr += 2000;
+    const ai = +a, bi = +b;
+    // Prefer DMY when first part > 12 (unambiguous), else try DMY first then MDY
+    if (ai > 12) return validateDate(yr, bi, ai);
+    if (bi > 12) return validateDate(yr, ai, bi);
+    // Ambiguous: try DMY (matches the user's sheet locale: 30/10/2027)
+    const dmy = validateDate(yr, bi, ai);
+    if (dmy.valid) return dmy;
+    return validateDate(yr, ai, bi);
+  }
+  // Last resort: native Date
+  const d = new Date(s);
+  if (!isNaN(d.getTime())) return { iso: d.toISOString().slice(0, 10), valid: true, hadValue: true };
+  return { iso: null, valid: false, hadValue: true };
+}
+
+function validateDate(y: number, mo: number, d: number): { iso: string | null; valid: boolean; hadValue: boolean } {
+  if (mo < 1 || mo > 12 || d < 1 || d > 31) return { iso: null, valid: false, hadValue: true };
+  const dt = new Date(Date.UTC(y, mo - 1, d));
+  if (dt.getUTCFullYear() !== y || dt.getUTCMonth() !== mo - 1 || dt.getUTCDate() !== d) {
+    return { iso: null, valid: false, hadValue: true };
+  }
+  return { iso: dt.toISOString().slice(0, 10), valid: true, hadValue: true };
+}
+
+// Map freetext item type ("Tablet", "GEL", "INJECTION", "powder", "suspension")
+// to our schema's full_pcs / measurable. Liquids/creams/gels = measurable.
+function inferItemType(itemTypeText: string, unitLabel: string): 'full_pcs' | 'measurable' {
+  const t = (itemTypeText + ' ' + unitLabel).toLowerCase();
+  if (/(gel|cream|ointment|syrup|suspension|drop|spray|lotion|powder|liquid|tube|bottle|ml|gram|\bg\b|kg)/.test(t)) {
+    // Tubes & bottles in this catalog still ship as discrete units → keep full_pcs
+    if (/(tube|bottle|sachet|vial|ampoule|amp)/.test(t) && !/(ml|gram|\bg\b|kg)/.test(t)) {
+      return 'full_pcs';
+    }
+    if (/(ml|gram|\bg\b|kg|liquid|powder)/.test(t)) return 'measurable';
+  }
+  return 'full_pcs';
+}
+
+function inferUnitLabel(itemType: 'full_pcs' | 'measurable', rawUnit: string, packagingText: string): string {
+  const u = (rawUnit || '').toLowerCase().trim();
+  if (itemType === 'measurable') {
+    if (/ml/.test(packagingText)) return 'ml';
+    if (/(g|gram)/.test(packagingText)) return 'g';
+    if (MEASURABLE_UNITS.includes(u as any)) return u;
+    return 'g';
+  }
+  // full_pcs
+  if (!u) return 'piece';
+  if (u === 'pk') return 'pack';
+  if (u === 'tube') return 'tube';
+  if (u === 'vial') return 'vial';
+  if (u === 'bottle') return 'bottle';
+  if (u === 'sachet') return 'sachet';
+  if (u === 'strip') return 'strip';
+  return u;
+}
 
 interface ImportCsvDialogProps {
   open: boolean;
