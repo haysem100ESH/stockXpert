@@ -82,10 +82,13 @@ export default function StaffInventoryWithActions() {
     const medicineCategories = ['tablet', 'capsule', 'syrup', 'injection', 'cream', 'ointment', 'drops', 'inhaler'];
     const term = searchTerm.toLowerCase();
     return branchItems.filter((item: any) => {
+      const ingredientsText = (item.active_ingredients || [])
+        .map((i: any) => i.ingredient_name).join(' ').toLowerCase();
       const matchesSearch = item.name.toLowerCase().includes(term) ||
         (item.generic_name || '').toLowerCase().includes(term) ||
         (item.strength || '').toLowerCase().includes(term) ||
-        (item.medicine_group || '').toLowerCase().includes(term);
+        (item.medicine_group || '').toLowerCase().includes(term) ||
+        ingredientsText.includes(term);
       let matchesCategory = true;
       if (categoryFilter === 'medicines_only') {
         matchesCategory = medicineCategories.includes(item.category);
