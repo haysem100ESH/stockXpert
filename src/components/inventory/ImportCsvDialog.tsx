@@ -378,14 +378,29 @@ export default function ImportCsvDialog({ open, onOpenChange, onImported }: Impo
     // first row whose cells map to ≥3 known canonical columns.
     let headerRowIdx = 0;
     let bestRecognized = 0;
+    let bestHasName = false;
     for (let i = 0; i < Math.min(rows.length, 10); i++) {
       const cells = rows[i] || [];
-      const recognized = cells.reduce((n: number, h: any) => n + (canonicalHeader(String(h ?? '')) ? 1 : 0), 0);
-      if (recognized > bestRecognized) {
+      let recognized = 0;
+      let hasName = false;
+      cells.forEach((h: any) => {
+        const k = canonicalHeader(String(h ?? ''));
+        if (k) {
+          recognized += 1;
+          if (k === 'name') hasName = true;
+        }
+      });
+      // Prefer rows that include the canonical "name" column. Only fall back to
+      // a name-less row if no candidate row contains it.
+      const better = hasName === bestHasName
+        ? recognized > bestRecognized
+        : hasName && !bestHasName;
+      if (better) {
         bestRecognized = recognized;
+        bestHasName = hasName;
         headerRowIdx = i;
       }
-      if (recognized >= 3) break;
+      if (hasName && recognized >= 3) break;
     }
 
     // Build header → canonical-key map by alias matching. Unknown columns are ignored.
