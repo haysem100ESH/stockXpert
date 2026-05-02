@@ -432,6 +432,16 @@ export default function ImportCsvDialog({ open, onOpenChange, onImported }: Impo
     const out: ParsedRow[] = [];
     let groupCarry: string | null = null; // GROUP cell only filled on first row of a group
 
+    // Helper: which "data" columns (beyond medicine_group/strength/generic_name)
+    // carry meaningful values? Used to decide whether a name-less row is just a
+    // continuation/blank vs an attempt at a new item.
+    const hasItemData = (cells: any[]): boolean => {
+      const dataKeys = ['category', 'manufacturer', 'batch_number', 'item_type', 'unit_label',
+        'packaging_mode', 'strips_per_pack', 'units_per_strip', 'units_per_pack',
+        'purchase_price', 'selling_price', 'stock_quantity', 'minimum_stock_level', 'expiry_date'];
+      return dataKeys.some(k => get(cells, k) !== '');
+    };
+
     for (let r = headerRowIdx + 1; r < rows.length; r++) {
       const cells = rows[r] || [];
       if (!cells.some((c: any) => c != null && String(c).trim() !== '')) continue; // blank row
@@ -439,23 +449,34 @@ export default function ImportCsvDialog({ open, onOpenChange, onImported }: Impo
 
       const name = get(cells, 'name');
       const generic_name_raw = get(cells, 'generic_name');
+      const strengthRaw = getRaw(cells, 'strength');
       const groupCell = get(cells, 'medicine_group');
       if (groupCell) groupCarry = groupCell;
 
-      // Pharmacy hierarchy: empty NAME but ingredient continuation
+      // Pharmacy hierarchy: a name-less row is treated as an ingredient
+      // continuation of the previous medicine — as long as it does NOT
+      // carry standalone item data (price/qty/etc.). This makes the parser
+      // tolerant of stray cells (a leftover group label, an empty manufacturer
+      // string, etc.) that would otherwise be misread as a new item.
       if (isPharmacy && !name) {
-        if (!generic_name_raw) continue; // truly blank
-        const parent = out[out.length - 1];
-        if (!parent) {
-          errs.push(`Row ${r + 1}: ingredient row "${generic_name_raw}" has no parent medicine above it.`);
+        const isContinuation = !hasItemData(cells);
+        if (isContinuation) {
+          if (!generic_name_raw && (strengthRaw == null || String(strengthRaw).trim() === '')) {
+            continue; // truly blank — ignore
+          }
+          const parent = out[out.length - 1];
+          if (!parent) {
+            errs.push(`Row ${r + 1}: ingredient row "${generic_name_raw || normalizeStrength(strengthRaw) || ''}" has no parent medicine above it. Put a NAME OF ITEMS on the row above, or remove this row.`);
+            continue;
+          }
+          parent.active_ingredients.push({
+            rowIndex: r + 1,
+            ingredient_name: generic_name_raw || '(unnamed)',
+            strength: normalizeStrength(strengthRaw),
+          });
           continue;
         }
-        parent.active_ingredients.push({
-          rowIndex: r + 1,
-          ingredient_name: generic_name_raw,
-          strength: normalizeStrength(getRaw(cells, 'strength')),
-        });
-        continue;
+        // Falls through: row clearly tries to be a new item but is missing NAME.
       }
 
       if (!name) rowErrors.push('column "NAME OF ITEMS" is empty (required)');
