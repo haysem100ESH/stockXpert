@@ -544,8 +544,8 @@ export default function ImportCsvDialog({ open, onOpenChange, onImported }: Impo
       const medicine_group = isPharmacy ? (groupCell || groupCarry || null) : null;
       const strength = isPharmacy ? normalizeStrength(getRaw(cells, 'strength')) : null;
 
-      const key = `${name.toLowerCase()}|${(manufacturer || '').toLowerCase()}`;
-      if (seenInFile.has(key)) rowErrors.push(`duplicate of another row in this file (same NAME OF ITEMS "${name}" + manufacturer)`);
+      const key = `${name.toLowerCase()}|${(manufacturer || '').toLowerCase()}|${(strength || '').toLowerCase()}|${(batch_number || '').toLowerCase()}`;
+      if (seenInFile.has(key)) rowErrors.push(`duplicate of another row in this file (same NAME OF ITEMS "${name}", manufacturer "${manufacturer || '—'}", strength "${strength || '—'}", BATCH NO "${batch_number || '—'}"). If these are different items, set a different STRENGTH, BATCH NO, or MANUFACTURER to distinguish them.`);
       seenInFile.add(key);
       const isDuplicate = name ? existingKey.has(key) : false;
 
