@@ -231,6 +231,30 @@ export default function ImportCsvDialog({ open, onOpenChange, onImported }: Impo
       const rowErrors: string[] = [];
 
       const name = get('name');
+      const generic_name_raw = get('generic_name');
+
+      // ---------------------------------------------------------------
+      // PHARMACY HIERARCHY: a row with empty NAME but a generic_name is
+      // an active-ingredient continuation of the previous medicine.
+      // ---------------------------------------------------------------
+      if (isPharmacy && !name) {
+        if (!generic_name_raw) {
+          // Truly blank row → ignore silently
+          continue;
+        }
+        const parent = out[out.length - 1];
+        if (!parent) {
+          errs.push(`Row ${r + 1}: ingredient row "${generic_name_raw}" has no parent medicine above it.`);
+          continue;
+        }
+        parent.active_ingredients.push({
+          rowIndex: r + 1,
+          ingredient_name: generic_name_raw,
+          strength: get('strength') || null,
+        });
+        continue;
+      }
+
       if (!name) rowErrors.push('name is required');
 
       const category = get('category') || (isPharmacy ? 'tablet' : 'other');
@@ -291,7 +315,7 @@ export default function ImportCsvDialog({ open, onOpenChange, onImported }: Impo
         else expiry_date = expiryRaw;
       }
 
-      const generic_name = get('generic_name') || null;
+      const generic_name = generic_name_raw || null;
       const manufacturer = get('manufacturer') || null;
       const batch_number = get('batch_number') || null;
       // Pharmacy-only optional fields
@@ -302,6 +326,18 @@ export default function ImportCsvDialog({ open, onOpenChange, onImported }: Impo
       if (seenInFile.has(key)) rowErrors.push('Duplicate row in CSV (same name + manufacturer)');
       seenInFile.add(key);
       const isDuplicate = name ? existingKey.has(key) : false;
+
+      // Seed active_ingredients with the first ingredient (the medicine's own
+      // generic_name + strength), so "Snip / Paracetamol 325mg" becomes the
+      // first ingredient automatically.
+      const initialIngredients: ActiveIngredient[] = [];
+      if (isPharmacy && generic_name_raw) {
+        initialIngredients.push({
+          rowIndex: r + 1,
+          ingredient_name: generic_name_raw,
+          strength: strength,
+        });
+      }
 
       out.push({
         rowIndex: r + 1,
@@ -326,6 +362,7 @@ export default function ImportCsvDialog({ open, onOpenChange, onImported }: Impo
         expiry_date,
         medicine_group,
         strength,
+        active_ingredients: initialIngredients,
       });
     }
 
