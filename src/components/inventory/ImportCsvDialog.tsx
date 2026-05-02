@@ -479,6 +479,17 @@ export default function ImportCsvDialog({ open, onOpenChange, onImported }: Impo
             await supabase.from('grouped_item_members').insert({ group_id: groupId, medicine_id: medicineId });
           }
 
+          // Persist active ingredients (pharmacy hierarchical composition)
+          if (isPharmacy && medicineId && row.active_ingredients.length > 0) {
+            const ingredientRows = row.active_ingredients.map((ing, i) => ({
+              medicine_id: medicineId,
+              ingredient_name: ing.ingredient_name,
+              strength: ing.strength,
+              sort_order: i,
+            }));
+            await (supabase as any).from('medicine_active_ingredients').insert(ingredientRows);
+          }
+
           // Create branch_item
           const { data: newBI, error: biErr } = await supabase.from('branch_items').insert({
             owner_id: ownerId,
