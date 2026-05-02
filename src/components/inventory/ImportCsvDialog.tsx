@@ -417,13 +417,13 @@ export default function ImportCsvDialog({ open, onOpenChange, onImported }: Impo
       return i === undefined ? '' : cells[i];
     };
 
-    // Fetch existing medicines (catalog) to detect duplicates by name+manufacturer
+    // Fetch existing medicines (catalog) to detect duplicates by name+manufacturer+strength+batch
     const { data: existingMeds } = await supabase
       .from('medicines')
-      .select('id, name, manufacturer, batch_number');
+      .select('id, name, manufacturer, batch_number, strength');
     const existingKey = new Set<string>();
     (existingMeds || []).forEach((m: any) => {
-      existingKey.add(`${(m.name || '').toLowerCase().trim()}|${(m.manufacturer || '').toLowerCase().trim()}`);
+      existingKey.add(`${(m.name || '').toLowerCase().trim()}|${(m.manufacturer || '').toLowerCase().trim()}|${(m.strength || '').toLowerCase().trim()}|${(m.batch_number || '').toLowerCase().trim()}`);
     });
 
     const seenInFile = new Set<string>();
