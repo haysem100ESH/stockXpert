@@ -672,10 +672,17 @@ export default function ImportCsvDialog({ open, onOpenChange, onImported }: Impo
         if (og && og.length > 0) {
           groupId = og[0].group_id;
         } else {
-          const { data: newGroup } = await supabase.from('grouped_items')
-            .insert({ name: 'Imported Items', business_type: isPharmacy ? 'pharmacy' : 'general' })
+          const { data: { user: gUser } } = await supabase.auth.getUser();
+          const { data: newGroup, error: groupErr } = await supabase.from('grouped_items')
+            .insert({
+              group_name: 'Imported Items',
+              business_type: isPharmacy ? 'pharmacy' : 'general',
+              created_by: gUser?.id ?? null,
+            })
             .select('id').single();
-          if (newGroup) {
+          if (groupErr) {
+            console.warn('Could not create owner group (non-fatal):', groupErr.message);
+          } else if (newGroup) {
             groupId = newGroup.id;
             await supabase.from('owner_item_groups').insert({ owner_id: ownerId, group_id: groupId });
           }

@@ -156,7 +156,7 @@ export default function CreateCustomItemDialog({ open, onOpenChange, onItemCreat
           // Create a default group for this owner
           const { data: newGroup, error: groupErr } = await supabase
             .from('grouped_items')
-            .insert({ name: 'Custom Items', business_type: branchType === 'pharmacy' ? 'pharmacy' : 'general' })
+            .insert({ group_name: 'Custom Items', business_type: branchType === 'pharmacy' ? 'pharmacy' : 'general' })
             .select('id')
             .single();
 
