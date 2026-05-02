@@ -453,7 +453,7 @@ export default function ImportCsvDialog({ open, onOpenChange, onImported }: Impo
       })();
       const unit_label = inferUnitLabel(item_type, unitLabelRaw, packagingRaw);
       if (item_type === 'measurable' && !MEASURABLE_UNITS.includes(unit_label as any)) {
-        rowErrors.push(`unit_label "${unit_label}" must be one of: ${MEASURABLE_UNITS.join(', ')}`);
+        rowErrors.push(`column "UNIT By LABEL" = "${unit_label}" is invalid for a measurable item — use one of: ${MEASURABLE_UNITS.join(', ')}`);
       }
 
       // Packaging: accept canonical (with_strip/no_strip) OR real-world like "3*10".
