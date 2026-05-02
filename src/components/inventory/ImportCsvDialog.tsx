@@ -440,7 +440,7 @@ export default function ImportCsvDialog({ open, onOpenChange, onImported }: Impo
         continue;
       }
 
-      if (!name) rowErrors.push('name is required');
+      if (!name) rowErrors.push('column "NAME OF ITEMS" is empty (required)');
 
       const itemTypeRaw = get(cells, 'item_type');
       const unitLabelRaw = get(cells, 'unit_label');
