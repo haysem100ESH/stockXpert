@@ -163,8 +163,16 @@ export default function StaffInventoryWithActions() {
 
   const isOutOfStock = (item: BranchItem) => item.quantity === 0;
   const isLowStock = (item: BranchItem) => item.quantity > 0 && item.quantity <= 10;
-  const getUniqueCategories = () => [...new Set(branchItems.map(i => i.category))].sort();
-  const getUniqueGroups = () => [...new Set(branchItems.map((i: any) => i.medicine_group).filter(Boolean))].sort() as string[];
+  const uniqueCategories = useMemo(
+    () => [...new Set(branchItems.map((i: any) => i.category).filter(Boolean))].sort() as string[],
+    [branchItems]
+  );
+  const uniqueGroups = useMemo(
+    () => [...new Set(branchItems.map((i: any) => i.medicine_group).filter(Boolean))].sort() as string[],
+    [branchItems]
+  );
+  const getUniqueCategories = () => uniqueCategories;
+  const getUniqueGroups = () => uniqueGroups;
 
   const isExpired = (item: BranchItem) => {
     if (!item.expiry_date) return false;
