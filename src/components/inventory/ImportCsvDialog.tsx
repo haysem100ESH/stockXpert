@@ -19,6 +19,12 @@ interface ImportCsvDialogProps {
   onImported: () => void;
 }
 
+interface ActiveIngredient {
+  rowIndex: number;
+  ingredient_name: string;
+  strength: string | null;
+}
+
 interface ParsedRow {
   rowIndex: number;
   raw: Record<string, string>;
@@ -44,6 +50,8 @@ interface ParsedRow {
   // Pharmacy-only (optional)
   medicine_group: string | null;
   strength: string | null;
+  // Pharmacy hierarchical composition (rows with empty name attach here)
+  active_ingredients: ActiveIngredient[];
 }
 
 const HEADERS = [
@@ -74,10 +82,16 @@ const OPTIONAL_HEADERS = new Set(['medicine_group', 'strength']);
 // name, generic_name, medicine_group, strength, category, manufacturer, batch_number,
 // item_type, unit_label, packaging_mode, strips_per_pack, units_per_strip, units_per_pack,
 // purchase_price, selling_price, stock_quantity, minimum_stock_level, expiry_date
+// Pharmacy template demonstrates hierarchical composition:
+//   - Row with NAME OF ITEMS filled = new medicine
+//   - Subsequent rows with empty NAME OF ITEMS = active ingredients of the
+//     previous medicine (only generic_name + optional strength matter)
 const SAMPLE_PHARMACY = [
-  ['Paracetamol',      'Acetaminophen', 'NSAIDS and anti-pain', '500mg',    'tablet',  'GSK',        'BN-001',      'full_pcs',   'strip',  'with_strip', '10', '10', '',  '5.00',  '8.50',  '20',  '5',  '2026-12-31'],
-  ['Amoxicillin Syrup','Amoxicillin',   'Antibiotics',          '250mg/5ml','syrup',   'Pfizer',     'BN-AMX-2026', 'full_pcs',   'bottle', 'no_strip',   '',   '',   '1', '45.00', '70.00', '15',  '3',  '2026-08-15'],
-  ['Cough Drops',      '',              '',                     '',         'tablet',  'Halls',      '',            'full_pcs',   'piece',  'no_strip',   '',   '',   '',  '0.50',  '1.00',  '100', '20', ''],
+  ['Snip',             'Paracetamol',                 'NSAIDS and anti-pain', '325mg',    'tablet',  'Local Pharma','BN-SNIP-01',  'full_pcs',   'strip',  'with_strip', '10', '10', '',  '3.00',  '5.00',  '50',  '10', '2027-06-30'],
+  ['',                 'Pseudoephedrine Hydrochloride','',                    '15mg',     '',        '',           '',            '',           '',       '',           '',   '',   '',  '',      '',      '',    '',   ''],
+  ['',                 'Chlorophenaramine maleate',   '',                     '1mg',      '',        '',           '',            '',           '',       '',           '',   '',   '',  '',      '',      '',    '',   ''],
+  ['Etricox 90mg',     'Etoricoxib',                  'NSAIDS and anti-pain', '90mg',     'tablet',  'Pharmacare', 'BN-ETR-09',   'full_pcs',   'strip',  'with_strip', '3',  '10', '',  '12.00', '20.00', '30',  '5',  '2026-12-31'],
+  ['Amoxicillin Syrup','Amoxicillin',                 'Antibiotics',          '250mg/5ml','syrup',   'Pfizer',     'BN-AMX-2026', 'full_pcs',   'bottle', 'no_strip',   '',   '',   '1', '45.00', '70.00', '15',  '3',  '2026-08-15'],
 ];
 
 const SAMPLE_GENERAL = [
@@ -217,6 +231,30 @@ export default function ImportCsvDialog({ open, onOpenChange, onImported }: Impo
       const rowErrors: string[] = [];
 
       const name = get('name');
+      const generic_name_raw = get('generic_name');
+
+      // ---------------------------------------------------------------
+      // PHARMACY HIERARCHY: a row with empty NAME but a generic_name is
+      // an active-ingredient continuation of the previous medicine.
+      // ---------------------------------------------------------------
+      if (isPharmacy && !name) {
+        if (!generic_name_raw) {
+          // Truly blank row → ignore silently
+          continue;
+        }
+        const parent = out[out.length - 1];
+        if (!parent) {
+          errs.push(`Row ${r + 1}: ingredient row "${generic_name_raw}" has no parent medicine above it.`);
+          continue;
+        }
+        parent.active_ingredients.push({
+          rowIndex: r + 1,
+          ingredient_name: generic_name_raw,
+          strength: get('strength') || null,
+        });
+        continue;
+      }
+
       if (!name) rowErrors.push('name is required');
 
       const category = get('category') || (isPharmacy ? 'tablet' : 'other');
@@ -277,7 +315,7 @@ export default function ImportCsvDialog({ open, onOpenChange, onImported }: Impo
         else expiry_date = expiryRaw;
       }
 
-      const generic_name = get('generic_name') || null;
+      const generic_name = generic_name_raw || null;
       const manufacturer = get('manufacturer') || null;
       const batch_number = get('batch_number') || null;
       // Pharmacy-only optional fields
@@ -288,6 +326,18 @@ export default function ImportCsvDialog({ open, onOpenChange, onImported }: Impo
       if (seenInFile.has(key)) rowErrors.push('Duplicate row in CSV (same name + manufacturer)');
       seenInFile.add(key);
       const isDuplicate = name ? existingKey.has(key) : false;
+
+      // Seed active_ingredients with the first ingredient (the medicine's own
+      // generic_name + strength), so "Snip / Paracetamol 325mg" becomes the
+      // first ingredient automatically.
+      const initialIngredients: ActiveIngredient[] = [];
+      if (isPharmacy && generic_name_raw) {
+        initialIngredients.push({
+          rowIndex: r + 1,
+          ingredient_name: generic_name_raw,
+          strength: strength,
+        });
+      }
 
       out.push({
         rowIndex: r + 1,
@@ -312,6 +362,7 @@ export default function ImportCsvDialog({ open, onOpenChange, onImported }: Impo
         expiry_date,
         medicine_group,
         strength,
+        active_ingredients: initialIngredients,
       });
     }
 
@@ -428,6 +479,17 @@ export default function ImportCsvDialog({ open, onOpenChange, onImported }: Impo
             await supabase.from('grouped_item_members').insert({ group_id: groupId, medicine_id: medicineId });
           }
 
+          // Persist active ingredients (pharmacy hierarchical composition)
+          if (isPharmacy && medicineId && row.active_ingredients.length > 0) {
+            const ingredientRows = row.active_ingredients.map((ing, i) => ({
+              medicine_id: medicineId,
+              ingredient_name: ing.ingredient_name,
+              strength: ing.strength,
+              sort_order: i,
+            }));
+            await (supabase as any).from('medicine_active_ingredients').insert(ingredientRows);
+          }
+
           // Create branch_item
           const { data: newBI, error: biErr } = await supabase.from('branch_items').insert({
             owner_id: ownerId,
@@ -516,6 +578,9 @@ export default function ImportCsvDialog({ open, onOpenChange, onImported }: Impo
                 <p><strong>item_type:</strong> <code>full_pcs</code> or <code>measurable</code>.</p>
                 <p><strong>packaging_mode:</strong> <code>no_strip</code> or <code>with_strip</code>. If <code>with_strip</code>, fill <code>strips_per_pack</code> and <code>units_per_strip</code>.</p>
                 <p><strong>Measurable units:</strong> {MEASURABLE_UNITS.join(', ')}. Date format: YYYY-MM-DD.</p>
+                {isPharmacy && (
+                  <p className="pt-1 border-t mt-1"><strong>💊 Pharmacy composition:</strong> Leave <code>name</code> empty on a row to add it as an <em>active ingredient</em> of the medicine on the row above. Use <code>generic_name</code> + <code>strength</code> for each ingredient. See template for example (Snip → Paracetamol + Pseudoephedrine + Chlorophenaramine).</p>
+                )}
               </AlertDescription>
             </Alert>
 
@@ -642,7 +707,14 @@ export default function ImportCsvDialog({ open, onOpenChange, onImported }: Impo
                     {parsedRows.slice(0, 50).map(r => (
                       <tr key={r.rowIndex} className="border-t">
                         <td className="p-2">{r.rowIndex}</td>
-                        <td className="p-2">{r.name || <span className="text-destructive">—</span>}</td>
+                        <td className="p-2">
+                          {r.name || <span className="text-destructive">—</span>}
+                          {isPharmacy && r.active_ingredients.length > 0 && (
+                            <div className="text-[10px] text-muted-foreground mt-0.5">
+                              Contains: {r.active_ingredients.map(i => i.ingredient_name + (i.strength ? ` ${i.strength}` : '')).join(' + ')}
+                            </div>
+                          )}
+                        </td>
                         <td className="p-2">{r.item_type}{r.packaging_mode === 'with_strip' && ' (strip)'}</td>
                         <td className="p-2">{r.stock_quantity} {r.unit_label}</td>
                         <td className="p-2">{r.purchase_price} / {r.selling_price}</td>

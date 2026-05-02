@@ -26,6 +26,7 @@ export type EnrichedBranchItem = BranchItem & {
   branch_name?: string;
   medicine_group?: string | null;
   strength?: string | null;
+  active_ingredients?: Array<{ ingredient_name: string; strength: string | null }>;
 };
 
 interface FetchArgs {
@@ -48,7 +49,7 @@ async function fetchBranchInventory({ branchIds }: FetchArgs): Promise<EnrichedB
   const medicineIds = [...new Set(items.map((i: any) => i.medicine_id))];
   const allBranchIds = [...new Set(items.map((i: any) => i.branch_id))];
 
-  const [medsRes, branchesRes] = await Promise.all([
+  const [medsRes, branchesRes, ingredientsRes] = await Promise.all([
     supabase
       .from('medicines')
       .select('id, name, generic_name, category, manufacturer, batch_number, item_type, unit_label, units_per_pack, strips_per_pack, units_per_strip, medicine_group, strength')
@@ -57,12 +58,22 @@ async function fetchBranchInventory({ branchIds }: FetchArgs): Promise<EnrichedB
       .from('pharmacy_branches')
       .select('id, name')
       .in('id', allBranchIds),
+    (supabase as any)
+      .from('medicine_active_ingredients')
+      .select('medicine_id, ingredient_name, strength, sort_order')
+      .in('medicine_id', medicineIds)
+      .order('sort_order'),
   ]);
 
   const medMap: Record<string, any> = {};
   (medsRes.data || []).forEach((m: any) => { medMap[m.id] = m; });
   const branchMap: Record<string, string> = {};
   (branchesRes.data || []).forEach((b: any) => { branchMap[b.id] = b.name; });
+  const ingMap: Record<string, Array<{ ingredient_name: string; strength: string | null }>> = {};
+  ((ingredientsRes as any).data || []).forEach((i: any) => {
+    if (!ingMap[i.medicine_id]) ingMap[i.medicine_id] = [];
+    ingMap[i.medicine_id].push({ ingredient_name: i.ingredient_name, strength: i.strength });
+  });
 
   return items.map((item: any) => {
     const med = medMap[item.medicine_id] || {};
@@ -80,6 +91,7 @@ async function fetchBranchInventory({ branchIds }: FetchArgs): Promise<EnrichedB
       units_per_strip: med.units_per_strip,
       medicine_group: med.medicine_group,
       strength: med.strength,
+      active_ingredients: ingMap[item.medicine_id] || [],
       branch_name: branchMap[item.branch_id],
     } as EnrichedBranchItem;
   });

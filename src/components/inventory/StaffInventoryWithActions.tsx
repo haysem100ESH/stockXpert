@@ -82,10 +82,13 @@ export default function StaffInventoryWithActions() {
     const medicineCategories = ['tablet', 'capsule', 'syrup', 'injection', 'cream', 'ointment', 'drops', 'inhaler'];
     const term = searchTerm.toLowerCase();
     return branchItems.filter((item: any) => {
+      const ingredientsText = (item.active_ingredients || [])
+        .map((i: any) => i.ingredient_name).join(' ').toLowerCase();
       const matchesSearch = item.name.toLowerCase().includes(term) ||
         (item.generic_name || '').toLowerCase().includes(term) ||
         (item.strength || '').toLowerCase().includes(term) ||
-        (item.medicine_group || '').toLowerCase().includes(term);
+        (item.medicine_group || '').toLowerCase().includes(term) ||
+        ingredientsText.includes(term);
       let matchesCategory = true;
       if (categoryFilter === 'medicines_only') {
         matchesCategory = medicineCategories.includes(item.category);
@@ -179,7 +182,7 @@ export default function StaffInventoryWithActions() {
     return new Date(item.expiry_date) <= thirtyDaysFromNow;
   };
 
-  const renderItemCard = (item: BranchItem & { branch_name?: string; medicine_group?: string | null; strength?: string | null }) => (
+  const renderItemCard = (item: BranchItem & { branch_name?: string; medicine_group?: string | null; strength?: string | null; active_ingredients?: Array<{ ingredient_name: string; strength: string | null }> }) => (
     <Card key={item.id} className={isExpired(item) ? 'border-destructive/30 bg-destructive/5' : ''}>
       <CardHeader>
         <div className="flex justify-between items-start">
@@ -199,6 +202,19 @@ export default function StaffInventoryWithActions() {
         <div className="space-y-2">
           <div className="flex justify-between text-sm"><span>Category:</span><Badge variant="outline">{item.category}</Badge></div>
           {isPharmacy && item.medicine_group && <div className="flex justify-between text-sm"><span>Group:</span><Badge variant="secondary" className="text-xs">{item.medicine_group}</Badge></div>}
+          {isPharmacy && item.active_ingredients && item.active_ingredients.length > 0 && (
+            <div className="text-xs bg-muted/50 rounded-md p-2 space-y-0.5">
+              <div className="font-medium text-muted-foreground">Contains:</div>
+              <div className="text-foreground">
+                {item.active_ingredients.map((ing, i) => (
+                  <span key={i}>
+                    {i > 0 && ' + '}
+                    {ing.ingredient_name}{ing.strength ? ` ${ing.strength}` : ''}
+                  </span>
+                ))}
+              </div>
+            </div>
+          )}
           {isPharmacy && formatPackaging(item.strips_per_pack, item.units_per_strip, item.units_per_pack) && <div className="flex justify-between text-sm"><span>Packaging:</span><span className="font-mono text-xs">{formatPackaging(item.strips_per_pack, item.units_per_strip, item.units_per_pack)}</span></div>}
           {isPharmacy && item.batch_number && <div className="flex justify-between text-sm"><span>Batch:</span><span>{item.batch_number}</span></div>}
           {item.manufacturer && <div className="flex justify-between text-sm"><span>{isPharmacy ? 'Manufacturer' : 'Brand'}:</span><span>{item.manufacturer}</span></div>}
