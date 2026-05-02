@@ -36,12 +36,13 @@ interface FetchArgs {
 async function fetchBranchInventory({ branchIds }: FetchArgs): Promise<EnrichedBranchItem[]> {
   if (branchIds.length === 0) return [];
 
-  // 1. Fetch branch_items, medicines, and branch names in parallel where possible.
+  // 1. Fetch branch_items (explicit range to bypass Supabase's default 1000-row cap).
   const { data: items, error } = await supabase
     .from('branch_items')
     .select('id, medicine_id, branch_id, owner_id, selling_price, purchase_price, quantity, expiry_date')
     .in('branch_id', branchIds)
-    .order('created_at', { ascending: false });
+    .order('created_at', { ascending: false })
+    .range(0, 49999);
 
   if (error) throw error;
   if (!items || items.length === 0) return [];
@@ -49,21 +50,47 @@ async function fetchBranchInventory({ branchIds }: FetchArgs): Promise<EnrichedB
   const medicineIds = [...new Set(items.map((i: any) => i.medicine_id))];
   const allBranchIds = [...new Set(items.map((i: any) => i.branch_id))];
 
-  const [medsRes, branchesRes, ingredientsRes] = await Promise.all([
-    supabase
-      .from('medicines')
-      .select('id, name, generic_name, category, manufacturer, batch_number, item_type, unit_label, units_per_pack, strips_per_pack, units_per_strip, medicine_group, strength')
-      .in('id', medicineIds),
-    supabase
-      .from('pharmacy_branches')
-      .select('id, name')
-      .in('id', allBranchIds),
-    (supabase as any)
-      .from('medicine_active_ingredients')
-      .select('medicine_id, ingredient_name, strength, sort_order')
-      .in('medicine_id', medicineIds)
-      .order('sort_order'),
+  // Helper: chunk .in() lookups so URLs stay short and we never hit row caps.
+  const CHUNK = 200;
+  const chunk = <T,>(arr: T[]): T[][] => {
+    const out: T[][] = [];
+    for (let i = 0; i < arr.length; i += CHUNK) out.push(arr.slice(i, i + CHUNK));
+    return out;
+  };
+
+  const medChunks = chunk(medicineIds);
+  const branchChunks = chunk(allBranchIds);
+
+  const [medArrays, branchArrays, ingArrays] = await Promise.all([
+    Promise.all(medChunks.map((ids) =>
+      supabase
+        .from('medicines')
+        .select('id, name, generic_name, category, manufacturer, batch_number, item_type, unit_label, units_per_pack, strips_per_pack, units_per_strip, medicine_group, strength')
+        .in('id', ids)
+        .range(0, 9999)
+        .then((r: any) => r.data || [])
+    )),
+    Promise.all(branchChunks.map((ids) =>
+      supabase
+        .from('pharmacy_branches')
+        .select('id, name')
+        .in('id', ids)
+        .then((r: any) => r.data || [])
+    )),
+    Promise.all(medChunks.map((ids) =>
+      (supabase as any)
+        .from('medicine_active_ingredients')
+        .select('medicine_id, ingredient_name, strength, sort_order')
+        .in('medicine_id', ids)
+        .order('sort_order')
+        .range(0, 49999)
+        .then((r: any) => r.data || [])
+    )),
   ]);
+
+  const medsRes = { data: medArrays.flat() };
+  const branchesRes = { data: branchArrays.flat() };
+  const ingredientsRes = { data: ingArrays.flat() };
 
   const medMap: Record<string, any> = {};
   (medsRes.data || []).forEach((m: any) => { medMap[m.id] = m; });
