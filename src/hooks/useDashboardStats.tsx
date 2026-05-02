@@ -84,51 +84,54 @@ async function fetchDashboardOverview({ selectedBranch, ownerBranchIds, dateFilt
   const now = new Date();
   const startDate = getStartDate(dateFilter);
 
-  // Build all primary queries
-  let salesQuery = supabase.from('sales')
-    .select('total_amount, payment_method, discount_amount, branch_id, created_at')
-    .gte('created_at', startDate.toISOString())
-    .lte('created_at', now.toISOString());
-  let branchItemsQuery = supabase.from('branch_items')
-    .select('id, quantity, expiry_date, medicines!inner(category, minimum_stock_level)');
-  let saleItemsQuery = supabase.from('sale_items')
-    .select('quantity, sales!inner(branch_id, created_at)')
-    .gte('sales.created_at', startDate.toISOString())
-    .lte('sales.created_at', now.toISOString());
+  // Build all primary queries.
+  // NOTE: explicit .range() is required to bypass Supabase's default 1000-row cap,
+  // which silently truncates results for owners with hundreds of items / sales.
+  // We also dropped the redundant `salesQuery` — `salesWithItemsQuery` returns the
+  // same rows plus the joined sale_items, so one round-trip is enough.
   let salesWithItemsQuery = supabase.from('sales')
-    .select('*, sale_items (quantity, medicine_id, medicines (name, category))')
+    .select('id, total_amount, payment_method, discount_amount, branch_id, created_at, sale_items(quantity, medicines(name, category))')
     .gte('created_at', startDate.toISOString())
-    .lte('created_at', now.toISOString());
-  let custQuery = supabase.from('customers').select('id, credit_score, max_credit_limit, branch_id');
-  let salesDebtQuery = supabase.from('sales').select('total_amount, amount_paid, customer_id, branch_id').not('customer_id', 'is', null);
+    .lte('created_at', now.toISOString())
+    .range(0, 49999);
+  let branchItemsQuery = supabase.from('branch_items')
+    .select('id, quantity, expiry_date, medicines!inner(category, minimum_stock_level)')
+    .range(0, 49999);
+  let custQuery = supabase.from('customers')
+    .select('id, credit_score, max_credit_limit, branch_id')
+    .range(0, 9999);
+  let salesDebtQuery = supabase.from('sales')
+    .select('total_amount, amount_paid, customer_id, branch_id')
+    .not('customer_id', 'is', null)
+    .range(0, 49999);
 
   if (selectedBranch) {
-    salesQuery = salesQuery.eq('branch_id', selectedBranch);
     branchItemsQuery = branchItemsQuery.eq('branch_id', selectedBranch);
-    saleItemsQuery = saleItemsQuery.eq('sales.branch_id', selectedBranch);
     salesWithItemsQuery = salesWithItemsQuery.eq('branch_id', selectedBranch);
     custQuery = custQuery.eq('branch_id', selectedBranch);
     salesDebtQuery = salesDebtQuery.eq('branch_id', selectedBranch);
   } else if (ownerBranchIds.length > 0) {
-    salesQuery = salesQuery.in('branch_id', ownerBranchIds);
     branchItemsQuery = branchItemsQuery.in('branch_id', ownerBranchIds);
-    saleItemsQuery = saleItemsQuery.in('sales.branch_id', ownerBranchIds);
     salesWithItemsQuery = salesWithItemsQuery.in('branch_id', ownerBranchIds);
     custQuery = custQuery.in('branch_id', ownerBranchIds);
     salesDebtQuery = salesDebtQuery.in('branch_id', ownerBranchIds);
   }
 
-  // Fire all 6 queries in parallel
-  const [salesRes, branchItemsRes, saleItemsRes, salesWithItemsRes, custRes, salesDebtRes] = await Promise.all([
-    salesQuery, branchItemsQuery, saleItemsQuery, salesWithItemsQuery, custQuery, salesDebtQuery,
+  // Fire all 4 queries in parallel.
+  const [branchItemsRes, salesWithItemsRes, custRes, salesDebtRes] = await Promise.all([
+    branchItemsQuery, salesWithItemsQuery, custQuery, salesDebtQuery,
   ]);
 
-  const salesData = salesRes.data || [];
   const branchItemsData = branchItemsRes.data || [];
-  const saleItemsData = saleItemsRes.data || [];
   const salesWithItems = salesWithItemsRes.data || [];
   const custData = custRes.data || [];
   const salesDebt = salesDebtRes.data || [];
+
+  // Derive flat sales list + sale items from the consolidated query.
+  const salesData = salesWithItems;
+  const saleItemsData: any[] = [];
+  salesWithItems.forEach((s: any) => (s.sale_items || []).forEach((si: any) => saleItemsData.push(si)));
+
 
   // Stats
   const totalRevenue = salesData.reduce((sum, s: any) => sum + Number(s.total_amount), 0);
