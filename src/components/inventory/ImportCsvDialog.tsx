@@ -82,10 +82,16 @@ const OPTIONAL_HEADERS = new Set(['medicine_group', 'strength']);
 // name, generic_name, medicine_group, strength, category, manufacturer, batch_number,
 // item_type, unit_label, packaging_mode, strips_per_pack, units_per_strip, units_per_pack,
 // purchase_price, selling_price, stock_quantity, minimum_stock_level, expiry_date
+// Pharmacy template demonstrates hierarchical composition:
+//   - Row with NAME OF ITEMS filled = new medicine
+//   - Subsequent rows with empty NAME OF ITEMS = active ingredients of the
+//     previous medicine (only generic_name + optional strength matter)
 const SAMPLE_PHARMACY = [
-  ['Paracetamol',      'Acetaminophen', 'NSAIDS and anti-pain', '500mg',    'tablet',  'GSK',        'BN-001',      'full_pcs',   'strip',  'with_strip', '10', '10', '',  '5.00',  '8.50',  '20',  '5',  '2026-12-31'],
-  ['Amoxicillin Syrup','Amoxicillin',   'Antibiotics',          '250mg/5ml','syrup',   'Pfizer',     'BN-AMX-2026', 'full_pcs',   'bottle', 'no_strip',   '',   '',   '1', '45.00', '70.00', '15',  '3',  '2026-08-15'],
-  ['Cough Drops',      '',              '',                     '',         'tablet',  'Halls',      '',            'full_pcs',   'piece',  'no_strip',   '',   '',   '',  '0.50',  '1.00',  '100', '20', ''],
+  ['Snip',             'Paracetamol',                 'NSAIDS and anti-pain', '325mg',    'tablet',  'Local Pharma','BN-SNIP-01',  'full_pcs',   'strip',  'with_strip', '10', '10', '',  '3.00',  '5.00',  '50',  '10', '2027-06-30'],
+  ['',                 'Pseudoephedrine Hydrochloride','',                    '15mg',     '',        '',           '',            '',           '',       '',           '',   '',   '',  '',      '',      '',    '',   ''],
+  ['',                 'Chlorophenaramine maleate',   '',                     '1mg',      '',        '',           '',            '',           '',       '',           '',   '',   '',  '',      '',      '',    '',   ''],
+  ['Etricox 90mg',     'Etoricoxib',                  'NSAIDS and anti-pain', '90mg',     'tablet',  'Pharmacare', 'BN-ETR-09',   'full_pcs',   'strip',  'with_strip', '3',  '10', '',  '12.00', '20.00', '30',  '5',  '2026-12-31'],
+  ['Amoxicillin Syrup','Amoxicillin',                 'Antibiotics',          '250mg/5ml','syrup',   'Pfizer',     'BN-AMX-2026', 'full_pcs',   'bottle', 'no_strip',   '',   '',   '1', '45.00', '70.00', '15',  '3',  '2026-08-15'],
 ];
 
 const SAMPLE_GENERAL = [
