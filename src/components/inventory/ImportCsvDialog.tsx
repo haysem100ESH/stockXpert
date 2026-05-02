@@ -365,18 +365,41 @@ export default function ImportCsvDialog({ open, onOpenChange, onImported }: Impo
     URL.revokeObjectURL(url);
   };
 
-  const validateAndNormalize = async (rows: string[][]): Promise<{ ok: ParsedRow[]; errs: string[] }> => {
+  const validateAndNormalize = async (rows: any[][]): Promise<{ ok: ParsedRow[]; errs: string[] }> => {
     const errs: string[] = [];
     if (rows.length < 2) {
-      return { ok: [], errs: ['CSV is empty or has no data rows.'] };
+      return { ok: [], errs: ['File is empty or has no data rows.'] };
     }
 
-    const headerRow = rows[0].map(h => h.trim().toLowerCase());
-    const missing = HEADERS.filter(h => !headerRow.includes(h) && !OPTIONAL_HEADERS.has(h));
-    if (missing.length > 0) {
-      return { ok: [], errs: [`Missing required column(s): ${missing.join(', ')}. Please use the provided template.`] };
+    // Build header → canonical-key map by alias matching. Unknown columns are ignored.
+    const rawHeaders = rows[0].map((h: any) => String(h ?? ''));
+    const headerToKey: Record<number, string> = {};
+    rawHeaders.forEach((h, i) => {
+      const k = canonicalHeader(h);
+      if (k) headerToKey[i] = k;
+    });
+    const keyIndex: Record<string, number> = {};
+    Object.entries(headerToKey).forEach(([i, k]) => {
+      if (keyIndex[k] === undefined) keyIndex[k] = +i;
+    });
+
+    // Required columns
+    const required = ['name', 'purchase_price', 'selling_price', 'stock_quantity'];
+    const missingReq = required.filter(k => keyIndex[k] === undefined);
+    if (missingReq.length > 0) {
+      return { ok: [], errs: [`Missing required column(s): ${missingReq.join(', ')}. Recognized headers: ${Object.values(headerToKey).join(', ') || '(none)'}.`] };
     }
-    const idx = (h: string) => headerRow.indexOf(h); // returns -1 if optional and absent
+    const get = (cells: any[], k: string): string => {
+      const i = keyIndex[k];
+      if (i === undefined) return '';
+      const v = cells[i];
+      if (v == null) return '';
+      return String(v).trim();
+    };
+    const getRaw = (cells: any[], k: string): any => {
+      const i = keyIndex[k];
+      return i === undefined ? '' : cells[i];
+    };
 
     // Fetch existing medicines (catalog) to detect duplicates by name+manufacturer
     const { data: existingMeds } = await supabase
@@ -389,24 +412,21 @@ export default function ImportCsvDialog({ open, onOpenChange, onImported }: Impo
 
     const seenInFile = new Set<string>();
     const out: ParsedRow[] = [];
+    let groupCarry: string | null = null; // GROUP cell only filled on first row of a group
 
     for (let r = 1; r < rows.length; r++) {
-      const cells = rows[r];
-      const get = (k: string) => (cells[idx(k)] ?? '').trim();
+      const cells = rows[r] || [];
+      if (!cells.some((c: any) => c != null && String(c).trim() !== '')) continue; // blank row
       const rowErrors: string[] = [];
 
-      const name = get('name');
-      const generic_name_raw = get('generic_name');
+      const name = get(cells, 'name');
+      const generic_name_raw = get(cells, 'generic_name');
+      const groupCell = get(cells, 'medicine_group');
+      if (groupCell) groupCarry = groupCell;
 
-      // ---------------------------------------------------------------
-      // PHARMACY HIERARCHY: a row with empty NAME but a generic_name is
-      // an active-ingredient continuation of the previous medicine.
-      // ---------------------------------------------------------------
+      // Pharmacy hierarchy: empty NAME but ingredient continuation
       if (isPharmacy && !name) {
-        if (!generic_name_raw) {
-          // Truly blank row → ignore silently
-          continue;
-        }
+        if (!generic_name_raw) continue; // truly blank
         const parent = out[out.length - 1];
         if (!parent) {
           errs.push(`Row ${r + 1}: ingredient row "${generic_name_raw}" has no parent medicine above it.`);
@@ -415,86 +435,104 @@ export default function ImportCsvDialog({ open, onOpenChange, onImported }: Impo
         parent.active_ingredients.push({
           rowIndex: r + 1,
           ingredient_name: generic_name_raw,
-          strength: get('strength') || null,
+          strength: normalizeStrength(getRaw(cells, 'strength')),
         });
         continue;
       }
 
       if (!name) rowErrors.push('name is required');
 
-      const category = get('category') || (isPharmacy ? 'tablet' : 'other');
-      const itemTypeRaw = (get('item_type') || 'full_pcs').toLowerCase();
-      const item_type: 'full_pcs' | 'measurable' = itemTypeRaw === 'measurable' ? 'measurable' : 'full_pcs';
+      const itemTypeRaw = get(cells, 'item_type');
+      const unitLabelRaw = get(cells, 'unit_label');
+      const packagingRaw = get(cells, 'packaging_mode');
 
-      const unitLabelRaw = get('unit_label').toLowerCase();
-      const unit_label = unitLabelRaw || (item_type === 'measurable' ? 'kg' : 'piece');
+      const item_type: 'full_pcs' | 'measurable' = (() => {
+        const v = itemTypeRaw.toLowerCase();
+        if (v === 'measurable' || v === 'full_pcs') return v as any;
+        return inferItemType(itemTypeRaw, unitLabelRaw);
+      })();
+      const unit_label = inferUnitLabel(item_type, unitLabelRaw, packagingRaw);
       if (item_type === 'measurable' && !MEASURABLE_UNITS.includes(unit_label as any)) {
         rowErrors.push(`unit_label "${unit_label}" must be one of: ${MEASURABLE_UNITS.join(', ')}`);
       }
 
-      const packagingRaw = (get('packaging_mode') || 'no_strip').toLowerCase();
-      const packaging_mode: 'with_strip' | 'no_strip' = packagingRaw === 'with_strip' ? 'with_strip' : 'no_strip';
-
+      // Packaging: accept canonical (with_strip/no_strip) OR real-world like "3*10".
+      let packaging_mode: 'with_strip' | 'no_strip' = 'no_strip';
       let strips_per_pack: number | null = null;
       let units_per_strip: number | null = null;
       let units_per_pack: number | null = null;
 
+      if (packagingRaw === 'with_strip' || packagingRaw === 'no_strip') {
+        packaging_mode = packagingRaw;
+      } else {
+        const parsed = parsePackagingMode(packagingRaw);
+        if (parsed.isStripLayout) {
+          packaging_mode = 'with_strip';
+          strips_per_pack = parsed.stripsPerPack;
+          units_per_strip = parsed.unitsPerStrip;
+          units_per_pack = (parsed.stripsPerPack || 0) * (parsed.unitsPerStrip || 0);
+        }
+      }
+
+      // Allow explicit columns to override / fill in
       if (item_type === 'full_pcs' && packaging_mode === 'with_strip') {
-        const sp = parseInt(get('strips_per_pack'));
-        const ups = parseInt(get('units_per_strip'));
-        if (!sp || sp < 1) rowErrors.push('strips_per_pack must be ≥ 1 when packaging_mode=with_strip');
-        if (!ups || ups < 1) rowErrors.push('units_per_strip must be ≥ 1 when packaging_mode=with_strip');
+        const sp = parseInt(get(cells, 'strips_per_pack')) || strips_per_pack;
+        const ups = parseInt(get(cells, 'units_per_strip')) || units_per_strip;
+        if (!sp || sp < 1) rowErrors.push('strips_per_pack must be ≥ 1 when packaging is strip layout');
+        if (!ups || ups < 1) rowErrors.push('units_per_strip must be ≥ 1 when packaging is strip layout');
         if (sp && ups) {
           strips_per_pack = sp;
           units_per_strip = ups;
           units_per_pack = sp * ups;
         }
       } else {
-        const upp = get('units_per_pack');
+        const upp = get(cells, 'units_per_pack');
         if (upp) {
           const v = parseInt(upp);
           if (!isNaN(v) && v >= 1) units_per_pack = v;
         }
       }
 
-      const purchaseRaw = get('purchase_price');
-      const sellingRaw = get('selling_price');
-      const purchase_price = parseFloat(purchaseRaw);
-      const selling_price = parseFloat(sellingRaw);
+      const purchaseRaw = get(cells, 'purchase_price');
+      const sellingRaw = get(cells, 'selling_price');
+      let purchase_price = parseFloat(purchaseRaw);
+      let selling_price = parseFloat(sellingRaw);
       if (!purchaseRaw || isNaN(purchase_price) || purchase_price < 0) rowErrors.push('purchase_price is required and must be ≥ 0');
       if (!sellingRaw || isNaN(selling_price) || selling_price < 0) rowErrors.push('selling_price is required and must be ≥ 0');
 
-      const stockRaw = get('stock_quantity');
+      // Per-strip → per-pack conversion (user choice: prices labeled "(strip)" → multiply by strips_per_pack)
+      if (packaging_mode === 'with_strip' && strips_per_pack && strips_per_pack > 1) {
+        if (!isNaN(purchase_price)) purchase_price = +(purchase_price * strips_per_pack).toFixed(2);
+        if (!isNaN(selling_price)) selling_price = +(selling_price * strips_per_pack).toFixed(2);
+      }
+
+      const stockRaw = get(cells, 'stock_quantity');
       const stock_quantity = item_type === 'measurable' ? parseFloat(stockRaw) : parseInt(stockRaw);
       if (!stockRaw || isNaN(stock_quantity) || stock_quantity < 0) rowErrors.push('stock_quantity is required and must be ≥ 0');
 
-      const minRaw = get('minimum_stock_level');
-      const minimum_stock_level = minRaw ? parseInt(minRaw) : 0;
-      if (minRaw && (isNaN(minimum_stock_level) || minimum_stock_level < 0)) rowErrors.push('minimum_stock_level must be ≥ 0');
+      const minRaw = get(cells, 'minimum_stock_level');
+      // accept "1 PK", "3 tubes" etc.
+      const minimum_stock_level = minRaw ? (parseLeadingInt(minRaw) ?? 0) : 0;
 
-      const expiryRaw = get('expiry_date');
-      let expiry_date: string | null = null;
-      if (expiryRaw) {
-        const d = new Date(expiryRaw);
-        if (isNaN(d.getTime())) rowErrors.push('expiry_date must be a valid date (YYYY-MM-DD)');
-        else expiry_date = expiryRaw;
+      const expRaw = getRaw(cells, 'expiry_date');
+      const expParsed = parseExpiryDate(expRaw);
+      if (expParsed.hadValue && !expParsed.valid) {
+        rowErrors.push(`expiry_date "${String(expRaw)}" is not a valid date`);
       }
+      const expiry_date = expParsed.iso;
 
       const generic_name = generic_name_raw || null;
-      const manufacturer = get('manufacturer') || null;
-      const batch_number = get('batch_number') || null;
-      // Pharmacy-only optional fields
-      const medicine_group = isPharmacy ? (get('medicine_group') || null) : null;
-      const strength = isPharmacy ? (get('strength') || null) : null;
+      const manufacturer = get(cells, 'manufacturer') || null;
+      const batch_number = get(cells, 'batch_number') || null;
+      const category = get(cells, 'category') || (isPharmacy ? 'tablet' : 'other');
+      const medicine_group = isPharmacy ? (groupCell || groupCarry || null) : null;
+      const strength = isPharmacy ? normalizeStrength(getRaw(cells, 'strength')) : null;
 
       const key = `${name.toLowerCase()}|${(manufacturer || '').toLowerCase()}`;
-      if (seenInFile.has(key)) rowErrors.push('Duplicate row in CSV (same name + manufacturer)');
+      if (seenInFile.has(key)) rowErrors.push('Duplicate row in file (same name + manufacturer)');
       seenInFile.add(key);
       const isDuplicate = name ? existingKey.has(key) : false;
 
-      // Seed active_ingredients with the first ingredient (the medicine's own
-      // generic_name + strength), so "Snip / Paracetamol 325mg" becomes the
-      // first ingredient automatically.
       const initialIngredients: ActiveIngredient[] = [];
       if (isPharmacy && generic_name_raw) {
         initialIngredients.push({
@@ -506,7 +544,7 @@ export default function ImportCsvDialog({ open, onOpenChange, onImported }: Impo
 
       out.push({
         rowIndex: r + 1,
-        raw: Object.fromEntries(headerRow.map((h, i) => [h, cells[i] ?? ''])),
+        raw: Object.fromEntries(rawHeaders.map((h, i) => [String(h), cells[i] != null ? String(cells[i]) : ''])),
         errors: rowErrors,
         isDuplicate,
         name,
