@@ -529,7 +529,7 @@ export default function ImportCsvDialog({ open, onOpenChange, onImported }: Impo
       const strength = isPharmacy ? normalizeStrength(getRaw(cells, 'strength')) : null;
 
       const key = `${name.toLowerCase()}|${(manufacturer || '').toLowerCase()}`;
-      if (seenInFile.has(key)) rowErrors.push('Duplicate row in file (same name + manufacturer)');
+      if (seenInFile.has(key)) rowErrors.push(`duplicate of another row in this file (same NAME OF ITEMS "${name}" + manufacturer)`);
       seenInFile.add(key);
       const isDuplicate = name ? existingKey.has(key) : false;
 
