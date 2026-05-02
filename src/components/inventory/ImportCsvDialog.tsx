@@ -378,14 +378,29 @@ export default function ImportCsvDialog({ open, onOpenChange, onImported }: Impo
     // first row whose cells map to ≥3 known canonical columns.
     let headerRowIdx = 0;
     let bestRecognized = 0;
+    let bestHasName = false;
     for (let i = 0; i < Math.min(rows.length, 10); i++) {
       const cells = rows[i] || [];
-      const recognized = cells.reduce((n: number, h: any) => n + (canonicalHeader(String(h ?? '')) ? 1 : 0), 0);
-      if (recognized > bestRecognized) {
+      let recognized = 0;
+      let hasName = false;
+      cells.forEach((h: any) => {
+        const k = canonicalHeader(String(h ?? ''));
+        if (k) {
+          recognized += 1;
+          if (k === 'name') hasName = true;
+        }
+      });
+      // Prefer rows that include the canonical "name" column. Only fall back to
+      // a name-less row if no candidate row contains it.
+      const better = hasName === bestHasName
+        ? recognized > bestRecognized
+        : hasName && !bestHasName;
+      if (better) {
         bestRecognized = recognized;
+        bestHasName = hasName;
         headerRowIdx = i;
       }
-      if (recognized >= 3) break;
+      if (hasName && recognized >= 3) break;
     }
 
     // Build header → canonical-key map by alias matching. Unknown columns are ignored.
@@ -432,14 +447,6 @@ export default function ImportCsvDialog({ open, onOpenChange, onImported }: Impo
     const out: ParsedRow[] = [];
     let groupCarry: string | null = null; // GROUP cell only filled on first row of a group
 
-    // Helper: which columns prove a name-less row is trying to be a standalone
-    // item? Category/group/packaging cells alone are often copied down in Excel
-    // and should not turn ingredient/separator rows into invalid items.
-    const hasItemData = (cells: any[]): boolean => {
-      const dataKeys = ['manufacturer', 'batch_number', 'purchase_price', 'selling_price', 'stock_quantity', 'expiry_date'];
-      return dataKeys.some(k => get(cells, k) !== '');
-    };
-
     for (let r = headerRowIdx + 1; r < rows.length; r++) {
       const cells = rows[r] || [];
       if (!cells.some((c: any) => c != null && String(c).trim() !== '')) continue; // blank row
@@ -451,14 +458,16 @@ export default function ImportCsvDialog({ open, onOpenChange, onImported }: Impo
       const groupCell = get(cells, 'medicine_group');
       if (groupCell) groupCarry = groupCell;
 
-      // Pharmacy hierarchy: a name-less row with GENERIC NAME is always an
-      // ingredient continuation of the previous medicine. It should not be
-      // validated as a standalone item, so missing prices/quantity are ignored.
+      // Pharmacy hierarchy: in pharmacy mode, a row with empty NAME OF ITEMS is
+      // NEVER a standalone item. Either it's an ingredient continuation of the
+      // medicine above (when GENERIC NAME is present), or it's a separator /
+      // leftover row to silently skip. No missing-name, missing-price, or
+      // duplicate-row errors should be raised for these.
       if (isPharmacy && !name) {
         if (generic_name_raw) {
           const parent = out[out.length - 1];
           if (!parent) {
-            errs.push(`Row ${r + 1}: ingredient row "${generic_name_raw}" has no parent medicine above it. Put a NAME OF ITEMS on the row above, or remove this row.`);
+            errs.push(`Row ${r + 1}: ingredient "${generic_name_raw}" has no parent medicine above it. Add a NAME OF ITEMS on the row above, or remove this row.`);
             continue;
           }
           parent.active_ingredients.push({
@@ -468,11 +477,8 @@ export default function ImportCsvDialog({ open, onOpenChange, onImported }: Impo
           });
           continue;
         }
-
-        // Rows with no NAME and no GENERIC NAME are either empty/separator rows
-        // or incomplete items. Ignore empty/group-only rows; reject rows that
-        // contain standalone item data.
-        if (!hasItemData(cells)) continue;
+        // No NAME and no GENERIC NAME → skip silently regardless of stray cells.
+        continue;
       }
 
       if (!name) rowErrors.push('column "NAME OF ITEMS" is empty (required)');
