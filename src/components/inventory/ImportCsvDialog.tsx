@@ -432,14 +432,6 @@ export default function ImportCsvDialog({ open, onOpenChange, onImported }: Impo
     const out: ParsedRow[] = [];
     let groupCarry: string | null = null; // GROUP cell only filled on first row of a group
 
-    // Helper: which columns prove a name-less row is trying to be a standalone
-    // item? Category/group/packaging cells alone are often copied down in Excel
-    // and should not turn ingredient/separator rows into invalid items.
-    const hasItemData = (cells: any[]): boolean => {
-      const dataKeys = ['manufacturer', 'batch_number', 'purchase_price', 'selling_price', 'stock_quantity', 'expiry_date'];
-      return dataKeys.some(k => get(cells, k) !== '');
-    };
-
     for (let r = headerRowIdx + 1; r < rows.length; r++) {
       const cells = rows[r] || [];
       if (!cells.some((c: any) => c != null && String(c).trim() !== '')) continue; // blank row
@@ -451,14 +443,16 @@ export default function ImportCsvDialog({ open, onOpenChange, onImported }: Impo
       const groupCell = get(cells, 'medicine_group');
       if (groupCell) groupCarry = groupCell;
 
-      // Pharmacy hierarchy: a name-less row with GENERIC NAME is always an
-      // ingredient continuation of the previous medicine. It should not be
-      // validated as a standalone item, so missing prices/quantity are ignored.
+      // Pharmacy hierarchy: in pharmacy mode, a row with empty NAME OF ITEMS is
+      // NEVER a standalone item. Either it's an ingredient continuation of the
+      // medicine above (when GENERIC NAME is present), or it's a separator /
+      // leftover row to silently skip. No missing-name, missing-price, or
+      // duplicate-row errors should be raised for these.
       if (isPharmacy && !name) {
         if (generic_name_raw) {
           const parent = out[out.length - 1];
           if (!parent) {
-            errs.push(`Row ${r + 1}: ingredient row "${generic_name_raw}" has no parent medicine above it. Put a NAME OF ITEMS on the row above, or remove this row.`);
+            errs.push(`Row ${r + 1}: ingredient "${generic_name_raw}" has no parent medicine above it. Add a NAME OF ITEMS on the row above, or remove this row.`);
             continue;
           }
           parent.active_ingredients.push({
@@ -468,11 +462,8 @@ export default function ImportCsvDialog({ open, onOpenChange, onImported }: Impo
           });
           continue;
         }
-
-        // Rows with no NAME and no GENERIC NAME are either empty/separator rows
-        // or incomplete items. Ignore empty/group-only rows; reject rows that
-        // contain standalone item data.
-        if (!hasItemData(cells)) continue;
+        // No NAME and no GENERIC NAME → skip silently regardless of stray cells.
+        continue;
       }
 
       if (!name) rowErrors.push('column "NAME OF ITEMS" is empty (required)');
