@@ -417,13 +417,13 @@ export default function ImportCsvDialog({ open, onOpenChange, onImported }: Impo
       return i === undefined ? '' : cells[i];
     };
 
-    // Fetch existing medicines (catalog) to detect duplicates by name+manufacturer
+    // Fetch existing medicines (catalog) to detect duplicates by name+manufacturer+strength+batch
     const { data: existingMeds } = await supabase
       .from('medicines')
-      .select('id, name, manufacturer, batch_number');
+      .select('id, name, manufacturer, batch_number, strength');
     const existingKey = new Set<string>();
     (existingMeds || []).forEach((m: any) => {
-      existingKey.add(`${(m.name || '').toLowerCase().trim()}|${(m.manufacturer || '').toLowerCase().trim()}`);
+      existingKey.add(`${(m.name || '').toLowerCase().trim()}|${(m.manufacturer || '').toLowerCase().trim()}|${(m.strength || '').toLowerCase().trim()}|${(m.batch_number || '').toLowerCase().trim()}`);
     });
 
     const seenInFile = new Set<string>();
@@ -544,8 +544,8 @@ export default function ImportCsvDialog({ open, onOpenChange, onImported }: Impo
       const medicine_group = isPharmacy ? (groupCell || groupCarry || null) : null;
       const strength = isPharmacy ? normalizeStrength(getRaw(cells, 'strength')) : null;
 
-      const key = `${name.toLowerCase()}|${(manufacturer || '').toLowerCase()}`;
-      if (seenInFile.has(key)) rowErrors.push(`duplicate of another row in this file (same NAME OF ITEMS "${name}" + manufacturer)`);
+      const key = `${name.toLowerCase()}|${(manufacturer || '').toLowerCase()}|${(strength || '').toLowerCase()}|${(batch_number || '').toLowerCase()}`;
+      if (seenInFile.has(key)) rowErrors.push(`duplicate of another row in this file (same NAME OF ITEMS "${name}", manufacturer "${manufacturer || '—'}", strength "${strength || '—'}", BATCH NO "${batch_number || '—'}"). If these are different items, set a different STRENGTH, BATCH NO, or MANUFACTURER to distinguish them.`);
       seenInFile.add(key);
       const isDuplicate = name ? existingKey.has(key) : false;
 
@@ -898,7 +898,7 @@ export default function ImportCsvDialog({ open, onOpenChange, onImported }: Impo
 
             {duplicates.length > 0 && rowsWithErrors.length === 0 && (
               <div className="space-y-2 rounded-lg border p-3 bg-warning/5">
-                <p className="text-sm font-medium">⚠️ {duplicates.length} item(s) match existing catalog entries (same name + manufacturer):</p>
+                <p className="text-sm font-medium">⚠️ {duplicates.length} item(s) match existing catalog entries (same name + manufacturer + strength + batch number):</p>
                 <ul className="text-xs text-muted-foreground list-disc pl-4 max-h-24 overflow-y-auto">
                   {duplicates.slice(0, 8).map(d => <li key={d.rowIndex}>Row {d.rowIndex}: {d.name} {d.manufacturer ? `(${d.manufacturer})` : ''}</li>)}
                   {duplicates.length > 8 && <li>…and {duplicates.length - 8} more</li>}
