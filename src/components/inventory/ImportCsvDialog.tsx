@@ -440,7 +440,7 @@ export default function ImportCsvDialog({ open, onOpenChange, onImported }: Impo
         continue;
       }
 
-      if (!name) rowErrors.push('name is required');
+      if (!name) rowErrors.push('column "NAME OF ITEMS" is empty (required)');
 
       const itemTypeRaw = get(cells, 'item_type');
       const unitLabelRaw = get(cells, 'unit_label');
@@ -453,7 +453,7 @@ export default function ImportCsvDialog({ open, onOpenChange, onImported }: Impo
       })();
       const unit_label = inferUnitLabel(item_type, unitLabelRaw, packagingRaw);
       if (item_type === 'measurable' && !MEASURABLE_UNITS.includes(unit_label as any)) {
-        rowErrors.push(`unit_label "${unit_label}" must be one of: ${MEASURABLE_UNITS.join(', ')}`);
+        rowErrors.push(`column "UNIT By LABEL" = "${unit_label}" is invalid for a measurable item — use one of: ${MEASURABLE_UNITS.join(', ')}`);
       }
 
       // Packaging: accept canonical (with_strip/no_strip) OR real-world like "3*10".
@@ -478,8 +478,8 @@ export default function ImportCsvDialog({ open, onOpenChange, onImported }: Impo
       if (item_type === 'full_pcs' && packaging_mode === 'with_strip') {
         const sp = parseInt(get(cells, 'strips_per_pack')) || strips_per_pack;
         const ups = parseInt(get(cells, 'units_per_strip')) || units_per_strip;
-        if (!sp || sp < 1) rowErrors.push('strips_per_pack must be ≥ 1 when packaging is strip layout');
-        if (!ups || ups < 1) rowErrors.push('units_per_strip must be ≥ 1 when packaging is strip layout');
+        if (!sp || sp < 1) rowErrors.push(`column "STRIPS PER PACK" must be ≥ 1 (PACKAGING MODE "${packagingRaw}" looks like a strip layout)`);
+        if (!ups || ups < 1) rowErrors.push(`column "UNITS PER STRIP" must be ≥ 1 (PACKAGING MODE "${packagingRaw}" looks like a strip layout)`);
         if (sp && ups) {
           strips_per_pack = sp;
           units_per_strip = ups;
@@ -497,8 +497,8 @@ export default function ImportCsvDialog({ open, onOpenChange, onImported }: Impo
       const sellingRaw = get(cells, 'selling_price');
       let purchase_price = parseFloat(purchaseRaw);
       let selling_price = parseFloat(sellingRaw);
-      if (!purchaseRaw || isNaN(purchase_price) || purchase_price < 0) rowErrors.push('purchase_price is required and must be ≥ 0');
-      if (!sellingRaw || isNaN(selling_price) || selling_price < 0) rowErrors.push('selling_price is required and must be ≥ 0');
+      if (!purchaseRaw || isNaN(purchase_price) || purchase_price < 0) rowErrors.push(`column "PERCHASING PRICE (strip)" = "${purchaseRaw}" is missing or not a valid number ≥ 0`);
+      if (!sellingRaw || isNaN(selling_price) || selling_price < 0) rowErrors.push(`column "SELLING PRICE (strip)" = "${sellingRaw}" is missing or not a valid number ≥ 0`);
 
       // Per-strip → per-pack conversion (user choice: prices labeled "(strip)" → multiply by strips_per_pack)
       if (packaging_mode === 'with_strip' && strips_per_pack && strips_per_pack > 1) {
@@ -508,7 +508,7 @@ export default function ImportCsvDialog({ open, onOpenChange, onImported }: Impo
 
       const stockRaw = get(cells, 'stock_quantity');
       const stock_quantity = item_type === 'measurable' ? parseFloat(stockRaw) : parseInt(stockRaw);
-      if (!stockRaw || isNaN(stock_quantity) || stock_quantity < 0) rowErrors.push('stock_quantity is required and must be ≥ 0');
+      if (!stockRaw || isNaN(stock_quantity) || stock_quantity < 0) rowErrors.push(`column "QUANTITY (PK)" = "${stockRaw}" is missing or not a valid number ≥ 0`);
 
       const minRaw = get(cells, 'minimum_stock_level');
       // accept "1 PK", "3 tubes" etc.
@@ -517,7 +517,7 @@ export default function ImportCsvDialog({ open, onOpenChange, onImported }: Impo
       const expRaw = getRaw(cells, 'expiry_date');
       const expParsed = parseExpiryDate(expRaw);
       if (expParsed.hadValue && !expParsed.valid) {
-        rowErrors.push(`expiry_date "${String(expRaw)}" is not a valid date`);
+        rowErrors.push(`column "EX-DATE" = "${String(expRaw)}" is not a valid date (use DD/MM/YYYY or YYYY-MM-DD; check that the day actually exists in that month)`);
       }
       const expiry_date = expParsed.iso;
 
@@ -529,7 +529,7 @@ export default function ImportCsvDialog({ open, onOpenChange, onImported }: Impo
       const strength = isPharmacy ? normalizeStrength(getRaw(cells, 'strength')) : null;
 
       const key = `${name.toLowerCase()}|${(manufacturer || '').toLowerCase()}`;
-      if (seenInFile.has(key)) rowErrors.push('Duplicate row in file (same name + manufacturer)');
+      if (seenInFile.has(key)) rowErrors.push(`duplicate of another row in this file (same NAME OF ITEMS "${name}" + manufacturer)`);
       seenInFile.add(key);
       const isDuplicate = name ? existingKey.has(key) : false;
 
@@ -862,14 +862,19 @@ export default function ImportCsvDialog({ open, onOpenChange, onImported }: Impo
               <Alert variant="destructive">
                 <AlertCircle className="h-4 w-4" />
                 <AlertDescription>
-                  <p className="font-semibold mb-1">Fix these errors before importing — the entire file will be rejected:</p>
-                  <ul className="list-disc pl-4 text-xs max-h-40 overflow-y-auto space-y-1">
-                    {rowsWithErrors.slice(0, 20).map(r => (
+                  <p className="font-semibold mb-1">
+                    Found {rowsWithErrors.length} row(s) with problems. Fix these in your sheet, then re-upload — the entire file is rejected until all rows are valid:
+                  </p>
+                  <ul className="list-disc pl-4 text-xs max-h-60 overflow-y-auto space-y-1.5">
+                    {rowsWithErrors.slice(0, 50).map(r => (
                       <li key={r.rowIndex}>
-                        <strong>Row {r.rowIndex}</strong> ({r.name || '(no name)'}): {r.errors.join('; ')}
+                        <strong>Row {r.rowIndex}</strong>{r.name ? ` — "${r.name}"` : ''}:
+                        <ul className="list-[circle] pl-4 mt-0.5">
+                          {r.errors.map((err, i) => <li key={i}>{err}</li>)}
+                        </ul>
                       </li>
                     ))}
-                    {rowsWithErrors.length > 20 && <li>…and {rowsWithErrors.length - 20} more</li>}
+                    {rowsWithErrors.length > 50 && <li>…and {rowsWithErrors.length - 50} more row(s) with problems</li>}
                   </ul>
                 </AlertDescription>
               </Alert>
