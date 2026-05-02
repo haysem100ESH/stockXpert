@@ -582,14 +582,23 @@ export default function ImportCsvDialog({ open, onOpenChange, onImported }: Impo
     }
 
     try {
-      const text = await file.text();
-      const rows = parseCsv(text);
+      const isExcel = /\.(xlsx|xls)$/i.test(file.name);
+      let rows: any[][];
+      if (isExcel) {
+        const buf = await file.arrayBuffer();
+        const wb = XLSX.read(buf, { type: 'array', cellDates: true });
+        const ws = wb.Sheets[wb.SheetNames[0]];
+        rows = XLSX.utils.sheet_to_json<any[]>(ws, { header: 1, raw: true, defval: '' });
+      } else {
+        const text = await file.text();
+        rows = parseCsv(text);
+      }
       const { ok, errs } = await validateAndNormalize(rows);
       setParsedRows(ok);
       setParseErrors(errs);
       setStep('preview');
     } catch (err: any) {
-      toast({ title: 'Error', description: err.message || 'Failed to read CSV', variant: 'destructive' });
+      toast({ title: 'Error', description: err.message || 'Failed to read file', variant: 'destructive' });
     } finally {
       e.target.value = '';
     }
