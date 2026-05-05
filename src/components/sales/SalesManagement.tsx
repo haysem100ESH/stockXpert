@@ -897,6 +897,14 @@ export default function SalesManagement() {
         onAddToCart={addToCart}
       />
 
+      <MedicineInfoDialog
+        open={!!infoMed}
+        onOpenChange={(open) => { if (!open) setInfoMed(null); }}
+        branchItemId={infoMed?.branchItemId}
+        medicineId={infoMed?.medicineId}
+        fallbackName={infoMed?.name}
+      />
+
       <ConfirmationDialog
         open={showCheckoutConfirm}
         onOpenChange={setShowCheckoutConfirm}
