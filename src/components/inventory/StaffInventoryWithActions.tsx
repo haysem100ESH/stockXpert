@@ -201,6 +201,7 @@ export default function StaffInventoryWithActions() {
             {item.generic_name && <CardDescription>{item.generic_name}</CardDescription>}
           </div>
           <div className="flex space-x-1">
+            <Button size="sm" variant="ghost" onClick={() => setInfoItem({ branchItemId: item.id, medicineId: (item as any).medicine_id, name: item.name })} title="Info"><Info className="h-4 w-4" /></Button>
             <Button size="sm" variant="ghost" onClick={() => setBatchBreakdown({ open: true, itemId: item.id, itemName: item.name })} title="View Batches"><Layers className="h-4 w-4" /></Button>
             {!readOnly && <Button size="sm" variant="ghost" onClick={() => setAdjustingItem(item)} title="Adjust Stock"><PackagePlus className="h-4 w-4" /></Button>}
             {!readOnly && <Button size="sm" variant="ghost" onClick={() => handleEditItem(item)} title="Edit"><Edit2 className="h-4 w-4" /></Button>}
