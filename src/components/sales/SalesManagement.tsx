@@ -663,6 +663,15 @@ export default function SalesManagement() {
             {medicine.generic_name && <CardDescription>{medicine.generic_name}</CardDescription>}
           </div>
           <div className="flex flex-col gap-1 items-end">
+            <Button
+              size="sm"
+              variant="ghost"
+              className="h-7 w-7 p-0"
+              title="Info"
+              onClick={(e) => { e.stopPropagation(); setInfoMed({ branchItemId: medicine.id, medicineId: medicine.medicine_id, name: medicine.name }); }}
+            >
+              <Info className="h-4 w-4" />
+            </Button>
             {medicine.category && <Badge variant="outline" className="text-xs">{medicine.category}</Badge>}
             {isMeasurable(medicine.unit_label) ? (
               <Badge variant="secondary" className="text-xs">Measurable ({medicine.unit_label})</Badge>
