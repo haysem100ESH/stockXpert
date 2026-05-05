@@ -5,7 +5,8 @@ import { Input } from '@/components/ui/input';
 import { Badge } from '@/components/ui/badge';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
 import { Pagination, PaginationContent, PaginationItem, PaginationLink, PaginationNext, PaginationPrevious } from '@/components/ui/pagination';
-import { Search, Plus, ShoppingCart, Filter } from 'lucide-react';
+import { Search, Plus, ShoppingCart, Filter, Info } from 'lucide-react';
+import MedicineInfoDialog from '@/components/inventory/MedicineInfoDialog';
 import { supabase } from '@/lib/db';
 import { useToast } from '@/hooks/use-toast';
 import { useAuth } from '@/hooks/useAuth';
@@ -57,6 +58,7 @@ export default function SalesManagement() {
   const [categoryFilter, setCategoryFilter] = useState<string>('all');
   const [currentPage, setCurrentPage] = useState(1);
   const [processing, setProcessing] = useState(false);
+  const [infoMed, setInfoMed] = useState<{ branchItemId: string; medicineId?: string; name: string } | null>(null);
   const [paymentMethod, setPaymentMethod] = useState<string>('Cash');
   const [discountPercent, setDiscountPercent] = useState<number>(0);
   const [showCheckoutConfirm, setShowCheckoutConfirm] = useState(false);
@@ -661,6 +663,15 @@ export default function SalesManagement() {
             {medicine.generic_name && <CardDescription>{medicine.generic_name}</CardDescription>}
           </div>
           <div className="flex flex-col gap-1 items-end">
+            <Button
+              size="sm"
+              variant="ghost"
+              className="h-7 w-7 p-0"
+              title="Info"
+              onClick={(e) => { e.stopPropagation(); setInfoMed({ branchItemId: medicine.id, medicineId: medicine.medicine_id, name: medicine.name }); }}
+            >
+              <Info className="h-4 w-4" />
+            </Button>
             {medicine.category && <Badge variant="outline" className="text-xs">{medicine.category}</Badge>}
             {isMeasurable(medicine.unit_label) ? (
               <Badge variant="secondary" className="text-xs">Measurable ({medicine.unit_label})</Badge>
@@ -884,6 +895,14 @@ export default function SalesManagement() {
         onOpenChange={(v) => { if (!v) setSelectedMedicineForDialog(null); }}
         medicine={selectedMedicineForDialog}
         onAddToCart={addToCart}
+      />
+
+      <MedicineInfoDialog
+        open={!!infoMed}
+        onOpenChange={(open) => { if (!open) setInfoMed(null); }}
+        branchItemId={infoMed?.branchItemId}
+        medicineId={infoMed?.medicineId}
+        fallbackName={infoMed?.name}
       />
 
       <ConfirmationDialog

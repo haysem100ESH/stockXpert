@@ -7,7 +7,8 @@ import { Badge } from '@/components/ui/badge';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
 import { Pagination, PaginationContent, PaginationItem, PaginationLink, PaginationNext, PaginationPrevious } from '@/components/ui/pagination';
-import { Search, Edit2, Plus, Trash2, Filter, Settings2, SlidersHorizontal, History, Layers, PackagePlus, Upload } from 'lucide-react';
+import { Search, Edit2, Plus, Trash2, Filter, Settings2, SlidersHorizontal, History, Layers, PackagePlus, Upload, Info } from 'lucide-react';
+import MedicineInfoDialog from './MedicineInfoDialog';
 import { supabase } from '@/lib/db';
 import { useToast } from '@/hooks/use-toast';
 import { useAuth } from '@/hooks/useAuth';
@@ -45,6 +46,7 @@ export default function StaffInventoryWithActions() {
   const [hasBranches, setHasBranches] = useState(true);
   const [batchBreakdown, setBatchBreakdown] = useState<{ open: boolean; itemId: string; itemName: string }>({ open: false, itemId: '', itemName: '' });
   const [adjustingItem, setAdjustingItem] = useState<BranchItem | null>(null);
+  const [infoItem, setInfoItem] = useState<{ branchItemId: string; medicineId?: string; name: string } | null>(null);
   const { toast } = useToast();
   const { profile } = useAuth();
   const { selectedBranch, branchType } = useBranchContext();
@@ -199,6 +201,7 @@ export default function StaffInventoryWithActions() {
             {item.generic_name && <CardDescription>{item.generic_name}</CardDescription>}
           </div>
           <div className="flex space-x-1">
+            <Button size="sm" variant="ghost" onClick={() => setInfoItem({ branchItemId: item.id, medicineId: (item as any).medicine_id, name: item.name })} title="Info"><Info className="h-4 w-4" /></Button>
             <Button size="sm" variant="ghost" onClick={() => setBatchBreakdown({ open: true, itemId: item.id, itemName: item.name })} title="View Batches"><Layers className="h-4 w-4" /></Button>
             {!readOnly && <Button size="sm" variant="ghost" onClick={() => setAdjustingItem(item)} title="Adjust Stock"><PackagePlus className="h-4 w-4" /></Button>}
             {!readOnly && <Button size="sm" variant="ghost" onClick={() => handleEditItem(item)} title="Edit"><Edit2 className="h-4 w-4" /></Button>}
@@ -467,6 +470,14 @@ export default function StaffInventoryWithActions() {
           unit_label: (adjustingItem as any).unit_label,
         } : null}
         onAdjusted={() => { setAdjustingItem(null); refetch(); }}
+      />
+
+      <MedicineInfoDialog
+        open={!!infoItem}
+        onOpenChange={(open) => { if (!open) setInfoItem(null); }}
+        branchItemId={infoItem?.branchItemId}
+        medicineId={infoItem?.medicineId}
+        fallbackName={infoItem?.name}
       />
     </div>
   );
