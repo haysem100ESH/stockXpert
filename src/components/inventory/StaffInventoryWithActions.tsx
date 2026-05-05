@@ -471,6 +471,14 @@ export default function StaffInventoryWithActions() {
         } : null}
         onAdjusted={() => { setAdjustingItem(null); refetch(); }}
       />
+
+      <MedicineInfoDialog
+        open={!!infoItem}
+        onOpenChange={(open) => { if (!open) setInfoItem(null); }}
+        branchItemId={infoItem?.branchItemId}
+        medicineId={infoItem?.medicineId}
+        fallbackName={infoItem?.name}
+      />
     </div>
   );
 }
