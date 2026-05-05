@@ -58,6 +58,7 @@ export default function SalesManagement() {
   const [categoryFilter, setCategoryFilter] = useState<string>('all');
   const [currentPage, setCurrentPage] = useState(1);
   const [processing, setProcessing] = useState(false);
+  const [infoMed, setInfoMed] = useState<{ branchItemId: string; medicineId?: string; name: string } | null>(null);
   const [paymentMethod, setPaymentMethod] = useState<string>('Cash');
   const [discountPercent, setDiscountPercent] = useState<number>(0);
   const [showCheckoutConfirm, setShowCheckoutConfirm] = useState(false);
