@@ -1,64 +1,68 @@
-## Problem
+## Advanced Multi-Level Packaging & Measurement System
 
-In `src/components/inventory/ImportCsvDialog.tsx`, even when a row clearly is an ingredient continuation (NAME OF ITEMS empty, GENERIC NAME filled), it still gets flagged as a missing-name / missing-price / duplicate item.
+This is a major architectural change. Before I start writing code, I want to confirm scope and a phased approach so we don't break the existing FIFO batches, sales, and pharmacy features.
 
-Root cause: the parser detects ingredient rows by reading `get(cells, 'generic_name')`, which depends on the header `GENERIC NAME` being recognized. In the user's sheet the GENERIC NAME column comes through, but two things can still break the branch:
+### Current state (what already exists)
+- `medicines` table already has: `item_type` (`full_pcs` / `measurable`), `unit_label` (kg, g, l, ml, etc.), `units_per_pack`, `strips_per_pack`, `units_per_strip`.
+- Sales already support **Full Pack** vs **By Strip/Unit**, plus measurable decimal quantities.
+- FIFO batches via `inventory_batches` (per branch_item).
+- CSV import exists in `ImportCsvDialog.tsx`.
+- Smart Inventory analytics exist (`useSmartInventory`, demand, dead stock, etc.).
 
-1. The "blank row" early-skip on line 445 uses `cells.some(c => String(c).trim() !== '')`. That works, but the ingredient branch then only fires when both NAME is empty AND `generic_name_raw` is truthy. If GENERIC NAME got mapped to a different column index (e.g., header detection picked a row where GENERIC NAME wasn't yet present, or the column index for `name` is shifted), `name` may actually pick up the generic name's cell — making `name` non-empty for one row and `generic_name_raw` empty for the next, so the ingredient branch is skipped and the row is treated as a malformed standalone item.
-2. Even when GENERIC NAME is present, any stray cell (CATEGORY = "Tab" copied down, leftover BATCH NO, an EX-DATE in another column) makes `hasItemData()` return true, which then bypasses the ingredient path and runs full standalone-item validation → "missing name", "missing price", "duplicate (empty name)".
+So ~60% of what you described is already in the system, just under different names and only 2 levels deep (Pack → Strip), not 3 levels (Pack → Strip → Sub-strip/Tablet).
 
-## Fix
+### What's actually new
+1. **Packaging mode** free-text label (Bottle / Pack / Box / Carton / Sachet / Tube / Roll / Bag).
+2. **3rd hierarchy level** — sub-units (e.g. Pack → Strip → Tablet), today we only have 2 (Pack → Strip).
+3. **3-tier pricing** — pack price, strip price, sub-unit price (today: pack price + derived strip price).
+4. **Sales UI** — third option "Sell by sub-unit".
+5. **CSV template** — new columns for the above.
+6. **Analytics** — best-selling sub-units, most profitable packaging level.
 
-Make the rule literal and unconditional: **in pharmacy mode, a row with empty NAME OF ITEMS is never a standalone item.** It either becomes an ingredient of the medicine above, or it is silently skipped. No `hasItemData` escape hatch.
+### Proposed Plan (phased, non-breaking)
 
-### Edits in `src/components/inventory/ImportCsvDialog.tsx`
+**Phase 1 — Schema (migration)**
+Add nullable columns to `medicines` (defaults preserve existing behavior):
+```
+packaging_mode        text          -- "Pack", "Bottle", "Carton", free text
+sub_units_per_unit    integer       -- e.g. 5 tablets per strip
+main_unit_name        text          -- "Pack" (display label)
+sub_unit_name         text          -- "Tablet" (display label)
+unit_price            numeric       -- explicit strip price (overrides derived)
+sub_unit_price        numeric       -- explicit sub-unit price
+```
+`is_measurable` already covered by `item_type='measurable'`. `measurement_unit` = existing `unit_label`. `total_measurement_amount` = existing `quantity` on `branch_items`.
 
-1. **Replace the name-less-row block (~lines 454–476)** with this logic, evaluated *before* any standalone validation, duplicate check, or `hasItemData` test:
+Existing `units_per_pack` stays as "units/strips per pack". No data migration needed — old items continue working as 2-level.
 
-   ```ts
-   if (isPharmacy && !name) {
-     const parent = out[out.length - 1];
+**Phase 2 — Add/Edit Item dialogs**
+- New "Packaging Mode" combobox (free text + suggestions).
+- New collapsible "Advanced packaging" section: sub-unit name, sub-units per unit, sub-unit price.
+- Validation: if `sub_units_per_unit > 0` then `sub_unit_name` and `sub_unit_price` required.
 
-     if (generic_name_raw) {
-       if (!parent) {
-         errs.push(
-           `Row ${r + 1}: ingredient "${generic_name_raw}" has no parent medicine above it. ` +
-           `Add a NAME OF ITEMS on the row above, or remove this row.`
-         );
-         continue;
-       }
-       parent.active_ingredients.push({
-         rowIndex: r + 1,
-         ingredient_name: generic_name_raw,
-         strength: normalizeStrength(strengthRaw),
-       });
-       continue;
-     }
+**Phase 3 — CSV import/export template**
+Add new optional columns; old templates still parse correctly.
 
-     // No NAME and no GENERIC NAME → treat as separator / leftover row.
-     // Never flag missing-name, missing-price, or duplicate.
-     continue;
-   }
-   ```
+**Phase 4 — Sales (Add to Cart dialog)**
+Third sale type option `by_sub_unit` shown only when `sub_units_per_unit > 0`. Stock deduction:
+`total_sub_units_available = stock_packs * units_per_pack * sub_units_per_unit + open_pack_units * sub_units_per_unit + open_strip_sub_units`. We'll add an `open_strip_sub_units` counter on `branch_items` to track partial strips, mirroring how `open_pack_units` works today.
 
-2. **Delete the `hasItemData` helper and its call.** With the new rule, name-less rows in pharmacy mode are exhaustively handled above, so no escape hatch is needed.
+**Phase 5 — UI display**
+`MedicineInfoDialog` and inventory cards show full hierarchy + 3-tier pricing.
 
-3. **Header-detection robustness**: when scoring header rows (current loop at ~lines 379–389), also require that the candidate row contains the canonical key `name`. This prevents picking a partial/secondary header row in which `name` is missing and a downstream column gets mis-mapped to `name`. Concretely: in the recognized-count loop, prefer the row with the highest recognized count *that also contains* `name`; only fall back to the highest-overall if none do.
+**Phase 6 — Analytics**
+Extend `useSmartInventory` to break down sales by level (pack / strip / sub-unit) and surface "most profitable packaging level".
 
-4. **Diagnostic improvement (small)**: when an ingredient row is attached, also persist its raw row number so the preview UI can show it under its parent (already supported via `rowIndex`). No UI changes needed.
+### Technical notes
+- FIFO: untouched. Batches still track `quantity_remaining` in pack units; sub-unit deductions roll up.
+- RLS: new columns inherit existing `medicines` policies.
+- Backward compatibility: every new field is nullable; absence = current 2-level behavior.
 
-5. **General-mode behavior unchanged.** For `isPharmacy === false`, name-less rows still raise the existing "NAME OF ITEMS is empty" error.
+### Questions before I build
 
-### Out of scope
+This is roughly **6–10 hours** of work across 15+ files. To keep it shippable I'd like to do it in **two PRs**:
 
-- No DB / schema changes.
-- No changes to the per-row progress UI, branch scoping, batch creation, or duplicate detection for *named* items.
-- No changes to general-inventory import.
+1. **PR1 (this turn):** Phase 1–3 (schema + Add/Edit dialog + CSV template). Item creation works end-to-end with sub-units; sales still uses existing 2-level flow.
+2. **PR2 (next turn):** Phase 4–6 (sales sub-unit selling + analytics + info dialog redesign).
 
-## Acceptance check
-
-After the fix, importing the user's sheet:
-
-- Rows like `pseudoephedrine hydrochloride 15mg` and `Chlorpheneramine maleate 1mg` (no NAME, GENERIC NAME present) attach as active ingredients of the medicine on the row above ("Snip").
-- Rows 13 / 14 / 16 (empty NAME, empty GENERIC NAME, possibly stray cells) are silently skipped — no "missing name", no "missing price", no "duplicate (empty name)" errors.
-- Standalone medicines (NAME present) still go through full validation and duplicate detection unchanged.
+Reply **"go"** to proceed with PR1 as described, or tell me which phases to reorder/skip.
