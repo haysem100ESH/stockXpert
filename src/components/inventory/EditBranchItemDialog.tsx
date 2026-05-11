@@ -36,6 +36,12 @@ export interface BranchItem {
   units_per_strip?: number;
   medicine_group?: string | null;
   strength?: string | null;
+  packaging_mode?: string | null;
+  sub_units_per_unit?: number | null;
+  main_unit_name?: string | null;
+  sub_unit_name?: string | null;
+  unit_price?: number | null;
+  sub_unit_price?: number | null;
 }
 
 interface EditBranchItemDialogProps {
@@ -67,6 +73,13 @@ export default function EditBranchItemDialog({ open, onOpenChange, item, onItemU
   const [stripsPerPack, setStripsPerPack] = useState('');
   const [unitsPerStrip, setUnitsPerStrip] = useState('');
   const [unitsPerPack, setUnitsPerPack] = useState('');
+
+  // Multi-level packaging
+  const [containerType, setContainerType] = useState('');
+  const [subUnitsPerUnit, setSubUnitsPerUnit] = useState('');
+  const [subUnitName, setSubUnitName] = useState('');
+  const [unitPrice, setUnitPrice] = useState('');
+  const [subUnitPrice, setSubUnitPrice] = useState('');
 
   const [loading, setLoading] = useState(false);
   const { toast } = useToast();
@@ -103,6 +116,12 @@ export default function EditBranchItemDialog({ open, onOpenChange, item, onItemU
       setStripsPerPack(hasStrip ? String(item.strips_per_pack) : '');
       setUnitsPerStrip(hasStrip ? String(item.units_per_strip) : '');
       setUnitsPerPack(item.units_per_pack ? String(item.units_per_pack) : '');
+
+      setContainerType(item.packaging_mode || '');
+      setSubUnitsPerUnit(item.sub_units_per_unit ? String(item.sub_units_per_unit) : '');
+      setSubUnitName(item.sub_unit_name || '');
+      setUnitPrice(item.unit_price != null ? String(item.unit_price) : '');
+      setSubUnitPrice(item.sub_unit_price != null ? String(item.sub_unit_price) : '');
     }
   }, [item, open]);
 
@@ -135,6 +154,11 @@ export default function EditBranchItemDialog({ open, onOpenChange, item, onItemU
       newUpp !== (item.units_per_pack || null) ||
       newStripsPerPack !== oldStripsPerPack ||
       newUnitsPerStrip !== oldUnitsPerStrip ||
+      containerType !== (item.packaging_mode || '') ||
+      (subUnitsPerUnit ? parseInt(subUnitsPerUnit) : null) !== (item.sub_units_per_unit || null) ||
+      subUnitName !== (item.sub_unit_name || '') ||
+      (unitPrice ? parseFloat(unitPrice) : null) !== (item.unit_price ?? null) ||
+      (subUnitPrice ? parseFloat(subUnitPrice) : null) !== (item.sub_unit_price ?? null) ||
       (isPharmacy && (
         strength !== (item.strength || '') ||
         newGroup !== oldGroup
@@ -192,6 +216,11 @@ export default function EditBranchItemDialog({ open, onOpenChange, item, onItemU
           units_per_pack: computeUnitsPerPack(),
           strips_per_pack: packagingMode === 'with_strip' ? parseInt(stripsPerPack) : null,
           units_per_strip: packagingMode === 'with_strip' ? parseInt(unitsPerStrip) : null,
+          packaging_mode: containerType.trim() || null,
+          sub_units_per_unit: subUnitsPerUnit && parseInt(subUnitsPerUnit) > 0 ? parseInt(subUnitsPerUnit) : null,
+          sub_unit_name: subUnitName.trim() || null,
+          unit_price: unitPrice && !isNaN(parseFloat(unitPrice)) ? parseFloat(unitPrice) : null,
+          sub_unit_price: subUnitPrice && !isNaN(parseFloat(subUnitPrice)) ? parseFloat(subUnitPrice) : null,
         };
         if (isPharmacy) {
           newMedicineData.strength = strength.trim() || null;
@@ -508,6 +537,50 @@ export default function EditBranchItemDialog({ open, onOpenChange, item, onItemU
                   <Input type="number" min="1" value={unitsPerPack} onChange={e => setUnitsPerPack(e.target.value)} placeholder="Leave empty if not sold by unit" />
                 </div>
               )}
+
+              {/* Container / packaging type */}
+              <div className="space-y-2">
+                <Label>Container Type</Label>
+                <Input
+                  list="edit-container-types"
+                  value={containerType}
+                  onChange={e => setContainerType(e.target.value)}
+                  placeholder="e.g. Pack, Bottle, Box, Carton, Sachet, Tube, Roll, Bag"
+                />
+                <datalist id="edit-container-types">
+                  {['Pack','Bottle','Box','Carton','Sachet','Tube','Roll','Bag','Container','Vial','Ampoule'].map(o => (
+                    <option key={o} value={o} />
+                  ))}
+                </datalist>
+              </div>
+
+              {/* Sub-unit (3rd hierarchy level) */}
+              <div className="space-y-3 rounded-lg border p-3 bg-muted/20">
+                <div className="flex items-center justify-between">
+                  <Label className="text-sm font-semibold">Sub-unit (optional)</Label>
+                  <span className="text-xs text-muted-foreground">e.g. tablets in a strip</span>
+                </div>
+                <div className="grid grid-cols-2 gap-3">
+                  <div className="space-y-1">
+                    <Label className="text-xs">Sub-units per Unit</Label>
+                    <Input type="number" min="0" value={subUnitsPerUnit} onChange={e => setSubUnitsPerUnit(e.target.value)} placeholder="e.g. 5" />
+                  </div>
+                  <div className="space-y-1">
+                    <Label className="text-xs">Sub-unit Name</Label>
+                    <Input value={subUnitName} onChange={e => setSubUnitName(e.target.value)} placeholder="e.g. Tablet" />
+                  </div>
+                </div>
+                <div className="grid grid-cols-2 gap-3">
+                  <div className="space-y-1">
+                    <Label className="text-xs">Unit / Strip Price</Label>
+                    <Input type="number" step="0.01" min="0" value={unitPrice} onChange={e => setUnitPrice(e.target.value)} placeholder="Optional" />
+                  </div>
+                  <div className="space-y-1">
+                    <Label className="text-xs">Sub-unit Price</Label>
+                    <Input type="number" step="0.01" min="0" value={subUnitPrice} onChange={e => setSubUnitPrice(e.target.value)} placeholder="Optional" />
+                  </div>
+                </div>
+              </div>
 
               {catalogFieldsChanged() && (
                 <p className="text-xs text-muted-foreground bg-muted/50 p-2 rounded">

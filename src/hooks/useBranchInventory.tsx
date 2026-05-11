@@ -27,6 +27,12 @@ export type EnrichedBranchItem = BranchItem & {
   medicine_group?: string | null;
   strength?: string | null;
   active_ingredients?: Array<{ ingredient_name: string; strength: string | null }>;
+  packaging_mode?: string | null;
+  sub_units_per_unit?: number | null;
+  main_unit_name?: string | null;
+  sub_unit_name?: string | null;
+  unit_price?: number | null;
+  sub_unit_price?: number | null;
 };
 
 interface FetchArgs {
@@ -65,7 +71,7 @@ async function fetchBranchInventory({ branchIds }: FetchArgs): Promise<EnrichedB
     Promise.all(medChunks.map((ids) =>
       supabase
         .from('medicines')
-        .select('id, name, generic_name, category, manufacturer, batch_number, item_type, unit_label, units_per_pack, strips_per_pack, units_per_strip, medicine_group, strength')
+        .select('id, name, generic_name, category, manufacturer, batch_number, item_type, unit_label, units_per_pack, strips_per_pack, units_per_strip, medicine_group, strength, packaging_mode, sub_units_per_unit, main_unit_name, sub_unit_name, unit_price, sub_unit_price')
         .in('id', ids)
         .range(0, 9999)
         .then((r: any) => r.data || [])
@@ -118,6 +124,12 @@ async function fetchBranchInventory({ branchIds }: FetchArgs): Promise<EnrichedB
       units_per_strip: med.units_per_strip,
       medicine_group: med.medicine_group,
       strength: med.strength,
+      packaging_mode: med.packaging_mode,
+      sub_units_per_unit: med.sub_units_per_unit,
+      main_unit_name: med.main_unit_name,
+      sub_unit_name: med.sub_unit_name,
+      unit_price: med.unit_price,
+      sub_unit_price: med.sub_unit_price,
       active_ingredients: ingMap[item.medicine_id] || [],
       branch_name: branchMap[item.branch_id],
     } as EnrichedBranchItem;

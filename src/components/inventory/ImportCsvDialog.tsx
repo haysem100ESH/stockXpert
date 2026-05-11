@@ -47,6 +47,14 @@ const HEADER_ALIASES: Record<string, string> = {
   'min stock': 'minimum_stock_level', 'minimum stock': 'minimum_stock_level', 'reorder level': 'minimum_stock_level',
   expiry_date: 'expiry_date', 'expiry date': 'expiry_date', 'ex date': 'expiry_date', 'exp date': 'expiry_date',
   expiry: 'expiry_date', expiration: 'expiry_date',
+  // Multi-level packaging (PR1)
+  container_type: 'container_type', 'container type': 'container_type',
+  main_unit_name: 'main_unit_name', 'main unit name': 'main_unit_name',
+  sub_unit_name: 'sub_unit_name', 'sub unit name': 'sub_unit_name',
+  sub_units_per_unit: 'sub_units_per_unit', 'sub units per unit': 'sub_units_per_unit', 'sub units': 'sub_units_per_unit',
+  main_unit_price: 'main_unit_price', 'main unit price': 'main_unit_price',
+  unit_price: 'unit_price', 'unit price': 'unit_price',
+  sub_unit_price: 'sub_unit_price', 'sub unit price': 'sub_unit_price',
 };
 
 function normalizeHeader(h: string): string {
@@ -216,6 +224,13 @@ interface ParsedRow {
   // Pharmacy-only (optional)
   medicine_group: string | null;
   strength: string | null;
+  // Multi-level packaging (optional)
+  container_type: string | null;
+  main_unit_name: string | null;
+  sub_unit_name: string | null;
+  sub_units_per_unit: number | null;
+  unit_price: number | null;
+  sub_unit_price: number | null;
   // Pharmacy hierarchical composition (rows with empty name attach here)
   active_ingredients: ActiveIngredient[];
 }
@@ -239,6 +254,11 @@ const HEADERS = [
   'stock_quantity',
   'minimum_stock_level',
   'expiry_date',
+  'container_type',
+  'sub_units_per_unit',
+  'sub_unit_name',
+  'unit_price',
+  'sub_unit_price',
 ];
 
 // Pharmacy-only optional columns (may be missing in older templates / general branch)
@@ -253,17 +273,17 @@ const OPTIONAL_HEADERS = new Set(['medicine_group', 'strength']);
 //   - Subsequent rows with empty NAME OF ITEMS = active ingredients of the
 //     previous medicine (only generic_name + optional strength matter)
 const SAMPLE_PHARMACY = [
-  ['Snip',             'Paracetamol',                 'NSAIDS and anti-pain', '325mg',    'tablet',  'Local Pharma','BN-SNIP-01',  'full_pcs',   'strip',  'with_strip', '10', '10', '',  '3.00',  '5.00',  '50',  '10', '2027-06-30'],
-  ['',                 'Pseudoephedrine Hydrochloride','',                    '15mg',     '',        '',           '',            '',           '',       '',           '',   '',   '',  '',      '',      '',    '',   ''],
-  ['',                 'Chlorophenaramine maleate',   '',                     '1mg',      '',        '',           '',            '',           '',       '',           '',   '',   '',  '',      '',      '',    '',   ''],
-  ['Etricox 90mg',     'Etoricoxib',                  'NSAIDS and anti-pain', '90mg',     'tablet',  'Pharmacare', 'BN-ETR-09',   'full_pcs',   'strip',  'with_strip', '3',  '10', '',  '12.00', '20.00', '30',  '5',  '2026-12-31'],
-  ['Amoxicillin Syrup','Amoxicillin',                 'Antibiotics',          '250mg/5ml','syrup',   'Pfizer',     'BN-AMX-2026', 'full_pcs',   'bottle', 'no_strip',   '',   '',   '1', '45.00', '70.00', '15',  '3',  '2026-08-15'],
+  ['Snip',             'Paracetamol',                 'NSAIDS and anti-pain', '325mg',    'tablet',  'Local Pharma','BN-SNIP-01',  'full_pcs',   'strip',  'with_strip', '10', '10', '',  '3.00',  '5.00',  '50',  '10', '2027-06-30', 'Pack',   '10', 'Tablet', '5.00', '0.50'],
+  ['',                 'Pseudoephedrine Hydrochloride','',                    '15mg',     '',        '',           '',            '',           '',       '',           '',   '',   '',  '',      '',      '',    '',   '',           '',       '',   '',       '',     ''],
+  ['',                 'Chlorophenaramine maleate',   '',                     '1mg',      '',        '',           '',            '',           '',       '',           '',   '',   '',  '',      '',      '',    '',   '',           '',       '',   '',       '',     ''],
+  ['Etricox 90mg',     'Etoricoxib',                  'NSAIDS and anti-pain', '90mg',     'tablet',  'Pharmacare', 'BN-ETR-09',   'full_pcs',   'strip',  'with_strip', '3',  '10', '',  '12.00', '20.00', '30',  '5',  '2026-12-31', 'Pack',   '10', 'Tablet', '20.00','2.00'],
+  ['Amoxicillin Syrup','Amoxicillin',                 'Antibiotics',          '250mg/5ml','syrup',   'Pfizer',     'BN-AMX-2026', 'full_pcs',   'bottle', 'no_strip',   '',   '',   '1', '45.00', '70.00', '15',  '3',  '2026-08-15', 'Bottle', '',   '',       '',     ''],
 ];
 
 const SAMPLE_GENERAL = [
-  ['Rice',           '', '', '', 'grocery',  'Local Farm', '',  'measurable', 'kg',     'no_strip', '', '', '',  '40.00',  '55.00',  '500', '50', ''],
-  ['Cooking Oil 1L', '', '', '', 'grocery',  'Shemu',      '',  'full_pcs',   'bottle', 'no_strip', '', '', '1', '120.00', '150.00', '60',  '10', '2027-01-31'],
-  ['Soap Bar',       '', '', '', 'cleaning', 'Lifebuoy',   '',  'full_pcs',   'piece',  'no_strip', '', '', '',  '15.00',  '20.00',  '120', '20', ''],
+  ['Rice',           '', '', '', 'grocery',  'Local Farm', '',  'measurable', 'kg',     'no_strip', '', '', '',  '40.00',  '55.00',  '500', '50', '',           'Bag',    '',  '',      '',     ''],
+  ['Cooking Oil 1L', '', '', '', 'grocery',  'Shemu',      '',  'full_pcs',   'bottle', 'no_strip', '', '', '1', '120.00', '150.00', '60',  '10', '2027-01-31', 'Bottle', '',  '',      '',     ''],
+  ['Soap Bar',       '', '', '', 'cleaning', 'Lifebuoy',   '',  'full_pcs',   'piece',  'no_strip', '', '', '',  '15.00',  '20.00',  '120', '20', '',           'Pack',   '',  '',      '',     ''],
 ];
 
 function escapeCsv(v: string): string {
@@ -569,6 +589,17 @@ export default function ImportCsvDialog({ open, onOpenChange, onImported }: Impo
       const medicine_group = isPharmacy ? (groupCell || groupCarry || null) : null;
       const strength = isPharmacy ? normalizeStrength(getRaw(cells, 'strength')) : null;
 
+      // Multi-level packaging (all optional)
+      const container_type = get(cells, 'container_type') || null;
+      const sub_unit_name = get(cells, 'sub_unit_name') || null;
+      const subUnitsRaw = get(cells, 'sub_units_per_unit');
+      const sub_units_per_unit = subUnitsRaw && parseInt(subUnitsRaw) > 0 ? parseInt(subUnitsRaw) : null;
+      const unitPriceRaw = get(cells, 'unit_price');
+      const unit_price = unitPriceRaw && !isNaN(parseFloat(unitPriceRaw)) ? parseFloat(unitPriceRaw) : null;
+      const subUnitPriceRaw = get(cells, 'sub_unit_price');
+      const sub_unit_price = subUnitPriceRaw && !isNaN(parseFloat(subUnitPriceRaw)) ? parseFloat(subUnitPriceRaw) : null;
+      const main_unit_name = container_type;
+
       const key = `${name.toLowerCase()}|${(manufacturer || '').toLowerCase()}|${(strength || '').toLowerCase()}|${(batch_number || '').toLowerCase()}`;
       if (seenInFile.has(key)) rowErrors.push(`duplicate of another row in this file (same NAME OF ITEMS "${name}", manufacturer "${manufacturer || '—'}", strength "${strength || '—'}", BATCH NO "${batch_number || '—'}"). If these are different items, set a different STRENGTH, BATCH NO, or MANUFACTURER to distinguish them.`);
       seenInFile.add(key);
@@ -606,6 +637,12 @@ export default function ImportCsvDialog({ open, onOpenChange, onImported }: Impo
         expiry_date,
         medicine_group,
         strength,
+        container_type,
+        main_unit_name,
+        sub_unit_name,
+        sub_units_per_unit,
+        unit_price,
+        sub_unit_price,
         active_ingredients: initialIngredients,
       });
     }
@@ -722,6 +759,12 @@ export default function ImportCsvDialog({ open, onOpenChange, onImported }: Impo
             branch_id: selectedBranchId,
             created_by: user?.id || null,
             expiry_date: row.expiry_date,
+            packaging_mode: row.container_type,
+            main_unit_name: row.main_unit_name,
+            sub_unit_name: row.sub_unit_name,
+            sub_units_per_unit: row.sub_units_per_unit,
+            unit_price: row.unit_price,
+            sub_unit_price: row.sub_unit_price,
           };
           if (row.packaging_mode === 'with_strip') {
             medPayload.strips_per_pack = row.strips_per_pack;

@@ -26,6 +26,13 @@ interface InfoData {
   unit_label?: string | null;
   item_type?: string | null;
   active_ingredients?: { ingredient_name: string; strength: string | null }[];
+  packaging_mode?: string | null;
+  units_per_pack?: number | null;
+  sub_units_per_unit?: number | null;
+  sub_unit_name?: string | null;
+  selling_price?: number | null;
+  unit_price?: number | null;
+  sub_unit_price?: number | null;
 }
 
 export default function MedicineInfoDialog({ open, onOpenChange, medicineId, branchItemId, fallbackName }: Props) {
@@ -46,10 +53,11 @@ export default function MedicineInfoDialog({ open, onOpenChange, medicineId, bra
         let branchExpiry: string | null = null;
         let branchUnitLabel: string | null = null;
 
+        let branchSellingPrice: number | null = null;
         if (branchItemId) {
           const { data: bi } = await supabase
             .from('branch_items')
-            .select('medicine_id, batch_number, expiry_date, unit_label')
+            .select('medicine_id, batch_number, expiry_date, unit_label, selling_price')
             .eq('id', branchItemId)
             .maybeSingle();
           if (bi) {
@@ -57,6 +65,7 @@ export default function MedicineInfoDialog({ open, onOpenChange, medicineId, bra
             branchBatch = bi.batch_number;
             branchExpiry = bi.expiry_date;
             branchUnitLabel = bi.unit_label;
+            branchSellingPrice = bi.selling_price;
           }
         }
 
@@ -64,7 +73,7 @@ export default function MedicineInfoDialog({ open, onOpenChange, medicineId, bra
         if (medId) {
           const { data: m } = await supabase
             .from('medicines')
-            .select('name, generic_name, medicine_group, strength, manufacturer, category, item_type, unit_label')
+            .select('name, generic_name, medicine_group, strength, manufacturer, category, item_type, unit_label, packaging_mode, units_per_pack, sub_units_per_unit, sub_unit_name, unit_price, sub_unit_price')
             .eq('id', medId)
             .maybeSingle();
           med = m;
@@ -105,6 +114,13 @@ export default function MedicineInfoDialog({ open, onOpenChange, medicineId, bra
           unit_label: branchUnitLabel || med?.unit_label,
           item_type: med?.item_type,
           active_ingredients: ingredients,
+          packaging_mode: med?.packaging_mode,
+          units_per_pack: med?.units_per_pack,
+          sub_units_per_unit: med?.sub_units_per_unit,
+          sub_unit_name: med?.sub_unit_name,
+          selling_price: branchSellingPrice,
+          unit_price: med?.unit_price,
+          sub_unit_price: med?.sub_unit_price,
         });
       } finally {
         if (!cancelled) setLoading(false);
@@ -150,7 +166,34 @@ export default function MedicineInfoDialog({ open, onOpenChange, medicineId, bra
             {isPharmacy && <Row label="Expiry Date" value={data.expiry_date ? new Date(data.expiry_date).toLocaleDateString() : null} />}
             <Row label="Category" value={data.category && <Badge variant="outline">{data.category}</Badge>} />
             <Row label="Unit" value={data.unit_label} />
+            <Row label="Container" value={data.packaging_mode} />
             {isPharmacy && <Row label="Type" value={data.item_type} />}
+
+            {/* Multi-level packaging summary */}
+            {(data.units_per_pack || data.sub_units_per_unit) && (
+              <div className="pt-2">
+                <div className="text-sm text-muted-foreground mb-1">Packaging Hierarchy</div>
+                <div className="text-sm bg-muted/50 rounded-md p-2 space-y-0.5">
+                  <div>• 1 {data.packaging_mode || 'Pack'}{data.units_per_pack ? ` = ${data.units_per_pack} ${data.unit_label || 'units'}` : ''}</div>
+                  {data.sub_units_per_unit && (
+                    <div>• 1 {data.unit_label || 'unit'} = {data.sub_units_per_unit} {data.sub_unit_name || 'sub-units'}</div>
+                  )}
+                </div>
+              </div>
+            )}
+
+            {/* Multi-level pricing */}
+            {(data.selling_price != null || data.unit_price != null || data.sub_unit_price != null) && (
+              <div className="pt-2">
+                <div className="text-sm text-muted-foreground mb-1">Pricing</div>
+                <div className="text-sm bg-muted/50 rounded-md p-2 space-y-0.5">
+                  {data.selling_price != null && <div>• {data.packaging_mode || 'Pack'}: ETB {Number(data.selling_price).toFixed(2)}</div>}
+                  {data.unit_price != null && <div>• {data.unit_label || 'Unit'}: ETB {Number(data.unit_price).toFixed(2)}</div>}
+                  {data.sub_unit_price != null && <div>• {data.sub_unit_name || 'Sub-unit'}: ETB {Number(data.sub_unit_price).toFixed(2)}</div>}
+                </div>
+              </div>
+            )}
+
             {isPharmacy && data.active_ingredients && data.active_ingredients.length > 0 && (
               <div className="pt-2">
                 <div className="text-sm text-muted-foreground mb-1">Active Ingredients</div>
