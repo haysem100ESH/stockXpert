@@ -354,6 +354,52 @@ export default function CreateCustomItemDialog({ open, onOpenChange, onItemCreat
             </div>
           )}
 
+          {/* Container / packaging type (free-text with suggestions) */}
+          <div className="space-y-2">
+            <Label>Container Type</Label>
+            <Input
+              list="container-types"
+              value={containerType}
+              onChange={e => setContainerType(e.target.value)}
+              placeholder="e.g. Pack, Bottle, Box, Carton, Sachet, Tube, Roll, Bag"
+            />
+            <datalist id="container-types">
+              {['Pack','Bottle','Box','Carton','Sachet','Tube','Roll','Bag','Container','Vial','Ampoule'].map(o => (
+                <option key={o} value={o} />
+              ))}
+            </datalist>
+          </div>
+
+          {/* Sub-unit (3rd hierarchy level) — only meaningful for countable items */}
+          {itemType === 'full_pcs' && (
+            <div className="space-y-3 rounded-lg border p-3 bg-muted/20">
+              <div className="flex items-center justify-between">
+                <Label className="text-sm font-semibold">Sub-unit (optional)</Label>
+                <span className="text-xs text-muted-foreground">e.g. tablets in a strip</span>
+              </div>
+              <div className="grid grid-cols-2 gap-3">
+                <div className="space-y-1">
+                  <Label className="text-xs">Sub-units per Unit</Label>
+                  <Input type="number" min="0" value={subUnitsPerUnit} onChange={e => setSubUnitsPerUnit(e.target.value)} placeholder="e.g. 5" />
+                </div>
+                <div className="space-y-1">
+                  <Label className="text-xs">Sub-unit Name</Label>
+                  <Input value={subUnitName} onChange={e => setSubUnitName(e.target.value)} placeholder="e.g. Tablet, Piece" />
+                </div>
+              </div>
+              <div className="grid grid-cols-2 gap-3">
+                <div className="space-y-1">
+                  <Label className="text-xs">Unit / Strip Price</Label>
+                  <Input type="number" step="0.01" min="0" value={unitPrice} onChange={e => setUnitPrice(e.target.value)} placeholder="Optional" />
+                </div>
+                <div className="space-y-1">
+                  <Label className="text-xs">Sub-unit Price</Label>
+                  <Input type="number" step="0.01" min="0" value={subUnitPrice} onChange={e => setSubUnitPrice(e.target.value)} placeholder="Optional" />
+                </div>
+              </div>
+            </div>
+          )}
+
           <Button onClick={handleCreate} disabled={submitting} className="w-full">
             {submitting && <Loader2 className="h-4 w-4 animate-spin mr-2" />}
             Create Item
