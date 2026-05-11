@@ -254,6 +254,11 @@ const HEADERS = [
   'stock_quantity',
   'minimum_stock_level',
   'expiry_date',
+  'container_type',
+  'sub_units_per_unit',
+  'sub_unit_name',
+  'unit_price',
+  'sub_unit_price',
 ];
 
 // Pharmacy-only optional columns (may be missing in older templates / general branch)
@@ -584,6 +589,17 @@ export default function ImportCsvDialog({ open, onOpenChange, onImported }: Impo
       const medicine_group = isPharmacy ? (groupCell || groupCarry || null) : null;
       const strength = isPharmacy ? normalizeStrength(getRaw(cells, 'strength')) : null;
 
+      // Multi-level packaging (all optional)
+      const container_type = get(cells, 'container_type') || null;
+      const sub_unit_name = get(cells, 'sub_unit_name') || null;
+      const subUnitsRaw = get(cells, 'sub_units_per_unit');
+      const sub_units_per_unit = subUnitsRaw && parseInt(subUnitsRaw) > 0 ? parseInt(subUnitsRaw) : null;
+      const unitPriceRaw = get(cells, 'unit_price');
+      const unit_price = unitPriceRaw && !isNaN(parseFloat(unitPriceRaw)) ? parseFloat(unitPriceRaw) : null;
+      const subUnitPriceRaw = get(cells, 'sub_unit_price');
+      const sub_unit_price = subUnitPriceRaw && !isNaN(parseFloat(subUnitPriceRaw)) ? parseFloat(subUnitPriceRaw) : null;
+      const main_unit_name = container_type;
+
       const key = `${name.toLowerCase()}|${(manufacturer || '').toLowerCase()}|${(strength || '').toLowerCase()}|${(batch_number || '').toLowerCase()}`;
       if (seenInFile.has(key)) rowErrors.push(`duplicate of another row in this file (same NAME OF ITEMS "${name}", manufacturer "${manufacturer || '—'}", strength "${strength || '—'}", BATCH NO "${batch_number || '—'}"). If these are different items, set a different STRENGTH, BATCH NO, or MANUFACTURER to distinguish them.`);
       seenInFile.add(key);
@@ -621,6 +637,12 @@ export default function ImportCsvDialog({ open, onOpenChange, onImported }: Impo
         expiry_date,
         medicine_group,
         strength,
+        container_type,
+        main_unit_name,
+        sub_unit_name,
+        sub_units_per_unit,
+        unit_price,
+        sub_unit_price,
         active_ingredients: initialIngredients,
       });
     }
