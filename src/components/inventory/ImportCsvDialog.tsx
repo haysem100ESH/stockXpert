@@ -47,6 +47,14 @@ const HEADER_ALIASES: Record<string, string> = {
   'min stock': 'minimum_stock_level', 'minimum stock': 'minimum_stock_level', 'reorder level': 'minimum_stock_level',
   expiry_date: 'expiry_date', 'expiry date': 'expiry_date', 'ex date': 'expiry_date', 'exp date': 'expiry_date',
   expiry: 'expiry_date', expiration: 'expiry_date',
+  // Multi-level packaging (PR1)
+  container_type: 'container_type', 'container type': 'container_type',
+  main_unit_name: 'main_unit_name', 'main unit name': 'main_unit_name',
+  sub_unit_name: 'sub_unit_name', 'sub unit name': 'sub_unit_name',
+  sub_units_per_unit: 'sub_units_per_unit', 'sub units per unit': 'sub_units_per_unit', 'sub units': 'sub_units_per_unit',
+  main_unit_price: 'main_unit_price', 'main unit price': 'main_unit_price',
+  unit_price: 'unit_price', 'unit price': 'unit_price',
+  sub_unit_price: 'sub_unit_price', 'sub unit price': 'sub_unit_price',
 };
 
 function normalizeHeader(h: string): string {
@@ -216,6 +224,13 @@ interface ParsedRow {
   // Pharmacy-only (optional)
   medicine_group: string | null;
   strength: string | null;
+  // Multi-level packaging (optional)
+  container_type: string | null;
+  main_unit_name: string | null;
+  sub_unit_name: string | null;
+  sub_units_per_unit: number | null;
+  unit_price: number | null;
+  sub_unit_price: number | null;
   // Pharmacy hierarchical composition (rows with empty name attach here)
   active_ingredients: ActiveIngredient[];
 }
