@@ -35,6 +35,14 @@ export default function CreateCustomItemDialog({ open, onOpenChange, onItemCreat
   const [unitsPerStrip, setUnitsPerStrip] = useState('');
   const [unitsPack, setUnitsPack] = useState('');
   const [minStock, setMinStock] = useState('');
+  // Multi-level packaging
+  const [containerType, setContainerType] = useState(''); // packaging_mode column: Pack, Bottle, Box, Carton...
+  const [mainUnitName, setMainUnitName] = useState('');
+  const [unitName, setUnitName] = useState(''); // strip-level label (informational; persisted via unit_label too)
+  const [subUnitsPerUnit, setSubUnitsPerUnit] = useState('');
+  const [subUnitName, setSubUnitName] = useState('');
+  const [unitPrice, setUnitPrice] = useState('');
+  const [subUnitPrice, setSubUnitPrice] = useState('');
   const [submitting, setSubmitting] = useState(false);
 
   const { toast } = useToast();
@@ -60,6 +68,13 @@ export default function CreateCustomItemDialog({ open, onOpenChange, onItemCreat
     setUnitsPerStrip('');
     setUnitsPack('');
     setMinStock('');
+    setContainerType('');
+    setMainUnitName('');
+    setUnitName('');
+    setSubUnitsPerUnit('');
+    setSubUnitName('');
+    setUnitPrice('');
+    setSubUnitPrice('');
   };
 
   const handleCreate = async () => {
@@ -135,6 +150,16 @@ export default function CreateCustomItemDialog({ open, onOpenChange, onItemCreat
         insertPayload.strips_per_pack = parseInt(stripsPerPack);
         insertPayload.units_per_strip = parseInt(unitsPerStrip);
       }
+
+      // Multi-level packaging fields (all optional, nullable)
+      if (containerType.trim()) insertPayload.packaging_mode = containerType.trim();
+      if (mainUnitName.trim()) insertPayload.main_unit_name = mainUnitName.trim();
+      if (subUnitsPerUnit && parseInt(subUnitsPerUnit) > 0) {
+        insertPayload.sub_units_per_unit = parseInt(subUnitsPerUnit);
+        if (subUnitName.trim()) insertPayload.sub_unit_name = subUnitName.trim();
+        if (subUnitPrice && !isNaN(parseFloat(subUnitPrice))) insertPayload.sub_unit_price = parseFloat(subUnitPrice);
+      }
+      if (unitPrice && !isNaN(parseFloat(unitPrice))) insertPayload.unit_price = parseFloat(unitPrice);
 
       const { data: newMed, error } = await supabase.from('medicines').insert(insertPayload).select('id, name, generic_name, category, manufacturer, item_type, unit_label, units_per_pack, minimum_stock_level').single();
 
