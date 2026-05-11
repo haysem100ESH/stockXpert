@@ -759,6 +759,12 @@ export default function ImportCsvDialog({ open, onOpenChange, onImported }: Impo
             branch_id: selectedBranchId,
             created_by: user?.id || null,
             expiry_date: row.expiry_date,
+            packaging_mode: row.container_type,
+            main_unit_name: row.main_unit_name,
+            sub_unit_name: row.sub_unit_name,
+            sub_units_per_unit: row.sub_units_per_unit,
+            unit_price: row.unit_price,
+            sub_unit_price: row.sub_unit_price,
           };
           if (row.packaging_mode === 'with_strip') {
             medPayload.strips_per_pack = row.strips_per_pack;
