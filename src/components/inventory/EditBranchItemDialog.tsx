@@ -36,6 +36,12 @@ export interface BranchItem {
   units_per_strip?: number;
   medicine_group?: string | null;
   strength?: string | null;
+  packaging_mode?: string | null;
+  sub_units_per_unit?: number | null;
+  main_unit_name?: string | null;
+  sub_unit_name?: string | null;
+  unit_price?: number | null;
+  sub_unit_price?: number | null;
 }
 
 interface EditBranchItemDialogProps {
@@ -67,6 +73,13 @@ export default function EditBranchItemDialog({ open, onOpenChange, item, onItemU
   const [stripsPerPack, setStripsPerPack] = useState('');
   const [unitsPerStrip, setUnitsPerStrip] = useState('');
   const [unitsPerPack, setUnitsPerPack] = useState('');
+
+  // Multi-level packaging
+  const [containerType, setContainerType] = useState('');
+  const [subUnitsPerUnit, setSubUnitsPerUnit] = useState('');
+  const [subUnitName, setSubUnitName] = useState('');
+  const [unitPrice, setUnitPrice] = useState('');
+  const [subUnitPrice, setSubUnitPrice] = useState('');
 
   const [loading, setLoading] = useState(false);
   const { toast } = useToast();
@@ -103,6 +116,12 @@ export default function EditBranchItemDialog({ open, onOpenChange, item, onItemU
       setStripsPerPack(hasStrip ? String(item.strips_per_pack) : '');
       setUnitsPerStrip(hasStrip ? String(item.units_per_strip) : '');
       setUnitsPerPack(item.units_per_pack ? String(item.units_per_pack) : '');
+
+      setContainerType(item.packaging_mode || '');
+      setSubUnitsPerUnit(item.sub_units_per_unit ? String(item.sub_units_per_unit) : '');
+      setSubUnitName(item.sub_unit_name || '');
+      setUnitPrice(item.unit_price != null ? String(item.unit_price) : '');
+      setSubUnitPrice(item.sub_unit_price != null ? String(item.sub_unit_price) : '');
     }
   }, [item, open]);
 
