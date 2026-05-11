@@ -154,6 +154,11 @@ export default function EditBranchItemDialog({ open, onOpenChange, item, onItemU
       newUpp !== (item.units_per_pack || null) ||
       newStripsPerPack !== oldStripsPerPack ||
       newUnitsPerStrip !== oldUnitsPerStrip ||
+      containerType !== (item.packaging_mode || '') ||
+      (subUnitsPerUnit ? parseInt(subUnitsPerUnit) : null) !== (item.sub_units_per_unit || null) ||
+      subUnitName !== (item.sub_unit_name || '') ||
+      (unitPrice ? parseFloat(unitPrice) : null) !== (item.unit_price ?? null) ||
+      (subUnitPrice ? parseFloat(subUnitPrice) : null) !== (item.sub_unit_price ?? null) ||
       (isPharmacy && (
         strength !== (item.strength || '') ||
         newGroup !== oldGroup
@@ -211,6 +216,11 @@ export default function EditBranchItemDialog({ open, onOpenChange, item, onItemU
           units_per_pack: computeUnitsPerPack(),
           strips_per_pack: packagingMode === 'with_strip' ? parseInt(stripsPerPack) : null,
           units_per_strip: packagingMode === 'with_strip' ? parseInt(unitsPerStrip) : null,
+          packaging_mode: containerType.trim() || null,
+          sub_units_per_unit: subUnitsPerUnit && parseInt(subUnitsPerUnit) > 0 ? parseInt(subUnitsPerUnit) : null,
+          sub_unit_name: subUnitName.trim() || null,
+          unit_price: unitPrice && !isNaN(parseFloat(unitPrice)) ? parseFloat(unitPrice) : null,
+          sub_unit_price: subUnitPrice && !isNaN(parseFloat(subUnitPrice)) ? parseFloat(subUnitPrice) : null,
         };
         if (isPharmacy) {
           newMedicineData.strength = strength.trim() || null;
