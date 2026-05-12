@@ -430,15 +430,18 @@ export default function ImportCsvDialog({ open, onOpenChange, onImported }: Impo
     }
   };
 
-  const handleDownloadTemplate = () => {
-    const csv = buildTemplate(isPharmacy ? 'pharmacy' : 'general');
-    const blob = new Blob([csv], { type: 'text/csv;charset=utf-8;' });
-    const url = URL.createObjectURL(blob);
-    const a = document.createElement('a');
-    a.href = url;
-    a.download = `inventory-import-template-${isPharmacy ? 'pharmacy' : 'general'}.csv`;
-    a.click();
-    URL.revokeObjectURL(url);
+  const handleDownloadTemplate = async () => {
+    try {
+      const blob = await buildTemplateXlsx(isPharmacy ? 'pharmacy' : 'general');
+      const url = URL.createObjectURL(blob);
+      const a = document.createElement('a');
+      a.href = url;
+      a.download = `inventory-import-template-${isPharmacy ? 'pharmacy' : 'general'}.xlsx`;
+      a.click();
+      URL.revokeObjectURL(url);
+    } catch (e: any) {
+      toast({ title: 'Failed to build template', description: e?.message || 'Unknown error', variant: 'destructive' });
+    }
   };
 
   const validateAndNormalize = async (rows: any[][]): Promise<{ ok: ParsedRow[]; errs: string[] }> => {
