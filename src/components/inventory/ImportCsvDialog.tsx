@@ -34,13 +34,16 @@ const HEADER_ALIASES: Record<string, string> = {
   unit_label: 'unit_label', 'unit by label': 'unit_label', 'unit label': 'unit_label', unit: 'unit_label',
   packaging_mode: 'packaging_mode', 'packaging mode': 'packaging_mode', packaging: 'packaging_mode', pack: 'packaging_mode',
   strips_per_pack: 'strips_per_pack', 'strips per pack': 'strips_per_pack',
-  units_per_strip: 'units_per_strip', 'units per strip': 'units_per_strip',
-  units_per_pack: 'units_per_pack', 'units per pack': 'units_per_pack', 'unit per pack': 'units_per_pack',
+  units_per_strip: 'units_per_strip', 'units per strip': 'units_per_strip', 'tablets per strip': 'units_per_strip',
+  units_per_pack: 'units_per_pack', 'units per pack': 'units_per_pack', 'unit per pack': 'units_per_pack', 'units per item': 'units_per_pack',
   purchase_price: 'purchase_price', 'purchase price': 'purchase_price', 'perchasing price': 'purchase_price',
   'perchasing price strip': 'purchase_price', 'purchase price strip': 'purchase_price',
   'cost price': 'purchase_price', cost: 'purchase_price',
   selling_price: 'selling_price', 'selling price': 'selling_price', 'selling price strip': 'selling_price',
   price: 'selling_price', sale: 'selling_price', 'sale price': 'selling_price',
+  // Pack-level price (final template): "MEDICINE PRICE" / "ITEM PRICE" / "PACK PRICE"
+  // Different from selling_price because it must NOT be multiplied by strips_per_pack.
+  pack_price: 'pack_price', 'pack price': 'pack_price', 'medicine price': 'pack_price', 'item price': 'pack_price',
   stock_quantity: 'stock_quantity', 'stock quantity': 'stock_quantity', quantity: 'stock_quantity',
   'quantity pk': 'stock_quantity', qty: 'stock_quantity', stock: 'stock_quantity',
   minimum_stock_level: 'minimum_stock_level', 'minimum stock level': 'minimum_stock_level',
@@ -53,8 +56,8 @@ const HEADER_ALIASES: Record<string, string> = {
   sub_unit_name: 'sub_unit_name', 'sub unit name': 'sub_unit_name',
   sub_units_per_unit: 'sub_units_per_unit', 'sub units per unit': 'sub_units_per_unit', 'sub units': 'sub_units_per_unit',
   main_unit_price: 'main_unit_price', 'main unit price': 'main_unit_price',
-  unit_price: 'unit_price', 'unit price': 'unit_price',
-  sub_unit_price: 'sub_unit_price', 'sub unit price': 'sub_unit_price',
+  unit_price: 'unit_price', 'unit price': 'unit_price', 'strip price': 'unit_price',
+  sub_unit_price: 'sub_unit_price', 'sub unit price': 'sub_unit_price', 'tablet price': 'sub_unit_price',
 };
 
 function normalizeHeader(h: string): string {
