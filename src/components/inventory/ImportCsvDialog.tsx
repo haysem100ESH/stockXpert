@@ -608,11 +608,32 @@ export default function ImportCsvDialog({ open, onOpenChange, onImported }: Impo
       const container_type = get(cells, 'container_type') || null;
       const sub_unit_name = get(cells, 'sub_unit_name') || null;
       const subUnitsRaw = get(cells, 'sub_units_per_unit');
-      const sub_units_per_unit = subUnitsRaw && parseInt(subUnitsRaw) > 0 ? parseInt(subUnitsRaw) : null;
+      let sub_units_per_unit = subUnitsRaw && parseInt(subUnitsRaw) > 0 ? parseInt(subUnitsRaw) : null;
+      // Pharmacy template "TABLETS PER STRIP" feeds units_per_strip; mirror it
+      // into sub_units_per_unit so the 3-tier (pack→strip→tablet) hierarchy
+      // works at sale time without forcing the user to fill it twice.
+      if (!sub_units_per_unit && isPharmacy && units_per_strip && units_per_strip > 1) {
+        sub_units_per_unit = units_per_strip;
+      }
       const unitPriceRaw = get(cells, 'unit_price');
-      const unit_price = unitPriceRaw && !isNaN(parseFloat(unitPriceRaw)) ? parseFloat(unitPriceRaw) : null;
+      let unit_price: number | null = unitPriceRaw && !isNaN(parseFloat(unitPriceRaw)) ? parseFloat(unitPriceRaw) : null;
       const subUnitPriceRaw = get(cells, 'sub_unit_price');
-      const sub_unit_price = subUnitPriceRaw && !isNaN(parseFloat(subUnitPriceRaw)) ? parseFloat(subUnitPriceRaw) : null;
+      let sub_unit_price: number | null = subUnitPriceRaw && !isNaN(parseFloat(subUnitPriceRaw)) ? parseFloat(subUnitPriceRaw) : null;
+
+      // Auto-derive missing prices from the pack price (final-template rule).
+      // Pharmacy: strip_price = pack/strips_per_pack; tablet_price = strip/tablets_per_strip.
+      // General : unit_price  = pack/units_per_pack.
+      if (selling_price > 0) {
+        if (isPharmacy && packaging_mode === 'with_strip' && strips_per_pack && strips_per_pack > 0) {
+          if (unit_price == null) unit_price = +(selling_price / strips_per_pack).toFixed(4);
+          if (sub_unit_price == null && units_per_strip && units_per_strip > 0) {
+            sub_unit_price = +(unit_price / units_per_strip).toFixed(4);
+          }
+        } else if (!isPharmacy && units_per_pack && units_per_pack > 0) {
+          if (unit_price == null) unit_price = +(selling_price / units_per_pack).toFixed(4);
+        }
+      }
+
       const main_unit_name = container_type;
 
       const key = `${name.toLowerCase()}|${(manufacturer || '').toLowerCase()}|${(strength || '').toLowerCase()}|${(batch_number || '').toLowerCase()}`;
