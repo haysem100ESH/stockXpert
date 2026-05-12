@@ -238,55 +238,42 @@ interface ParsedRow {
   active_ingredients: ActiveIngredient[];
 }
 
-const HEADERS = [
-  'name',
-  'generic_name',
-  'medicine_group',
-  'strength',
-  'category',
-  'manufacturer',
-  'batch_number',
-  'item_type',
-  'unit_label',
-  'packaging_mode',
-  'strips_per_pack',
-  'units_per_strip',
-  'units_per_pack',
-  'purchase_price',
-  'selling_price',
-  'stock_quantity',
-  'minimum_stock_level',
-  'expiry_date',
-  'container_type',
-  'sub_units_per_unit',
-  'sub_unit_name',
-  'unit_price',
-  'sub_unit_price',
+// Final-template column order — pharmacy and general share the parser, but the
+// downloaded template surfaces only the columns relevant to that branch type.
+const PHARMACY_HEADERS = [
+  'GROUP', 'NAME OF ITEMS', 'GENERIC NAME', 'STRENGTH', 'CATEGORY',
+  'BATCH NO', 'ITEM TYPE', 'UNIT BY LABEL', 'PACKAGING MODE',
+  'STRIPS PER PACK', 'TABLETS PER STRIP',
+  'MEDICINE PRICE', 'STRIP PRICE', 'TABLET PRICE',
+  'PURCHASE PRICE', 'STOCK QUANTITY', 'EXPIRY DATE',
+];
+
+const GENERAL_HEADERS = [
+  'ITEM NAME', 'CATEGORY', 'PACKAGING MODE',
+  'UNITS PER ITEM', 'ITEM PRICE', 'UNIT PRICE',
+  'PURCHASE PRICE', 'STOCK QUANTITY', 'EXPIRY DATE',
 ];
 
 // Pharmacy-only optional columns (may be missing in older templates / general branch)
 const OPTIONAL_HEADERS = new Set(['medicine_group', 'strength']);
 
-// Order matches HEADERS exactly:
-// name, generic_name, medicine_group, strength, category, manufacturer, batch_number,
-// item_type, unit_label, packaging_mode, strips_per_pack, units_per_strip, units_per_pack,
-// purchase_price, selling_price, stock_quantity, minimum_stock_level, expiry_date
-// Pharmacy template demonstrates hierarchical composition:
+// Pharmacy template demonstrates:
 //   - Row with NAME OF ITEMS filled = new medicine
 //   - Subsequent rows with empty NAME OF ITEMS = active ingredients of the
-//     previous medicine (only generic_name + optional strength matter)
+//     previous medicine (only GENERIC NAME + optional STRENGTH matter)
+//   - "no_strip" packaging (bottle/sachet/tube) sells as full pack only.
 const SAMPLE_PHARMACY = [
-  ['Snip',             'Paracetamol',                 'NSAIDS and anti-pain', '325mg',    'tablet',  'Local Pharma','BN-SNIP-01',  'full_pcs',   'strip',  'with_strip', '10', '10', '',  '3.00',  '5.00',  '50',  '10', '2027-06-30', 'Pack',   '10', 'Tablet', '5.00', '0.50'],
-  ['',                 'Pseudoephedrine Hydrochloride','',                    '15mg',     '',        '',           '',            '',           '',       '',           '',   '',   '',  '',      '',      '',    '',   '',           '',       '',   '',       '',     ''],
-  ['',                 'Chlorophenaramine maleate',   '',                     '1mg',      '',        '',           '',            '',           '',       '',           '',   '',   '',  '',      '',      '',    '',   '',           '',       '',   '',       '',     ''],
-  ['Etricox 90mg',     'Etoricoxib',                  'NSAIDS and anti-pain', '90mg',     'tablet',  'Pharmacare', 'BN-ETR-09',   'full_pcs',   'strip',  'with_strip', '3',  '10', '',  '12.00', '20.00', '30',  '5',  '2026-12-31', 'Pack',   '10', 'Tablet', '20.00','2.00'],
-  ['Amoxicillin Syrup','Amoxicillin',                 'Antibiotics',          '250mg/5ml','syrup',   'Pfizer',     'BN-AMX-2026', 'full_pcs',   'bottle', 'no_strip',   '',   '',   '1', '45.00', '70.00', '15',  '3',  '2026-08-15', 'Bottle', '',   '',       '',     ''],
+  // GROUP, NAME, GENERIC, STRENGTH, CATEGORY, BATCH, ITEM TYPE, UNIT, PACKAGING, STRIPS/PACK, TABLETS/STRIP, MED PRICE, STRIP PRICE, TABLET PRICE, PURCHASE, QTY, EXPIRY
+  ['NSAIDS and anti-pain', 'Paracetamol 500mg', 'Paracetamol', '500mg', 'tablet', 'BN-PCM-01', 'full_pcs', 'tablet', 'standard_strip', '3', '10', '300', '100', '10', '180', '50', '2027-06-30'],
+  ['NSAIDS and anti-pain', 'Etricox 90mg',      'Etoricoxib',  '90mg',  'tablet', 'BN-ETR-09', 'full_pcs', 'tablet', 'standard_strip', '3', '10', '600', '',    '',   '420', '30', '2026-12-31'],
+  ['Antibiotics',          'Amoxicillin Syrup', 'Amoxicillin', '250mg/5ml', 'syrup', 'BN-AMX-2026', 'full_pcs', 'bottle', 'no_strip', '', '', '70', '', '', '45', '15', '2026-08-15'],
 ];
 
 const SAMPLE_GENERAL = [
-  ['Rice',           '', '', '', 'grocery',  'Local Farm', '',  'measurable', 'kg',     'no_strip', '', '', '',  '40.00',  '55.00',  '500', '50', '',           'Bag',    '',  '',      '',     ''],
-  ['Cooking Oil 1L', '', '', '', 'grocery',  'Shemu',      '',  'full_pcs',   'bottle', 'no_strip', '', '', '1', '120.00', '150.00', '60',  '10', '2027-01-31', 'Bottle', '',  '',      '',     ''],
-  ['Soap Bar',       '', '', '', 'cleaning', 'Lifebuoy',   '',  'full_pcs',   'piece',  'no_strip', '', '', '',  '15.00',  '20.00',  '120', '20', '',           'Pack',   '',  '',      '',     ''],
+  // ITEM NAME, CATEGORY, PACKAGING MODE, UNITS PER ITEM, ITEM PRICE, UNIT PRICE, PURCHASE PRICE, QTY, EXPIRY
+  ['Carton Milk 1L',  'grocery',  'carton',  '24', '2400', '100', '1800', '20',  ''],
+  ['Cooking Oil 1L',  'grocery',  'bottle',  '1',  '150',  '',    '120',  '60',  '2027-01-31'],
+  ['Soap Bar Pack',   'cleaning', 'pack',    '6',  '120',  '20',  '90',   '40',  ''],
 ];
 
 function escapeCsv(v: string): string {
@@ -299,8 +286,9 @@ function escapeCsv(v: string): string {
 }
 
 function buildTemplate(mode: 'pharmacy' | 'general'): string {
+  const headers = mode === 'pharmacy' ? PHARMACY_HEADERS : GENERAL_HEADERS;
   const sample = mode === 'pharmacy' ? SAMPLE_PHARMACY : SAMPLE_GENERAL;
-  const lines = [HEADERS.join(',')];
+  const lines = [headers.join(',')];
   sample.forEach(row => lines.push(row.map(escapeCsv).join(',')));
   return lines.join('\n');
 }
