@@ -17,6 +17,12 @@ interface Medicine {
   open_pack_units?: number;
   unit_label?: string;
   item_type?: string;
+  // Multi-level packaging
+  sub_units_per_unit?: number | null;
+  sub_unit_name?: string | null;
+  sub_unit_price?: number | null;
+  main_unit_name?: string | null;
+  packaging_mode?: string | null;
 }
 
 interface AddToCartDialogProps {
