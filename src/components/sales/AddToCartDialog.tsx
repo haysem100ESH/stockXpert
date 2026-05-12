@@ -308,6 +308,35 @@ export default function AddToCartDialog({ open, onOpenChange, medicine, onAddToC
                   </p>
                 </div>
               )}
+
+              {/* Quantity for by_sub_unit */}
+              {saleType === 'by_sub_unit' && hasSubUnit && (
+                <div className="space-y-2">
+                  <Label htmlFor="sub-unit-count">Number of {subUnitNameCap}s</Label>
+                  <Input
+                    id="sub-unit-count"
+                    type="number"
+                    step="1"
+                    min="1"
+                    max={totalAvailableSubUnits}
+                    value={subUnitInputValue}
+                    onChange={(e) => {
+                      setSubUnitInputValue(e.target.value);
+                      const val = parseInt(e.target.value);
+                      if (!isNaN(val) && val > 0) setSubUnitCount(val);
+                    }}
+                    onBlur={() => {
+                      const val = parseInt(subUnitInputValue);
+                      const clamped = isNaN(val) || val <= 0 ? 1 : Math.min(val, totalAvailableSubUnits);
+                      setSubUnitCount(clamped);
+                      setSubUnitInputValue(String(clamped));
+                    }}
+                  />
+                  <p className="text-sm text-muted-foreground">
+                    Total: ETB {(subUnitCount * effectiveSubUnitPrice).toFixed(2)}
+                  </p>
+                </div>
+              )}
             </>
           )}
 
