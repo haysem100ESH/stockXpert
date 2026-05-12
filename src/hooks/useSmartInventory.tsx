@@ -60,6 +60,26 @@ interface RpcRow {
   monthly_qty: number[];
 }
 
+interface DirectBranchItemRow {
+  id: string;
+  medicine_id: string;
+  branch_id: string;
+  quantity: number;
+  expiry_date: string | null;
+  selling_price: number;
+  medicines: {
+    name: string | null;
+    category: string | null;
+    minimum_stock_level: number | null;
+    item_type: string | null;
+  } | Array<{
+    name: string | null;
+    category: string | null;
+    minimum_stock_level: number | null;
+    item_type: string | null;
+  }> | null;
+}
+
 function calcExpiryLevel(d: number | null): SmartItem['expiryAlertLevel'] {
   if (d === null) return 'none';
   if (d <= 0) return 'expired';
@@ -95,64 +115,104 @@ function getScoreLevel(score: number): SmartItem['scoreLevel'] {
   return 'critical';
 }
 
-async function fetchSmartInventory(branchIds: string[]): Promise<SmartItem[]> {
-  if (branchIds.length === 0) return [];
+function toSmartItem(r: RpcRow, now: number, hasSalesAggregation = true): SmartItem {
+  const adc = (Number(r.qty_30) || 0) / 30;
+  const seasonalMult = getSeasonalMultiplier(r.monthly_qty || new Array(12).fill(0));
+  const predictedDemand14 = adc * 14 * seasonalMult;
+  const safetyStock = predictedDemand14 * 0.2;
+  const minLevel = Number(r.minimum_stock_level) || 0;
+  const stock = Number(r.stock_quantity) || 0;
+  const belowMin = minLevel > 0 && stock < minLevel;
+  const needsReorder = stock < predictedDemand14 || belowMin;
+  const target = Math.max(predictedDemand14 + safetyStock, minLevel);
+  const suggestedReorder = needsReorder ? Math.max(1, Math.ceil(target - stock)) : 0;
+  const daysRemaining = adc > 0 ? Math.round(stock / adc) : null;
+  const stockOutRisk = daysRemaining !== null && daysRemaining < 7;
 
-  const { data, error } = await (supabase as any).rpc('smart_inventory_summary', {
-    _branch_ids: branchIds,
-  });
+  let daysUntilExpiry: number | null = null;
+  if (r.expiry_date) {
+    daysUntilExpiry = Math.ceil((new Date(r.expiry_date).getTime() - now) / 86_400_000);
+  }
+  const expiryAlertLevel = calcExpiryLevel(daysUntilExpiry);
+  const isDeadStock = hasSalesAggregation && (Number(r.qty_60) || 0) === 0 && stock > 0;
+  const inventoryScore = calcInventoryScore({ adc, currentStock: stock, predictedDemand14, daysUntilExpiry, isDeadStock });
+
+  return {
+    id: r.branch_item_id,
+    name: r.name || 'Unknown',
+    category: r.category || 'Uncategorized',
+    currentStock: stock,
+    minStockLevel: minLevel,
+    expiryDate: r.expiry_date,
+    sellingPrice: Number(r.selling_price) || 0,
+    branchId: r.branch_id,
+    adc,
+    predictedDemand14,
+    safetyStock,
+    suggestedReorder,
+    needsReorder,
+    daysRemaining,
+    stockOutRisk,
+    daysUntilExpiry,
+    expiryAlertLevel,
+    isDeadStock,
+    lastSaleDate: r.last_sale_date,
+    totalSold30Days: Number(r.qty_30) || 0,
+    inventoryScore,
+    scoreLevel: getScoreLevel(inventoryScore),
+  };
+}
+
+async function fetchBranchItemsFallback(branchIds: string[]): Promise<SmartItem[]> {
+  const { data, error } = await supabase
+    .from('branch_items')
+    .select('id, medicine_id, branch_id, quantity, expiry_date, selling_price, medicines!inner(name, category, minimum_stock_level, item_type)')
+    .in('branch_id', branchIds)
+    .order('id', { ascending: false })
+    .limit(10_000);
+
   if (error) throw error;
 
   const now = Date.now();
-  const rows: RpcRow[] = data || [];
-
-  return rows.map((r) => {
-    const adc = (Number(r.qty_30) || 0) / 30;
-    const seasonalMult = getSeasonalMultiplier(r.monthly_qty || new Array(12).fill(0));
-    const predictedDemand14 = adc * 14 * seasonalMult;
-    const safetyStock = predictedDemand14 * 0.2;
-    const minLevel = Number(r.minimum_stock_level) || 0;
-    const stock = Number(r.stock_quantity) || 0;
-    const belowMin = minLevel > 0 && stock < minLevel;
-    const needsReorder = stock < predictedDemand14 || belowMin;
-    const target = Math.max(predictedDemand14 + safetyStock, minLevel);
-    const suggestedReorder = needsReorder ? Math.max(1, Math.ceil(target - stock)) : 0;
-    const daysRemaining = adc > 0 ? Math.round(stock / adc) : null;
-    const stockOutRisk = daysRemaining !== null && daysRemaining < 7;
-
-    let daysUntilExpiry: number | null = null;
-    if (r.expiry_date) {
-      daysUntilExpiry = Math.ceil((new Date(r.expiry_date).getTime() - now) / 86_400_000);
-    }
-    const expiryAlertLevel = calcExpiryLevel(daysUntilExpiry);
-    const isDeadStock = (Number(r.qty_60) || 0) === 0 && stock > 0;
-    const inventoryScore = calcInventoryScore({ adc, currentStock: stock, predictedDemand14, daysUntilExpiry, isDeadStock });
-
-    return {
-      id: r.branch_item_id,
-      name: r.name || 'Unknown',
-      category: r.category || 'Uncategorized',
-      currentStock: stock,
-      minStockLevel: minLevel,
-      expiryDate: r.expiry_date,
-      sellingPrice: Number(r.selling_price) || 0,
-      branchId: r.branch_id,
-      adc,
-      predictedDemand14,
-      safetyStock,
-      suggestedReorder,
-      needsReorder,
-      daysRemaining,
-      stockOutRisk,
-      daysUntilExpiry,
-      expiryAlertLevel,
-      isDeadStock,
-      lastSaleDate: r.last_sale_date,
-      totalSold30Days: Number(r.qty_30) || 0,
-      inventoryScore,
-      scoreLevel: getScoreLevel(inventoryScore),
-    };
+  return ((data || []) as DirectBranchItemRow[]).map((item) => {
+    const med = Array.isArray(item.medicines) ? item.medicines[0] : item.medicines;
+    return toSmartItem({
+      branch_item_id: item.id,
+      medicine_id: item.medicine_id,
+      name: med?.name || 'Unknown',
+      category: med?.category || 'Uncategorized',
+      branch_id: item.branch_id,
+      stock_quantity: item.quantity,
+      minimum_stock_level: med?.minimum_stock_level || 0,
+      expiry_date: item.expiry_date,
+      selling_price: item.selling_price,
+      item_type: med?.item_type || null,
+      qty_30: 0,
+      qty_60: 0,
+      last_sale_date: null,
+      monthly_qty: new Array(12).fill(0),
+    }, now, false);
   });
+}
+
+async function fetchSmartInventory(branchIds: string[]): Promise<SmartItem[]> {
+  if (branchIds.length === 0) return [];
+
+  const now = Date.now();
+
+  try {
+    const { data, error } = await (supabase as any).rpc('smart_inventory_summary', {
+      _branch_ids: branchIds,
+    });
+    if (error) throw error;
+
+    const rows: RpcRow[] = data || [];
+    if (rows.length > 0) return rows.map((r) => toSmartItem(r, now));
+  } catch (error) {
+    console.warn('Smart inventory RPC unavailable; falling back to branch inventory snapshot.', error);
+  }
+
+  return fetchBranchItemsFallback(branchIds);
 }
 
 export function useSmartInventory() {
@@ -216,7 +276,8 @@ export function useSmartInventory() {
   return {
     items,
     summary,
-    loading: query.isLoading,
+    loading: ownerBranchesLoading || query.isLoading,
+    error: query.error,
     isPharmacy,
     refetch: query.refetch,
   };
