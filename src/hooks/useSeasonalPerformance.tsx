@@ -208,7 +208,8 @@ export function useSeasonalPerformance() {
 
   useEffect(() => {
     fetchData();
-  }, [selectedBranch, profile, cachedOwnerBranchIds]);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [selectedBranch, profile?.id, profile?.role, profile?.branch_id, cachedOwnerBranchIds]);
 
   const topSeasonalThisMonth = useMemo(() => {
     return items
