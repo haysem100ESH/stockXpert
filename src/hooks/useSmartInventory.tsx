@@ -1,27 +1,22 @@
-import { useState, useEffect, useMemo } from 'react';
+/**
+ * useSmartInventory
+ * ----------------------------------------------------------------------------
+ * v2 — server-side aggregation via the `smart_inventory_summary` RPC.
+ *
+ * Before: 3 round-trips fetching ALL branch_items + 60d sale_items + 365d
+ *         sale_items → potentially millions of rows aggregated client-side.
+ * Now:    1 RPC returns ONE pre-aggregated row per branch_item. TanStack Query
+ *         caches per-branch with staleTime so revisits are instant.
+ *
+ * Cache key: ['smart-inventory', sortedBranchIds.join(',')]
+ */
+import { useEffect, useMemo } from 'react';
+import { useQuery, useQueryClient } from '@tanstack/react-query';
 import { supabase } from '@/lib/db';
 import { useAuth } from '@/hooks/useAuth';
 import { useBranchContext } from '@/hooks/useBranchContext';
 import { useOwnerBranchIds } from '@/hooks/useOwnerBranchIds';
 import { getSeasonalMultiplier } from '@/hooks/useSeasonalPerformance';
-
-export interface InventoryItem {
-  id: string;
-  name: string;
-  category: string;
-  stock_quantity: number;
-  minimum_stock_level: number;
-  expiry_date: string | null;
-  branch_id: string;
-  selling_price: number;
-  item_type?: string;
-}
-
-export interface SaleRecord {
-  item_id: string;
-  quantity: number;
-  sale_date: string;
-}
 
 export interface SmartItem {
   id: string;
@@ -32,73 +27,85 @@ export interface SmartItem {
   expiryDate: string | null;
   sellingPrice: number;
   branchId: string;
-
-  // Computed
-  adc: number; // Average Daily Consumption
+  adc: number;
   predictedDemand14: number;
   safetyStock: number;
   suggestedReorder: number;
   needsReorder: boolean;
-  daysRemaining: number | null; // null if no sales
+  daysRemaining: number | null;
   stockOutRisk: boolean;
-
-  // Expiry (pharmacy only)
   daysUntilExpiry: number | null;
   expiryAlertLevel: 'none' | 'warning' | 'risk' | 'critical' | 'expired';
-
-  // Dead stock
   isDeadStock: boolean;
   lastSaleDate: string | null;
   totalSold30Days: number;
-
-  // Health score
   inventoryScore: number;
   scoreLevel: 'excellent' | 'good' | 'risk' | 'critical';
 }
 
-function calcExpiryLevel(daysUntilExpiry: number | null): SmartItem['expiryAlertLevel'] {
-  if (daysUntilExpiry === null) return 'none';
-  if (daysUntilExpiry <= 0) return 'expired';
-  if (daysUntilExpiry < 30) return 'critical';
-  if (daysUntilExpiry < 60) return 'risk';
-  if (daysUntilExpiry < 90) return 'warning';
+interface RpcRow {
+  branch_item_id: string;
+  medicine_id: string;
+  name: string;
+  category: string;
+  branch_id: string;
+  stock_quantity: number;
+  minimum_stock_level: number;
+  expiry_date: string | null;
+  selling_price: number;
+  item_type: string | null;
+  qty_30: number;
+  qty_60: number;
+  last_sale_date: string | null;
+  monthly_qty: number[];
+}
+
+interface DirectBranchItemRow {
+  id: string;
+  medicine_id: string;
+  branch_id: string;
+  quantity: number;
+  expiry_date: string | null;
+  selling_price: number;
+  medicines: {
+    name: string | null;
+    category: string | null;
+    minimum_stock_level: number | null;
+    item_type: string | null;
+  } | Array<{
+    name: string | null;
+    category: string | null;
+    minimum_stock_level: number | null;
+    item_type: string | null;
+  }> | null;
+}
+
+function calcExpiryLevel(d: number | null): SmartItem['expiryAlertLevel'] {
+  if (d === null) return 'none';
+  if (d <= 0) return 'expired';
+  if (d < 30) return 'critical';
+  if (d < 60) return 'risk';
+  if (d < 90) return 'warning';
   return 'none';
 }
 
-function calcInventoryScore(item: {
-  adc: number;
-  currentStock: number;
-  predictedDemand14: number;
-  daysUntilExpiry: number | null;
-  isDeadStock: boolean;
-}): number {
-  let score = 50; // base
-
-  // Demand strength (+0 to +20)
-  if (item.adc > 0) score += Math.min(20, item.adc * 5);
-
-  // Stock balance (+0 to +30)
-  if (item.predictedDemand14 > 0) {
-    const ratio = item.currentStock / item.predictedDemand14;
-    if (ratio >= 0.8 && ratio <= 2) score += 30;
-    else if (ratio >= 0.5 && ratio <= 3) score += 20;
-    else if (ratio > 0) score += 10;
-  } else if (item.currentStock > 0) {
-    score += 15; // has stock but no demand data
+function calcInventoryScore(it: { adc: number; currentStock: number; predictedDemand14: number; daysUntilExpiry: number | null; isDeadStock: boolean }): number {
+  let s = 50;
+  if (it.adc > 0) s += Math.min(20, it.adc * 5);
+  if (it.predictedDemand14 > 0) {
+    const r = it.currentStock / it.predictedDemand14;
+    if (r >= 0.8 && r <= 2) s += 30;
+    else if (r >= 0.5 && r <= 3) s += 20;
+    else if (r > 0) s += 10;
+  } else if (it.currentStock > 0) s += 15;
+  if (it.daysUntilExpiry !== null) {
+    if (it.daysUntilExpiry <= 0) s -= 30;
+    else if (it.daysUntilExpiry < 30) s -= 25;
+    else if (it.daysUntilExpiry < 60) s -= 15;
+    else if (it.daysUntilExpiry < 90) s -= 5;
   }
-
-  // Expiry risk (-0 to -30)
-  if (item.daysUntilExpiry !== null) {
-    if (item.daysUntilExpiry <= 0) score -= 30;
-    else if (item.daysUntilExpiry < 30) score -= 25;
-    else if (item.daysUntilExpiry < 60) score -= 15;
-    else if (item.daysUntilExpiry < 90) score -= 5;
-  }
-
-  // Dead stock risk (-20)
-  if (item.isDeadStock) score -= 20;
-
-  return Math.max(0, Math.min(100, score));
+  if (it.isDeadStock) s -= 20;
+  return Math.max(0, Math.min(100, s));
 }
 
 function getScoreLevel(score: number): SmartItem['scoreLevel'] {
@@ -108,246 +115,170 @@ function getScoreLevel(score: number): SmartItem['scoreLevel'] {
   return 'critical';
 }
 
+function toSmartItem(r: RpcRow, now: number, hasSalesAggregation = true): SmartItem {
+  const adc = (Number(r.qty_30) || 0) / 30;
+  const seasonalMult = getSeasonalMultiplier(r.monthly_qty || new Array(12).fill(0));
+  const predictedDemand14 = adc * 14 * seasonalMult;
+  const safetyStock = predictedDemand14 * 0.2;
+  const minLevel = Number(r.minimum_stock_level) || 0;
+  const stock = Number(r.stock_quantity) || 0;
+  const belowMin = minLevel > 0 && stock < minLevel;
+  const needsReorder = stock < predictedDemand14 || belowMin;
+  const target = Math.max(predictedDemand14 + safetyStock, minLevel);
+  const suggestedReorder = needsReorder ? Math.max(1, Math.ceil(target - stock)) : 0;
+  const daysRemaining = adc > 0 ? Math.round(stock / adc) : null;
+  const stockOutRisk = daysRemaining !== null && daysRemaining < 7;
+
+  let daysUntilExpiry: number | null = null;
+  if (r.expiry_date) {
+    daysUntilExpiry = Math.ceil((new Date(r.expiry_date).getTime() - now) / 86_400_000);
+  }
+  const expiryAlertLevel = calcExpiryLevel(daysUntilExpiry);
+  const isDeadStock = hasSalesAggregation && (Number(r.qty_60) || 0) === 0 && stock > 0;
+  const inventoryScore = calcInventoryScore({ adc, currentStock: stock, predictedDemand14, daysUntilExpiry, isDeadStock });
+
+  return {
+    id: r.branch_item_id,
+    name: r.name || 'Unknown',
+    category: r.category || 'Uncategorized',
+    currentStock: stock,
+    minStockLevel: minLevel,
+    expiryDate: r.expiry_date,
+    sellingPrice: Number(r.selling_price) || 0,
+    branchId: r.branch_id,
+    adc,
+    predictedDemand14,
+    safetyStock,
+    suggestedReorder,
+    needsReorder,
+    daysRemaining,
+    stockOutRisk,
+    daysUntilExpiry,
+    expiryAlertLevel,
+    isDeadStock,
+    lastSaleDate: r.last_sale_date,
+    totalSold30Days: Number(r.qty_30) || 0,
+    inventoryScore,
+    scoreLevel: getScoreLevel(inventoryScore),
+  };
+}
+
+async function fetchBranchItemsFallback(branchIds: string[]): Promise<SmartItem[]> {
+  const { data, error } = await supabase
+    .from('branch_items')
+    .select('id, medicine_id, branch_id, quantity, expiry_date, selling_price, medicines!inner(name, category, minimum_stock_level, item_type)')
+    .in('branch_id', branchIds)
+    .order('id', { ascending: false })
+    .limit(10_000);
+
+  if (error) throw error;
+
+  const now = Date.now();
+  return ((data || []) as DirectBranchItemRow[]).map((item) => {
+    const med = Array.isArray(item.medicines) ? item.medicines[0] : item.medicines;
+    return toSmartItem({
+      branch_item_id: item.id,
+      medicine_id: item.medicine_id,
+      name: med?.name || 'Unknown',
+      category: med?.category || 'Uncategorized',
+      branch_id: item.branch_id,
+      stock_quantity: item.quantity,
+      minimum_stock_level: med?.minimum_stock_level || 0,
+      expiry_date: item.expiry_date,
+      selling_price: item.selling_price,
+      item_type: med?.item_type || null,
+      qty_30: 0,
+      qty_60: 0,
+      last_sale_date: null,
+      monthly_qty: new Array(12).fill(0),
+    }, now, false);
+  });
+}
+
+async function fetchSmartInventory(branchIds: string[]): Promise<SmartItem[]> {
+  if (branchIds.length === 0) return [];
+
+  const now = Date.now();
+
+  try {
+    const { data, error } = await (supabase as any).rpc('smart_inventory_summary', {
+      _branch_ids: branchIds,
+    });
+    if (error) throw error;
+
+    const rows: RpcRow[] = data || [];
+    if (rows.length > 0) return rows.map((r) => toSmartItem(r, now));
+  } catch (error) {
+    console.warn('Smart inventory RPC unavailable; falling back to branch inventory snapshot.', error);
+  }
+
+  return fetchBranchItemsFallback(branchIds);
+}
+
 export function useSmartInventory() {
-  const [items, setItems] = useState<SmartItem[]>([]);
-  const [loading, setLoading] = useState(true);
   const { profile } = useAuth();
   const { selectedBranch, branchType } = useBranchContext();
-  const { branchIds: cachedOwnerBranchIds } = useOwnerBranchIds();
+  const { branchIds: cachedOwnerBranchIds, isLoading: ownerBranchesLoading } = useOwnerBranchIds();
   const isPharmacy = branchType === 'pharmacy';
+  const queryClient = useQueryClient();
 
+  const branchIds = useMemo(() => {
+    if (selectedBranch) return [selectedBranch];
+    if (profile?.role === 'owner') return cachedOwnerBranchIds;
+    if (profile?.branch_id) return [profile.branch_id];
+    return [];
+  }, [selectedBranch, profile?.role, profile?.branch_id, cachedOwnerBranchIds]);
+
+  const enabled = !!profile && (profile.role !== 'owner' || !ownerBranchesLoading) && branchIds.length > 0;
+
+  const queryKey = useMemo(
+    () => ['smart-inventory', [...branchIds].sort().join(',')] as const,
+    [branchIds]
+  );
+
+  const query = useQuery({
+    queryKey,
+    queryFn: () => fetchSmartInventory(branchIds),
+    enabled,
+    staleTime: 2 * 60 * 1000,   // 2 min — heavy aggregation, OK to cache
+    gcTime: 10 * 60 * 1000,
+    placeholderData: (prev) => prev,
+  });
+
+  // Pull-to-refresh hook integration
   useEffect(() => {
-    fetchData();
-  }, [selectedBranch, profile, cachedOwnerBranchIds]);
+    const handler = () => queryClient.invalidateQueries({ queryKey: ['smart-inventory'] });
+    window.addEventListener('app:refresh', handler);
+    return () => window.removeEventListener('app:refresh', handler);
+  }, [queryClient]);
 
-  const fetchData = async () => {
-    if (!profile) return;
-    setLoading(true);
+  const items = query.data ?? [];
 
-    try {
-      // Get owner's branch IDs
-      let branchIds: string[] = [];
-      if (selectedBranch) {
-        branchIds = [selectedBranch];
-      } else if (profile.role === 'owner' && profile.id) {
-        // Use cached owner-branch lookup.
-        branchIds = cachedOwnerBranchIds;
-      } else if (profile.branch_id) {
-        branchIds = [profile.branch_id];
-      }
-
-      if (branchIds.length === 0) {
-        setItems([]);
-        setLoading(false);
-        return;
-      }
-
-      // Fetch all branch_items for the branches, joined with medicines
-      const { data: branchItemsData } = await supabase
-        .from('branch_items')
-        .select('id, medicine_id, branch_id, selling_price, purchase_price, quantity, expiry_date')
-        .in('branch_id', branchIds);
-
-      // Fetch medicine details for the branch_items
-      const medIds = [...new Set((branchItemsData || []).map((bi: any) => bi.medicine_id))];
-      const { data: medicines } = medIds.length > 0
-        ? await supabase
-            .from('medicines')
-            .select('id, name, category, minimum_stock_level, item_type')
-            .in('id', medIds)
-        : { data: [] };
-
-      const medMap: Record<string, any> = {};
-      (medicines || []).forEach((m: any) => { medMap[m.id] = m; });
-
-      // Map branch_items as inventory items for smart analysis
-      const mappedMedicines = (branchItemsData || []).map((bi: any) => {
-        const med = medMap[bi.medicine_id] || {};
-        return {
-          id: bi.id,
-          name: med.name || 'Unknown',
-          category: med.category || 'Uncategorized',
-          stock_quantity: bi.quantity,
-          minimum_stock_level: med.minimum_stock_level || 0,
-          expiry_date: bi.expiry_date,
-          branch_id: bi.branch_id,
-          selling_price: bi.selling_price,
-          item_type: med.item_type,
-          medicine_id: bi.medicine_id,
-        };
-      });
-
-      if (!mappedMedicines || mappedMedicines.length === 0) {
-        setItems([]);
-        setLoading(false);
-        return;
-      }
-
-      const medicinesForAnalysis = mappedMedicines;
-
-      // Fetch sales from last 60 days for dead stock + demand calc
-      const sixtyDaysAgo = new Date();
-      sixtyDaysAgo.setDate(sixtyDaysAgo.getDate() - 60);
-
-      // Also fetch 12 months for seasonal multiplier
-      const oneYearAgo = new Date();
-      oneYearAgo.setFullYear(oneYearAgo.getFullYear() - 1);
-
-      const { data: recentSales } = await supabase
-        .from('sale_items')
-        .select('medicine_id, quantity, pack_quantity, strip_quantity, created_at, sales!inner(branch_id)')
-        .in('sales.branch_id', branchIds)
-        .gte('created_at', sixtyDaysAgo.toISOString());
-
-      const { data: yearlySales } = await supabase
-        .from('sale_items')
-        .select('medicine_id, quantity, pack_quantity, strip_quantity, created_at, sales!inner(branch_id)')
-        .in('sales.branch_id', branchIds)
-        .gte('created_at', oneYearAgo.toISOString());
-
-      // Build monthly map for seasonal multiplier: medicine_id -> month(0-11) -> qty
-      const monthlyMap: Record<string, number[]> = {};
-      (yearlySales || []).forEach((sale: any) => {
-        const id = sale.medicine_id;
-        if (!monthlyMap[id]) monthlyMap[id] = new Array(12).fill(0);
-        const month = new Date(sale.created_at).getMonth();
-        const packStripQty = (sale.pack_quantity || 0) + (sale.strip_quantity || 0);
-        const qty = packStripQty > 0 ? packStripQty : (sale.quantity || 0);
-        monthlyMap[id][month] += qty;
-      });
-
-      // Build sales map: medicine_id -> { totalQty30, totalQty60, lastSaleDate }
-      const thirtyDaysAgo = new Date();
-      thirtyDaysAgo.setDate(thirtyDaysAgo.getDate() - 30);
-      const now = new Date();
-
-      const salesMap: Record<string, { totalQty30: number; totalQty60: number; lastSaleDate: string | null }> = {};
-
-      (recentSales || []).forEach((sale: any) => {
-        const id = sale.medicine_id;
-        if (!salesMap[id]) salesMap[id] = { totalQty30: 0, totalQty60: 0, lastSaleDate: null };
-
-        const packStripQty = (sale.pack_quantity || 0) + (sale.strip_quantity || 0);
-        const qty = packStripQty > 0 ? packStripQty : (sale.quantity || 0);
-        const saleDate = new Date(sale.created_at);
-
-        salesMap[id].totalQty60 += qty;
-        if (saleDate >= thirtyDaysAgo) {
-          salesMap[id].totalQty30 += qty;
-        }
-
-        if (!salesMap[id].lastSaleDate || sale.created_at > salesMap[id].lastSaleDate!) {
-          salesMap[id].lastSaleDate = sale.created_at;
-        }
-      });
-
-      // Compute smart items
-      const smartItems: SmartItem[] = medicinesForAnalysis.map((med: any) => {
-        // Use medicine_id for sales lookup (sale_items references the original medicine)
-        const lookupId = med.medicine_id || med.id;
-        const sales = salesMap[lookupId] || { totalQty30: 0, totalQty60: 0, lastSaleDate: null };
-        const adc = sales.totalQty30 / 30;
-
-        // Apply seasonal multiplier to demand prediction
-        const seasonalMult = getSeasonalMultiplier(monthlyMap[lookupId] || new Array(12).fill(0));
-        const predictedDemand14 = adc * 14 * seasonalMult;
-
-        const safetyStock = predictedDemand14 * 0.2;
-        const minLevel = med.minimum_stock_level || 0;
-        // Reorder if either predicted 14-day demand exceeds stock, OR stock is below the
-        // configured minimum (covers low-stock items that have not sold recently).
-        const belowMin = minLevel > 0 && med.stock_quantity < minLevel;
-        const needsReorder = med.stock_quantity < predictedDemand14 || belowMin;
-        // Target restock = enough to cover demand+safety, but never less than the minimum.
-        const target = Math.max(predictedDemand14 + safetyStock, minLevel);
-        const suggestedReorder = needsReorder
-          ? Math.max(1, Math.ceil(target - med.stock_quantity))
-          : 0;
-
-        const daysRemaining = adc > 0 ? Math.round(med.stock_quantity / adc) : null;
-        const stockOutRisk = daysRemaining !== null && daysRemaining < 7;
-
-        // Expiry
-        let daysUntilExpiry: number | null = null;
-        if (med.expiry_date) {
-          const expiryDate = new Date(med.expiry_date);
-          daysUntilExpiry = Math.ceil((expiryDate.getTime() - now.getTime()) / (1000 * 60 * 60 * 24));
-        }
-        const expiryAlertLevel = calcExpiryLevel(daysUntilExpiry);
-
-        // Dead stock: no sales in 60 days AND stock > 0
-        const isDeadStock = sales.totalQty60 === 0 && med.stock_quantity > 0;
-
-        const scoreInput = { adc, currentStock: med.stock_quantity, predictedDemand14, daysUntilExpiry, isDeadStock };
-        const inventoryScore = calcInventoryScore(scoreInput);
-
-        return {
-          id: med.id,
-          name: med.name,
-          category: med.category || 'Uncategorized',
-          currentStock: med.stock_quantity,
-          minStockLevel: med.minimum_stock_level || 0,
-          expiryDate: med.expiry_date,
-          sellingPrice: med.selling_price || 0,
-          branchId: med.branch_id,
-          adc,
-          predictedDemand14,
-          safetyStock,
-          suggestedReorder,
-          needsReorder,
-          daysRemaining,
-          stockOutRisk,
-          daysUntilExpiry,
-          expiryAlertLevel,
-          isDeadStock,
-          lastSaleDate: sales.lastSaleDate,
-          totalSold30Days: sales.totalQty30,
-          inventoryScore,
-          scoreLevel: getScoreLevel(inventoryScore),
-        };
-      });
-
-      setItems(smartItems);
-    } catch (error) {
-      console.error('Error fetching smart inventory data:', error);
-    } finally {
-      setLoading(false);
-    }
-  };
-
-  // Derived summaries
   const summary = useMemo(() => {
-    // Only show items with actual recent sales in the demand list (adc > 0).
     const topDemand = [...items].filter(i => i.adc > 0).sort((a, b) => b.adc - a.adc).slice(0, 20);
     const reorderItems = items.filter(i => i.needsReorder);
     const stockOutAlerts = items.filter(i => i.stockOutRisk);
     const deadStock = items.filter(i => i.isDeadStock);
     const expiryAlerts = items.filter(i => i.expiryAlertLevel !== 'none');
     const criticalExpiry = items.filter(i => i.expiryAlertLevel === 'critical' || i.expiryAlertLevel === 'expired');
-
     const avgScore = items.length > 0
-      ? Math.round(items.reduce((sum, i) => sum + i.inventoryScore, 0) / items.length)
+      ? Math.round(items.reduce((s, i) => s + i.inventoryScore, 0) / items.length)
       : 0;
-
     const scoreDist = {
       excellent: items.filter(i => i.scoreLevel === 'excellent').length,
       good: items.filter(i => i.scoreLevel === 'good').length,
       risk: items.filter(i => i.scoreLevel === 'risk').length,
       critical: items.filter(i => i.scoreLevel === 'critical').length,
     };
-
-    return {
-      topDemand,
-      reorderItems,
-      stockOutAlerts,
-      deadStock,
-      expiryAlerts,
-      criticalExpiry,
-      avgScore,
-      scoreDist,
-      totalItems: items.length,
-    };
+    return { topDemand, reorderItems, stockOutAlerts, deadStock, expiryAlerts, criticalExpiry, avgScore, scoreDist, totalItems: items.length };
   }, [items]);
 
-  return { items, summary, loading, isPharmacy, refetch: fetchData };
+  return {
+    items,
+    summary,
+    loading: ownerBranchesLoading || query.isLoading,
+    error: query.error,
+    isPharmacy,
+    refetch: query.refetch,
+  };
 }

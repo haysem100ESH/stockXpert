@@ -20,6 +20,7 @@ import {
   Layers,
 } from 'lucide-react';
 import { Button } from '@/components/ui/button';
+import { Alert, AlertDescription } from '@/components/ui/alert';
 import ScoreOverview from './ScoreOverview';
 import DemandTable from './DemandTable';
 import ReorderSuggestions from './ReorderSuggestions';
@@ -31,9 +32,10 @@ import SeasonalInsights from './SeasonalInsights';
 import SeasonalTrendsWidget from './SeasonalTrendsWidget';
 import InventoryDashboard from '@/components/inventory/InventoryDashboard';
 import BatchAnalytics from '@/components/inventory/BatchAnalytics';
+import HealthScoreInfoDialog from './HealthScoreInfoDialog';
 
 export default function SmartInventoryDashboard() {
-  const { items, summary, loading, isPharmacy, refetch } = useSmartInventory();
+  const { items, summary, loading, error, isPharmacy, refetch } = useSmartInventory();
   const seasonal = useSeasonalPerformance();
   const { branchType } = useBranchContext();
 
@@ -63,11 +65,23 @@ export default function SmartInventoryDashboard() {
             </p>
           </div>
         </div>
-        <Button variant="outline" size="sm" onClick={refetch}>
-          <RefreshCw className="h-4 w-4 mr-2" />
-          Refresh
-        </Button>
+        <div className="flex items-center gap-2">
+          <HealthScoreInfoDialog isPharmacy={isPharmacy} />
+          <Button variant="outline" size="sm" onClick={() => refetch()}>
+            <RefreshCw className="h-4 w-4 mr-2" />
+            Refresh
+          </Button>
+        </div>
       </div>
+
+      {error && (
+        <Alert variant="destructive">
+          <AlertTriangle className="h-4 w-4" />
+          <AlertDescription>
+            Smart Inventory could not load branch stock. Please refresh after checking inventory table access.
+          </AlertDescription>
+        </Alert>
+      )}
 
       {/* Summary Cards */}
       <div className="grid grid-cols-2 md:grid-cols-3 lg:grid-cols-6 gap-4">
