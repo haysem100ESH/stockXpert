@@ -17,6 +17,12 @@ interface Medicine {
   open_pack_units?: number;
   unit_label?: string;
   item_type?: string;
+  // Multi-level packaging
+  sub_units_per_unit?: number | null;
+  sub_unit_name?: string | null;
+  sub_unit_price?: number | null;
+  main_unit_name?: string | null;
+  packaging_mode?: string | null;
 }
 
 interface AddToCartDialogProps {
@@ -27,11 +33,17 @@ interface AddToCartDialogProps {
 }
 
 export default function AddToCartDialog({ open, onOpenChange, medicine, onAddToCart }: AddToCartDialogProps) {
-  const getDefaultSaleType = () => medicine?.units_per_pack ? 'by_stripe' : 'full_pack';
-  const [saleType, setSaleType] = useState<'full_pack' | 'by_stripe'>(getDefaultSaleType());
+  const hasSubUnit = !!(medicine?.sub_units_per_unit && medicine.sub_units_per_unit > 0 && medicine.units_per_pack);
+  const getDefaultSaleType = (): 'full_pack' | 'by_stripe' | 'by_sub_unit' => {
+    if (hasSubUnit) return 'by_sub_unit';
+    return medicine?.units_per_pack ? 'by_stripe' : 'full_pack';
+  };
+  const [saleType, setSaleType] = useState<'full_pack' | 'by_stripe' | 'by_sub_unit'>(getDefaultSaleType());
   const [stripesCount, setStripesCount] = useState<number>(1);
   const [packQuantity, setPackQuantity] = useState<number>(1);
   const [stripInputValue, setStripInputValue] = useState<string>('1');
+  const [subUnitCount, setSubUnitCount] = useState<number>(1);
+  const [subUnitInputValue, setSubUnitInputValue] = useState<string>('1');
   const [measurableWhole, setMeasurableWhole] = useState<string>('1');
   const [measurableDecimal, setMeasurableDecimal] = useState<string>('0');
 
@@ -40,12 +52,24 @@ export default function AddToCartDialog({ open, onOpenChange, medicine, onAddToC
   const isMeasurableItem = medicine.item_type === 'measurable';
   const unitLabel = medicine.unit_label || (isMeasurableItem ? 'kg' : 'unit');
   const unitLabelCap = unitLabel.charAt(0).toUpperCase() + unitLabel.slice(1);
+  const subUnitName = medicine.sub_unit_name || 'sub-unit';
+  const subUnitNameCap = subUnitName.charAt(0).toUpperCase() + subUnitName.slice(1);
   const pricePerStripe = medicine.units_per_pack
     ? (medicine.selling_price / medicine.units_per_pack).toFixed(2)
     : '0';
 
   const totalAvailableStripes = medicine.units_per_pack
     ? (medicine.stock_quantity * medicine.units_per_pack) + (medicine.open_pack_units || 0)
+    : 0;
+
+  // Sub-unit pricing: explicit sub_unit_price overrides derived
+  const effectiveSubUnitPrice = hasSubUnit
+    ? (medicine.sub_unit_price && medicine.sub_unit_price > 0
+        ? Number(medicine.sub_unit_price)
+        : medicine.selling_price / (medicine.units_per_pack! * medicine.sub_units_per_unit!))
+    : 0;
+  const totalAvailableSubUnits = hasSubUnit
+    ? totalAvailableStripes * (medicine.sub_units_per_unit || 1)
     : 0;
 
   const getMeasurableQuantity = () => {
@@ -55,11 +79,13 @@ export default function AddToCartDialog({ open, onOpenChange, medicine, onAddToC
     return parseFloat((whole + dec).toFixed(2));
   };
 
-  const handleSaleTypeChange = (val: 'full_pack' | 'by_stripe') => {
+  const handleSaleTypeChange = (val: 'full_pack' | 'by_stripe' | 'by_sub_unit') => {
     setSaleType(val);
     setStripesCount(1);
     setStripInputValue('1');
     setPackQuantity(1);
+    setSubUnitCount(1);
+    setSubUnitInputValue('1');
   };
 
   const resetState = () => {
@@ -67,8 +93,24 @@ export default function AddToCartDialog({ open, onOpenChange, medicine, onAddToC
     setStripesCount(1);
     setStripInputValue('1');
     setPackQuantity(1);
+    setSubUnitCount(1);
+    setSubUnitInputValue('1');
     setMeasurableWhole('1');
     setMeasurableDecimal('0');
+  };
+
+  // Build a virtual "sub-unit clone" so all downstream cart/checkout/FIFO logic
+  // keeps treating quantities as 'by_stripe' but each "strip" is really 1 sub-unit.
+  const buildSubUnitClone = (): Medicine => {
+    const expandedUnitsPerPack = (medicine.units_per_pack || 1) * (medicine.sub_units_per_unit || 1);
+    const expandedSellingPrice = effectiveSubUnitPrice * expandedUnitsPerPack;
+    return {
+      ...medicine,
+      units_per_pack: expandedUnitsPerPack,
+      selling_price: expandedSellingPrice,
+      unit_label: subUnitName,
+      open_pack_units: (medicine.open_pack_units || 0) * (medicine.sub_units_per_unit || 1),
+    };
   };
 
   const handleAdd = () => {
@@ -76,6 +118,10 @@ export default function AddToCartDialog({ open, onOpenChange, medicine, onAddToC
       const qty = getMeasurableQuantity();
       if (qty <= 0 || qty > medicine.stock_quantity) return;
       onAddToCart(medicine, 'full_pack', qty);
+    } else if (saleType === 'by_sub_unit') {
+      if (subUnitCount <= 0) return;
+      const clone = buildSubUnitClone();
+      onAddToCart(clone, 'by_stripe', subUnitCount);
     } else {
       const finalCount = saleType === 'by_stripe' ? stripesCount : packQuantity;
       if (finalCount <= 0) return;
@@ -133,6 +179,22 @@ export default function AddToCartDialog({ open, onOpenChange, medicine, onAddToC
                     <Badge variant="outline">{medicine.open_pack_units}</Badge>
                   </div>
                 )}
+                {hasSubUnit && (
+                  <>
+                    <div className="flex justify-between text-sm">
+                      <span>{subUnitNameCap}s Per {unitLabelCap}:</span>
+                      <Badge variant="outline">{medicine.sub_units_per_unit}</Badge>
+                    </div>
+                    <div className="flex justify-between text-sm">
+                      <span>Price Per {subUnitNameCap}:</span>
+                      <span className="font-medium">ETB {effectiveSubUnitPrice.toFixed(2)}</span>
+                    </div>
+                    <div className="flex justify-between text-sm">
+                      <span>Total Available {subUnitNameCap}s:</span>
+                      <Badge variant="secondary">{totalAvailableSubUnits}</Badge>
+                    </div>
+                  </>
+                )}
               </>
             )}
           </div>
@@ -186,10 +248,16 @@ export default function AddToCartDialog({ open, onOpenChange, medicine, onAddToC
                     {medicine.units_per_pack && (
                       <SelectItem value="by_stripe">By {unitLabelCap}</SelectItem>
                     )}
+                    {hasSubUnit && (
+                      <SelectItem value="by_sub_unit">By {subUnitNameCap}</SelectItem>
+                    )}
                   </SelectContent>
                 </Select>
                 {medicine.units_per_pack && saleType === 'by_stripe' && (
                   <p className="text-xs text-primary font-medium">✓ Selling by individual {unitLabel}</p>
+                )}
+                {saleType === 'by_sub_unit' && (
+                  <p className="text-xs text-primary font-medium">✓ Selling by individual {subUnitName}</p>
                 )}
               </div>
 
@@ -237,6 +305,35 @@ export default function AddToCartDialog({ open, onOpenChange, medicine, onAddToC
                   />
                   <p className="text-sm text-muted-foreground">
                     Total: ETB {(stripesCount * parseFloat(pricePerStripe)).toFixed(2)}
+                  </p>
+                </div>
+              )}
+
+              {/* Quantity for by_sub_unit */}
+              {saleType === 'by_sub_unit' && hasSubUnit && (
+                <div className="space-y-2">
+                  <Label htmlFor="sub-unit-count">Number of {subUnitNameCap}s</Label>
+                  <Input
+                    id="sub-unit-count"
+                    type="number"
+                    step="1"
+                    min="1"
+                    max={totalAvailableSubUnits}
+                    value={subUnitInputValue}
+                    onChange={(e) => {
+                      setSubUnitInputValue(e.target.value);
+                      const val = parseInt(e.target.value);
+                      if (!isNaN(val) && val > 0) setSubUnitCount(val);
+                    }}
+                    onBlur={() => {
+                      const val = parseInt(subUnitInputValue);
+                      const clamped = isNaN(val) || val <= 0 ? 1 : Math.min(val, totalAvailableSubUnits);
+                      setSubUnitCount(clamped);
+                      setSubUnitInputValue(String(clamped));
+                    }}
+                  />
+                  <p className="text-sm text-muted-foreground">
+                    Total: ETB {(subUnitCount * effectiveSubUnitPrice).toFixed(2)}
                   </p>
                 </div>
               )}
