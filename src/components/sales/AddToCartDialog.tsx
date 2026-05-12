@@ -33,10 +33,15 @@ interface AddToCartDialogProps {
 }
 
 export default function AddToCartDialog({ open, onOpenChange, medicine, onAddToCart }: AddToCartDialogProps) {
-  const hasSubUnit = !!(medicine?.sub_units_per_unit && medicine.sub_units_per_unit > 0 && medicine.units_per_pack);
+  // Pharmacy "no_strip" mode (bottle/sachet/tube/no_strip) → only the full pack
+  // can be sold; strip + sub-unit options are hidden regardless of stored counts.
+  const packagingModeNorm = (medicine?.packaging_mode || '').toLowerCase().trim();
+  const noStripMode = ['no_strip', 'no-strip', 'nostrip', 'bottle', 'sachet', 'tube'].includes(packagingModeNorm);
+  const hasSubUnit = !noStripMode && !!(medicine?.sub_units_per_unit && medicine.sub_units_per_unit > 0 && medicine.units_per_pack);
+  const allowByStripe = !noStripMode && !!medicine?.units_per_pack;
   const getDefaultSaleType = (): 'full_pack' | 'by_stripe' | 'by_sub_unit' => {
     if (hasSubUnit) return 'by_sub_unit';
-    return medicine?.units_per_pack ? 'by_stripe' : 'full_pack';
+    return allowByStripe ? 'by_stripe' : 'full_pack';
   };
   const [saleType, setSaleType] = useState<'full_pack' | 'by_stripe' | 'by_sub_unit'>(getDefaultSaleType());
   const [stripesCount, setStripesCount] = useState<number>(1);
