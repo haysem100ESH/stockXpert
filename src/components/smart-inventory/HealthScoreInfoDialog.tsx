@@ -211,6 +211,15 @@ function ScoreFactor({ sign, range, title, desc }: { sign: string; range: string
   );
 }
 
+function Bullet({ children }: { children: React.ReactNode }) {
+  return (
+    <div className="flex gap-2">
+      <span className="text-primary mt-1">•</span>
+      <p className="flex-1">{children}</p>
+    </div>
+  );
+}
+
 function AlertRow({ icon, title, desc }: { icon: React.ReactNode; title: string; desc: string }) {
   return (
     <div className="flex gap-3">
