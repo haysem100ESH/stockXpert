@@ -517,8 +517,12 @@ export default function ImportCsvDialog({ open, onOpenChange, onImported }: Impo
       let units_per_strip: number | null = null;
       let units_per_pack: number | null = null;
 
-      if (packagingRaw === 'with_strip' || packagingRaw === 'no_strip') {
-        packaging_mode = packagingRaw;
+      // Final-template values: 'standard_strip' → with_strip; bottle/sachet/tube → no_strip.
+      const packagingNorm = packagingRaw.toLowerCase().trim();
+      if (packagingNorm === 'with_strip' || packagingNorm === 'standard_strip') {
+        packaging_mode = 'with_strip';
+      } else if (['no_strip', 'bottle', 'sachet', 'tube', 'carton', 'box', 'pack', 'piece'].includes(packagingNorm)) {
+        packaging_mode = 'no_strip';
       } else {
         const parsed = parsePackagingMode(packagingRaw);
         if (parsed.isStripLayout) {
