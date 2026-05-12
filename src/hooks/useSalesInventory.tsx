@@ -41,6 +41,12 @@ export interface SalesMedicine {
   branch_name?: string;
   medicine_group?: string | null;
   strength?: string | null;
+  packaging_mode?: string | null;
+  sub_units_per_unit?: number | null;
+  main_unit_name?: string | null;
+  sub_unit_name?: string | null;
+  unit_price?: number | null;
+  sub_unit_price?: number | null;
 }
 
 export interface SalesCustomer {
@@ -70,7 +76,7 @@ async function fetchSalesInventory(branchIds: string[]): Promise<SalesMedicine[]
   const [medsRes, branchesRes] = await Promise.all([
     (supabase as any)
       .from('medicines')
-      .select('id, name, generic_name, category, item_type, unit_label, units_per_pack, medicine_group, strength')
+      .select('id, name, generic_name, category, item_type, unit_label, units_per_pack, medicine_group, strength, packaging_mode, sub_units_per_unit, main_unit_name, sub_unit_name, unit_price, sub_unit_price')
       .in('id', medicineIds),
     allBranchIds.length > 0
       ? (supabase as any).from('pharmacy_branches').select('id, name').in('id', allBranchIds)
@@ -102,6 +108,12 @@ async function fetchSalesInventory(branchIds: string[]): Promise<SalesMedicine[]
       branch_name: branchMap[item.branch_id],
       medicine_group: med.medicine_group,
       strength: med.strength,
+      packaging_mode: med.packaging_mode,
+      sub_units_per_unit: med.sub_units_per_unit,
+      main_unit_name: med.main_unit_name,
+      sub_unit_name: med.sub_unit_name,
+      unit_price: med.unit_price,
+      sub_unit_price: med.sub_unit_price,
     } as SalesMedicine;
   });
 }
