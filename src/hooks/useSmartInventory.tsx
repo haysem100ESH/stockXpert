@@ -276,7 +276,8 @@ export function useSmartInventory() {
   return {
     items,
     summary,
-    loading: query.isLoading,
+    loading: ownerBranchesLoading || query.isLoading,
+    error: query.error,
     isPharmacy,
     refetch: query.refetch,
   };
