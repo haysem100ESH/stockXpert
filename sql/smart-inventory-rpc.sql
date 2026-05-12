@@ -49,7 +49,7 @@ AS $$
       s.branch_id,
       si.medicine_id,
       SUM( CASE
-             WHEN si.created_at >= now() - interval '30 days'
+             WHEN s.created_at >= now() - interval '30 days'
              THEN COALESCE(NULLIF(COALESCE(si.pack_quantity,0)+COALESCE(si.strip_quantity,0),0), si.quantity, 0)
              ELSE 0
            END ) AS qty_30,
