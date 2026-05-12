@@ -432,13 +432,33 @@ export default function ImportCsvDialog({ open, onOpenChange, onImported }: Impo
 
   const handleDownloadTemplate = async () => {
     try {
-      const blob = await buildTemplateXlsx(isPharmacy ? 'pharmacy' : 'general');
+      const mode = isPharmacy ? 'pharmacy' : 'general';
+      const filename = `inventory-import-template-${mode}.xlsx`;
+      const blob = await buildTemplateXlsx(mode);
+
+      // iOS/Android Safari + in-app browsers don't reliably trigger download
+      // from a detached <a>. Append to DOM, use rel=noopener, and as a last
+      // resort fall back to opening the blob in a new tab so the user can save it.
+      const nav: any = navigator;
+      if (nav.msSaveOrOpenBlob) {
+        nav.msSaveOrOpenBlob(blob, filename);
+        return;
+      }
+
       const url = URL.createObjectURL(blob);
       const a = document.createElement('a');
       a.href = url;
-      a.download = `inventory-import-template-${isPharmacy ? 'pharmacy' : 'general'}.xlsx`;
+      a.download = filename;
+      a.rel = 'noopener';
+      a.target = '_blank';
+      a.style.display = 'none';
+      document.body.appendChild(a);
       a.click();
-      URL.revokeObjectURL(url);
+
+      setTimeout(() => {
+        document.body.removeChild(a);
+        URL.revokeObjectURL(url);
+      }, 1500);
     } catch (e: any) {
       toast({ title: 'Failed to build template', description: e?.message || 'Unknown error', variant: 'destructive' });
     }
