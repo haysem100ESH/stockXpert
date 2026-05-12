@@ -483,9 +483,11 @@ export default function SalesManagement() {
         if (item.saleType === 'full_pack') {
           totalQtyToDeduct = item.quantity;
         } else if (item.saleType === 'by_stripe' && item.stripesCount) {
-          const medicine = medicines.find(m => m.id === item.id);
-          if (!medicine?.units_per_pack) continue;
-          totalQtyToDeduct = item.stripesCount / medicine.units_per_pack;
+          // Use the cart item's units_per_pack (which may be the expanded value
+          // for sub-unit sales, not the original medicine's units_per_pack).
+          const upp = item.units_per_pack;
+          if (!upp) continue;
+          totalQtyToDeduct = item.stripesCount / upp;
         }
 
         if (totalQtyToDeduct > 0) {
