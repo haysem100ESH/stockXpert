@@ -34,13 +34,16 @@ const HEADER_ALIASES: Record<string, string> = {
   unit_label: 'unit_label', 'unit by label': 'unit_label', 'unit label': 'unit_label', unit: 'unit_label',
   packaging_mode: 'packaging_mode', 'packaging mode': 'packaging_mode', packaging: 'packaging_mode', pack: 'packaging_mode',
   strips_per_pack: 'strips_per_pack', 'strips per pack': 'strips_per_pack',
-  units_per_strip: 'units_per_strip', 'units per strip': 'units_per_strip',
-  units_per_pack: 'units_per_pack', 'units per pack': 'units_per_pack', 'unit per pack': 'units_per_pack',
+  units_per_strip: 'units_per_strip', 'units per strip': 'units_per_strip', 'tablets per strip': 'units_per_strip',
+  units_per_pack: 'units_per_pack', 'units per pack': 'units_per_pack', 'unit per pack': 'units_per_pack', 'units per item': 'units_per_pack',
   purchase_price: 'purchase_price', 'purchase price': 'purchase_price', 'perchasing price': 'purchase_price',
   'perchasing price strip': 'purchase_price', 'purchase price strip': 'purchase_price',
   'cost price': 'purchase_price', cost: 'purchase_price',
   selling_price: 'selling_price', 'selling price': 'selling_price', 'selling price strip': 'selling_price',
   price: 'selling_price', sale: 'selling_price', 'sale price': 'selling_price',
+  // Pack-level price (final template): "MEDICINE PRICE" / "ITEM PRICE" / "PACK PRICE"
+  // Different from selling_price because it must NOT be multiplied by strips_per_pack.
+  pack_price: 'pack_price', 'pack price': 'pack_price', 'medicine price': 'pack_price', 'item price': 'pack_price',
   stock_quantity: 'stock_quantity', 'stock quantity': 'stock_quantity', quantity: 'stock_quantity',
   'quantity pk': 'stock_quantity', qty: 'stock_quantity', stock: 'stock_quantity',
   minimum_stock_level: 'minimum_stock_level', 'minimum stock level': 'minimum_stock_level',
@@ -53,8 +56,8 @@ const HEADER_ALIASES: Record<string, string> = {
   sub_unit_name: 'sub_unit_name', 'sub unit name': 'sub_unit_name',
   sub_units_per_unit: 'sub_units_per_unit', 'sub units per unit': 'sub_units_per_unit', 'sub units': 'sub_units_per_unit',
   main_unit_price: 'main_unit_price', 'main unit price': 'main_unit_price',
-  unit_price: 'unit_price', 'unit price': 'unit_price',
-  sub_unit_price: 'sub_unit_price', 'sub unit price': 'sub_unit_price',
+  unit_price: 'unit_price', 'unit price': 'unit_price', 'strip price': 'unit_price',
+  sub_unit_price: 'sub_unit_price', 'sub unit price': 'sub_unit_price', 'tablet price': 'sub_unit_price',
 };
 
 function normalizeHeader(h: string): string {
@@ -235,55 +238,42 @@ interface ParsedRow {
   active_ingredients: ActiveIngredient[];
 }
 
-const HEADERS = [
-  'name',
-  'generic_name',
-  'medicine_group',
-  'strength',
-  'category',
-  'manufacturer',
-  'batch_number',
-  'item_type',
-  'unit_label',
-  'packaging_mode',
-  'strips_per_pack',
-  'units_per_strip',
-  'units_per_pack',
-  'purchase_price',
-  'selling_price',
-  'stock_quantity',
-  'minimum_stock_level',
-  'expiry_date',
-  'container_type',
-  'sub_units_per_unit',
-  'sub_unit_name',
-  'unit_price',
-  'sub_unit_price',
+// Final-template column order — pharmacy and general share the parser, but the
+// downloaded template surfaces only the columns relevant to that branch type.
+const PHARMACY_HEADERS = [
+  'GROUP', 'NAME OF ITEMS', 'GENERIC NAME', 'STRENGTH', 'CATEGORY',
+  'BATCH NO', 'ITEM TYPE', 'UNIT BY LABEL', 'PACKAGING MODE',
+  'STRIPS PER PACK', 'TABLETS PER STRIP',
+  'MEDICINE PRICE', 'STRIP PRICE', 'TABLET PRICE',
+  'PURCHASE PRICE', 'STOCK QUANTITY', 'EXPIRY DATE',
+];
+
+const GENERAL_HEADERS = [
+  'ITEM NAME', 'CATEGORY', 'PACKAGING MODE',
+  'UNITS PER ITEM', 'ITEM PRICE', 'UNIT PRICE',
+  'PURCHASE PRICE', 'STOCK QUANTITY', 'EXPIRY DATE',
 ];
 
 // Pharmacy-only optional columns (may be missing in older templates / general branch)
 const OPTIONAL_HEADERS = new Set(['medicine_group', 'strength']);
 
-// Order matches HEADERS exactly:
-// name, generic_name, medicine_group, strength, category, manufacturer, batch_number,
-// item_type, unit_label, packaging_mode, strips_per_pack, units_per_strip, units_per_pack,
-// purchase_price, selling_price, stock_quantity, minimum_stock_level, expiry_date
-// Pharmacy template demonstrates hierarchical composition:
+// Pharmacy template demonstrates:
 //   - Row with NAME OF ITEMS filled = new medicine
 //   - Subsequent rows with empty NAME OF ITEMS = active ingredients of the
-//     previous medicine (only generic_name + optional strength matter)
+//     previous medicine (only GENERIC NAME + optional STRENGTH matter)
+//   - "no_strip" packaging (bottle/sachet/tube) sells as full pack only.
 const SAMPLE_PHARMACY = [
-  ['Snip',             'Paracetamol',                 'NSAIDS and anti-pain', '325mg',    'tablet',  'Local Pharma','BN-SNIP-01',  'full_pcs',   'strip',  'with_strip', '10', '10', '',  '3.00',  '5.00',  '50',  '10', '2027-06-30', 'Pack',   '10', 'Tablet', '5.00', '0.50'],
-  ['',                 'Pseudoephedrine Hydrochloride','',                    '15mg',     '',        '',           '',            '',           '',       '',           '',   '',   '',  '',      '',      '',    '',   '',           '',       '',   '',       '',     ''],
-  ['',                 'Chlorophenaramine maleate',   '',                     '1mg',      '',        '',           '',            '',           '',       '',           '',   '',   '',  '',      '',      '',    '',   '',           '',       '',   '',       '',     ''],
-  ['Etricox 90mg',     'Etoricoxib',                  'NSAIDS and anti-pain', '90mg',     'tablet',  'Pharmacare', 'BN-ETR-09',   'full_pcs',   'strip',  'with_strip', '3',  '10', '',  '12.00', '20.00', '30',  '5',  '2026-12-31', 'Pack',   '10', 'Tablet', '20.00','2.00'],
-  ['Amoxicillin Syrup','Amoxicillin',                 'Antibiotics',          '250mg/5ml','syrup',   'Pfizer',     'BN-AMX-2026', 'full_pcs',   'bottle', 'no_strip',   '',   '',   '1', '45.00', '70.00', '15',  '3',  '2026-08-15', 'Bottle', '',   '',       '',     ''],
+  // GROUP, NAME, GENERIC, STRENGTH, CATEGORY, BATCH, ITEM TYPE, UNIT, PACKAGING, STRIPS/PACK, TABLETS/STRIP, MED PRICE, STRIP PRICE, TABLET PRICE, PURCHASE, QTY, EXPIRY
+  ['NSAIDS and anti-pain', 'Paracetamol 500mg', 'Paracetamol', '500mg', 'tablet', 'BN-PCM-01', 'full_pcs', 'tablet', 'standard_strip', '3', '10', '300', '100', '10', '180', '50', '2027-06-30'],
+  ['NSAIDS and anti-pain', 'Etricox 90mg',      'Etoricoxib',  '90mg',  'tablet', 'BN-ETR-09', 'full_pcs', 'tablet', 'standard_strip', '3', '10', '600', '',    '',   '420', '30', '2026-12-31'],
+  ['Antibiotics',          'Amoxicillin Syrup', 'Amoxicillin', '250mg/5ml', 'syrup', 'BN-AMX-2026', 'full_pcs', 'bottle', 'no_strip', '', '', '70', '', '', '45', '15', '2026-08-15'],
 ];
 
 const SAMPLE_GENERAL = [
-  ['Rice',           '', '', '', 'grocery',  'Local Farm', '',  'measurable', 'kg',     'no_strip', '', '', '',  '40.00',  '55.00',  '500', '50', '',           'Bag',    '',  '',      '',     ''],
-  ['Cooking Oil 1L', '', '', '', 'grocery',  'Shemu',      '',  'full_pcs',   'bottle', 'no_strip', '', '', '1', '120.00', '150.00', '60',  '10', '2027-01-31', 'Bottle', '',  '',      '',     ''],
-  ['Soap Bar',       '', '', '', 'cleaning', 'Lifebuoy',   '',  'full_pcs',   'piece',  'no_strip', '', '', '',  '15.00',  '20.00',  '120', '20', '',           'Pack',   '',  '',      '',     ''],
+  // ITEM NAME, CATEGORY, PACKAGING MODE, UNITS PER ITEM, ITEM PRICE, UNIT PRICE, PURCHASE PRICE, QTY, EXPIRY
+  ['Carton Milk 1L',  'grocery',  'carton',  '24', '2400', '100', '1800', '20',  ''],
+  ['Cooking Oil 1L',  'grocery',  'bottle',  '1',  '150',  '',    '120',  '60',  '2027-01-31'],
+  ['Soap Bar Pack',   'cleaning', 'pack',    '6',  '120',  '20',  '90',   '40',  ''],
 ];
 
 function escapeCsv(v: string): string {
@@ -296,8 +286,9 @@ function escapeCsv(v: string): string {
 }
 
 function buildTemplate(mode: 'pharmacy' | 'general'): string {
+  const headers = mode === 'pharmacy' ? PHARMACY_HEADERS : GENERAL_HEADERS;
   const sample = mode === 'pharmacy' ? SAMPLE_PHARMACY : SAMPLE_GENERAL;
-  const lines = [HEADERS.join(',')];
+  const lines = [headers.join(',')];
   sample.forEach(row => lines.push(row.map(escapeCsv).join(',')));
   return lines.join('\n');
 }
@@ -435,12 +426,15 @@ export default function ImportCsvDialog({ open, onOpenChange, onImported }: Impo
       if (keyIndex[k] === undefined) keyIndex[k] = +i;
     });
 
-    // Required columns
-    const required = ['name', 'purchase_price', 'selling_price', 'stock_quantity'];
+    // Required columns. Either "selling_price" OR "pack_price" satisfies the price requirement.
+    const required = ['name', 'purchase_price', 'stock_quantity'];
     const missingReq = required.filter(k => keyIndex[k] === undefined);
+    if (keyIndex['selling_price'] === undefined && keyIndex['pack_price'] === undefined) {
+      missingReq.push('selling_price (or medicine/item/pack price)');
+    }
     if (missingReq.length > 0) {
       const recognizedList = Object.values(headerToKey).join(', ') || '(none)';
-      return { ok: [], errs: [`Missing required column(s): ${missingReq.join(', ')}. Header row detected at row ${headerRowIdx + 1}. Recognized headers: ${recognizedList}. Tip: make sure your header row is the first non-empty row and column names match (e.g. "NAME OF ITEMS", "PERCHASING PRICE (strip)", "QUANTITY (PK)").`] };
+      return { ok: [], errs: [`Missing required column(s): ${missingReq.join(', ')}. Header row detected at row ${headerRowIdx + 1}. Recognized headers: ${recognizedList}. Tip: make sure your header row is the first non-empty row and column names match (e.g. "NAME OF ITEMS", "MEDICINE PRICE", "QUANTITY").`] };
     }
     const get = (cells: any[], k: string): string => {
       const i = keyIndex[k];
@@ -523,8 +517,12 @@ export default function ImportCsvDialog({ open, onOpenChange, onImported }: Impo
       let units_per_strip: number | null = null;
       let units_per_pack: number | null = null;
 
-      if (packagingRaw === 'with_strip' || packagingRaw === 'no_strip') {
-        packaging_mode = packagingRaw;
+      // Final-template values: 'standard_strip' → with_strip; bottle/sachet/tube → no_strip.
+      const packagingNorm = packagingRaw.toLowerCase().trim();
+      if (packagingNorm === 'with_strip' || packagingNorm === 'standard_strip') {
+        packaging_mode = 'with_strip';
+      } else if (['no_strip', 'bottle', 'sachet', 'tube', 'carton', 'box', 'pack', 'piece'].includes(packagingNorm)) {
+        packaging_mode = 'no_strip';
       } else {
         const parsed = parsePackagingMode(packagingRaw);
         if (parsed.isStripLayout) {
@@ -556,13 +554,22 @@ export default function ImportCsvDialog({ open, onOpenChange, onImported }: Impo
 
       const purchaseRaw = get(cells, 'purchase_price');
       const sellingRaw = get(cells, 'selling_price');
+      const packPriceRaw = get(cells, 'pack_price');
       let purchase_price = parseFloat(purchaseRaw);
-      let selling_price = parseFloat(sellingRaw);
+      // Pack-level price ("MEDICINE PRICE" / "ITEM PRICE" / "PACK PRICE") wins
+      // over generic "selling price". When present we treat it as the final pack
+      // price and skip the per-strip→per-pack multiplier below.
+      const pickedPackPrice = packPriceRaw ? parseFloat(packPriceRaw) : NaN;
+      const usingPackLevelPrice = !isNaN(pickedPackPrice);
+      let selling_price = usingPackLevelPrice ? pickedPackPrice : parseFloat(sellingRaw);
+      const sellingLabel = usingPackLevelPrice ? 'MEDICINE/ITEM PRICE' : 'SELLING PRICE (strip)';
       if (!purchaseRaw || isNaN(purchase_price) || purchase_price < 0) rowErrors.push(`column "PERCHASING PRICE (strip)" = "${purchaseRaw}" is missing or not a valid number ≥ 0`);
-      if (!sellingRaw || isNaN(selling_price) || selling_price < 0) rowErrors.push(`column "SELLING PRICE (strip)" = "${sellingRaw}" is missing or not a valid number ≥ 0`);
+      if ((!sellingRaw && !packPriceRaw) || isNaN(selling_price) || selling_price < 0) rowErrors.push(`column "${sellingLabel}" = "${sellingRaw || packPriceRaw}" is missing or not a valid number ≥ 0`);
 
-      // Per-strip → per-pack conversion (user choice: prices labeled "(strip)" → multiply by strips_per_pack)
-      if (packaging_mode === 'with_strip' && strips_per_pack && strips_per_pack > 1) {
+      // Per-strip → per-pack conversion: only when the price came from a
+      // strip-level header (legacy "SELLING PRICE (strip)"). Pack-level prices
+      // already represent the full pack and must NOT be multiplied.
+      if (!usingPackLevelPrice && packaging_mode === 'with_strip' && strips_per_pack && strips_per_pack > 1) {
         if (!isNaN(purchase_price)) purchase_price = +(purchase_price * strips_per_pack).toFixed(2);
         if (!isNaN(selling_price)) selling_price = +(selling_price * strips_per_pack).toFixed(2);
       }
@@ -593,11 +600,32 @@ export default function ImportCsvDialog({ open, onOpenChange, onImported }: Impo
       const container_type = get(cells, 'container_type') || null;
       const sub_unit_name = get(cells, 'sub_unit_name') || null;
       const subUnitsRaw = get(cells, 'sub_units_per_unit');
-      const sub_units_per_unit = subUnitsRaw && parseInt(subUnitsRaw) > 0 ? parseInt(subUnitsRaw) : null;
+      let sub_units_per_unit = subUnitsRaw && parseInt(subUnitsRaw) > 0 ? parseInt(subUnitsRaw) : null;
+      // Pharmacy template "TABLETS PER STRIP" feeds units_per_strip; mirror it
+      // into sub_units_per_unit so the 3-tier (pack→strip→tablet) hierarchy
+      // works at sale time without forcing the user to fill it twice.
+      if (!sub_units_per_unit && isPharmacy && units_per_strip && units_per_strip > 1) {
+        sub_units_per_unit = units_per_strip;
+      }
       const unitPriceRaw = get(cells, 'unit_price');
-      const unit_price = unitPriceRaw && !isNaN(parseFloat(unitPriceRaw)) ? parseFloat(unitPriceRaw) : null;
+      let unit_price: number | null = unitPriceRaw && !isNaN(parseFloat(unitPriceRaw)) ? parseFloat(unitPriceRaw) : null;
       const subUnitPriceRaw = get(cells, 'sub_unit_price');
-      const sub_unit_price = subUnitPriceRaw && !isNaN(parseFloat(subUnitPriceRaw)) ? parseFloat(subUnitPriceRaw) : null;
+      let sub_unit_price: number | null = subUnitPriceRaw && !isNaN(parseFloat(subUnitPriceRaw)) ? parseFloat(subUnitPriceRaw) : null;
+
+      // Auto-derive missing prices from the pack price (final-template rule).
+      // Pharmacy: strip_price = pack/strips_per_pack; tablet_price = strip/tablets_per_strip.
+      // General : unit_price  = pack/units_per_pack.
+      if (selling_price > 0) {
+        if (isPharmacy && packaging_mode === 'with_strip' && strips_per_pack && strips_per_pack > 0) {
+          if (unit_price == null) unit_price = +(selling_price / strips_per_pack).toFixed(4);
+          if (sub_unit_price == null && units_per_strip && units_per_strip > 0) {
+            sub_unit_price = +(unit_price / units_per_strip).toFixed(4);
+          }
+        } else if (!isPharmacy && units_per_pack && units_per_pack > 0) {
+          if (unit_price == null) unit_price = +(selling_price / units_per_pack).toFixed(4);
+        }
+      }
+
       const main_unit_name = container_type;
 
       const key = `${name.toLowerCase()}|${(manufacturer || '').toLowerCase()}|${(strength || '').toLowerCase()}|${(batch_number || '').toLowerCase()}`;
@@ -759,7 +787,7 @@ export default function ImportCsvDialog({ open, onOpenChange, onImported }: Impo
             branch_id: selectedBranchId,
             created_by: user?.id || null,
             expiry_date: row.expiry_date,
-            packaging_mode: row.container_type,
+            packaging_mode: row.container_type || row.packaging_mode,
             main_unit_name: row.main_unit_name,
             sub_unit_name: row.sub_unit_name,
             sub_units_per_unit: row.sub_units_per_unit,
