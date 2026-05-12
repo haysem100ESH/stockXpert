@@ -39,10 +39,19 @@ RETURNS TABLE (
 )
 LANGUAGE sql
 STABLE
-SECURITY INVOKER
+SECURITY DEFINER
 SET search_path = public
 AS $$
   WITH
+  accessible_branches AS (
+    SELECT pb.id
+    FROM public.pharmacy_branches pb
+    WHERE pb.id = ANY(_branch_ids)
+      AND (
+        pb.pharmacy_owner_id = auth.uid()
+        OR pb.id = (SELECT p.branch_id FROM public.profiles p WHERE p.id = auth.uid())
+      )
+  ),
   -- Pre-aggregate sale_items once per medicine over the relevant horizons.
   recent AS (
     SELECT
@@ -57,7 +66,7 @@ AS $$
       MAX(s.created_at) AS last_sale_date
     FROM public.sale_items si
     JOIN public.sales s ON s.id = si.sale_id
-    WHERE s.branch_id = ANY(_branch_ids)
+    JOIN accessible_branches ab ON ab.id = s.branch_id
       AND s.created_at >= now() - interval '60 days'
     GROUP BY s.branch_id, si.medicine_id
   ),
@@ -69,7 +78,7 @@ AS $$
       SUM( COALESCE(NULLIF(COALESCE(si.pack_quantity,0)+COALESCE(si.strip_quantity,0),0), si.quantity, 0) ) AS qty
     FROM public.sale_items si
     JOIN public.sales s ON s.id = si.sale_id
-    WHERE s.branch_id = ANY(_branch_ids)
+    JOIN accessible_branches ab ON ab.id = s.branch_id
       AND s.created_at >= now() - interval '365 days'
     GROUP BY s.branch_id, si.medicine_id, EXTRACT(MONTH FROM s.created_at)
   ),
@@ -104,7 +113,7 @@ AS $$
   JOIN public.medicines m ON m.id = bi.medicine_id
   LEFT JOIN recent      r  ON r.branch_id = bi.branch_id AND r.medicine_id  = bi.medicine_id
   LEFT JOIN monthly_arr ma ON ma.branch_id = bi.branch_id AND ma.medicine_id = bi.medicine_id
-  WHERE bi.branch_id = ANY(_branch_ids);
+  JOIN accessible_branches ab ON ab.id = bi.branch_id;
 $$;
 
 GRANT EXECUTE ON FUNCTION public.smart_inventory_summary(uuid[])
