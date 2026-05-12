@@ -559,13 +559,22 @@ export default function ImportCsvDialog({ open, onOpenChange, onImported }: Impo
 
       const purchaseRaw = get(cells, 'purchase_price');
       const sellingRaw = get(cells, 'selling_price');
+      const packPriceRaw = get(cells, 'pack_price');
       let purchase_price = parseFloat(purchaseRaw);
-      let selling_price = parseFloat(sellingRaw);
+      // Pack-level price ("MEDICINE PRICE" / "ITEM PRICE" / "PACK PRICE") wins
+      // over generic "selling price". When present we treat it as the final pack
+      // price and skip the per-strip→per-pack multiplier below.
+      const pickedPackPrice = packPriceRaw ? parseFloat(packPriceRaw) : NaN;
+      const usingPackLevelPrice = !isNaN(pickedPackPrice);
+      let selling_price = usingPackLevelPrice ? pickedPackPrice : parseFloat(sellingRaw);
+      const sellingLabel = usingPackLevelPrice ? 'MEDICINE/ITEM PRICE' : 'SELLING PRICE (strip)';
       if (!purchaseRaw || isNaN(purchase_price) || purchase_price < 0) rowErrors.push(`column "PERCHASING PRICE (strip)" = "${purchaseRaw}" is missing or not a valid number ≥ 0`);
-      if (!sellingRaw || isNaN(selling_price) || selling_price < 0) rowErrors.push(`column "SELLING PRICE (strip)" = "${sellingRaw}" is missing or not a valid number ≥ 0`);
+      if ((!sellingRaw && !packPriceRaw) || isNaN(selling_price) || selling_price < 0) rowErrors.push(`column "${sellingLabel}" = "${sellingRaw || packPriceRaw}" is missing or not a valid number ≥ 0`);
 
-      // Per-strip → per-pack conversion (user choice: prices labeled "(strip)" → multiply by strips_per_pack)
-      if (packaging_mode === 'with_strip' && strips_per_pack && strips_per_pack > 1) {
+      // Per-strip → per-pack conversion: only when the price came from a
+      // strip-level header (legacy "SELLING PRICE (strip)"). Pack-level prices
+      // already represent the full pack and must NOT be multiplied.
+      if (!usingPackLevelPrice && packaging_mode === 'with_strip' && strips_per_pack && strips_per_pack > 1) {
         if (!isNaN(purchase_price)) purchase_price = +(purchase_price * strips_per_pack).toFixed(2);
         if (!isNaN(selling_price)) selling_price = +(selling_price * strips_per_pack).toFixed(2);
       }
