@@ -139,6 +139,22 @@ export default function AddToCartDialog({ open, onOpenChange, medicine, onAddToC
                     <Badge variant="outline">{medicine.open_pack_units}</Badge>
                   </div>
                 )}
+                {hasSubUnit && (
+                  <>
+                    <div className="flex justify-between text-sm">
+                      <span>{subUnitNameCap}s Per {unitLabelCap}:</span>
+                      <Badge variant="outline">{medicine.sub_units_per_unit}</Badge>
+                    </div>
+                    <div className="flex justify-between text-sm">
+                      <span>Price Per {subUnitNameCap}:</span>
+                      <span className="font-medium">ETB {effectiveSubUnitPrice.toFixed(2)}</span>
+                    </div>
+                    <div className="flex justify-between text-sm">
+                      <span>Total Available {subUnitNameCap}s:</span>
+                      <Badge variant="secondary">{totalAvailableSubUnits}</Badge>
+                    </div>
+                  </>
+                )}
               </>
             )}
           </div>
@@ -192,10 +208,16 @@ export default function AddToCartDialog({ open, onOpenChange, medicine, onAddToC
                     {medicine.units_per_pack && (
                       <SelectItem value="by_stripe">By {unitLabelCap}</SelectItem>
                     )}
+                    {hasSubUnit && (
+                      <SelectItem value="by_sub_unit">By {subUnitNameCap}</SelectItem>
+                    )}
                   </SelectContent>
                 </Select>
                 {medicine.units_per_pack && saleType === 'by_stripe' && (
                   <p className="text-xs text-primary font-medium">✓ Selling by individual {unitLabel}</p>
+                )}
+                {saleType === 'by_sub_unit' && (
+                  <p className="text-xs text-primary font-medium">✓ Selling by individual {subUnitName}</p>
                 )}
               </div>
 
