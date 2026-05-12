@@ -10,11 +10,11 @@
 -- ============================================================================
 
 -- Supporting indexes (transaction-safe). Skips if already present.
-CREATE INDEX IF NOT EXISTS idx_sale_items_created_medicine
-  ON public.sale_items (created_at DESC, medicine_id);
+CREATE INDEX IF NOT EXISTS idx_sales_smart_inventory_branch_created
+  ON public.sales (branch_id, created_at DESC, id);
 
-CREATE INDEX IF NOT EXISTS idx_sale_items_sale_id
-  ON public.sale_items (sale_id);
+CREATE INDEX IF NOT EXISTS idx_sale_items_smart_inventory_sale_medicine
+  ON public.sale_items (sale_id, medicine_id);
 
 CREATE INDEX IF NOT EXISTS idx_branch_items_branch
   ON public.branch_items (branch_id);
@@ -54,24 +54,24 @@ AS $$
              ELSE 0
            END ) AS qty_30,
       SUM( COALESCE(NULLIF(COALESCE(si.pack_quantity,0)+COALESCE(si.strip_quantity,0),0), si.quantity, 0) ) AS qty_60,
-      MAX(si.created_at) AS last_sale_date
+      MAX(s.created_at) AS last_sale_date
     FROM public.sale_items si
     JOIN public.sales s ON s.id = si.sale_id
     WHERE s.branch_id = ANY(_branch_ids)
-      AND si.created_at >= now() - interval '60 days'
+      AND s.created_at >= now() - interval '60 days'
     GROUP BY s.branch_id, si.medicine_id
   ),
   monthly AS (
     SELECT
       s.branch_id,
       si.medicine_id,
-      EXTRACT(MONTH FROM si.created_at)::int - 1 AS m_idx,
+      EXTRACT(MONTH FROM s.created_at)::int - 1 AS m_idx,
       SUM( COALESCE(NULLIF(COALESCE(si.pack_quantity,0)+COALESCE(si.strip_quantity,0),0), si.quantity, 0) ) AS qty
     FROM public.sale_items si
     JOIN public.sales s ON s.id = si.sale_id
     WHERE s.branch_id = ANY(_branch_ids)
-      AND si.created_at >= now() - interval '365 days'
-    GROUP BY s.branch_id, si.medicine_id, EXTRACT(MONTH FROM si.created_at)
+      AND s.created_at >= now() - interval '365 days'
+    GROUP BY s.branch_id, si.medicine_id, EXTRACT(MONTH FROM s.created_at)
   ),
   monthly_arr AS (
     SELECT
