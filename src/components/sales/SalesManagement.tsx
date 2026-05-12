@@ -37,6 +37,13 @@ interface Medicine {
   item_type?: string;
   branch_id?: string;
   branch_name?: string;
+  // Multi-level packaging (v2)
+  packaging_mode?: string | null;
+  sub_units_per_unit?: number | null;
+  main_unit_name?: string | null;
+  sub_unit_name?: string | null;
+  unit_price?: number | null;
+  sub_unit_price?: number | null;
 }
 
 interface CartItem extends Medicine {
