@@ -250,7 +250,7 @@ export default function AddToCartDialog({ open, onOpenChange, medicine, onAddToC
                   </SelectTrigger>
                   <SelectContent>
                     <SelectItem value="full_pack">Full Pack</SelectItem>
-                    {medicine.units_per_pack && (
+                    {allowByStripe && (
                       <SelectItem value="by_stripe">By {unitLabelCap}</SelectItem>
                     )}
                     {hasSubUnit && (
