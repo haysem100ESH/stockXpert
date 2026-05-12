@@ -787,7 +787,7 @@ export default function ImportCsvDialog({ open, onOpenChange, onImported }: Impo
             branch_id: selectedBranchId,
             created_by: user?.id || null,
             expiry_date: row.expiry_date,
-            packaging_mode: row.container_type,
+            packaging_mode: row.container_type || row.packaging_mode,
             main_unit_name: row.main_unit_name,
             sub_unit_name: row.sub_unit_name,
             sub_units_per_unit: row.sub_units_per_unit,
