@@ -998,7 +998,7 @@ export default function ImportCsvDialog({ open, onOpenChange, onImported }: Impo
               <Button variant="outline" onClick={handleDownloadTemplate} className="h-auto py-4 flex-col gap-2">
                 <Download className="h-5 w-5" />
                 <span className="font-medium">Download Template</span>
-                <span className="text-xs text-muted-foreground">CSV with sample rows</span>
+                <span className="text-xs text-muted-foreground">Excel (.xlsx) — frozen header, required columns in red</span>
               </Button>
 
               <label className="cursor-pointer">
