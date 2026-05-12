@@ -293,6 +293,69 @@ function buildTemplate(mode: 'pharmacy' | 'general'): string {
   return lines.join('\n');
 }
 
+// Required columns by template mode (highlighted red + frozen in xlsx export)
+const REQUIRED_PHARMACY = new Set([
+  'NAME OF ITEMS', 'MEDICINE PRICE', 'PURCHASE PRICE', 'STOCK QUANTITY',
+]);
+const REQUIRED_GENERAL = new Set([
+  'ITEM NAME', 'ITEM PRICE', 'PURCHASE PRICE', 'STOCK QUANTITY',
+]);
+
+async function buildTemplateXlsx(mode: 'pharmacy' | 'general'): Promise<Blob> {
+  const ExcelJS = (await import('exceljs')).default;
+  const headers = mode === 'pharmacy' ? PHARMACY_HEADERS : GENERAL_HEADERS;
+  const sample = mode === 'pharmacy' ? SAMPLE_PHARMACY : SAMPLE_GENERAL;
+  const required = mode === 'pharmacy' ? REQUIRED_PHARMACY : REQUIRED_GENERAL;
+
+  const wb = new ExcelJS.Workbook();
+  const ws = wb.addWorksheet('Inventory', {
+    views: [{ state: 'frozen', ySplit: 1 }], // freeze header row
+  });
+
+  ws.addRow(headers);
+  sample.forEach(r => ws.addRow(r));
+
+  // Style header row
+  const headerRow = ws.getRow(1);
+  headerRow.height = 24;
+  headerRow.eachCell((cell, colNumber) => {
+    const label = headers[colNumber - 1];
+    const isRequired = required.has(label);
+    cell.font = {
+      bold: true,
+      color: { argb: isRequired ? 'FFFFFFFF' : 'FF111827' },
+      size: 12,
+    };
+    cell.fill = {
+      type: 'pattern',
+      pattern: 'solid',
+      fgColor: { argb: isRequired ? 'FFDC2626' : 'FFE5E7EB' }, // red-600 / gray-200
+    };
+    cell.alignment = { vertical: 'middle', horizontal: 'center', wrapText: true };
+    cell.border = {
+      top: { style: 'thin', color: { argb: 'FF9CA3AF' } },
+      left: { style: 'thin', color: { argb: 'FF9CA3AF' } },
+      bottom: { style: 'medium', color: { argb: 'FF6B7280' } },
+      right: { style: 'thin', color: { argb: 'FF9CA3AF' } },
+    };
+  });
+
+  // Auto-fit column widths
+  headers.forEach((h, i) => {
+    let max = h.length;
+    sample.forEach(r => { const v = String(r[i] ?? ''); if (v.length > max) max = v.length; });
+    ws.getColumn(i + 1).width = Math.min(Math.max(max + 2, 12), 32);
+  });
+
+  // Auto-filter on header row
+  ws.autoFilter = { from: { row: 1, column: 1 }, to: { row: 1, column: headers.length } };
+
+  const buf = await wb.xlsx.writeBuffer();
+  return new Blob([buf], {
+    type: 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet',
+  });
+}
+
 // Simple CSV parser supporting quoted fields with commas and "" escapes
 function parseCsv(text: string): string[][] {
   const rows: string[][] = [];
