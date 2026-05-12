@@ -1,58 +1,52 @@
 -- ============================================================================
--- Cursor (Keyset) Pagination Indexes
+-- Cursor (Keyset) Pagination Indexes — TRANSACTION-SAFE VERSION
 -- ----------------------------------------------------------------------------
--- These composite indexes power O(log N) keyset pagination over (created_at, id)
--- partitioned by the most-common equality filter (branch_id / customer_id /
--- supplier_id). They replace OFFSET-based pagination, which becomes O(N) at
--- deep pages on 5M+ row tables.
+-- The Supabase migration runner wraps everything in a transaction, so
+-- CREATE INDEX CONCURRENTLY is NOT allowed (errors with 25001).
 --
--- Run each statement individually in the Supabase SQL editor — CONCURRENTLY
--- cannot run inside a transaction block. Safe to re-run (IF NOT EXISTS).
+-- This file uses regular CREATE INDEX IF NOT EXISTS, which DOES work inside
+-- a transaction. It will briefly lock each table for writes while the index
+-- builds. On 5M+ row tables this can take seconds-to-minutes per index — run
+-- during a low-traffic window.
+--
+-- If you prefer zero-downtime CONCURRENTLY builds, run each CREATE INDEX
+-- statement one-by-one directly in the Supabase SQL Editor (NOT the
+-- migration tool), adding the CONCURRENTLY keyword back manually.
 -- ============================================================================
 
 -- Sales feed (Sales page, Finance page, Customer ledger)
-CREATE INDEX CONCURRENTLY IF NOT EXISTS idx_sales_keyset_branch
+CREATE INDEX IF NOT EXISTS idx_sales_keyset_branch
   ON public.sales (branch_id, created_at DESC, id DESC);
 
-CREATE INDEX CONCURRENTLY IF NOT EXISTS idx_sales_keyset_customer
+CREATE INDEX IF NOT EXISTS idx_sales_keyset_customer
   ON public.sales (customer_id, created_at DESC, id DESC)
   WHERE customer_id IS NOT NULL;
 
 -- Sale items (Smart Inventory demand, top products)
-CREATE INDEX CONCURRENTLY IF NOT EXISTS idx_sale_items_keyset_medicine
+CREATE INDEX IF NOT EXISTS idx_sale_items_keyset_medicine
   ON public.sale_items (medicine_id, created_at DESC, id DESC);
 
 -- Branch inventory list (Inventory page virtual scroll)
--- For inventory we paginate by name since it is the natural sort order.
-CREATE INDEX CONCURRENTLY IF NOT EXISTS idx_branch_items_keyset_branch
+CREATE INDEX IF NOT EXISTS idx_branch_items_keyset_branch
   ON public.branch_items (branch_id, id DESC);
 
 -- Stock movements / batches feed
-CREATE INDEX CONCURRENTLY IF NOT EXISTS idx_inventory_batches_keyset_branch
+CREATE INDEX IF NOT EXISTS idx_inventory_batches_keyset_branch
   ON public.inventory_batches (branch_id, created_at DESC, id DESC);
 
 -- Customer & supplier lists
-CREATE INDEX CONCURRENTLY IF NOT EXISTS idx_customers_keyset_branch
+CREATE INDEX IF NOT EXISTS idx_customers_keyset_branch
   ON public.customers (branch_id, created_at DESC, id DESC);
 
-CREATE INDEX CONCURRENTLY IF NOT EXISTS idx_suppliers_keyset_branch
+CREATE INDEX IF NOT EXISTS idx_suppliers_keyset_branch
   ON public.suppliers (branch_id, created_at DESC, id DESC);
 
 -- Credit logs (Finance / Customer ledger)
-CREATE INDEX CONCURRENTLY IF NOT EXISTS idx_credit_logs_keyset_customer
+CREATE INDEX IF NOT EXISTS idx_credit_logs_keyset_customer
   ON public.credit_logs (customer_id, created_at DESC, id DESC);
-
-ANALYZE public.sales;
-ANALYZE public.sale_items;
-ANALYZE public.branch_items;
-ANALYZE public.inventory_batches;
-ANALYZE public.customers;
-ANALYZE public.suppliers;
-ANALYZE public.credit_logs;
 
 -- ============================================================================
 -- High-performance RPC: server-side join + projection for the Sales feed.
--- Returns a lean JSON shape per row so the client does zero post-processing.
 -- ============================================================================
 CREATE OR REPLACE FUNCTION public.sales_feed_page(
   _branch_id uuid,
@@ -97,6 +91,15 @@ AS $$
   LIMIT _limit;
 $$;
 
--- Allow the anon/authenticated roles to call it (subject to RLS on base tables).
 GRANT EXECUTE ON FUNCTION public.sales_feed_page(uuid, timestamptz, uuid, int)
   TO anon, authenticated;
+
+-- Run ANALYZE separately AFTER the migration completes (also cannot be in a tx
+-- with some configurations). Use the SQL Editor:
+--   ANALYZE public.sales;
+--   ANALYZE public.sale_items;
+--   ANALYZE public.branch_items;
+--   ANALYZE public.inventory_batches;
+--   ANALYZE public.customers;
+--   ANALYZE public.suppliers;
+--   ANALYZE public.credit_logs;
