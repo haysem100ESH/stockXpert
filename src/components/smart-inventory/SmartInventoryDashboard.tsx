@@ -63,7 +63,7 @@ export default function SmartInventoryDashboard() {
             </p>
           </div>
         </div>
-        <Button variant="outline" size="sm" onClick={refetch}>
+        <Button variant="outline" size="sm" onClick={() => refetch()}>
           <RefreshCw className="h-4 w-4 mr-2" />
           Refresh
         </Button>
