@@ -301,6 +301,11 @@ export default function CreateCustomItemDialog({ open, onOpenChange, onItemCreat
             )}
           </div>
 
+          <div className="pt-2 border-t">
+            <h3 className="text-sm font-semibold mb-1">Pricing & Stock</h3>
+            <p className="text-xs text-muted-foreground mb-3">Configure packaging here. Prices and stock quantities are set per-branch when adding the item.</p>
+          </div>
+
           {/* Strip packaging — only for countable items */}
           {itemType === 'full_pcs' && (
             <div className="space-y-2">
