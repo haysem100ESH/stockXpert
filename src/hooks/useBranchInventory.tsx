@@ -199,7 +199,15 @@ export function useBranchInventory() {
 
   const query = useQuery({
     queryKey,
-    queryFn: () => fetchBranchInventoryCore(branchIds),
+    queryFn: () => fetchBranchInventoryProgressive(branchIds, (rows) => {
+      // Append each page to the cache so the UI re-renders progressively.
+      queryClient.setQueryData<EnrichedBranchItem[]>(queryKey, (prev) => {
+        if (!prev || prev.length === 0) return rows;
+        const seen = new Set(prev.map((p) => p.id));
+        const fresh = rows.filter((r) => !seen.has(r.id));
+        return fresh.length === 0 ? prev : [...prev, ...fresh];
+      });
+    }),
     enabled,
     staleTime: 60 * 1000,
     gcTime: 5 * 60 * 1000,
