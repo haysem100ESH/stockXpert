@@ -742,6 +742,37 @@ export default function EditBranchItemDialog({ open, onOpenChange, item, onItemU
                   </div>
                 )}
               </div>
+
+              <div className="space-y-3 rounded-lg border border-destructive/30 p-3 bg-destructive/5">
+                <div className="flex items-center justify-between">
+                  <Label className="text-sm font-semibold">Reduce Stock (optional)</Label>
+                  <span className="text-xs text-muted-foreground">FIFO from oldest batches</span>
+                </div>
+                <div className="space-y-2">
+                  <Label className="text-xs">Quantity to Reduce</Label>
+                  <Input
+                    type="number"
+                    step="0.01"
+                    min="0"
+                    max={item.quantity}
+                    value={reduceQuantity}
+                    onChange={e => setReduceQuantity(e.target.value)}
+                    placeholder="Leave empty to skip"
+                  />
+                </div>
+                {reduceQuantity && parseFloat(reduceQuantity) > 0 && (
+                  <div className="space-y-2">
+                    <Label className="text-xs">Reason *</Label>
+                    <Textarea
+                      value={reduceReason}
+                      onChange={e => setReduceReason(e.target.value)}
+                      placeholder="e.g. Damaged, expired, lost, return to supplier"
+                      rows={2}
+                      required
+                    />
+                  </div>
+                )}
+              </div>
             </TabsContent>
 
             <TabsContent value="catalog" className="space-y-4 mt-4">
