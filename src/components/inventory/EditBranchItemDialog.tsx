@@ -619,7 +619,7 @@ export default function EditBranchItemDialog({ open, onOpenChange, item, onItemU
                 </Select>
               </div>
 
-              {packagingMode === 'with_strip' ? (
+              {packagingMode === 'with_strip' && (
                 <>
                   <div className="grid grid-cols-2 gap-4">
                     <div className="space-y-2">
@@ -637,11 +637,6 @@ export default function EditBranchItemDialog({ open, onOpenChange, item, onItemU
                     </p>
                   )}
                 </>
-              ) : (
-                <div className="space-y-2">
-                  <Label>Units per Pack</Label>
-                  <Input type="number" min="1" value={unitsPerPack} onChange={e => setUnitsPerPack(e.target.value)} placeholder="Leave empty if not sold by unit" />
-                </div>
               )}
 
               {/* Container / packaging type */}
