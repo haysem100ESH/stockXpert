@@ -320,11 +320,11 @@ export default function CreateCustomItemDialog({ open, onOpenChange, onItemCreat
             <>
               <div className="grid grid-cols-2 gap-4">
                 <div className="space-y-2">
-                  <Label>Strips per Item *</Label>
+                  <Label>Strips per Item</Label>
                   <Input type="number" min="1" value={stripsPerPack} onChange={e => setStripsPerPack(e.target.value)} placeholder="e.g. 10" />
                 </div>
                 <div className="space-y-2">
-                  <Label>Total Items *</Label>
+                  <Label>Total Items</Label>
                   <Input type="number" min="1" value={unitsPerStrip} onChange={e => setUnitsPerStrip(e.target.value)} placeholder="e.g. 10" />
                 </div>
               </div>
