@@ -315,7 +315,7 @@ export default function CreateCustomItemDialog({ open, onOpenChange, onItemCreat
             </div>
           )}
 
-          {itemType === 'full_pcs' && packagingMode === 'with_strip' ? (
+          {itemType === 'full_pcs' && packagingMode === 'with_strip' && (
             <>
               <div className="grid grid-cols-2 gap-4">
                 <div className="space-y-2">
@@ -337,7 +337,8 @@ export default function CreateCustomItemDialog({ open, onOpenChange, onItemCreat
                 <Input type="number" min="0" value={minStock} onChange={e => setMinStock(e.target.value)} placeholder="e.g. 5" />
               </div>
             </>
-          ) : (
+          )}
+          {itemType === 'measurable' && (
             <div className="grid grid-cols-2 gap-4">
               <div className="space-y-2">
                 <Label>Units per Pack</Label>
