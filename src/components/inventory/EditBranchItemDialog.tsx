@@ -169,6 +169,8 @@ export default function EditBranchItemDialog({ open, onOpenChange, item, onItemU
       setSelectedSupplierId('');
       setPaymentType('paid');
       setAddBatchNumber('');
+      setReduceQuantity('');
+      setReduceReason('');
     }
   }, [item, open]);
 
