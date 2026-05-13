@@ -173,6 +173,9 @@ export default function EditBranchItemDialog({ open, onOpenChange, item, onItemU
       setAddBatchNumber('');
       setReduceQuantity('');
       setReduceReason('');
+      setReduceBatchId('auto');
+      // Load batches for FIFO/specific selection
+      getFIFOBatches(item.id).then(setAvailableBatches).catch(() => setAvailableBatches([]));
     }
   }, [item, open]);
 
