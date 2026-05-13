@@ -805,6 +805,26 @@ export default function EditBranchItemDialog({ open, onOpenChange, item, onItemU
                     placeholder="Whole number only"
                   />
                 </div>
+                {availableBatches.length > 1 && reduceQuantity && parseInt(reduceQuantity, 10) > 0 && (
+                  <div className="space-y-2">
+                    <Label className="text-xs">Reduce From Batch</Label>
+                    <Select value={reduceBatchId} onValueChange={setReduceBatchId}>
+                      <SelectTrigger><SelectValue /></SelectTrigger>
+                      <SelectContent>
+                        <SelectItem value="auto">Auto (FIFO — oldest first)</SelectItem>
+                        {availableBatches.map((b, idx) => {
+                          const label = b.batch_number || `Batch #${idx + 1}`;
+                          const exp = b.expiry_date ? ` · exp ${b.expiry_date}` : '';
+                          return (
+                            <SelectItem key={b.id} value={b.id}>
+                              {label} — {b.remaining_quantity} left{exp}
+                            </SelectItem>
+                          );
+                        })}
+                      </SelectContent>
+                    </Select>
+                  </div>
+                )}
                 {reduceQuantity && parseFloat(reduceQuantity) > 0 && (
                   <div className="space-y-2">
                     <Label className="text-xs">Reason *</Label>
