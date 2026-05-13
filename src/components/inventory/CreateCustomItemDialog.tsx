@@ -65,7 +65,7 @@ export default function CreateCustomItemDialog({ open, onOpenChange, onItemCreat
     setStripsPerPack('');
     setUnitsPerStrip('');
     setUnitsPack('');
-    setMinStock('');
+    
     setContainerType('');
     setMainUnitName('');
     setUnitName('');
