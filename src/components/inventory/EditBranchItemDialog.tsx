@@ -574,14 +574,16 @@ export default function EditBranchItemDialog({ open, onOpenChange, item, onItemU
                       <Input type="number" min="1" value={stripsPerPack} onChange={e => setStripsPerPack(e.target.value)} placeholder="e.g. 10" />
                     </div>
                     <div className="space-y-2">
-                      <Label>Total Items *</Label>
+                      <Label>Units per Strip *</Label>
                       <Input type="number" min="1" value={unitsPerStrip} onChange={e => setUnitsPerStrip(e.target.value)} placeholder="e.g. 10" />
                     </div>
                   </div>
                   {stripsPerPack && unitsPerStrip && parseInt(stripsPerPack) > 0 && parseInt(unitsPerStrip) > 0 && (
-                    <p className="text-xs text-muted-foreground -mt-2">
-                      Total: {parseInt(stripsPerPack) * parseInt(unitsPerStrip)} units per pack
-                    </p>
+                    <div className="rounded-md bg-primary/10 border border-primary/20 px-3 py-2 -mt-2">
+                      <p className="text-sm font-semibold">
+                        Total stock per item: {parseInt(stripsPerPack) * parseInt(unitsPerStrip)} units
+                      </p>
+                    </div>
                   )}
                 </>
               )}
