@@ -41,8 +41,6 @@ export default function CreateCustomItemDialog({ open, onOpenChange, onItemCreat
   const [unitName, setUnitName] = useState(''); // strip-level label (informational; persisted via unit_label too)
   const [subUnitsPerUnit, setSubUnitsPerUnit] = useState('');
   const [subUnitName, setSubUnitName] = useState('');
-  const [unitPrice, setUnitPrice] = useState('');
-  const [subUnitPrice, setSubUnitPrice] = useState('');
   const [submitting, setSubmitting] = useState(false);
 
   const { toast } = useToast();
@@ -73,8 +71,6 @@ export default function CreateCustomItemDialog({ open, onOpenChange, onItemCreat
     setUnitName('');
     setSubUnitsPerUnit('');
     setSubUnitName('');
-    setUnitPrice('');
-    setSubUnitPrice('');
   };
 
   const handleCreate = async () => {
@@ -154,9 +150,7 @@ export default function CreateCustomItemDialog({ open, onOpenChange, onItemCreat
       if (subUnitsPerUnit && parseInt(subUnitsPerUnit) > 0) {
         insertPayload.sub_units_per_unit = parseInt(subUnitsPerUnit);
         if (subUnitName.trim()) insertPayload.sub_unit_name = subUnitName.trim();
-        if (subUnitPrice && !isNaN(parseFloat(subUnitPrice))) insertPayload.sub_unit_price = parseFloat(subUnitPrice);
       }
-      if (unitPrice && !isNaN(parseFloat(unitPrice))) insertPayload.unit_price = parseFloat(unitPrice);
 
       const { data: newMed, error } = await supabase.from('medicines').insert(insertPayload).select('id, name, generic_name, category, manufacturer, item_type, unit_label, units_per_pack, minimum_stock_level').single();
 
@@ -384,16 +378,9 @@ export default function CreateCustomItemDialog({ open, onOpenChange, onItemCreat
                   <Input value={subUnitName} onChange={e => setSubUnitName(e.target.value)} placeholder="e.g. Tablet, Piece" />
                 </div>
               </div>
-              <div className="grid grid-cols-2 gap-3">
-                <div className="space-y-1">
-                  <Label className="text-xs">Unit / Strip Price</Label>
-                  <Input type="number" step="0.01" min="0" value={unitPrice} onChange={e => setUnitPrice(e.target.value)} placeholder="Optional" />
-                </div>
-                <div className="space-y-1">
-                  <Label className="text-xs">Sub-unit Price</Label>
-                  <Input type="number" step="0.01" min="0" value={subUnitPrice} onChange={e => setSubUnitPrice(e.target.value)} placeholder="Optional" />
-                </div>
-              </div>
+              <p className="text-xs text-muted-foreground">
+                Pricing will be configured when adding stock to a branch.
+              </p>
             </div>
           )}
 
