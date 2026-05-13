@@ -233,7 +233,11 @@ export default function EditBranchItemDialog({ open, onOpenChange, item, onItemU
       }
     }
 
-    const reduceQty = reduceQuantity ? parseFloat(reduceQuantity) : 0;
+    const reduceQty = reduceQuantity ? parseInt(reduceQuantity, 10) : 0;
+    if (reduceQuantity && (!Number.isInteger(Number(reduceQuantity)) || Number(reduceQuantity) < 1)) {
+      toast({ title: 'Error', description: 'Reduce quantity must be a whole number (1 or greater).', variant: 'destructive' });
+      return;
+    }
     if (reduceQty > 0) {
       if (!reduceReason.trim()) {
         toast({ title: 'Error', description: 'Reason is required to reduce stock.', variant: 'destructive' });
@@ -242,6 +246,17 @@ export default function EditBranchItemDialog({ open, onOpenChange, item, onItemU
       if (reduceQty > Number(item.quantity)) {
         toast({ title: 'Error', description: 'Cannot reduce more than current stock.', variant: 'destructive' });
         return;
+      }
+      if (reduceBatchId !== 'auto') {
+        const b = availableBatches.find(x => x.id === reduceBatchId);
+        if (!b) {
+          toast({ title: 'Error', description: 'Selected batch not found.', variant: 'destructive' });
+          return;
+        }
+        if (reduceQty > Number(b.remaining_quantity)) {
+          toast({ title: 'Error', description: `Selected batch only has ${b.remaining_quantity} units remaining.`, variant: 'destructive' });
+          return;
+        }
       }
     }
 
