@@ -78,9 +78,9 @@ export default function CreateCustomItemDialog({ open, onOpenChange, onItemCreat
   };
 
   const handleCreate = async () => {
-    const finalCategory = category === '__custom__' ? customCategory.trim() : category;
-    if (!name.trim() || !finalCategory) {
-      toast({ title: 'Error', description: 'Name and category are required', variant: 'destructive' });
+    const finalCategory = (category === '__custom__' ? customCategory.trim() : category) || 'Uncategorized';
+    if (!name.trim()) {
+      toast({ title: 'Error', description: 'Item name is required', variant: 'destructive' });
       return;
     }
 
