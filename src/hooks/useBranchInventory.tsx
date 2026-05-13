@@ -41,21 +41,13 @@ const chunk = <T,>(arr: T[]): T[][] => {
   return out;
 };
 
-async function fetchBranchInventoryCore(branchIds: string[]): Promise<EnrichedBranchItem[]> {
-  if (branchIds.length === 0) return [];
-
-  const { data: items, error } = await supabase
-    .from('branch_items')
-    .select('id, medicine_id, branch_id, owner_id, selling_price, purchase_price, quantity, expiry_date')
-    .in('branch_id', branchIds)
-    .order('created_at', { ascending: false })
-    .range(0, 49999);
-
-  if (error) throw error;
-  if (!items || items.length === 0) return [];
-
-  const medicineIds = [...new Set(items.map((i: any) => i.medicine_id))];
-  const allBranchIds = [...new Set(items.map((i: any) => i.branch_id))];
+// Cache of branch-name lookups, shared across page fetches in one session.
+async function enrichItems(
+  rawItems: any[],
+): Promise<EnrichedBranchItem[]> {
+  if (rawItems.length === 0) return [];
+  const medicineIds = [...new Set(rawItems.map((i) => i.medicine_id))];
+  const allBranchIds = [...new Set(rawItems.map((i) => i.branch_id))];
 
   const [medArrays, branchArrays] = await Promise.all([
     Promise.all(chunk(medicineIds).map((ids) =>
@@ -80,7 +72,7 @@ async function fetchBranchInventoryCore(branchIds: string[]): Promise<EnrichedBr
   const branchMap: Record<string, string> = {};
   branchArrays.flat().forEach((b: any) => { branchMap[b.id] = b.name; });
 
-  return items.map((item: any) => {
+  return rawItems.map((item) => {
     const med = medMap[item.medicine_id] || {};
     return {
       ...item,
@@ -107,6 +99,58 @@ async function fetchBranchInventoryCore(branchIds: string[]): Promise<EnrichedBr
     } as EnrichedBranchItem;
   });
 }
+
+const FIRST_PAGE_SIZE = 24;
+const NEXT_PAGE_SIZE = 200;
+
+/**
+ * Progressive fetch: returns the first page quickly, then keeps loading
+ * subsequent pages in the background and appending them to the cache via
+ * the supplied `appendToCache` callback. Resolves once all pages are loaded.
+ */
+async function fetchBranchInventoryProgressive(
+  branchIds: string[],
+  appendToCache: (rows: EnrichedBranchItem[]) => void,
+): Promise<EnrichedBranchItem[]> {
+  if (branchIds.length === 0) return [];
+
+  // Page 1 — render-critical.
+  const { data: firstRaw, error: firstErr } = await supabase
+    .from('branch_items')
+    .select('id, medicine_id, branch_id, owner_id, selling_price, purchase_price, quantity, expiry_date')
+    .in('branch_id', branchIds)
+    .order('created_at', { ascending: false })
+    .range(0, FIRST_PAGE_SIZE - 1);
+  if (firstErr) throw firstErr;
+  if (!firstRaw || firstRaw.length === 0) return [];
+
+  const firstEnriched = await enrichItems(firstRaw);
+  appendToCache(firstEnriched);
+
+  // If first page wasn't full, we're done.
+  if (firstRaw.length < FIRST_PAGE_SIZE) return firstEnriched;
+
+  // Background pages — sequential to keep request load reasonable.
+  const all: EnrichedBranchItem[] = [...firstEnriched];
+  let offset = FIRST_PAGE_SIZE;
+  while (true) {
+    const { data: pageRaw, error } = await supabase
+      .from('branch_items')
+      .select('id, medicine_id, branch_id, owner_id, selling_price, purchase_price, quantity, expiry_date')
+      .in('branch_id', branchIds)
+      .order('created_at', { ascending: false })
+      .range(offset, offset + NEXT_PAGE_SIZE - 1);
+    if (error) throw error;
+    if (!pageRaw || pageRaw.length === 0) break;
+    const enriched = await enrichItems(pageRaw);
+    all.push(...enriched);
+    appendToCache(enriched);
+    if (pageRaw.length < NEXT_PAGE_SIZE) break;
+    offset += NEXT_PAGE_SIZE;
+  }
+  return all;
+}
+
 
 async function fetchActiveIngredients(medicineIds: string[]) {
   if (medicineIds.length === 0) return {} as Record<string, Array<{ ingredient_name: string; strength: string | null }>>;
@@ -155,7 +199,15 @@ export function useBranchInventory() {
 
   const query = useQuery({
     queryKey,
-    queryFn: () => fetchBranchInventoryCore(branchIds),
+    queryFn: () => fetchBranchInventoryProgressive(branchIds, (rows) => {
+      // Append each page to the cache so the UI re-renders progressively.
+      queryClient.setQueryData<EnrichedBranchItem[]>(queryKey, (prev) => {
+        if (!prev || prev.length === 0) return rows;
+        const seen = new Set(prev.map((p) => p.id));
+        const fresh = rows.filter((r) => !seen.has(r.id));
+        return fresh.length === 0 ? prev : [...prev, ...fresh];
+      });
+    }),
     enabled,
     staleTime: 60 * 1000,
     gcTime: 5 * 60 * 1000,
