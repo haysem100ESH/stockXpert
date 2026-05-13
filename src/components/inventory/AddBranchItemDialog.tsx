@@ -149,6 +149,13 @@ export default function AddBranchItemDialog({ open, onOpenChange, onItemAdded }:
     else if (branches.length > 0 && !selectedBranchId) setSelectedBranchId(branches[0].id);
   }, [selectedBranch, branches]);
 
+  // Pre-fill min stock level from the selected item's existing value.
+  useEffect(() => {
+    if (selectedItem) {
+      setMinStockLevel(selectedItem.minimum_stock_level != null ? String(selectedItem.minimum_stock_level) : '');
+    }
+  }, [selectedItem]);
+
   const resetForm = () => {
     setSelectedItem(null);
     setSearchTerm('');
