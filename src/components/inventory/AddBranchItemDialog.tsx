@@ -284,6 +284,13 @@ export default function AddBranchItemDialog({ open, onOpenChange, onItemAdded }:
         });
       }
 
+      // Update master medicine's minimum stock level if provided/changed.
+      if (minStockLevel !== '') {
+        const newMin = parseInt(minStockLevel);
+        if (!isNaN(newMin) && newMin !== (selectedItem.minimum_stock_level ?? null)) {
+          await supabase.from('medicines').update({ minimum_stock_level: newMin }).eq('id', selectedItem.id);
+        }
+      }
       toast({ title: 'Success', description: `${selectedItem.name} added to branch inventory (Batch created)` });
       onItemAdded();
       onOpenChange(false);
