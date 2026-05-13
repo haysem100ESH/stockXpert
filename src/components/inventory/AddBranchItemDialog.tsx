@@ -78,9 +78,12 @@ export default function AddBranchItemDialog({ open, onOpenChange, onItemAdded }:
     staleTime: 1000 * 60 * 30,
   });
 
-  // Catalog items — cached for 5 minutes; fetches groups+members+meds in parallel.
+  const queryClient = useQueryClient();
+  const catalogKey = ['add-item-catalog', ownerId];
+
+  // Catalog items — progressive load: first 24 immediately, then rest in background.
   const { data: catalogItems = [], isLoading: catalogLoading, refetch: refetchCatalog } = useQuery({
-    queryKey: ['add-item-catalog', ownerId],
+    queryKey: catalogKey,
     queryFn: async (): Promise<CatalogItem[]> => {
       if (!ownerId) return [];
       const { data: ownerGroups } = await supabase
@@ -97,12 +100,43 @@ export default function AddBranchItemDialog({ open, onOpenChange, onItemAdded }:
       if (!groupMembers || groupMembers.length === 0) return [];
 
       const medicineIds = [...new Set(groupMembers.map((gm: any) => gm.medicine_id))];
-      const { data: meds } = await supabase
+      const SELECT = 'id, name, generic_name, category, manufacturer, batch_number, item_type, unit_label, units_per_pack, minimum_stock_level';
+
+      // First page: 24 items, render immediately.
+      const firstIds = medicineIds.slice(0, 24);
+      const { data: firstMeds } = await supabase
         .from('medicines')
-        .select('id, name, generic_name, category, manufacturer, batch_number, item_type, unit_label, units_per_pack, minimum_stock_level')
-        .in('id', medicineIds)
+        .select(SELECT)
+        .in('id', firstIds)
         .order('name');
-      return (meds || []) as CatalogItem[];
+      const firstBatch = (firstMeds || []) as CatalogItem[];
+
+      // Seed cache so UI shows the first 24 right away.
+      queryClient.setQueryData(catalogKey, firstBatch);
+
+      // Background: fetch the rest in chunks and append progressively.
+      const restIds = medicineIds.slice(24);
+      if (restIds.length > 0) {
+        (async () => {
+          const CHUNK = 200;
+          const seen = new Set(firstBatch.map(m => m.id));
+          let acc = [...firstBatch];
+          for (let i = 0; i < restIds.length; i += CHUNK) {
+            const chunk = restIds.slice(i, i + CHUNK);
+            const { data: more } = await supabase
+              .from('medicines')
+              .select(SELECT)
+              .in('id', chunk)
+              .order('name');
+            const fresh = ((more || []) as CatalogItem[]).filter(m => !seen.has(m.id));
+            fresh.forEach(m => seen.add(m.id));
+            acc = [...acc, ...fresh].sort((a, b) => a.name.localeCompare(b.name));
+            queryClient.setQueryData(catalogKey, acc);
+          }
+        })();
+      }
+
+      return firstBatch;
     },
     enabled: !!ownerId && open,
     staleTime: 1000 * 60 * 5,
