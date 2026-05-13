@@ -51,6 +51,7 @@ export default function AddBranchItemDialog({ open, onOpenChange, onItemAdded }:
   const [quantity, setQuantity] = useState('');
   const [expiryDate, setExpiryDate] = useState('');
   const [batchNumber, setBatchNumber] = useState('');
+  const [minStockLevel, setMinStockLevel] = useState('');
 
   const { toast } = useToast();
   const { profile } = useAuth();
