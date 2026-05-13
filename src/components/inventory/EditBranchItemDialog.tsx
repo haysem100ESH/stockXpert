@@ -94,6 +94,8 @@ export default function EditBranchItemDialog({ open, onOpenChange, item, onItemU
   const [addBatchNumber, setAddBatchNumber] = useState('');
   const [reduceQuantity, setReduceQuantity] = useState('');
   const [reduceReason, setReduceReason] = useState('');
+  const [reduceBatchId, setReduceBatchId] = useState<string>('auto');
+  const [availableBatches, setAvailableBatches] = useState<InventoryBatch[]>([]);
 
   const [loading, setLoading] = useState(false);
   const { toast } = useToast();
