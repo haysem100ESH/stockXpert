@@ -34,7 +34,7 @@ export default function CreateCustomItemDialog({ open, onOpenChange, onItemCreat
   const [stripsPerPack, setStripsPerPack] = useState('');
   const [unitsPerStrip, setUnitsPerStrip] = useState('');
   const [unitsPack, setUnitsPack] = useState('');
-  const [minStock, setMinStock] = useState('');
+  
   // Multi-level packaging
   const [containerType, setContainerType] = useState(''); // packaging_mode column: Pack, Bottle, Box, Carton...
   const [mainUnitName, setMainUnitName] = useState('');
@@ -65,7 +65,7 @@ export default function CreateCustomItemDialog({ open, onOpenChange, onItemCreat
     setStripsPerPack('');
     setUnitsPerStrip('');
     setUnitsPack('');
-    setMinStock('');
+    
     setContainerType('');
     setMainUnitName('');
     setUnitName('');
@@ -131,7 +131,7 @@ export default function CreateCustomItemDialog({ open, onOpenChange, onItemCreat
         item_type: itemType,
         unit_label: itemType === 'measurable' ? unitLabel : 'strip',
         units_per_pack: computedUnitsPerPack,
-        minimum_stock_level: minStock ? parseInt(minStock) : null,
+        minimum_stock_level: null,
         purchase_price: 0,
         selling_price: 0,
         stock_quantity: 0,
@@ -332,22 +332,12 @@ export default function CreateCustomItemDialog({ open, onOpenChange, onItemCreat
                   Total: {parseInt(stripsPerPack) * parseInt(unitsPerStrip)} units per pack
                 </div>
               )}
-              <div className="space-y-2">
-                <Label>Minimum Stock Level</Label>
-                <Input type="number" min="0" value={minStock} onChange={e => setMinStock(e.target.value)} placeholder="e.g. 5" />
-              </div>
             </>
           )}
           {itemType === 'measurable' && (
-            <div className="grid grid-cols-2 gap-4">
-              <div className="space-y-2">
-                <Label>Units per Pack</Label>
-                <Input type="number" min="1" value={unitsPack} onChange={e => setUnitsPack(e.target.value)} placeholder="e.g. 10" />
-              </div>
-              <div className="space-y-2">
-                <Label>Minimum Stock Level</Label>
-                <Input type="number" min="0" value={minStock} onChange={e => setMinStock(e.target.value)} placeholder="e.g. 5" />
-              </div>
+            <div className="space-y-2">
+              <Label>Units per Pack</Label>
+              <Input type="number" min="1" value={unitsPack} onChange={e => setUnitsPack(e.target.value)} placeholder="e.g. 10" />
             </div>
           )}
 

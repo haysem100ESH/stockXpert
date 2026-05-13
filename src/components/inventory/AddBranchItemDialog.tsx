@@ -51,6 +51,7 @@ export default function AddBranchItemDialog({ open, onOpenChange, onItemAdded }:
   const [quantity, setQuantity] = useState('');
   const [expiryDate, setExpiryDate] = useState('');
   const [batchNumber, setBatchNumber] = useState('');
+  const [minStockLevel, setMinStockLevel] = useState('');
 
   const { toast } = useToast();
   const { profile } = useAuth();
@@ -148,6 +149,13 @@ export default function AddBranchItemDialog({ open, onOpenChange, onItemAdded }:
     else if (branches.length > 0 && !selectedBranchId) setSelectedBranchId(branches[0].id);
   }, [selectedBranch, branches]);
 
+  // Pre-fill min stock level from the selected item's existing value.
+  useEffect(() => {
+    if (selectedItem) {
+      setMinStockLevel(selectedItem.minimum_stock_level != null ? String(selectedItem.minimum_stock_level) : '');
+    }
+  }, [selectedItem]);
+
   const resetForm = () => {
     setSelectedItem(null);
     setSearchTerm('');
@@ -156,6 +164,7 @@ export default function AddBranchItemDialog({ open, onOpenChange, onItemAdded }:
     setQuantity('');
     setExpiryDate('');
     setBatchNumber('');
+    setMinStockLevel('');
     setSelectedSupplierId('');
     setPaymentType('paid');
     setRecordInExpense(true);
@@ -275,6 +284,13 @@ export default function AddBranchItemDialog({ open, onOpenChange, onItemAdded }:
         });
       }
 
+      // Update master medicine's minimum stock level if provided/changed.
+      if (minStockLevel !== '') {
+        const newMin = parseInt(minStockLevel);
+        if (!isNaN(newMin) && newMin !== (selectedItem.minimum_stock_level ?? null)) {
+          await supabase.from('medicines').update({ minimum_stock_level: newMin }).eq('id', selectedItem.id);
+        }
+      }
       toast({ title: 'Success', description: `${selectedItem.name} added to branch inventory (Batch created)` });
       onItemAdded();
       onOpenChange(false);
@@ -418,6 +434,17 @@ export default function AddBranchItemDialog({ open, onOpenChange, onItemAdded }:
                 <div className="space-y-2">
                   <Label>Expiry Date</Label>
                   <Input type="date" value={expiryDate} onChange={e => setExpiryDate(e.target.value)} />
+                </div>
+
+                <div className="space-y-2">
+                  <Label>Minimum Stock Level</Label>
+                  <Input
+                    type="number"
+                    min="0"
+                    value={minStockLevel}
+                    onChange={e => setMinStockLevel(e.target.value)}
+                    placeholder="e.g. 5"
+                  />
                 </div>
               </div>
 
