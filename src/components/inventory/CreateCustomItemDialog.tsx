@@ -78,9 +78,9 @@ export default function CreateCustomItemDialog({ open, onOpenChange, onItemCreat
   };
 
   const handleCreate = async () => {
-    const finalCategory = category === '__custom__' ? customCategory.trim() : category;
-    if (!name.trim() || !finalCategory) {
-      toast({ title: 'Error', description: 'Name and category are required', variant: 'destructive' });
+    const finalCategory = (category === '__custom__' ? customCategory.trim() : category) || 'Uncategorized';
+    if (!name.trim()) {
+      toast({ title: 'Error', description: 'Item name is required', variant: 'destructive' });
       return;
     }
 
@@ -103,12 +103,9 @@ export default function CreateCustomItemDialog({ open, onOpenChange, onItemCreat
       if (itemType === 'full_pcs' && packagingMode === 'with_strip') {
         const sp = parseInt(stripsPerPack);
         const ups = parseInt(unitsPerStrip);
-        if (!sp || !ups || sp < 1 || ups < 1) {
-          toast({ title: 'Error', description: 'Strips per pack and units per strip are required', variant: 'destructive' });
-          setSubmitting(false);
-          return;
+        if (sp > 0 && ups > 0) {
+          computedUnitsPerPack = sp * ups;
         }
-        computedUnitsPerPack = sp * ups;
       } else if (unitsPack) {
         computedUnitsPerPack = parseInt(unitsPack);
       }
@@ -258,7 +255,7 @@ export default function CreateCustomItemDialog({ open, onOpenChange, onItemCreat
           )}
 
           <div className="space-y-2">
-            <Label>Category *</Label>
+            <Label>Category</Label>
             <Select value={category} onValueChange={setCategory}>
               <SelectTrigger><SelectValue placeholder="Select category" /></SelectTrigger>
               <SelectContent>
@@ -280,7 +277,7 @@ export default function CreateCustomItemDialog({ open, onOpenChange, onItemCreat
 
           <div className="grid grid-cols-2 gap-4">
             <div className="space-y-2">
-              <Label>Item Type *</Label>
+              <Label>Item Type</Label>
               <Select value={itemType} onValueChange={val => setItemType(val as 'full_pcs' | 'measurable')}>
                 <SelectTrigger><SelectValue /></SelectTrigger>
                 <SelectContent>
@@ -308,7 +305,7 @@ export default function CreateCustomItemDialog({ open, onOpenChange, onItemCreat
           {/* Strip packaging — only for countable items */}
           {itemType === 'full_pcs' && (
             <div className="space-y-2">
-              <Label>Packaging *</Label>
+              <Label>Packaging</Label>
               <Select value={packagingMode} onValueChange={val => setPackagingMode(val as 'with_strip' | 'no_strip')}>
                 <SelectTrigger><SelectValue /></SelectTrigger>
                 <SelectContent>
@@ -323,11 +320,11 @@ export default function CreateCustomItemDialog({ open, onOpenChange, onItemCreat
             <>
               <div className="grid grid-cols-2 gap-4">
                 <div className="space-y-2">
-                  <Label>Strips per Item *</Label>
+                  <Label>Strips per Item</Label>
                   <Input type="number" min="1" value={stripsPerPack} onChange={e => setStripsPerPack(e.target.value)} placeholder="e.g. 10" />
                 </div>
                 <div className="space-y-2">
-                  <Label>Total Items *</Label>
+                  <Label>Total Items</Label>
                   <Input type="number" min="1" value={unitsPerStrip} onChange={e => setUnitsPerStrip(e.target.value)} placeholder="e.g. 10" />
                 </div>
               </div>
