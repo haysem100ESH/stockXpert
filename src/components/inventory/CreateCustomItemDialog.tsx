@@ -255,7 +255,7 @@ export default function CreateCustomItemDialog({ open, onOpenChange, onItemCreat
           )}
 
           <div className="space-y-2">
-            <Label>Category *</Label>
+            <Label>Category</Label>
             <Select value={category} onValueChange={setCategory}>
               <SelectTrigger><SelectValue placeholder="Select category" /></SelectTrigger>
               <SelectContent>
