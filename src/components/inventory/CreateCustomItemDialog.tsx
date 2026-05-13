@@ -332,22 +332,12 @@ export default function CreateCustomItemDialog({ open, onOpenChange, onItemCreat
                   Total: {parseInt(stripsPerPack) * parseInt(unitsPerStrip)} units per pack
                 </div>
               )}
-              <div className="space-y-2">
-                <Label>Minimum Stock Level</Label>
-                <Input type="number" min="0" value={minStock} onChange={e => setMinStock(e.target.value)} placeholder="e.g. 5" />
-              </div>
             </>
           )}
           {itemType === 'measurable' && (
-            <div className="grid grid-cols-2 gap-4">
-              <div className="space-y-2">
-                <Label>Units per Pack</Label>
-                <Input type="number" min="1" value={unitsPack} onChange={e => setUnitsPack(e.target.value)} placeholder="e.g. 10" />
-              </div>
-              <div className="space-y-2">
-                <Label>Minimum Stock Level</Label>
-                <Input type="number" min="0" value={minStock} onChange={e => setMinStock(e.target.value)} placeholder="e.g. 5" />
-              </div>
+            <div className="space-y-2">
+              <Label>Units per Pack</Label>
+              <Input type="number" min="1" value={unitsPack} onChange={e => setUnitsPack(e.target.value)} placeholder="e.g. 10" />
             </div>
           )}
 
