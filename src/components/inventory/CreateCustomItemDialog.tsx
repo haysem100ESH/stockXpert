@@ -121,6 +121,8 @@ export default function CreateCustomItemDialog({ open, onOpenChange, onItemCreat
       }
 
       // Insert into medicines table
+      // Note: purchase_price / selling_price / stock_quantity are placeholders (0).
+      // Real pricing & stock are configured per-branch in Add Medicine → branch_items + inventory_batches.
       const insertPayload: any = {
         name: name.trim(),
         generic_name: genericName.trim() || null,
@@ -130,6 +132,9 @@ export default function CreateCustomItemDialog({ open, onOpenChange, onItemCreat
         unit_label: itemType === 'measurable' ? unitLabel : 'strip',
         units_per_pack: computedUnitsPerPack,
         minimum_stock_level: minStock ? parseInt(minStock) : null,
+        purchase_price: 0,
+        selling_price: 0,
+        stock_quantity: 0,
       };
 
       // Pharmacy-only fields
@@ -310,7 +315,7 @@ export default function CreateCustomItemDialog({ open, onOpenChange, onItemCreat
             </div>
           )}
 
-          {itemType === 'full_pcs' && packagingMode === 'with_strip' ? (
+          {itemType === 'full_pcs' && packagingMode === 'with_strip' && (
             <>
               <div className="grid grid-cols-2 gap-4">
                 <div className="space-y-2">
@@ -332,7 +337,8 @@ export default function CreateCustomItemDialog({ open, onOpenChange, onItemCreat
                 <Input type="number" min="0" value={minStock} onChange={e => setMinStock(e.target.value)} placeholder="e.g. 5" />
               </div>
             </>
-          ) : (
+          )}
+          {itemType === 'measurable' && (
             <div className="grid grid-cols-2 gap-4">
               <div className="space-y-2">
                 <Label>Units per Pack</Label>
@@ -362,7 +368,7 @@ export default function CreateCustomItemDialog({ open, onOpenChange, onItemCreat
           </div>
 
           {/* Sub-unit (3rd hierarchy level) — only meaningful for countable items */}
-          {itemType === 'full_pcs' && (
+          {itemType === 'full_pcs' && packagingMode === 'with_strip' && (
             <div className="space-y-3 rounded-lg border p-3 bg-muted/20">
               <div className="flex items-center justify-between">
                 <Label className="text-sm font-semibold">Sub-unit (optional)</Label>
