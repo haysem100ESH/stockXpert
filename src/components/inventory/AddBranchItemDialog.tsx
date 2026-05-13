@@ -428,6 +428,17 @@ export default function AddBranchItemDialog({ open, onOpenChange, onItemAdded }:
                   <Label>Expiry Date</Label>
                   <Input type="date" value={expiryDate} onChange={e => setExpiryDate(e.target.value)} />
                 </div>
+
+                <div className="space-y-2">
+                  <Label>Minimum Stock Level</Label>
+                  <Input
+                    type="number"
+                    min="0"
+                    value={minStockLevel}
+                    onChange={e => setMinStockLevel(e.target.value)}
+                    placeholder="e.g. 5"
+                  />
+                </div>
               </div>
 
               {/* Supplier (Optional) */}
