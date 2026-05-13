@@ -34,7 +34,7 @@ export default function CreateCustomItemDialog({ open, onOpenChange, onItemCreat
   const [stripsPerPack, setStripsPerPack] = useState('');
   const [unitsPerStrip, setUnitsPerStrip] = useState('');
   const [unitsPack, setUnitsPack] = useState('');
-  const [minStock, setMinStock] = useState('');
+  
   // Multi-level packaging
   const [containerType, setContainerType] = useState(''); // packaging_mode column: Pack, Bottle, Box, Carton...
   const [mainUnitName, setMainUnitName] = useState('');
