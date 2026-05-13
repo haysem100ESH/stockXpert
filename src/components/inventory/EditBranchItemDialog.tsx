@@ -13,6 +13,8 @@ import { useAuth } from '@/hooks/useAuth';
 import { useBranchContext } from '@/hooks/useBranchContext';
 import { useCustomCategories } from '@/hooks/useCustomCategories';
 import { useMedicineGroups } from '@/hooks/useMedicineGroups';
+import { useQuery } from '@tanstack/react-query';
+import { createBatch } from '@/lib/batchInventory';
 
 export interface BranchItem {
   id: string;
@@ -42,6 +44,7 @@ export interface BranchItem {
   sub_unit_name?: string | null;
   unit_price?: number | null;
   sub_unit_price?: number | null;
+  minimum_stock_level?: number | null;
 }
 
 interface EditBranchItemDialogProps {
@@ -81,6 +84,14 @@ export default function EditBranchItemDialog({ open, onOpenChange, item, onItemU
   const [unitPrice, setUnitPrice] = useState('');
   const [subUnitPrice, setSubUnitPrice] = useState('');
 
+  // New: branch-level controls
+  const [minStockLevel, setMinStockLevel] = useState('');
+  const [branchId, setBranchId] = useState('');
+  const [addQuantity, setAddQuantity] = useState('');
+  const [selectedSupplierId, setSelectedSupplierId] = useState('');
+  const [paymentType, setPaymentType] = useState<'paid' | 'credit'>('paid');
+  const [addBatchNumber, setAddBatchNumber] = useState('');
+
   const [loading, setLoading] = useState(false);
   const { toast } = useToast();
   const { profile } = useAuth();
@@ -88,6 +99,32 @@ export default function EditBranchItemDialog({ open, onOpenChange, item, onItemU
   const isPharmacy = branchType === 'pharmacy';
   const { categories: customCategories } = useCustomCategories(branchType === 'general' ? 'general' : 'pharmacy');
   const { groups: medicineGroups, addGroup } = useMedicineGroups();
+
+  const isOwner = profile?.role === 'owner' || profile?.role === 'developer';
+
+  const { data: branches = [] } = useQuery({
+    queryKey: ['edit-item-branches', profile?.id],
+    queryFn: async () => {
+      const { data } = await supabase
+        .from('pharmacy_branches')
+        .select('id, name')
+        .eq('pharmacy_owner_id', profile!.id)
+        .order('name');
+      return (data || []) as Array<{ id: string; name: string }>;
+    },
+    enabled: !!profile && isOwner && open,
+    staleTime: 1000 * 60 * 5,
+  });
+
+  const { data: suppliers = [] } = useQuery({
+    queryKey: ['edit-item-suppliers'],
+    queryFn: async () => {
+      const { data } = await supabase.from('suppliers').select('id, name').order('name');
+      return (data || []) as Array<{ id: string; name: string }>;
+    },
+    enabled: open,
+    staleTime: 1000 * 60 * 5,
+  });
 
   // Build dropdown list: include current value if not in custom list so user never loses the existing category
   const categoryOptions = (() => {
@@ -122,6 +159,13 @@ export default function EditBranchItemDialog({ open, onOpenChange, item, onItemU
       setSubUnitName(item.sub_unit_name || '');
       setUnitPrice(item.unit_price != null ? String(item.unit_price) : '');
       setSubUnitPrice(item.sub_unit_price != null ? String(item.sub_unit_price) : '');
+
+      setMinStockLevel((item as any).minimum_stock_level != null ? String((item as any).minimum_stock_level) : '');
+      setBranchId(item.branch_id || '');
+      setAddQuantity('');
+      setSelectedSupplierId('');
+      setPaymentType('paid');
+      setAddBatchNumber('');
     }
   }, [item, open]);
 
@@ -182,6 +226,8 @@ export default function EditBranchItemDialog({ open, onOpenChange, item, onItemU
     setLoading(true);
 
     try {
+      const { data: { user } } = await supabase.auth.getUser();
+
       // Always update branch-specific fields
       const branchUpdate: any = {
         selling_price: parseFloat(sellingPrice),
@@ -189,6 +235,9 @@ export default function EditBranchItemDialog({ open, onOpenChange, item, onItemU
         expiry_date: expiryDate || null,
         updated_at: new Date().toISOString(),
       };
+      if (isOwner && branchId && branchId !== item.branch_id) {
+        branchUpdate.branch_id = branchId;
+      }
 
       // If catalog fields changed, we need clone-on-write
       if (catalogFieldsChanged()) {
@@ -325,6 +374,63 @@ export default function EditBranchItemDialog({ open, onOpenChange, item, onItemU
 
       if (error) throw error;
 
+      // Update master medicine's minimum_stock_level if changed
+      if (minStockLevel !== '') {
+        const newMin = parseInt(minStockLevel);
+        if (!isNaN(newMin) && newMin !== ((item as any).minimum_stock_level ?? null)) {
+          await supabase.from('medicines').update({ minimum_stock_level: newMin }).eq('id', item.medicine_id);
+        }
+      }
+
+      // If user entered an "add stock" quantity, create a new batch (+ optional supplier purchase)
+      const addQty = addQuantity ? parseFloat(addQuantity) : 0;
+      if (addQty > 0) {
+        const targetBranchId = (isOwner && branchId) ? branchId : item.branch_id;
+        const pp = parseFloat(purchasePrice);
+        const sp = parseFloat(sellingPrice);
+
+        const { error: batchErr } = await createBatch({
+          branchId: targetBranchId,
+          medicineId: item.medicine_id,
+          branchItemId: item.id,
+          supplierId: selectedSupplierId || null,
+          batchNumber: addBatchNumber || null,
+          quantity: addQty,
+          purchasePrice: pp,
+          sellingPrice: sp,
+          expiryDate: expiryDate || null,
+          createdBy: user?.id || null,
+        });
+        if (batchErr) throw batchErr;
+
+        if (selectedSupplierId) {
+          const totalAmount = addQty * pp;
+          await supabase.from('supplier_purchases').insert({
+            supplier_id: selectedSupplierId,
+            item_name: itemName || item.name,
+            quantity: addQty,
+            unit_cost: pp,
+            total_cost: totalAmount,
+            payment_type: paymentType,
+            branch_id: targetBranchId,
+            created_by: user?.id || null,
+          });
+
+          if (paymentType === 'credit') {
+            const { data: existingDebt } = await supabase
+              .from('supplier_debts')
+              .select('id, total_debt')
+              .eq('supplier_id', selectedSupplierId)
+              .maybeSingle();
+            if (existingDebt) {
+              await supabase.from('supplier_debts').update({ total_debt: existingDebt.total_debt + totalAmount }).eq('id', existingDebt.id);
+            } else {
+              await supabase.from('supplier_debts').insert({ supplier_id: selectedSupplierId, total_debt: totalAmount });
+            }
+          }
+        }
+      }
+
       // Log every changed field to stock_edit_history
       try {
         const changes: Array<{ field: string; oldVal: any; newVal: any }> = [];
@@ -421,6 +527,83 @@ export default function EditBranchItemDialog({ open, onOpenChange, item, onItemU
                 <Label>Expiry Date</Label>
                 <Input type="date" value={expiryDate} onChange={e => setExpiryDate(e.target.value)} />
               </div>
+
+              <div className="space-y-2">
+                <Label>Minimum Stock Level (alert!)</Label>
+                <Input
+                  type="number"
+                  min="0"
+                  value={minStockLevel}
+                  onChange={e => setMinStockLevel(e.target.value)}
+                  placeholder="e.g. 10"
+                />
+                <p className="text-xs text-muted-foreground">Triggers low-stock alerts when quantity drops below this.</p>
+              </div>
+
+              {isOwner && branches.length > 0 && (
+                <div className="space-y-2">
+                  <Label>Branch</Label>
+                  <Select value={branchId} onValueChange={setBranchId}>
+                    <SelectTrigger><SelectValue placeholder="Select branch" /></SelectTrigger>
+                    <SelectContent>
+                      {branches.map(b => (
+                        <SelectItem key={b.id} value={b.id}>{b.name}</SelectItem>
+                      ))}
+                    </SelectContent>
+                  </Select>
+                </div>
+              )}
+
+              <div className="space-y-3 rounded-lg border p-3 bg-muted/20">
+                <div className="flex items-center justify-between">
+                  <Label className="text-sm font-semibold">Add Stock (optional)</Label>
+                  <span className="text-xs text-muted-foreground">Creates a new batch</span>
+                </div>
+
+                <div className="space-y-2">
+                  <Label className="text-xs">Quantity to Add</Label>
+                  <Input
+                    type="number"
+                    step="0.01"
+                    min="0"
+                    value={addQuantity}
+                    onChange={e => setAddQuantity(e.target.value)}
+                    placeholder="Leave empty to skip"
+                  />
+                </div>
+
+                <div className="grid grid-cols-2 gap-3">
+                  <div className="space-y-1">
+                    <Label className="text-xs">Supplier (optional)</Label>
+                    <Select value={selectedSupplierId || 'none'} onValueChange={(v) => setSelectedSupplierId(v === 'none' ? '' : v)}>
+                      <SelectTrigger><SelectValue placeholder="Link supplier" /></SelectTrigger>
+                      <SelectContent>
+                        <SelectItem value="none">— None —</SelectItem>
+                        {suppliers.map(s => (
+                          <SelectItem key={s.id} value={s.id}>{s.name}</SelectItem>
+                        ))}
+                      </SelectContent>
+                    </Select>
+                  </div>
+                  <div className="space-y-1">
+                    <Label className="text-xs">Batch Number</Label>
+                    <Input value={addBatchNumber} onChange={e => setAddBatchNumber(e.target.value)} placeholder="Optional" />
+                  </div>
+                </div>
+
+                {selectedSupplierId && (
+                  <div className="space-y-1">
+                    <Label className="text-xs">Payment Type</Label>
+                    <Select value={paymentType} onValueChange={(v) => setPaymentType(v as 'paid' | 'credit')}>
+                      <SelectTrigger><SelectValue /></SelectTrigger>
+                      <SelectContent>
+                        <SelectItem value="paid">Paid</SelectItem>
+                        <SelectItem value="credit">Credit</SelectItem>
+                      </SelectContent>
+                    </Select>
+                  </div>
+                )}
+              </div>
             </TabsContent>
 
             <TabsContent value="catalog" className="space-y-4 mt-4">
@@ -513,7 +696,7 @@ export default function EditBranchItemDialog({ open, onOpenChange, item, onItemU
                 </Select>
               </div>
 
-              {packagingMode === 'with_strip' ? (
+              {packagingMode === 'with_strip' && (
                 <>
                   <div className="grid grid-cols-2 gap-4">
                     <div className="space-y-2">
@@ -531,11 +714,6 @@ export default function EditBranchItemDialog({ open, onOpenChange, item, onItemU
                     </p>
                   )}
                 </>
-              ) : (
-                <div className="space-y-2">
-                  <Label>Units per Pack</Label>
-                  <Input type="number" min="1" value={unitsPerPack} onChange={e => setUnitsPerPack(e.target.value)} placeholder="Leave empty if not sold by unit" />
-                </div>
               )}
 
               {/* Container / packaging type */}
@@ -554,33 +732,35 @@ export default function EditBranchItemDialog({ open, onOpenChange, item, onItemU
                 </datalist>
               </div>
 
-              {/* Sub-unit (3rd hierarchy level) */}
-              <div className="space-y-3 rounded-lg border p-3 bg-muted/20">
-                <div className="flex items-center justify-between">
-                  <Label className="text-sm font-semibold">Sub-unit (optional)</Label>
-                  <span className="text-xs text-muted-foreground">e.g. tablets in a strip</span>
+              {/* Sub-unit (3rd hierarchy level) — only relevant for strip packaging */}
+              {packagingMode === 'with_strip' && (
+                <div className="space-y-3 rounded-lg border p-3 bg-muted/20">
+                  <div className="flex items-center justify-between">
+                    <Label className="text-sm font-semibold">Sub-unit (optional)</Label>
+                    <span className="text-xs text-muted-foreground">e.g. tablets in a strip</span>
+                  </div>
+                  <div className="grid grid-cols-2 gap-3">
+                    <div className="space-y-1">
+                      <Label className="text-xs">Sub-units per Unit</Label>
+                      <Input type="number" min="0" value={subUnitsPerUnit} onChange={e => setSubUnitsPerUnit(e.target.value)} placeholder="e.g. 5" />
+                    </div>
+                    <div className="space-y-1">
+                      <Label className="text-xs">Sub-unit Name</Label>
+                      <Input value={subUnitName} onChange={e => setSubUnitName(e.target.value)} placeholder="e.g. Tablet" />
+                    </div>
+                  </div>
+                  <div className="grid grid-cols-2 gap-3">
+                    <div className="space-y-1">
+                      <Label className="text-xs">Unit / Strip Price</Label>
+                      <Input type="number" step="0.01" min="0" value={unitPrice} onChange={e => setUnitPrice(e.target.value)} placeholder="Optional" />
+                    </div>
+                    <div className="space-y-1">
+                      <Label className="text-xs">Sub-unit Price</Label>
+                      <Input type="number" step="0.01" min="0" value={subUnitPrice} onChange={e => setSubUnitPrice(e.target.value)} placeholder="Optional" />
+                    </div>
+                  </div>
                 </div>
-                <div className="grid grid-cols-2 gap-3">
-                  <div className="space-y-1">
-                    <Label className="text-xs">Sub-units per Unit</Label>
-                    <Input type="number" min="0" value={subUnitsPerUnit} onChange={e => setSubUnitsPerUnit(e.target.value)} placeholder="e.g. 5" />
-                  </div>
-                  <div className="space-y-1">
-                    <Label className="text-xs">Sub-unit Name</Label>
-                    <Input value={subUnitName} onChange={e => setSubUnitName(e.target.value)} placeholder="e.g. Tablet" />
-                  </div>
-                </div>
-                <div className="grid grid-cols-2 gap-3">
-                  <div className="space-y-1">
-                    <Label className="text-xs">Unit / Strip Price</Label>
-                    <Input type="number" step="0.01" min="0" value={unitPrice} onChange={e => setUnitPrice(e.target.value)} placeholder="Optional" />
-                  </div>
-                  <div className="space-y-1">
-                    <Label className="text-xs">Sub-unit Price</Label>
-                    <Input type="number" step="0.01" min="0" value={subUnitPrice} onChange={e => setSubUnitPrice(e.target.value)} placeholder="Optional" />
-                  </div>
-                </div>
-              </div>
+              )}
 
               {catalogFieldsChanged() && (
                 <p className="text-xs text-muted-foreground bg-muted/50 p-2 rounded">

@@ -53,7 +53,7 @@ async function enrichItems(
     Promise.all(chunk(medicineIds).map((ids) =>
       supabase
         .from('medicines')
-        .select('id, name, generic_name, category, manufacturer, batch_number, item_type, unit_label, units_per_pack, strips_per_pack, units_per_strip, medicine_group, strength, packaging_mode, sub_units_per_unit, main_unit_name, sub_unit_name, unit_price, sub_unit_price')
+        .select('id, name, generic_name, category, manufacturer, batch_number, item_type, unit_label, units_per_pack, strips_per_pack, units_per_strip, medicine_group, strength, packaging_mode, sub_units_per_unit, main_unit_name, sub_unit_name, unit_price, sub_unit_price, minimum_stock_level')
         .in('id', ids)
         .range(0, 9999)
         .then((r: any) => r.data || [])
@@ -94,6 +94,7 @@ async function enrichItems(
       sub_unit_name: med.sub_unit_name,
       unit_price: med.unit_price,
       sub_unit_price: med.sub_unit_price,
+      minimum_stock_level: med.minimum_stock_level,
       active_ingredients: [],
       branch_name: branchMap[item.branch_id],
     } as EnrichedBranchItem;
