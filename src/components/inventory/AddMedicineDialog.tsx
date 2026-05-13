@@ -351,8 +351,8 @@ export default function AddMedicineDialog({ open, onOpenChange, onMedicineAdded,
             </div>
 
             <div className="space-y-2">
-              <Label htmlFor="minimum_stock_level">Minimum Stock Level(for alert!) *</Label>
-              <Input id="minimum_stock_level" name="minimum_stock_level" type="number" min="0" defaultValue={replicateData ? replicateData.minimum_stock_level : 10} required />
+              <Label htmlFor="minimum_stock_level">Minimum Stock Level (for alert!)</Label>
+              <Input id="minimum_stock_level" name="minimum_stock_level" type="number" min="0" defaultValue={replicateData ? replicateData.minimum_stock_level : ''} placeholder="Optional" />
             </div>
 
             {/* Measurable unit selector */}
