@@ -44,6 +44,7 @@ export interface BranchItem {
   sub_unit_name?: string | null;
   unit_price?: number | null;
   sub_unit_price?: number | null;
+  minimum_stock_level?: number | null;
 }
 
 interface EditBranchItemDialogProps {
