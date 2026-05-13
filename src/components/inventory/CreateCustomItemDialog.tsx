@@ -368,7 +368,7 @@ export default function CreateCustomItemDialog({ open, onOpenChange, onItemCreat
           </div>
 
           {/* Sub-unit (3rd hierarchy level) — only meaningful for countable items */}
-          {itemType === 'full_pcs' && (
+          {itemType === 'full_pcs' && packagingMode === 'with_strip' && (
             <div className="space-y-3 rounded-lg border p-3 bg-muted/20">
               <div className="flex items-center justify-between">
                 <Label className="text-sm font-semibold">Sub-unit (optional)</Label>
