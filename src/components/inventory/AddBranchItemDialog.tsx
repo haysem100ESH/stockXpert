@@ -1,4 +1,5 @@
 import { useState, useEffect } from 'react';
+import { useQuery } from '@tanstack/react-query';
 import { Dialog, DialogContent, DialogDescription, DialogHeader, DialogTitle } from '@/components/ui/dialog';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
@@ -34,18 +35,15 @@ interface AddBranchItemDialogProps {
 }
 
 export default function AddBranchItemDialog({ open, onOpenChange, onItemAdded }: AddBranchItemDialogProps) {
-  const [catalogItems, setCatalogItems] = useState<CatalogItem[]>([]);
-  const [loading, setLoading] = useState(false);
   const [submitting, setSubmitting] = useState(false);
   const [searchTerm, setSearchTerm] = useState('');
   const [selectedItem, setSelectedItem] = useState<CatalogItem | null>(null);
   const [showCustomDialog, setShowCustomDialog] = useState(false);
-  const [branches, setBranches] = useState<Array<{ id: string; name: string }>>([]);
   const [selectedBranchId, setSelectedBranchId] = useState<string>('');
-  const [suppliers, setSuppliers] = useState<Array<{ id: string; name: string }>>([]);
   const [selectedSupplierId, setSelectedSupplierId] = useState<string>('');
   const [paymentType, setPaymentType] = useState<'paid' | 'credit'>('paid');
   const [recordInExpense, setRecordInExpense] = useState(true);
+  const [extraCatalogItems, setExtraCatalogItems] = useState<CatalogItem[]>([]);
 
   // Form fields for branch-specific values
   const [sellingPrice, setSellingPrice] = useState('');
@@ -59,14 +57,95 @@ export default function AddBranchItemDialog({ open, onOpenChange, onItemAdded }:
   const { selectedBranch, branchType } = useBranchContext();
   const isPharmacy = branchType === 'pharmacy';
 
+  // Resolve owner ID once (cached) — staff users have to look up via branch.
+  const { data: ownerId } = useQuery({
+    queryKey: ['resolved-owner-id', profile?.id, profile?.role, profile?.branch_id],
+    queryFn: async () => {
+      if (!profile) return null;
+      if (profile.role === 'owner' || profile.role === 'developer') return profile.id;
+      if (profile.role === 'staff' && profile.branch_id) {
+        const { data } = await supabase
+          .from('pharmacy_branches')
+          .select('pharmacy_owner_id')
+          .eq('id', profile.branch_id)
+          .single();
+        return data?.pharmacy_owner_id || null;
+      }
+      return null;
+    },
+    enabled: !!profile,
+    staleTime: 1000 * 60 * 30,
+  });
+
+  // Catalog items — cached for 5 minutes; fetches groups+members+meds in parallel.
+  const { data: catalogItems = [], isLoading: catalogLoading, refetch: refetchCatalog } = useQuery({
+    queryKey: ['add-item-catalog', ownerId],
+    queryFn: async (): Promise<CatalogItem[]> => {
+      if (!ownerId) return [];
+      const { data: ownerGroups } = await supabase
+        .from('owner_item_groups')
+        .select('group_id')
+        .eq('owner_id', ownerId);
+      if (!ownerGroups || ownerGroups.length === 0) return [];
+      const groupIds = ownerGroups.map((og: any) => og.group_id);
+
+      const { data: groupMembers } = await supabase
+        .from('grouped_item_members')
+        .select('medicine_id')
+        .in('group_id', groupIds);
+      if (!groupMembers || groupMembers.length === 0) return [];
+
+      const medicineIds = [...new Set(groupMembers.map((gm: any) => gm.medicine_id))];
+      const { data: meds } = await supabase
+        .from('medicines')
+        .select('id, name, generic_name, category, manufacturer, batch_number, item_type, unit_label, units_per_pack, minimum_stock_level')
+        .in('id', medicineIds)
+        .order('name');
+      return (meds || []) as CatalogItem[];
+    },
+    enabled: !!ownerId && open,
+    staleTime: 1000 * 60 * 5,
+    placeholderData: (prev) => prev,
+  });
+
+  // Branches (owner only) — cached.
+  const { data: branches = [] } = useQuery({
+    queryKey: ['owner-branches-list', profile?.id],
+    queryFn: async () => {
+      const { data } = await supabase
+        .from('pharmacy_branches')
+        .select('id, name')
+        .eq('pharmacy_owner_id', profile!.id)
+        .order('name');
+      return (data || []) as Array<{ id: string; name: string }>;
+    },
+    enabled: !!profile && profile.role === 'owner',
+    staleTime: 1000 * 60 * 5,
+  });
+
+  // Suppliers — cached.
+  const { data: suppliers = [] } = useQuery({
+    queryKey: ['suppliers-list'],
+    queryFn: async () => {
+      const { data } = await supabase.from('suppliers').select('id, name').order('name');
+      return (data || []) as Array<{ id: string; name: string }>;
+    },
+    enabled: open,
+    staleTime: 1000 * 60 * 5,
+  });
+
+  const loading = catalogLoading;
+  const allCatalogItems = [...extraCatalogItems, ...catalogItems];
+
   useEffect(() => {
-    if (open && profile) {
-      fetchCatalogItems();
-      fetchBranches();
-      fetchSuppliers();
-      resetForm();
-    }
+    if (open && profile) resetForm();
   }, [open, profile]);
+
+  // Set default branch when branches/selectedBranch resolve.
+  useEffect(() => {
+    if (selectedBranch) setSelectedBranchId(selectedBranch);
+    else if (branches.length > 0 && !selectedBranchId) setSelectedBranchId(branches[0].id);
+  }, [selectedBranch, branches]);
 
   const resetForm = () => {
     setSelectedItem(null);
@@ -81,95 +160,7 @@ export default function AddBranchItemDialog({ open, onOpenChange, onItemAdded }:
     setRecordInExpense(true);
   };
 
-  const fetchCatalogItems = async () => {
-    if (!profile) return;
-    setLoading(true);
-
-    try {
-      // Resolve owner ID (staff → look up via branch)
-      let ownerId: string | null = null;
-      if (profile.role === 'owner' || profile.role === 'developer') {
-        ownerId = profile.id;
-      } else if (profile.role === 'staff' && profile.branch_id) {
-        const { data: branch } = await supabase
-          .from('pharmacy_branches')
-          .select('pharmacy_owner_id')
-          .eq('id', profile.branch_id)
-          .single();
-        ownerId = branch?.pharmacy_owner_id || null;
-      }
-      
-      if (!ownerId) {
-        setCatalogItems([]);
-        setLoading(false);
-        return;
-      }
-
-      // Step 1: Get groups assigned to this owner
-      const { data: ownerGroups } = await supabase
-        .from('owner_item_groups')
-        .select('group_id')
-        .eq('owner_id', ownerId);
-
-      if (!ownerGroups || ownerGroups.length === 0) {
-        setCatalogItems([]);
-        setLoading(false);
-        return;
-      }
-
-      const groupIds = ownerGroups.map((og: any) => og.group_id);
-
-      // Step 2: Get medicine IDs from these groups
-      const { data: groupMembers } = await supabase
-        .from('grouped_item_members')
-        .select('medicine_id')
-        .in('group_id', groupIds);
-
-      if (!groupMembers || groupMembers.length === 0) {
-        setCatalogItems([]);
-        setLoading(false);
-        return;
-      }
-
-      const medicineIds = [...new Set(groupMembers.map((gm: any) => gm.medicine_id))];
-
-      // Step 3: Fetch medicines
-      const { data: meds } = await supabase
-        .from('medicines')
-        .select('id, name, generic_name, category, manufacturer, batch_number, item_type, unit_label, units_per_pack, minimum_stock_level')
-        .in('id', medicineIds)
-        .order('name');
-
-      setCatalogItems(meds || []);
-    } catch (error) {
-      console.error('Error fetching catalog:', error);
-      toast({ title: 'Error', description: 'Failed to load item catalog', variant: 'destructive' });
-    } finally {
-      setLoading(false);
-    }
-  };
-
-  const fetchBranches = async () => {
-    if (!profile || profile.role !== 'owner') return;
-    const { data } = await supabase
-      .from('pharmacy_branches')
-      .select('id, name')
-      .eq('pharmacy_owner_id', profile.id)
-      .order('name');
-    setBranches(data || []);
-    if (selectedBranch) {
-      setSelectedBranchId(selectedBranch);
-    } else if (data && data.length > 0) {
-      setSelectedBranchId(data[0].id);
-    }
-  };
-
-  const fetchSuppliers = async () => {
-    const { data } = await supabase.from('suppliers').select('id, name').order('name');
-    setSuppliers(data || []);
-  };
-
-  const filteredItems = catalogItems.filter(item =>
+  const filteredItems = allCatalogItems.filter(item =>
     item.name.toLowerCase().includes(searchTerm.toLowerCase()) ||
     (item.generic_name || '').toLowerCase().includes(searchTerm.toLowerCase()) ||
     item.category.toLowerCase().includes(searchTerm.toLowerCase())
