@@ -14,7 +14,8 @@ import { useBranchContext } from '@/hooks/useBranchContext';
 import { useCustomCategories } from '@/hooks/useCustomCategories';
 import { useMedicineGroups } from '@/hooks/useMedicineGroups';
 import { useQuery } from '@tanstack/react-query';
-import { createBatch } from '@/lib/batchInventory';
+import { createBatch, deductFIFO } from '@/lib/batchInventory';
+import { Textarea } from '@/components/ui/textarea';
 
 export interface BranchItem {
   id: string;
@@ -91,6 +92,8 @@ export default function EditBranchItemDialog({ open, onOpenChange, item, onItemU
   const [selectedSupplierId, setSelectedSupplierId] = useState('');
   const [paymentType, setPaymentType] = useState<'paid' | 'credit'>('paid');
   const [addBatchNumber, setAddBatchNumber] = useState('');
+  const [reduceQuantity, setReduceQuantity] = useState('');
+  const [reduceReason, setReduceReason] = useState('');
 
   const [loading, setLoading] = useState(false);
   const { toast } = useToast();
@@ -166,6 +169,8 @@ export default function EditBranchItemDialog({ open, onOpenChange, item, onItemU
       setSelectedSupplierId('');
       setPaymentType('paid');
       setAddBatchNumber('');
+      setReduceQuantity('');
+      setReduceReason('');
     }
   }, [item, open]);
 
@@ -219,6 +224,18 @@ export default function EditBranchItemDialog({ open, onOpenChange, item, onItemU
       const ups = parseInt(unitsPerStrip);
       if (!sp || !ups || sp < 1 || ups < 1) {
         toast({ title: 'Error', description: 'Strips per item and total items are required for strip packaging', variant: 'destructive' });
+        return;
+      }
+    }
+
+    const reduceQty = reduceQuantity ? parseFloat(reduceQuantity) : 0;
+    if (reduceQty > 0) {
+      if (!reduceReason.trim()) {
+        toast({ title: 'Error', description: 'Reason is required to reduce stock.', variant: 'destructive' });
+        return;
+      }
+      if (reduceQty > Number(item.quantity)) {
+        toast({ title: 'Error', description: 'Cannot reduce more than current stock.', variant: 'destructive' });
         return;
       }
     }
@@ -431,7 +448,48 @@ export default function EditBranchItemDialog({ open, onOpenChange, item, onItemU
         }
       }
 
-      // Log every changed field to stock_edit_history
+      // Reduce stock with required reason (FIFO)
+      if (reduceQty > 0) {
+        const targetBranchId = (isOwner && branchId) ? branchId : item.branch_id;
+        const { error: fifoErr } = await deductFIFO(item.id, reduceQty);
+        if (fifoErr) {
+          // Fallback: direct decrement
+          const newStock = Math.max(0, Number(item.quantity) - reduceQty);
+          await supabase.from('branch_items').update({ quantity: newStock, updated_at: new Date().toISOString() }).eq('id', item.id);
+        }
+
+        // Audit logs
+        try {
+          await supabase.from('inventory_stock_adjustments').insert({
+            medicine_id: item.medicine_id,
+            branch_id: targetBranchId,
+            adjustment_type: 'decrease',
+            quantity: reduceQty,
+            reason: reduceReason.trim(),
+            deduct_from_expense: false,
+            created_by: user?.id || null,
+          });
+        } catch (e) { console.warn('adjustment log failed', e); }
+
+        try {
+          const oldStock = Number(item.quantity);
+          const newStock = Math.max(0, oldStock - reduceQty);
+          await (supabase as any).from('stock_edit_history').insert({
+            medicine_id: item.medicine_id,
+            branch_id: targetBranchId || null,
+            action_type: 'Stock Decreased',
+            field_name: 'stock_quantity',
+            old_value: String(oldStock),
+            new_value: String(newStock),
+            reason: reduceReason.trim(),
+            done_by: profile?.id || null,
+            done_by_name: profile?.full_name || 'Unknown',
+            item_name: item.name,
+          });
+        } catch (e) { console.warn('history log failed', e); }
+      }
+
+
       try {
         const changes: Array<{ field: string; oldVal: any; newVal: any }> = [];
         if (parseFloat(sellingPrice) !== Number(item.selling_price)) {
@@ -681,6 +739,37 @@ export default function EditBranchItemDialog({ open, onOpenChange, item, onItemU
                         <SelectItem value="credit">Credit</SelectItem>
                       </SelectContent>
                     </Select>
+                  </div>
+                )}
+              </div>
+
+              <div className="space-y-3 rounded-lg border border-destructive/30 p-3 bg-destructive/5">
+                <div className="flex items-center justify-between">
+                  <Label className="text-sm font-semibold">Reduce Stock (optional)</Label>
+                  <span className="text-xs text-muted-foreground">FIFO from oldest batches</span>
+                </div>
+                <div className="space-y-2">
+                  <Label className="text-xs">Quantity to Reduce</Label>
+                  <Input
+                    type="number"
+                    step="0.01"
+                    min="0"
+                    max={item.quantity}
+                    value={reduceQuantity}
+                    onChange={e => setReduceQuantity(e.target.value)}
+                    placeholder="Leave empty to skip"
+                  />
+                </div>
+                {reduceQuantity && parseFloat(reduceQuantity) > 0 && (
+                  <div className="space-y-2">
+                    <Label className="text-xs">Reason *</Label>
+                    <Textarea
+                      value={reduceReason}
+                      onChange={e => setReduceReason(e.target.value)}
+                      placeholder="e.g. Damaged, expired, lost, return to supplier"
+                      rows={2}
+                      required
+                    />
                   </div>
                 )}
               </div>
