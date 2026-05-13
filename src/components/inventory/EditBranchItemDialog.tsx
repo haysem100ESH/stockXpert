@@ -783,18 +783,26 @@ export default function EditBranchItemDialog({ open, onOpenChange, item, onItemU
               <div className="space-y-3 rounded-lg border border-destructive/30 p-3 bg-destructive/5">
                 <div className="flex items-center justify-between">
                   <Label className="text-sm font-semibold">Reduce Stock (optional)</Label>
-                  <span className="text-xs text-muted-foreground">FIFO from oldest batches</span>
+                  <span className="text-xs text-muted-foreground">
+                    {availableBatches.length > 1 ? 'Choose batch or use FIFO' : 'FIFO from oldest batches'}
+                  </span>
                 </div>
                 <div className="space-y-2">
                   <Label className="text-xs">Quantity to Reduce</Label>
                   <Input
                     type="number"
-                    step="0.01"
-                    min="0"
+                    step="1"
+                    min="1"
                     max={item.quantity}
                     value={reduceQuantity}
-                    onChange={e => setReduceQuantity(e.target.value)}
-                    placeholder="Leave empty to skip"
+                    onChange={e => {
+                      const v = e.target.value;
+                      // allow empty or digits only (natural numbers)
+                      if (v === '' || /^\d+$/.test(v)) setReduceQuantity(v);
+                    }}
+                    inputMode="numeric"
+                    pattern="[0-9]*"
+                    placeholder="Whole number only"
                   />
                 </div>
                 {reduceQuantity && parseFloat(reduceQuantity) > 0 && (
