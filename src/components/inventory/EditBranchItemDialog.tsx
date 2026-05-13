@@ -92,6 +92,8 @@ export default function EditBranchItemDialog({ open, onOpenChange, item, onItemU
   const [selectedSupplierId, setSelectedSupplierId] = useState('');
   const [paymentType, setPaymentType] = useState<'paid' | 'credit'>('paid');
   const [addBatchNumber, setAddBatchNumber] = useState('');
+  const [reduceQuantity, setReduceQuantity] = useState('');
+  const [reduceReason, setReduceReason] = useState('');
 
   const [loading, setLoading] = useState(false);
   const { toast } = useToast();
