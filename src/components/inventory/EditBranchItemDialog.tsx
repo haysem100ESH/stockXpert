@@ -431,6 +431,9 @@ export default function EditBranchItemDialog({ open, onOpenChange, item, onItemU
         }
       }
 
+      // Log every changed field to stock_edit_history
+      try {
+        const changes: Array<{ field: string; oldVal: any; newVal: any }> = [];
         if (parseFloat(sellingPrice) !== Number(item.selling_price)) {
           changes.push({ field: 'selling_price', oldVal: item.selling_price, newVal: parseFloat(sellingPrice) });
         }
