@@ -13,6 +13,8 @@ import { useAuth } from '@/hooks/useAuth';
 import { useBranchContext } from '@/hooks/useBranchContext';
 import { useCustomCategories } from '@/hooks/useCustomCategories';
 import { useMedicineGroups } from '@/hooks/useMedicineGroups';
+import { useQuery } from '@tanstack/react-query';
+import { createBatch } from '@/lib/batchInventory';
 
 export interface BranchItem {
   id: string;
