@@ -374,9 +374,63 @@ export default function EditBranchItemDialog({ open, onOpenChange, item, onItemU
 
       if (error) throw error;
 
-      // Log every changed field to stock_edit_history
-      try {
-        const changes: Array<{ field: string; oldVal: any; newVal: any }> = [];
+      // Update master medicine's minimum_stock_level if changed
+      if (minStockLevel !== '') {
+        const newMin = parseInt(minStockLevel);
+        if (!isNaN(newMin) && newMin !== ((item as any).minimum_stock_level ?? null)) {
+          await supabase.from('medicines').update({ minimum_stock_level: newMin }).eq('id', item.medicine_id);
+        }
+      }
+
+      // If user entered an "add stock" quantity, create a new batch (+ optional supplier purchase)
+      const addQty = addQuantity ? parseFloat(addQuantity) : 0;
+      if (addQty > 0) {
+        const targetBranchId = (isOwner && branchId) ? branchId : item.branch_id;
+        const pp = parseFloat(purchasePrice);
+        const sp = parseFloat(sellingPrice);
+
+        const { error: batchErr } = await createBatch({
+          branchId: targetBranchId,
+          medicineId: item.medicine_id,
+          branchItemId: item.id,
+          supplierId: selectedSupplierId || null,
+          batchNumber: addBatchNumber || null,
+          quantity: addQty,
+          purchasePrice: pp,
+          sellingPrice: sp,
+          expiryDate: expiryDate || null,
+          createdBy: user?.id || null,
+        });
+        if (batchErr) throw batchErr;
+
+        if (selectedSupplierId) {
+          const totalAmount = addQty * pp;
+          await supabase.from('supplier_purchases').insert({
+            supplier_id: selectedSupplierId,
+            item_name: itemName || item.name,
+            quantity: addQty,
+            unit_cost: pp,
+            total_cost: totalAmount,
+            payment_type: paymentType,
+            branch_id: targetBranchId,
+            created_by: user?.id || null,
+          });
+
+          if (paymentType === 'credit') {
+            const { data: existingDebt } = await supabase
+              .from('supplier_debts')
+              .select('id, total_debt')
+              .eq('supplier_id', selectedSupplierId)
+              .maybeSingle();
+            if (existingDebt) {
+              await supabase.from('supplier_debts').update({ total_debt: existingDebt.total_debt + totalAmount }).eq('id', existingDebt.id);
+            } else {
+              await supabase.from('supplier_debts').insert({ supplier_id: selectedSupplierId, total_debt: totalAmount });
+            }
+          }
+        }
+      }
+
         if (parseFloat(sellingPrice) !== Number(item.selling_price)) {
           changes.push({ field: 'selling_price', oldVal: item.selling_price, newVal: parseFloat(sellingPrice) });
         }
