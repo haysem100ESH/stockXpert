@@ -157,6 +157,7 @@ export default function AddBranchItemDialog({ open, onOpenChange, onItemAdded }:
     setQuantity('');
     setExpiryDate('');
     setBatchNumber('');
+    setMinStockLevel('');
     setSelectedSupplierId('');
     setPaymentType('paid');
     setRecordInExpense(true);
