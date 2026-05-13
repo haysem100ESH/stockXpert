@@ -83,6 +83,14 @@ export default function EditBranchItemDialog({ open, onOpenChange, item, onItemU
   const [unitPrice, setUnitPrice] = useState('');
   const [subUnitPrice, setSubUnitPrice] = useState('');
 
+  // New: branch-level controls
+  const [minStockLevel, setMinStockLevel] = useState('');
+  const [branchId, setBranchId] = useState('');
+  const [addQuantity, setAddQuantity] = useState('');
+  const [selectedSupplierId, setSelectedSupplierId] = useState('');
+  const [paymentType, setPaymentType] = useState<'paid' | 'credit'>('paid');
+  const [addBatchNumber, setAddBatchNumber] = useState('');
+
   const [loading, setLoading] = useState(false);
   const { toast } = useToast();
   const { profile } = useAuth();
@@ -90,6 +98,32 @@ export default function EditBranchItemDialog({ open, onOpenChange, item, onItemU
   const isPharmacy = branchType === 'pharmacy';
   const { categories: customCategories } = useCustomCategories(branchType === 'general' ? 'general' : 'pharmacy');
   const { groups: medicineGroups, addGroup } = useMedicineGroups();
+
+  const isOwner = profile?.role === 'owner' || profile?.role === 'developer';
+
+  const { data: branches = [] } = useQuery({
+    queryKey: ['edit-item-branches', profile?.id],
+    queryFn: async () => {
+      const { data } = await supabase
+        .from('pharmacy_branches')
+        .select('id, name')
+        .eq('pharmacy_owner_id', profile!.id)
+        .order('name');
+      return (data || []) as Array<{ id: string; name: string }>;
+    },
+    enabled: !!profile && isOwner && open,
+    staleTime: 1000 * 60 * 5,
+  });
+
+  const { data: suppliers = [] } = useQuery({
+    queryKey: ['edit-item-suppliers'],
+    queryFn: async () => {
+      const { data } = await supabase.from('suppliers').select('id, name').order('name');
+      return (data || []) as Array<{ id: string; name: string }>;
+    },
+    enabled: open,
+    staleTime: 1000 * 60 * 5,
+  });
 
   // Build dropdown list: include current value if not in custom list so user never loses the existing category
   const categoryOptions = (() => {
