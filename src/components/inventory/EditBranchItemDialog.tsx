@@ -448,7 +448,48 @@ export default function EditBranchItemDialog({ open, onOpenChange, item, onItemU
         }
       }
 
-      // Log every changed field to stock_edit_history
+      // Reduce stock with required reason (FIFO)
+      if (reduceQty > 0) {
+        const targetBranchId = (isOwner && branchId) ? branchId : item.branch_id;
+        const { error: fifoErr } = await deductFIFO(item.id, reduceQty);
+        if (fifoErr) {
+          // Fallback: direct decrement
+          const newStock = Math.max(0, Number(item.quantity) - reduceQty);
+          await supabase.from('branch_items').update({ quantity: newStock, updated_at: new Date().toISOString() }).eq('id', item.id);
+        }
+
+        // Audit logs
+        try {
+          await supabase.from('inventory_stock_adjustments').insert({
+            medicine_id: item.medicine_id,
+            branch_id: targetBranchId,
+            adjustment_type: 'decrease',
+            quantity: reduceQty,
+            reason: reduceReason.trim(),
+            deduct_from_expense: false,
+            created_by: user?.id || null,
+          });
+        } catch (e) { console.warn('adjustment log failed', e); }
+
+        try {
+          const oldStock = Number(item.quantity);
+          const newStock = Math.max(0, oldStock - reduceQty);
+          await (supabase as any).from('stock_edit_history').insert({
+            medicine_id: item.medicine_id,
+            branch_id: targetBranchId || null,
+            action_type: 'Stock Decreased',
+            field_name: 'stock_quantity',
+            old_value: String(oldStock),
+            new_value: String(newStock),
+            reason: reduceReason.trim(),
+            done_by: profile?.id || null,
+            done_by_name: profile?.full_name || 'Unknown',
+            item_name: item.name,
+          });
+        } catch (e) { console.warn('history log failed', e); }
+      }
+
+
       try {
         const changes: Array<{ field: string; oldVal: any; newVal: any }> = [];
         if (parseFloat(sellingPrice) !== Number(item.selling_price)) {
