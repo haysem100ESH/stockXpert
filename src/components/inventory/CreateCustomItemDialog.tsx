@@ -131,7 +131,7 @@ export default function CreateCustomItemDialog({ open, onOpenChange, onItemCreat
         item_type: itemType,
         unit_label: itemType === 'measurable' ? unitLabel : 'strip',
         units_per_pack: computedUnitsPerPack,
-        minimum_stock_level: null,
+        minimum_stock_level: 0,
         purchase_price: 0,
         selling_price: 0,
         stock_quantity: 0,
