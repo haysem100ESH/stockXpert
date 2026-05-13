@@ -468,14 +468,31 @@ export default function EditBranchItemDialog({ open, onOpenChange, item, onItemU
         }
       }
 
-      // Reduce stock with required reason (FIFO)
+      // Reduce stock with required reason
       if (reduceQty > 0) {
         const targetBranchId = (isOwner && branchId) ? branchId : item.branch_id;
-        const { error: fifoErr } = await deductFIFO(item.id, reduceQty);
-        if (fifoErr) {
-          // Fallback: direct decrement
-          const newStock = Math.max(0, Number(item.quantity) - reduceQty);
-          await supabase.from('branch_items').update({ quantity: newStock, updated_at: new Date().toISOString() }).eq('id', item.id);
+        if (reduceBatchId !== 'auto') {
+          // Deduct from a specific batch
+          const b = availableBatches.find(x => x.id === reduceBatchId);
+          if (b) {
+            const newRem = Math.max(0, Number(b.remaining_quantity) - reduceQty);
+            const { error: bErr } = await supabase
+              .from('inventory_batches')
+              .update({ remaining_quantity: newRem, updated_at: new Date().toISOString() })
+              .eq('id', b.id);
+            if (bErr) {
+              const newStock = Math.max(0, Number(item.quantity) - reduceQty);
+              await supabase.from('branch_items').update({ quantity: newStock, updated_at: new Date().toISOString() }).eq('id', item.id);
+            } else {
+              await syncBranchItemQuantity(item.id);
+            }
+          }
+        } else {
+          const { error: fifoErr } = await deductFIFO(item.id, reduceQty);
+          if (fifoErr) {
+            const newStock = Math.max(0, Number(item.quantity) - reduceQty);
+            await supabase.from('branch_items').update({ quantity: newStock, updated_at: new Date().toISOString() }).eq('id', item.id);
+          }
         }
 
         // Audit logs
