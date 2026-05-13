@@ -228,6 +228,18 @@ export default function EditBranchItemDialog({ open, onOpenChange, item, onItemU
       }
     }
 
+    const reduceQty = reduceQuantity ? parseFloat(reduceQuantity) : 0;
+    if (reduceQty > 0) {
+      if (!reduceReason.trim()) {
+        toast({ title: 'Error', description: 'Reason is required to reduce stock.', variant: 'destructive' });
+        return;
+      }
+      if (reduceQty > Number(item.quantity)) {
+        toast({ title: 'Error', description: 'Cannot reduce more than current stock.', variant: 'destructive' });
+        return;
+      }
+    }
+
     setLoading(true);
 
     try {
