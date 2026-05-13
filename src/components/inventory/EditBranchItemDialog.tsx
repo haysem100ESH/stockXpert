@@ -158,6 +158,13 @@ export default function EditBranchItemDialog({ open, onOpenChange, item, onItemU
       setSubUnitName(item.sub_unit_name || '');
       setUnitPrice(item.unit_price != null ? String(item.unit_price) : '');
       setSubUnitPrice(item.sub_unit_price != null ? String(item.sub_unit_price) : '');
+
+      setMinStockLevel((item as any).minimum_stock_level != null ? String((item as any).minimum_stock_level) : '');
+      setBranchId(item.branch_id || '');
+      setAddQuantity('');
+      setSelectedSupplierId('');
+      setPaymentType('paid');
+      setAddBatchNumber('');
     }
   }, [item, open]);
 
