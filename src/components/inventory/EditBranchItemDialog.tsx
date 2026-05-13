@@ -554,6 +554,84 @@ export default function EditBranchItemDialog({ open, onOpenChange, item, onItemU
                 </div>
               )}
 
+              {/* Packaging mode */}
+              <div className="space-y-2">
+                <Label>Packaging *</Label>
+                <Select value={packagingMode} onValueChange={(val) => setPackagingMode(val as 'with_strip' | 'no_strip')}>
+                  <SelectTrigger><SelectValue /></SelectTrigger>
+                  <SelectContent>
+                    <SelectItem value="no_strip">No strip (loose pieces)</SelectItem>
+                    <SelectItem value="with_strip">With strip (e.g. tablets in blister)</SelectItem>
+                  </SelectContent>
+                </Select>
+              </div>
+
+              {packagingMode === 'with_strip' && (
+                <>
+                  <div className="grid grid-cols-2 gap-4">
+                    <div className="space-y-2">
+                      <Label>Strips per Item *</Label>
+                      <Input type="number" min="1" value={stripsPerPack} onChange={e => setStripsPerPack(e.target.value)} placeholder="e.g. 10" />
+                    </div>
+                    <div className="space-y-2">
+                      <Label>Total Items *</Label>
+                      <Input type="number" min="1" value={unitsPerStrip} onChange={e => setUnitsPerStrip(e.target.value)} placeholder="e.g. 10" />
+                    </div>
+                  </div>
+                  {stripsPerPack && unitsPerStrip && parseInt(stripsPerPack) > 0 && parseInt(unitsPerStrip) > 0 && (
+                    <p className="text-xs text-muted-foreground -mt-2">
+                      Total: {parseInt(stripsPerPack) * parseInt(unitsPerStrip)} units per pack
+                    </p>
+                  )}
+                </>
+              )}
+
+              {/* Container / packaging type */}
+              <div className="space-y-2">
+                <Label>Container Type</Label>
+                <Input
+                  list="edit-container-types"
+                  value={containerType}
+                  onChange={e => setContainerType(e.target.value)}
+                  placeholder="e.g. Pack, Bottle, Box, Carton, Sachet, Tube, Roll, Bag"
+                />
+                <datalist id="edit-container-types">
+                  {['Pack','Bottle','Box','Carton','Sachet','Tube','Roll','Bag','Container','Vial','Ampoule'].map(o => (
+                    <option key={o} value={o} />
+                  ))}
+                </datalist>
+              </div>
+
+              {/* Sub-unit (3rd hierarchy level) — only relevant for strip packaging */}
+              {packagingMode === 'with_strip' && (
+                <div className="space-y-3 rounded-lg border p-3 bg-muted/20">
+                  <div className="flex items-center justify-between">
+                    <Label className="text-sm font-semibold">Sub-unit (optional)</Label>
+                    <span className="text-xs text-muted-foreground">e.g. tablets in a strip</span>
+                  </div>
+                  <div className="grid grid-cols-2 gap-3">
+                    <div className="space-y-1">
+                      <Label className="text-xs">Sub-units per Unit</Label>
+                      <Input type="number" min="0" value={subUnitsPerUnit} onChange={e => setSubUnitsPerUnit(e.target.value)} placeholder="e.g. 5" />
+                    </div>
+                    <div className="space-y-1">
+                      <Label className="text-xs">Sub-unit Name</Label>
+                      <Input value={subUnitName} onChange={e => setSubUnitName(e.target.value)} placeholder="e.g. Tablet" />
+                    </div>
+                  </div>
+                  <div className="grid grid-cols-2 gap-3">
+                    <div className="space-y-1">
+                      <Label className="text-xs">Unit / Strip Price</Label>
+                      <Input type="number" step="0.01" min="0" value={unitPrice} onChange={e => setUnitPrice(e.target.value)} placeholder="Optional" />
+                    </div>
+                    <div className="space-y-1">
+                      <Label className="text-xs">Sub-unit Price</Label>
+                      <Input type="number" step="0.01" min="0" value={subUnitPrice} onChange={e => setSubUnitPrice(e.target.value)} placeholder="Optional" />
+                    </div>
+                  </div>
+                </div>
+              )}
+
               <div className="space-y-3 rounded-lg border p-3 bg-muted/20">
                 <div className="flex items-center justify-between">
                   <Label className="text-sm font-semibold">Add Stock (optional)</Label>
