@@ -121,6 +121,8 @@ export default function CreateCustomItemDialog({ open, onOpenChange, onItemCreat
       }
 
       // Insert into medicines table
+      // Note: purchase_price / selling_price / stock_quantity are placeholders (0).
+      // Real pricing & stock are configured per-branch in Add Medicine → branch_items + inventory_batches.
       const insertPayload: any = {
         name: name.trim(),
         generic_name: genericName.trim() || null,
@@ -130,6 +132,9 @@ export default function CreateCustomItemDialog({ open, onOpenChange, onItemCreat
         unit_label: itemType === 'measurable' ? unitLabel : 'strip',
         units_per_pack: computedUnitsPerPack,
         minimum_stock_level: minStock ? parseInt(minStock) : null,
+        purchase_price: 0,
+        selling_price: 0,
+        stock_quantity: 0,
       };
 
       // Pharmacy-only fields
