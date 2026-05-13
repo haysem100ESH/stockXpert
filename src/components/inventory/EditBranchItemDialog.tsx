@@ -14,7 +14,7 @@ import { useBranchContext } from '@/hooks/useBranchContext';
 import { useCustomCategories } from '@/hooks/useCustomCategories';
 import { useMedicineGroups } from '@/hooks/useMedicineGroups';
 import { useQuery } from '@tanstack/react-query';
-import { createBatch, deductFIFO } from '@/lib/batchInventory';
+import { createBatch, deductFIFO, getFIFOBatches, syncBranchItemQuantity, type InventoryBatch } from '@/lib/batchInventory';
 import { Textarea } from '@/components/ui/textarea';
 
 export interface BranchItem {
