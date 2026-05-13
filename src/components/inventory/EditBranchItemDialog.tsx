@@ -226,6 +226,8 @@ export default function EditBranchItemDialog({ open, onOpenChange, item, onItemU
     setLoading(true);
 
     try {
+      const { data: { user } } = await supabase.auth.getUser();
+
       // Always update branch-specific fields
       const branchUpdate: any = {
         selling_price: parseFloat(sellingPrice),
@@ -233,6 +235,9 @@ export default function EditBranchItemDialog({ open, onOpenChange, item, onItemU
         expiry_date: expiryDate || null,
         updated_at: new Date().toISOString(),
       };
+      if (isOwner && branchId && branchId !== item.branch_id) {
+        branchUpdate.branch_id = branchId;
+      }
 
       // If catalog fields changed, we need clone-on-write
       if (catalogFieldsChanged()) {
