@@ -277,7 +277,7 @@ export default function CreateCustomItemDialog({ open, onOpenChange, onItemCreat
 
           <div className="grid grid-cols-2 gap-4">
             <div className="space-y-2">
-              <Label>Item Type *</Label>
+              <Label>Item Type</Label>
               <Select value={itemType} onValueChange={val => setItemType(val as 'full_pcs' | 'measurable')}>
                 <SelectTrigger><SelectValue /></SelectTrigger>
                 <SelectContent>
