@@ -103,12 +103,9 @@ export default function CreateCustomItemDialog({ open, onOpenChange, onItemCreat
       if (itemType === 'full_pcs' && packagingMode === 'with_strip') {
         const sp = parseInt(stripsPerPack);
         const ups = parseInt(unitsPerStrip);
-        if (!sp || !ups || sp < 1 || ups < 1) {
-          toast({ title: 'Error', description: 'Strips per pack and units per strip are required', variant: 'destructive' });
-          setSubmitting(false);
-          return;
+        if (sp > 0 && ups > 0) {
+          computedUnitsPerPack = sp * ups;
         }
-        computedUnitsPerPack = sp * ups;
       } else if (unitsPack) {
         computedUnitsPerPack = parseInt(unitsPack);
       }
