@@ -108,7 +108,8 @@ export default function AddBranchItemDialog({ open, onOpenChange, onItemAdded }:
     placeholderData: (prev) => prev,
   });
 
-  // Branches (owner only) — cached.
+  // Branches (owner only) — deferred until an item is selected so the catalog
+  // list renders first without competing for bandwidth. Cached for revisits.
   const { data: branches = [] } = useQuery({
     queryKey: ['owner-branches-list', profile?.id],
     queryFn: async () => {
@@ -119,18 +120,18 @@ export default function AddBranchItemDialog({ open, onOpenChange, onItemAdded }:
         .order('name');
       return (data || []) as Array<{ id: string; name: string }>;
     },
-    enabled: !!profile && profile.role === 'owner',
+    enabled: !!profile && profile.role === 'owner' && !!selectedItem,
     staleTime: 1000 * 60 * 5,
   });
 
-  // Suppliers — cached.
+  // Suppliers — deferred until an item is selected. Cached for revisits.
   const { data: suppliers = [] } = useQuery({
     queryKey: ['suppliers-list'],
     queryFn: async () => {
       const { data } = await supabase.from('suppliers').select('id, name').order('name');
       return (data || []) as Array<{ id: string; name: string }>;
     },
-    enabled: open,
+    enabled: open && !!selectedItem,
     staleTime: 1000 * 60 * 5,
   });
 
