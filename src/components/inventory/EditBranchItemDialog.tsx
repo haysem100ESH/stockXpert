@@ -14,7 +14,7 @@ import { useBranchContext } from '@/hooks/useBranchContext';
 import { useCustomCategories } from '@/hooks/useCustomCategories';
 import { useMedicineGroups } from '@/hooks/useMedicineGroups';
 import { useQuery } from '@tanstack/react-query';
-import { createBatch, deductFIFO } from '@/lib/batchInventory';
+import { createBatch, deductFIFO, getFIFOBatches, syncBranchItemQuantity, type InventoryBatch } from '@/lib/batchInventory';
 import { Textarea } from '@/components/ui/textarea';
 
 export interface BranchItem {
@@ -94,6 +94,8 @@ export default function EditBranchItemDialog({ open, onOpenChange, item, onItemU
   const [addBatchNumber, setAddBatchNumber] = useState('');
   const [reduceQuantity, setReduceQuantity] = useState('');
   const [reduceReason, setReduceReason] = useState('');
+  const [reduceBatchId, setReduceBatchId] = useState<string>('auto');
+  const [availableBatches, setAvailableBatches] = useState<InventoryBatch[]>([]);
 
   const [loading, setLoading] = useState(false);
   const { toast } = useToast();
@@ -171,6 +173,9 @@ export default function EditBranchItemDialog({ open, onOpenChange, item, onItemU
       setAddBatchNumber('');
       setReduceQuantity('');
       setReduceReason('');
+      setReduceBatchId('auto');
+      // Load batches for FIFO/specific selection
+      getFIFOBatches(item.id).then(setAvailableBatches).catch(() => setAvailableBatches([]));
     }
   }, [item, open]);
 
@@ -228,7 +233,11 @@ export default function EditBranchItemDialog({ open, onOpenChange, item, onItemU
       }
     }
 
-    const reduceQty = reduceQuantity ? parseFloat(reduceQuantity) : 0;
+    const reduceQty = reduceQuantity ? parseInt(reduceQuantity, 10) : 0;
+    if (reduceQuantity && (!Number.isInteger(Number(reduceQuantity)) || Number(reduceQuantity) < 1)) {
+      toast({ title: 'Error', description: 'Reduce quantity must be a whole number (1 or greater).', variant: 'destructive' });
+      return;
+    }
     if (reduceQty > 0) {
       if (!reduceReason.trim()) {
         toast({ title: 'Error', description: 'Reason is required to reduce stock.', variant: 'destructive' });
@@ -237,6 +246,17 @@ export default function EditBranchItemDialog({ open, onOpenChange, item, onItemU
       if (reduceQty > Number(item.quantity)) {
         toast({ title: 'Error', description: 'Cannot reduce more than current stock.', variant: 'destructive' });
         return;
+      }
+      if (reduceBatchId !== 'auto') {
+        const b = availableBatches.find(x => x.id === reduceBatchId);
+        if (!b) {
+          toast({ title: 'Error', description: 'Selected batch not found.', variant: 'destructive' });
+          return;
+        }
+        if (reduceQty > Number(b.remaining_quantity)) {
+          toast({ title: 'Error', description: `Selected batch only has ${b.remaining_quantity} units remaining.`, variant: 'destructive' });
+          return;
+        }
       }
     }
 
@@ -448,14 +468,31 @@ export default function EditBranchItemDialog({ open, onOpenChange, item, onItemU
         }
       }
 
-      // Reduce stock with required reason (FIFO)
+      // Reduce stock with required reason
       if (reduceQty > 0) {
         const targetBranchId = (isOwner && branchId) ? branchId : item.branch_id;
-        const { error: fifoErr } = await deductFIFO(item.id, reduceQty);
-        if (fifoErr) {
-          // Fallback: direct decrement
-          const newStock = Math.max(0, Number(item.quantity) - reduceQty);
-          await supabase.from('branch_items').update({ quantity: newStock, updated_at: new Date().toISOString() }).eq('id', item.id);
+        if (reduceBatchId !== 'auto') {
+          // Deduct from a specific batch
+          const b = availableBatches.find(x => x.id === reduceBatchId);
+          if (b) {
+            const newRem = Math.max(0, Number(b.remaining_quantity) - reduceQty);
+            const { error: bErr } = await supabase
+              .from('inventory_batches')
+              .update({ remaining_quantity: newRem, updated_at: new Date().toISOString() })
+              .eq('id', b.id);
+            if (bErr) {
+              const newStock = Math.max(0, Number(item.quantity) - reduceQty);
+              await supabase.from('branch_items').update({ quantity: newStock, updated_at: new Date().toISOString() }).eq('id', item.id);
+            } else {
+              await syncBranchItemQuantity(item.id);
+            }
+          }
+        } else {
+          const { error: fifoErr } = await deductFIFO(item.id, reduceQty);
+          if (fifoErr) {
+            const newStock = Math.max(0, Number(item.quantity) - reduceQty);
+            await supabase.from('branch_items').update({ quantity: newStock, updated_at: new Date().toISOString() }).eq('id', item.id);
+          }
         }
 
         // Audit logs
@@ -746,20 +783,48 @@ export default function EditBranchItemDialog({ open, onOpenChange, item, onItemU
               <div className="space-y-3 rounded-lg border border-destructive/30 p-3 bg-destructive/5">
                 <div className="flex items-center justify-between">
                   <Label className="text-sm font-semibold">Reduce Stock (optional)</Label>
-                  <span className="text-xs text-muted-foreground">FIFO from oldest batches</span>
+                  <span className="text-xs text-muted-foreground">
+                    {availableBatches.length > 1 ? 'Choose batch or use FIFO' : 'FIFO from oldest batches'}
+                  </span>
                 </div>
                 <div className="space-y-2">
                   <Label className="text-xs">Quantity to Reduce</Label>
                   <Input
                     type="number"
-                    step="0.01"
-                    min="0"
+                    step="1"
+                    min="1"
                     max={item.quantity}
                     value={reduceQuantity}
-                    onChange={e => setReduceQuantity(e.target.value)}
-                    placeholder="Leave empty to skip"
+                    onChange={e => {
+                      const v = e.target.value;
+                      // allow empty or digits only (natural numbers)
+                      if (v === '' || /^\d+$/.test(v)) setReduceQuantity(v);
+                    }}
+                    inputMode="numeric"
+                    pattern="[0-9]*"
+                    placeholder="Whole number only"
                   />
                 </div>
+                {availableBatches.length > 1 && reduceQuantity && parseInt(reduceQuantity, 10) > 0 && (
+                  <div className="space-y-2">
+                    <Label className="text-xs">Reduce From Batch</Label>
+                    <Select value={reduceBatchId} onValueChange={setReduceBatchId}>
+                      <SelectTrigger><SelectValue /></SelectTrigger>
+                      <SelectContent>
+                        <SelectItem value="auto">Auto (FIFO — oldest first)</SelectItem>
+                        {availableBatches.map((b, idx) => {
+                          const label = b.batch_number || `Batch #${idx + 1}`;
+                          const exp = b.expiry_date ? ` · exp ${b.expiry_date}` : '';
+                          return (
+                            <SelectItem key={b.id} value={b.id}>
+                              {label} — {b.remaining_quantity} left{exp}
+                            </SelectItem>
+                          );
+                        })}
+                      </SelectContent>
+                    </Select>
+                  </div>
+                )}
                 {reduceQuantity && parseFloat(reduceQuantity) > 0 && (
                   <div className="space-y-2">
                     <Label className="text-xs">Reason *</Label>
