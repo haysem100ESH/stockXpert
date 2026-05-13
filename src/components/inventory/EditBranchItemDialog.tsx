@@ -527,6 +527,83 @@ export default function EditBranchItemDialog({ open, onOpenChange, item, onItemU
                 <Label>Expiry Date</Label>
                 <Input type="date" value={expiryDate} onChange={e => setExpiryDate(e.target.value)} />
               </div>
+
+              <div className="space-y-2">
+                <Label>Minimum Stock Level (alert!)</Label>
+                <Input
+                  type="number"
+                  min="0"
+                  value={minStockLevel}
+                  onChange={e => setMinStockLevel(e.target.value)}
+                  placeholder="e.g. 10"
+                />
+                <p className="text-xs text-muted-foreground">Triggers low-stock alerts when quantity drops below this.</p>
+              </div>
+
+              {isOwner && branches.length > 0 && (
+                <div className="space-y-2">
+                  <Label>Branch</Label>
+                  <Select value={branchId} onValueChange={setBranchId}>
+                    <SelectTrigger><SelectValue placeholder="Select branch" /></SelectTrigger>
+                    <SelectContent>
+                      {branches.map(b => (
+                        <SelectItem key={b.id} value={b.id}>{b.name}</SelectItem>
+                      ))}
+                    </SelectContent>
+                  </Select>
+                </div>
+              )}
+
+              <div className="space-y-3 rounded-lg border p-3 bg-muted/20">
+                <div className="flex items-center justify-between">
+                  <Label className="text-sm font-semibold">Add Stock (optional)</Label>
+                  <span className="text-xs text-muted-foreground">Creates a new batch</span>
+                </div>
+
+                <div className="space-y-2">
+                  <Label className="text-xs">Quantity to Add</Label>
+                  <Input
+                    type="number"
+                    step="0.01"
+                    min="0"
+                    value={addQuantity}
+                    onChange={e => setAddQuantity(e.target.value)}
+                    placeholder="Leave empty to skip"
+                  />
+                </div>
+
+                <div className="grid grid-cols-2 gap-3">
+                  <div className="space-y-1">
+                    <Label className="text-xs">Supplier (optional)</Label>
+                    <Select value={selectedSupplierId || 'none'} onValueChange={(v) => setSelectedSupplierId(v === 'none' ? '' : v)}>
+                      <SelectTrigger><SelectValue placeholder="Link supplier" /></SelectTrigger>
+                      <SelectContent>
+                        <SelectItem value="none">— None —</SelectItem>
+                        {suppliers.map(s => (
+                          <SelectItem key={s.id} value={s.id}>{s.name}</SelectItem>
+                        ))}
+                      </SelectContent>
+                    </Select>
+                  </div>
+                  <div className="space-y-1">
+                    <Label className="text-xs">Batch Number</Label>
+                    <Input value={addBatchNumber} onChange={e => setAddBatchNumber(e.target.value)} placeholder="Optional" />
+                  </div>
+                </div>
+
+                {selectedSupplierId && (
+                  <div className="space-y-1">
+                    <Label className="text-xs">Payment Type</Label>
+                    <Select value={paymentType} onValueChange={(v) => setPaymentType(v as 'paid' | 'credit')}>
+                      <SelectTrigger><SelectValue /></SelectTrigger>
+                      <SelectContent>
+                        <SelectItem value="paid">Paid</SelectItem>
+                        <SelectItem value="credit">Credit</SelectItem>
+                      </SelectContent>
+                    </Select>
+                  </div>
+                )}
+              </div>
             </TabsContent>
 
             <TabsContent value="catalog" className="space-y-4 mt-4">
