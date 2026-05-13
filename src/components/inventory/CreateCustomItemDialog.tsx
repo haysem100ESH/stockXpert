@@ -305,7 +305,7 @@ export default function CreateCustomItemDialog({ open, onOpenChange, onItemCreat
           {/* Strip packaging — only for countable items */}
           {itemType === 'full_pcs' && (
             <div className="space-y-2">
-              <Label>Packaging *</Label>
+              <Label>Packaging</Label>
               <Select value={packagingMode} onValueChange={val => setPackagingMode(val as 'with_strip' | 'no_strip')}>
                 <SelectTrigger><SelectValue /></SelectTrigger>
                 <SelectContent>
