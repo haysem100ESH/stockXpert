@@ -14,8 +14,7 @@ import { useMedicineGroups } from '@/hooks/useMedicineGroups';
 import { MEASURABLE_UNIT_OPTIONS } from '@/lib/itemTypes';
 import MedicineCodeCombobox from './MedicineCodeCombobox';
 import PackagingEditor from './PackagingEditor';
-import StockEntryFields, { StockEntry, emptyStockEntry, unitsToEntry } from './StockEntryFields';
-import { defaultPackaging, Packaging, autoStripPrice, autoPackPrice } from '@/lib/packaging';
+import { defaultPackaging, Packaging, autoStripPrice, autoPackPrice, formatStock, packagingSummary } from '@/lib/packaging';
 
 interface Medicine {
   id: string;
