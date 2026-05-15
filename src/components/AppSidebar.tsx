@@ -56,6 +56,7 @@ export function AppSidebar() {
     { title: isPharmacy ? "Inventory" : "Stock", url: "/inventory", icon: Package },
     { title: "Global Inventory", url: "/stock-movements", icon: Globe },
     { title: "Smart Inventory", url: "/smart-inventory", icon: Brain },
+    { title: "Medicine Codes", url: "/medicine-codes", icon: Tag },
     { title: "Sales", url: "/sales", icon: ShoppingCart },
     { title: "Finance", url: "/finance", icon: DollarSign },
     { title: "Customers", url: "/customers", icon: UserCheck },
