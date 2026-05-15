@@ -482,16 +482,9 @@ export default function EditMedicineDialog({
             </div>
           </div>
 
-          <div className="grid grid-cols-2 gap-4">
-            <div className="space-y-2">
-              <Label htmlFor="stock_quantity">Stock Quantity</Label>
-              <Input id="stock_quantity" type="number" value={medicineData.stock_quantity} disabled className="opacity-60 cursor-not-allowed" />
-              <p className="text-xs text-muted-foreground">Use "Adjust Stock" to change quantity</p>
-            </div>
-            <div className="space-y-2">
-              <Label htmlFor="minimum_stock_level">Minimum Stock Level(for alert!) *</Label>
-              <Input id="minimum_stock_level" type="number" value={medicineData.minimum_stock_level} onChange={(e) => setMedicineData({ ...medicineData, minimum_stock_level: e.target.value })} required />
-            </div>
+          <div className="space-y-2">
+            <Label htmlFor="minimum_stock_level">Minimum Stock Level (for alert!) *</Label>
+            <Input id="minimum_stock_level" type="number" value={medicineData.minimum_stock_level} onChange={(e) => setMedicineData({ ...medicineData, minimum_stock_level: e.target.value })} required />
           </div>
 
           {/* Measurable unit selector */}
@@ -509,9 +502,27 @@ export default function EditMedicineDialog({
             </div>
           )}
 
+          {medicineData.item_type === 'measurable' && (
+            <div className="space-y-2">
+              <Label htmlFor="stock_quantity">Stock Quantity</Label>
+              <Input id="stock_quantity" type="number" value={medicineData.stock_quantity} disabled className="opacity-60 cursor-not-allowed" />
+              <p className="text-xs text-muted-foreground">Use "Adjust Stock" to change quantity</p>
+            </div>
+          )}
+
           {/* Unit / Strip / Pack — only for Full PCS */}
           {medicineData.item_type === 'full_pcs' && (
-            <PackagingEditor value={packaging} onChange={setPackaging} />
+            <>
+              <PackagingEditor value={packaging} onChange={setPackaging} />
+              <StockEntryFields
+                packaging={packaging}
+                value={stockEntry}
+                onChange={setStockEntry}
+                disabled
+                helperPrefix="Current total"
+              />
+              <p className="text-xs text-muted-foreground -mt-2">Use "Adjust Stock" to change stock quantity.</p>
+            </>
           )}
 
           {isPharmacy && (
