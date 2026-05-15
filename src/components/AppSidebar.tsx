@@ -15,7 +15,8 @@ import {
   ArrowRightLeft,
   ClipboardList,
   Globe,
-  Brain
+  Brain,
+  Tag
 } from "lucide-react";
 
 import {
