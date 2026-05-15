@@ -165,6 +165,7 @@ export default function AddMedicineDialog({ open, onOpenChange, onMedicineAdded,
       branch_id: selectedBranchId || userBranch || selectedBranch || null,
       created_by: user?.id || null,
       item_type: itemType,
+      medicine_code_id: medicineCodeId,
     };
 
     try {
