@@ -196,8 +196,31 @@ export default function AddMedicineDialog({ open, onOpenChange, onMedicineAdded,
     };
 
     try {
-      const { error } = await supabase.from('medicines').insert([medicineData]);
+      const { data: insertedMed, error } = await supabase
+        .from('medicines')
+        .insert([medicineData])
+        .select('id')
+        .single();
       if (error) throw error;
+
+      // Upsert packaging row (Full PCS items only)
+      if (insertedMed?.id && itemType === 'full_pcs') {
+        const stripPrice = packaging.strip_selling_price ?? autoStripPrice(packaging);
+        const packPrice = packaging.pack_selling_price ?? autoPackPrice(packaging);
+        await (supabase as any).from('medicine_packaging').upsert({
+          medicine_id: insertedMed.id,
+          unit_name: packaging.unit_name || 'unit',
+          strip_enabled: packaging.strip_enabled,
+          units_per_strip: packaging.strip_enabled ? packaging.units_per_strip : null,
+          strip_name: packaging.strip_enabled ? (packaging.strip_name || 'strip') : null,
+          pack_enabled: packaging.pack_enabled,
+          strips_per_pack: packaging.pack_enabled ? packaging.strips_per_pack : null,
+          pack_name: packaging.pack_enabled ? (packaging.pack_name || 'pack') : null,
+          unit_selling_price: packaging.unit_selling_price ?? null,
+          strip_selling_price: stripPrice ?? null,
+          pack_selling_price: packPrice ?? medicineData.selling_price ?? null,
+        }, { onConflict: 'medicine_id' });
+      }
 
       const totalAmount = stockQuantity * medicineData.purchase_price;
       const branchId = selectedBranchId || userBranch || selectedBranch || null;
