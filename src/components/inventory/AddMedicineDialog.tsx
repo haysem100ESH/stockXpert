@@ -395,18 +395,20 @@ export default function AddMedicineDialog({ open, onOpenChange, onMedicineAdded,
               <Input id="selling_price" name="selling_price" type="number" step="0.01" min="0" defaultValue={replicateData?.selling_price} required />
             </div>
 
-            <div className="space-y-2">
-              <Label htmlFor="stock_quantity">Stock Quantity {itemType === 'measurable' ? `(${measurableUnit})` : ''} *</Label>
-              <Input
-                id="stock_quantity"
-                name="stock_quantity"
-                type="number"
-                step={itemType === 'measurable' ? '0.01' : '1'}
-                min="0"
-                defaultValue={replicateData?.stock_quantity}
-                required
-              />
-            </div>
+            {itemType === 'measurable' && (
+              <div className="space-y-2">
+                <Label htmlFor="stock_quantity">Stock Quantity ({measurableUnit}) *</Label>
+                <Input
+                  id="stock_quantity"
+                  name="stock_quantity"
+                  type="number"
+                  step="0.01"
+                  min="0"
+                  defaultValue={replicateData?.stock_quantity}
+                  required
+                />
+              </div>
+            )}
 
             <div className="space-y-2">
               <Label htmlFor="minimum_stock_level">Minimum Stock Level (for alert!)</Label>
