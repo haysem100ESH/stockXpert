@@ -171,7 +171,9 @@ export default function AddMedicineDialog({ open, onOpenChange, onMedicineAdded,
     }
 
     const stockQtyRaw = formData.get('stock_quantity') as string;
-    const stockQuantity = isMeas ? parseFloat(stockQtyRaw) : parseInt(stockQtyRaw);
+    const stockQuantity = isMeas
+      ? parseFloat(stockQtyRaw)
+      : entryToUnits(stockEntry, packaging);
 
     const medicineData: Record<string, any> = {
       name: formData.get('name') as string,
