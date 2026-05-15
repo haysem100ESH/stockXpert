@@ -12,6 +12,7 @@ import { useToast } from '@/hooks/use-toast';
 import { useBranchContext } from '@/hooks/useBranchContext';
 import { useCustomCategories } from '@/hooks/useCustomCategories';
 import { MEASURABLE_UNIT_OPTIONS } from '@/lib/itemTypes';
+import MedicineCodeCombobox from './MedicineCodeCombobox';
 
 interface Medicine {
   id: string;
