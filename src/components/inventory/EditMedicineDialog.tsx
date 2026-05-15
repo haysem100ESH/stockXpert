@@ -209,22 +209,25 @@ export default function EditMedicineDialog({
 
     try {
       const isMeas = medicineData.item_type === 'measurable';
-      const unitLabel = isMeas ? measurableUnit : (medicineData.unit_label || 'strip');
+      const unitLabel = isMeas ? measurableUnit : (packaging.unit_name || 'unit');
 
-      // Compute units_per_pack: strip mode → strips × units/strip
+      // Derive legacy packaging columns from the new packaging state
       let computedUnitsPerPack: number | null = null;
+      let stripsPerPackVal: number | null = null;
+      let unitsPerStripVal: number | null = null;
+      let packagingModeVal: string | null = null;
       if (!isMeas) {
-        if (packagingMode === 'with_strip') {
-          const sp = parseInt(stripsPerPack);
-          const ups = parseInt(unitsPerStrip);
-          if (!sp || !ups || sp < 1 || ups < 1) {
-            toast({ title: 'Error', description: 'Strips per item and total items are required for strip packaging', variant: 'destructive' });
-            setLoading(false);
-            return;
+        if (packaging.strip_enabled && packaging.units_per_strip) {
+          unitsPerStripVal = packaging.units_per_strip;
+          packagingModeVal = 'with_strip';
+          if (packaging.pack_enabled && packaging.strips_per_pack) {
+            stripsPerPackVal = packaging.strips_per_pack;
+            computedUnitsPerPack = packaging.strips_per_pack * packaging.units_per_strip;
+          } else {
+            computedUnitsPerPack = packaging.units_per_strip;
           }
-          computedUnitsPerPack = sp * ups;
-        } else if (medicineData.units_per_pack) {
-          computedUnitsPerPack = parseInt(medicineData.units_per_pack);
+        } else {
+          packagingModeVal = 'no_strip';
         }
       }
 
@@ -251,27 +254,47 @@ export default function EditMedicineDialog({
         country_name: medicineData.country_name || null,
         purchase_price: parseFloat(medicineData.purchase_price),
         selling_price: parseFloat(medicineData.selling_price),
-        
         minimum_stock_level: parseInt(medicineData.minimum_stock_level),
         units_per_pack: computedUnitsPerPack,
         unit_label: unitLabel,
+        packaging_mode: packagingModeVal,
         expiry_date: isPharmacy ? (medicineData.expiry_date || null) : null,
         expiry_alert_enabled: isPharmacy ? medicineData.expiry_alert_enabled : false,
         item_type: medicineData.item_type,
-        strips_per_pack: !isMeas && packagingMode === 'with_strip' ? parseInt(stripsPerPack) : null,
-        units_per_strip: !isMeas && packagingMode === 'with_strip' ? parseInt(unitsPerStrip) : null,
+        strips_per_pack: stripsPerPackVal,
+        units_per_strip: unitsPerStripVal,
         // Pharmacy-only fields
         strength: isPharmacy ? (medicineData.strength.trim() || null) : null,
         medicine_group: isPharmacy ? resolvedGroup : null,
         medicine_code_id: medicineCodeId,
       };
-      
+
       if (userRole === 'owner' && medicineData.branch_id) {
         updateData.branch_id = medicineData.branch_id;
       }
 
       const { error } = await supabase.from('medicines').update(updateData).eq('id', medicine.id);
       if (error) throw error;
+
+      // Upsert packaging row (Full PCS items only)
+      if (!isMeas) {
+        const stripPrice = packaging.strip_selling_price ?? autoStripPrice(packaging);
+        const packPrice = packaging.pack_selling_price ?? autoPackPrice(packaging);
+        await (supabase as any).from('medicine_packaging').upsert({
+          medicine_id: medicine.id,
+          unit_name: packaging.unit_name || 'unit',
+          strip_enabled: packaging.strip_enabled,
+          units_per_strip: packaging.strip_enabled ? packaging.units_per_strip : null,
+          strip_name: packaging.strip_enabled ? (packaging.strip_name || 'strip') : null,
+          pack_enabled: packaging.pack_enabled,
+          strips_per_pack: packaging.pack_enabled ? packaging.strips_per_pack : null,
+          pack_name: packaging.pack_enabled ? (packaging.pack_name || 'pack') : null,
+          unit_selling_price: packaging.unit_selling_price ?? null,
+          strip_selling_price: stripPrice ?? null,
+          pack_selling_price: packPrice ?? updateData.selling_price ?? null,
+        }, { onConflict: 'medicine_id' });
+      }
+
 
       // Expense sync logic
       const { data: { user } } = await supabase.auth.getUser();
