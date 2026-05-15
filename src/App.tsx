@@ -25,6 +25,7 @@ import CustomersPage from "./pages/CustomersPage";
 import StockMovementsPage from "./pages/StockMovementsPage";
 import TransferRequestsPage from "./pages/TransferRequestsPage";
 import SmartInventoryPage from "./pages/SmartInventoryPage";
+import MedicineCodesPage from "./pages/MedicineCodesPage";
 import Auth from "./pages/Auth";
 import NotFound from "./pages/NotFound";
 
