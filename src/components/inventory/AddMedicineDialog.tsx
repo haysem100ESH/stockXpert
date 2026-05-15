@@ -60,6 +60,7 @@ export default function AddMedicineDialog({ open, onOpenChange, onMedicineAdded,
   const [paymentType, setPaymentType] = useState<'paid' | 'credit'>('paid');
   const [medicineCodeId, setMedicineCodeId] = useState<string | null>(null);
   const [packaging, setPackaging] = useState<Packaging>(defaultPackaging());
+  const [stockEntry, setStockEntry] = useState<StockEntry>(emptyStockEntry());
   const { toast } = useToast();
   const { selectedBranch, userBranch } = useBranchContext();
   const { categories } = useCustomCategories(isGeneral ? 'general' : 'pharmacy');
