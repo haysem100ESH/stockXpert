@@ -187,7 +187,6 @@ export default function EditMedicineDialog({
           resolved = fallback;
         }
         setPackaging(resolved);
-        setStockEntry(unitsToEntry(Number(medicine.stock_quantity || 0), resolved));
       })();
 
       // Check if an expense exists for this item
