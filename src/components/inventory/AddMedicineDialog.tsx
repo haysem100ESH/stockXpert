@@ -127,6 +127,7 @@ export default function AddMedicineDialog({ open, onOpenChange, onMedicineAdded,
       setItemType('full_pcs');
       setSelectedSupplierId('');
       setPaymentType('paid');
+      setMedicineCodeId(null);
     }
   }, [open, selectedBranch, userBranch]);
 
