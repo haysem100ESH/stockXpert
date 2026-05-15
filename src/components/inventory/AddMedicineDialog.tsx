@@ -144,12 +144,31 @@ export default function AddMedicineDialog({ open, onOpenChange, onMedicineAdded,
     
     const selectedCategory = (formData.get('category') as string) || 'other';
 
-    const unitLabel = itemType === 'measurable' ? measurableUnit : (formData.get('unit_label') as string || 'strip');
-    const unitsPerPackValue = formData.get('units_per_pack') as string;
-    const unitsPerPack = itemType === 'full_pcs' && unitsPerPackValue ? parseInt(unitsPerPackValue) : null;
-    
+    const isMeas = itemType === 'measurable';
+    const unitLabel = isMeas ? measurableUnit : (packaging.unit_name || 'unit');
+
+    // Derive legacy packaging columns for back-compat
+    let unitsPerPack: number | null = null;
+    let stripsPerPack: number | null = null;
+    let unitsPerStrip: number | null = null;
+    let packagingMode: string | null = null;
+    if (!isMeas) {
+      if (packaging.strip_enabled && packaging.units_per_strip) {
+        unitsPerStrip = packaging.units_per_strip;
+        packagingMode = 'with_strip';
+        if (packaging.pack_enabled && packaging.strips_per_pack) {
+          stripsPerPack = packaging.strips_per_pack;
+          unitsPerPack = packaging.strips_per_pack * packaging.units_per_strip;
+        } else {
+          unitsPerPack = packaging.units_per_strip;
+        }
+      } else {
+        packagingMode = 'no_strip';
+      }
+    }
+
     const stockQtyRaw = formData.get('stock_quantity') as string;
-    const stockQuantity = itemType === 'measurable' ? parseFloat(stockQtyRaw) : parseInt(stockQtyRaw);
+    const stockQuantity = isMeas ? parseFloat(stockQtyRaw) : parseInt(stockQtyRaw);
 
     const medicineData: Record<string, any> = {
       name: formData.get('name') as string,
@@ -163,6 +182,9 @@ export default function AddMedicineDialog({ open, onOpenChange, onMedicineAdded,
       stock_quantity: stockQuantity,
       minimum_stock_level: (() => { const v = formData.get('minimum_stock_level') as string; const n = parseInt(v); return isNaN(n) ? null : n; })(),
       units_per_pack: unitsPerPack,
+      strips_per_pack: stripsPerPack,
+      units_per_strip: unitsPerStrip,
+      packaging_mode: packagingMode,
       unit_label: unitLabel,
       open_pack_units: 0,
       expiry_date: formData.get('expiry_date') as string || null,
