@@ -14,6 +14,7 @@ import { useCustomCategories } from '@/hooks/useCustomCategories';
 import { MEASURABLE_UNIT_OPTIONS } from '@/lib/itemTypes';
 import MedicineCodeCombobox from './MedicineCodeCombobox';
 import PackagingEditor from './PackagingEditor';
+import StockEntryFields, { StockEntry, emptyStockEntry, entryToUnits } from './StockEntryFields';
 import { defaultPackaging, Packaging, autoStripPrice, autoPackPrice } from '@/lib/packaging';
 
 interface Medicine {
@@ -59,6 +60,7 @@ export default function AddMedicineDialog({ open, onOpenChange, onMedicineAdded,
   const [paymentType, setPaymentType] = useState<'paid' | 'credit'>('paid');
   const [medicineCodeId, setMedicineCodeId] = useState<string | null>(null);
   const [packaging, setPackaging] = useState<Packaging>(defaultPackaging());
+  const [stockEntry, setStockEntry] = useState<StockEntry>(emptyStockEntry());
   const { toast } = useToast();
   const { selectedBranch, userBranch } = useBranchContext();
   const { categories } = useCustomCategories(isGeneral ? 'general' : 'pharmacy');
@@ -132,6 +134,7 @@ export default function AddMedicineDialog({ open, onOpenChange, onMedicineAdded,
       setPaymentType('paid');
       setMedicineCodeId(null);
       setPackaging(defaultPackaging());
+      setStockEntry(emptyStockEntry());
     }
   }, [open, selectedBranch, userBranch]);
 
@@ -168,7 +171,9 @@ export default function AddMedicineDialog({ open, onOpenChange, onMedicineAdded,
     }
 
     const stockQtyRaw = formData.get('stock_quantity') as string;
-    const stockQuantity = isMeas ? parseFloat(stockQtyRaw) : parseInt(stockQtyRaw);
+    const stockQuantity = isMeas
+      ? parseFloat(stockQtyRaw)
+      : entryToUnits(stockEntry, packaging);
 
     const medicineData: Record<string, any> = {
       name: formData.get('name') as string,
@@ -390,18 +395,20 @@ export default function AddMedicineDialog({ open, onOpenChange, onMedicineAdded,
               <Input id="selling_price" name="selling_price" type="number" step="0.01" min="0" defaultValue={replicateData?.selling_price} required />
             </div>
 
-            <div className="space-y-2">
-              <Label htmlFor="stock_quantity">Stock Quantity {itemType === 'measurable' ? `(${measurableUnit})` : ''} *</Label>
-              <Input
-                id="stock_quantity"
-                name="stock_quantity"
-                type="number"
-                step={itemType === 'measurable' ? '0.01' : '1'}
-                min="0"
-                defaultValue={replicateData?.stock_quantity}
-                required
-              />
-            </div>
+            {itemType === 'measurable' && (
+              <div className="space-y-2">
+                <Label htmlFor="stock_quantity">Stock Quantity ({measurableUnit}) *</Label>
+                <Input
+                  id="stock_quantity"
+                  name="stock_quantity"
+                  type="number"
+                  step="0.01"
+                  min="0"
+                  defaultValue={replicateData?.stock_quantity}
+                  required
+                />
+              </div>
+            )}
 
             <div className="space-y-2">
               <Label htmlFor="minimum_stock_level">Minimum Stock Level (for alert!)</Label>
@@ -433,7 +440,14 @@ export default function AddMedicineDialog({ open, onOpenChange, onMedicineAdded,
 
           {/* Unit / Strip / Pack — only for Full PCS */}
           {itemType === 'full_pcs' && (
-            <PackagingEditor value={packaging} onChange={setPackaging} />
+            <>
+              <PackagingEditor value={packaging} onChange={setPackaging} />
+              <StockEntryFields
+                packaging={packaging}
+                value={stockEntry}
+                onChange={setStockEntry}
+              />
+            </>
           )}
 
           <div className="space-y-2">
