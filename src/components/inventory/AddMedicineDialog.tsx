@@ -134,6 +134,7 @@ export default function AddMedicineDialog({ open, onOpenChange, onMedicineAdded,
       setPaymentType('paid');
       setMedicineCodeId(null);
       setPackaging(defaultPackaging());
+      setStockEntry(emptyStockEntry());
     }
   }, [open, selectedBranch, userBranch]);
 
