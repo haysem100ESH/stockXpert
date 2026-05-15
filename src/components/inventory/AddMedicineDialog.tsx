@@ -12,6 +12,7 @@ import { useToast } from '@/hooks/use-toast';
 import { useBranchContext } from '@/hooks/useBranchContext';
 import { useCustomCategories } from '@/hooks/useCustomCategories';
 import { MEASURABLE_UNIT_OPTIONS } from '@/lib/itemTypes';
+import MedicineCodeCombobox from './MedicineCodeCombobox';
 
 interface Medicine {
   id: string;
@@ -54,6 +55,7 @@ export default function AddMedicineDialog({ open, onOpenChange, onMedicineAdded,
   const [suppliers, setSuppliers] = useState<Supplier[]>([]);
   const [selectedSupplierId, setSelectedSupplierId] = useState<string>('');
   const [paymentType, setPaymentType] = useState<'paid' | 'credit'>('paid');
+  const [medicineCodeId, setMedicineCodeId] = useState<string | null>(null);
   const { toast } = useToast();
   const { selectedBranch, userBranch } = useBranchContext();
   const { categories } = useCustomCategories(isGeneral ? 'general' : 'pharmacy');
@@ -125,6 +127,7 @@ export default function AddMedicineDialog({ open, onOpenChange, onMedicineAdded,
       setItemType('full_pcs');
       setSelectedSupplierId('');
       setPaymentType('paid');
+      setMedicineCodeId(null);
     }
   }, [open, selectedBranch, userBranch]);
 
@@ -163,6 +166,7 @@ export default function AddMedicineDialog({ open, onOpenChange, onMedicineAdded,
       branch_id: selectedBranchId || userBranch || selectedBranch || null,
       created_by: user?.id || null,
       item_type: itemType,
+      medicine_code_id: medicineCodeId,
     };
 
     try {
@@ -408,6 +412,11 @@ export default function AddMedicineDialog({ open, onOpenChange, onMedicineAdded,
                 <SelectItem value="6">6 Months</SelectItem>
               </SelectContent>
             </Select>
+          </div>
+
+          {/* Medicine Code (Optional grouping) */}
+          <div className="p-4 rounded-lg border bg-muted/30">
+            <MedicineCodeCombobox value={medicineCodeId} onChange={setMedicineCodeId} />
           </div>
 
           {/* Supplier Selection (Optional) */}

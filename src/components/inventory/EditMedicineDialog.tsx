@@ -12,6 +12,7 @@ import { useBranchContext } from '@/hooks/useBranchContext';
 import { useCustomCategories } from '@/hooks/useCustomCategories';
 import { useMedicineGroups } from '@/hooks/useMedicineGroups';
 import { MEASURABLE_UNIT_OPTIONS } from '@/lib/itemTypes';
+import MedicineCodeCombobox from './MedicineCodeCombobox';
 
 interface Medicine {
   id: string;
@@ -29,6 +30,7 @@ interface Medicine {
   expiry_alert_enabled?: boolean;
   medicine_group?: string | null;
   strength?: string | null;
+  medicine_code_id?: string | null;
 }
 
 interface EditMedicineDialogProps {
@@ -87,6 +89,7 @@ export default function EditMedicineDialog({
   const [branches, setBranches] = useState<Array<{ id: string; name: string }>>([]);
   const [userRole, setUserRole] = useState<'owner' | 'staff' | null>(null);
   const [loading, setLoading] = useState(false);
+  const [medicineCodeId, setMedicineCodeId] = useState<string | null>(null);
   const { toast } = useToast();
 
   useEffect(() => {
@@ -152,6 +155,7 @@ export default function EditMedicineDialog({
         medicine_group: medicine.medicine_group || '',
       });
       setCustomGroup('');
+      setMedicineCodeId(medicine.medicine_code_id ?? null);
 
       // Check if an expense exists for this item
       (async () => {
@@ -229,6 +233,7 @@ export default function EditMedicineDialog({
         // Pharmacy-only fields
         strength: isPharmacy ? (medicineData.strength.trim() || null) : null,
         medicine_group: isPharmacy ? resolvedGroup : null,
+        medicine_code_id: medicineCodeId,
       };
       
       if (userRole === 'owner' && medicineData.branch_id) {
@@ -516,6 +521,11 @@ export default function EditMedicineDialog({
               </div>
             </>
           )}
+
+          {/* Medicine Code (Optional grouping) */}
+          <div className="p-4 rounded-lg border bg-muted/30">
+            <MedicineCodeCombobox value={medicineCodeId} onChange={setMedicineCodeId} />
+          </div>
 
           {/* Record in Expense checkbox */}
           <div className="flex items-center space-x-2 rounded-md border p-3 bg-muted/30">
