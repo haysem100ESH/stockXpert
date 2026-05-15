@@ -436,9 +436,6 @@ export default function AddMedicineDialog({ open, onOpenChange, onMedicineAdded,
             <PackagingEditor value={packaging} onChange={setPackaging} />
           )}
 
-          <div className="hidden">
-            {/* spacer to keep grid above closed */}
-
           <div className="space-y-2">
             <Label htmlFor="expiry_alert_enabled">Alert me before expiry</Label>
             <Select name="expiry_alert_enabled" defaultValue="1">
