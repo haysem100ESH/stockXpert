@@ -508,19 +508,37 @@ export default function EditMedicineDialog({
           )}
 
           {/* Unit / Strip / Pack — only for Full PCS */}
-          {medicineData.item_type === 'full_pcs' && (
-            <>
-              <PackagingEditor value={packaging} onChange={setPackaging} />
-              <StockEntryFields
-                packaging={packaging}
-                value={stockEntry}
-                onChange={setStockEntry}
-                disabled
-                helperPrefix="Current total"
-              />
-              <p className="text-xs text-muted-foreground -mt-2">Use "Adjust Stock" to change stock quantity.</p>
-            </>
-          )}
+          {medicineData.item_type === 'full_pcs' && (() => {
+            const totalUnits = Number(medicineData.stock_quantity || 0);
+            const unitName = packaging.unit_name || 'unit';
+            return (
+              <>
+                <PackagingEditor value={packaging} onChange={setPackaging} />
+
+                <div className="space-y-2 rounded-lg border bg-muted/20 p-4">
+                  <Label className="text-sm font-semibold">Stock on hand</Label>
+                  <div className="space-y-1">
+                    <Label className="text-xs">Total {unitName}{totalUnits === 1 ? '' : 's'}</Label>
+                    <Input
+                      type="number"
+                      value={medicineData.stock_quantity}
+                      disabled
+                      className="opacity-60 cursor-not-allowed"
+                    />
+                  </div>
+                  <p className="text-sm font-medium text-foreground">
+                    = {formatStock(totalUnits, packaging)}
+                  </p>
+                  <p className="text-xs text-muted-foreground">{packagingSummary(packaging)}</p>
+                  <p className="text-xs text-muted-foreground">
+                    Toggle Strip / Pack above and set sizes — the breakdown updates automatically.
+                    Use "Adjust Stock" to change the total quantity.
+                  </p>
+                </div>
+              </>
+            );
+          })()}
+
 
           {isPharmacy && (
             <>
