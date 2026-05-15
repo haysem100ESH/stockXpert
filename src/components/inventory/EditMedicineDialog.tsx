@@ -30,6 +30,7 @@ interface Medicine {
   expiry_alert_enabled?: boolean;
   medicine_group?: string | null;
   strength?: string | null;
+  medicine_code_id?: string | null;
 }
 
 interface EditMedicineDialogProps {
