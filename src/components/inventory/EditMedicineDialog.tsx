@@ -522,6 +522,11 @@ export default function EditMedicineDialog({
             </>
           )}
 
+          {/* Medicine Code (Optional grouping) */}
+          <div className="p-4 rounded-lg border bg-muted/30">
+            <MedicineCodeCombobox value={medicineCodeId} onChange={setMedicineCodeId} />
+          </div>
+
           {/* Record in Expense checkbox */}
           <div className="flex items-center space-x-2 rounded-md border p-3 bg-muted/30">
             <Checkbox
