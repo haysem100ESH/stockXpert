@@ -13,6 +13,8 @@ import { useBranchContext } from '@/hooks/useBranchContext';
 import { useCustomCategories } from '@/hooks/useCustomCategories';
 import { MEASURABLE_UNIT_OPTIONS } from '@/lib/itemTypes';
 import MedicineCodeCombobox from './MedicineCodeCombobox';
+import PackagingEditor from './PackagingEditor';
+import { defaultPackaging, Packaging, autoStripPrice, autoPackPrice } from '@/lib/packaging';
 
 interface Medicine {
   id: string;
@@ -56,6 +58,7 @@ export default function AddMedicineDialog({ open, onOpenChange, onMedicineAdded,
   const [selectedSupplierId, setSelectedSupplierId] = useState<string>('');
   const [paymentType, setPaymentType] = useState<'paid' | 'credit'>('paid');
   const [medicineCodeId, setMedicineCodeId] = useState<string | null>(null);
+  const [packaging, setPackaging] = useState<Packaging>(defaultPackaging());
   const { toast } = useToast();
   const { selectedBranch, userBranch } = useBranchContext();
   const { categories } = useCustomCategories(isGeneral ? 'general' : 'pharmacy');
@@ -128,6 +131,7 @@ export default function AddMedicineDialog({ open, onOpenChange, onMedicineAdded,
       setSelectedSupplierId('');
       setPaymentType('paid');
       setMedicineCodeId(null);
+      setPackaging(defaultPackaging());
     }
   }, [open, selectedBranch, userBranch]);
 
