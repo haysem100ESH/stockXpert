@@ -89,6 +89,7 @@ export default function EditMedicineDialog({
   const [branches, setBranches] = useState<Array<{ id: string; name: string }>>([]);
   const [userRole, setUserRole] = useState<'owner' | 'staff' | null>(null);
   const [loading, setLoading] = useState(false);
+  const [medicineCodeId, setMedicineCodeId] = useState<string | null>(null);
   const { toast } = useToast();
 
   useEffect(() => {
