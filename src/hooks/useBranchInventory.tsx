@@ -95,6 +95,7 @@ async function enrichItems(
       unit_price: med.unit_price,
       sub_unit_price: med.sub_unit_price,
       minimum_stock_level: med.minimum_stock_level,
+      medicine_code_id: med.medicine_code_id ?? null,
       active_ingredients: [],
       branch_name: branchMap[item.branch_id],
     } as EnrichedBranchItem;
