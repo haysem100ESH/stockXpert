@@ -233,6 +233,7 @@ export default function EditMedicineDialog({
         // Pharmacy-only fields
         strength: isPharmacy ? (medicineData.strength.trim() || null) : null,
         medicine_group: isPharmacy ? resolvedGroup : null,
+        medicine_code_id: medicineCodeId,
       };
       
       if (userRole === 'owner' && medicineData.branch_id) {
