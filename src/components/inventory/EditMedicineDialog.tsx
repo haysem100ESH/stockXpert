@@ -155,6 +155,7 @@ export default function EditMedicineDialog({
         medicine_group: medicine.medicine_group || '',
       });
       setCustomGroup('');
+      setMedicineCodeId(medicine.medicine_code_id ?? null);
 
       // Check if an expense exists for this item
       (async () => {
