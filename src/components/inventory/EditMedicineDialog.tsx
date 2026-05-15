@@ -13,6 +13,8 @@ import { useCustomCategories } from '@/hooks/useCustomCategories';
 import { useMedicineGroups } from '@/hooks/useMedicineGroups';
 import { MEASURABLE_UNIT_OPTIONS } from '@/lib/itemTypes';
 import MedicineCodeCombobox from './MedicineCodeCombobox';
+import PackagingEditor from './PackagingEditor';
+import { defaultPackaging, Packaging, autoStripPrice, autoPackPrice } from '@/lib/packaging';
 
 interface Medicine {
   id: string;
@@ -90,6 +92,7 @@ export default function EditMedicineDialog({
   const [userRole, setUserRole] = useState<'owner' | 'staff' | null>(null);
   const [loading, setLoading] = useState(false);
   const [medicineCodeId, setMedicineCodeId] = useState<string | null>(null);
+  const [packaging, setPackaging] = useState<Packaging>(defaultPackaging());
   const { toast } = useToast();
 
   useEffect(() => {
