@@ -169,8 +169,9 @@ export default function EditMedicineDialog({
           .select('*')
           .eq('medicine_id', medicine.id)
           .maybeSingle();
+        let resolved: Packaging;
         if (pack) {
-          setPackaging(pack as Packaging);
+          resolved = pack as Packaging;
         } else {
           const fallback = defaultPackaging();
           fallback.unit_name = unitLbl || 'unit';
@@ -185,8 +186,10 @@ export default function EditMedicineDialog({
             }
           }
           fallback.pack_selling_price = medicine.selling_price ?? null;
-          setPackaging(fallback);
+          resolved = fallback;
         }
+        setPackaging(resolved);
+        setStockEntry(unitsToEntry(Number(medicine.stock_quantity || 0), resolved));
       })();
 
       // Check if an expense exists for this item
