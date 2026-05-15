@@ -13,6 +13,8 @@ import { useBranchContext } from '@/hooks/useBranchContext';
 import { useCustomCategories } from '@/hooks/useCustomCategories';
 import { MEASURABLE_UNIT_OPTIONS } from '@/lib/itemTypes';
 import MedicineCodeCombobox from './MedicineCodeCombobox';
+import PackagingEditor from './PackagingEditor';
+import { defaultPackaging, Packaging, autoStripPrice, autoPackPrice } from '@/lib/packaging';
 
 interface Medicine {
   id: string;
@@ -56,6 +58,7 @@ export default function AddMedicineDialog({ open, onOpenChange, onMedicineAdded,
   const [selectedSupplierId, setSelectedSupplierId] = useState<string>('');
   const [paymentType, setPaymentType] = useState<'paid' | 'credit'>('paid');
   const [medicineCodeId, setMedicineCodeId] = useState<string | null>(null);
+  const [packaging, setPackaging] = useState<Packaging>(defaultPackaging());
   const { toast } = useToast();
   const { selectedBranch, userBranch } = useBranchContext();
   const { categories } = useCustomCategories(isGeneral ? 'general' : 'pharmacy');
@@ -128,6 +131,7 @@ export default function AddMedicineDialog({ open, onOpenChange, onMedicineAdded,
       setSelectedSupplierId('');
       setPaymentType('paid');
       setMedicineCodeId(null);
+      setPackaging(defaultPackaging());
     }
   }, [open, selectedBranch, userBranch]);
 
@@ -140,12 +144,31 @@ export default function AddMedicineDialog({ open, onOpenChange, onMedicineAdded,
     
     const selectedCategory = (formData.get('category') as string) || 'other';
 
-    const unitLabel = itemType === 'measurable' ? measurableUnit : (formData.get('unit_label') as string || 'strip');
-    const unitsPerPackValue = formData.get('units_per_pack') as string;
-    const unitsPerPack = itemType === 'full_pcs' && unitsPerPackValue ? parseInt(unitsPerPackValue) : null;
-    
+    const isMeas = itemType === 'measurable';
+    const unitLabel = isMeas ? measurableUnit : (packaging.unit_name || 'unit');
+
+    // Derive legacy packaging columns for back-compat
+    let unitsPerPack: number | null = null;
+    let stripsPerPack: number | null = null;
+    let unitsPerStrip: number | null = null;
+    let packagingMode: string | null = null;
+    if (!isMeas) {
+      if (packaging.strip_enabled && packaging.units_per_strip) {
+        unitsPerStrip = packaging.units_per_strip;
+        packagingMode = 'with_strip';
+        if (packaging.pack_enabled && packaging.strips_per_pack) {
+          stripsPerPack = packaging.strips_per_pack;
+          unitsPerPack = packaging.strips_per_pack * packaging.units_per_strip;
+        } else {
+          unitsPerPack = packaging.units_per_strip;
+        }
+      } else {
+        packagingMode = 'no_strip';
+      }
+    }
+
     const stockQtyRaw = formData.get('stock_quantity') as string;
-    const stockQuantity = itemType === 'measurable' ? parseFloat(stockQtyRaw) : parseInt(stockQtyRaw);
+    const stockQuantity = isMeas ? parseFloat(stockQtyRaw) : parseInt(stockQtyRaw);
 
     const medicineData: Record<string, any> = {
       name: formData.get('name') as string,
@@ -159,6 +182,9 @@ export default function AddMedicineDialog({ open, onOpenChange, onMedicineAdded,
       stock_quantity: stockQuantity,
       minimum_stock_level: (() => { const v = formData.get('minimum_stock_level') as string; const n = parseInt(v); return isNaN(n) ? null : n; })(),
       units_per_pack: unitsPerPack,
+      strips_per_pack: stripsPerPack,
+      units_per_strip: unitsPerStrip,
+      packaging_mode: packagingMode,
       unit_label: unitLabel,
       open_pack_units: 0,
       expiry_date: formData.get('expiry_date') as string || null,
@@ -170,8 +196,31 @@ export default function AddMedicineDialog({ open, onOpenChange, onMedicineAdded,
     };
 
     try {
-      const { error } = await supabase.from('medicines').insert([medicineData]);
+      const { data: insertedMed, error } = await supabase
+        .from('medicines')
+        .insert([medicineData])
+        .select('id')
+        .single();
       if (error) throw error;
+
+      // Upsert packaging row (Full PCS items only)
+      if (insertedMed?.id && itemType === 'full_pcs') {
+        const stripPrice = packaging.strip_selling_price ?? autoStripPrice(packaging);
+        const packPrice = packaging.pack_selling_price ?? autoPackPrice(packaging);
+        await (supabase as any).from('medicine_packaging').upsert({
+          medicine_id: insertedMed.id,
+          unit_name: packaging.unit_name || 'unit',
+          strip_enabled: packaging.strip_enabled,
+          units_per_strip: packaging.strip_enabled ? packaging.units_per_strip : null,
+          strip_name: packaging.strip_enabled ? (packaging.strip_name || 'strip') : null,
+          pack_enabled: packaging.pack_enabled,
+          strips_per_pack: packaging.pack_enabled ? packaging.strips_per_pack : null,
+          pack_name: packaging.pack_enabled ? (packaging.pack_name || 'pack') : null,
+          unit_selling_price: packaging.unit_selling_price ?? null,
+          strip_selling_price: stripPrice ?? null,
+          pack_selling_price: packPrice ?? medicineData.selling_price ?? null,
+        }, { onConflict: 'medicine_id' });
+      }
 
       const totalAmount = stockQuantity * medicineData.purchase_price;
       const branchId = selectedBranchId || userBranch || selectedBranch || null;
@@ -376,25 +425,16 @@ export default function AddMedicineDialog({ open, onOpenChange, onMedicineAdded,
               </div>
             )}
 
-            {/* Unit Label & Units Per Pack — only for Full PCS */}
-            {itemType === 'full_pcs' && (
-              <>
-                <div className="space-y-2">
-                  <Label htmlFor="unit_label">Unit Label</Label>
-                  <Input id="unit_label" name="unit_label" placeholder="e.g. strip, piece, bottle" defaultValue="strip" />
-                </div>
-                <div className="space-y-2">
-                  <Label htmlFor="units_per_pack">Units Per Stock</Label>
-                  <Input id="units_per_pack" name="units_per_pack" type="number" min="1" placeholder="Leave empty if not sold by unit" />
-                </div>
-              </>
-            )}
-
             <div className="space-y-2">
               <Label htmlFor="expiry_date">Expiry Date</Label>
               <Input id="expiry_date" name="expiry_date" type="date" defaultValue={replicateData?.expiry_date} />
             </div>
           </div>
+
+          {/* Unit / Strip / Pack — only for Full PCS */}
+          {itemType === 'full_pcs' && (
+            <PackagingEditor value={packaging} onChange={setPackaging} />
+          )}
 
           <div className="space-y-2">
             <Label htmlFor="expiry_alert_enabled">Alert me before expiry</Label>

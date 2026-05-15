@@ -20,6 +20,7 @@ import { useAuth } from './useAuth';
 import { useBranchContext } from './useBranchContext';
 import { useOwnerBranchIds } from './useOwnerBranchIds';
 import type { BranchItem } from '@/components/inventory/EditBranchItemDialog';
+import type { Packaging } from '@/lib/packaging';
 
 export type EnrichedBranchItem = BranchItem & {
   branch_name?: string;
@@ -32,6 +33,7 @@ export type EnrichedBranchItem = BranchItem & {
   sub_unit_name?: string | null;
   unit_price?: number | null;
   sub_unit_price?: number | null;
+  packaging?: Packaging | null;
 };
 
 const CHUNK = 200;
@@ -49,7 +51,7 @@ async function enrichItems(
   const medicineIds = [...new Set(rawItems.map((i) => i.medicine_id))];
   const allBranchIds = [...new Set(rawItems.map((i) => i.branch_id))];
 
-  const [medArrays, branchArrays] = await Promise.all([
+  const [medArrays, branchArrays, packArrays] = await Promise.all([
     Promise.all(chunk(medicineIds).map((ids) =>
       supabase
         .from('medicines')
@@ -65,12 +67,21 @@ async function enrichItems(
         .in('id', ids)
         .then((r: any) => r.data || [])
     )),
+    Promise.all(chunk(medicineIds).map((ids) =>
+      (supabase as any)
+        .from('medicine_packaging')
+        .select('*')
+        .in('medicine_id', ids)
+        .then((r: any) => r.data || [])
+    )),
   ]);
 
   const medMap: Record<string, any> = {};
   medArrays.flat().forEach((m: any) => { medMap[m.id] = m; });
   const branchMap: Record<string, string> = {};
   branchArrays.flat().forEach((b: any) => { branchMap[b.id] = b.name; });
+  const packMap: Record<string, Packaging> = {};
+  packArrays.flat().forEach((p: any) => { packMap[p.medicine_id] = p as Packaging; });
 
   return rawItems.map((item) => {
     const med = medMap[item.medicine_id] || {};
@@ -96,6 +107,7 @@ async function enrichItems(
       sub_unit_price: med.sub_unit_price,
       minimum_stock_level: med.minimum_stock_level,
       medicine_code_id: med.medicine_code_id ?? null,
+      packaging: packMap[item.medicine_id] ?? null,
       active_ingredients: [],
       branch_name: branchMap[item.branch_id],
     } as EnrichedBranchItem;
