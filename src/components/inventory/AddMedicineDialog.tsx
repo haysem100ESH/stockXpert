@@ -414,6 +414,11 @@ export default function AddMedicineDialog({ open, onOpenChange, onMedicineAdded,
             </Select>
           </div>
 
+          {/* Medicine Code (Optional grouping) */}
+          <div className="p-4 rounded-lg border bg-muted/30">
+            <MedicineCodeCombobox value={medicineCodeId} onChange={setMedicineCodeId} />
+          </div>
+
           {/* Supplier Selection (Optional) */}
           <div className="space-y-3 p-4 rounded-lg border bg-muted/30">
             <Label className="text-sm font-semibold">Link to Supplier (Optional)</Label>
