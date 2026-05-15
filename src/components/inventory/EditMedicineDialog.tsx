@@ -504,50 +504,9 @@ export default function EditMedicineDialog({
             </div>
           )}
 
-          {/* Unit Label & Packaging — only for Full PCS */}
+          {/* Unit / Strip / Pack — only for Full PCS */}
           {medicineData.item_type === 'full_pcs' && (
-            <>
-              <div className="space-y-2">
-                <Label htmlFor="unit_label">Unit Label</Label>
-                <Input id="unit_label" value={medicineData.unit_label} onChange={(e) => setMedicineData({ ...medicineData, unit_label: e.target.value })} placeholder="e.g. strip, piece, bottle" />
-              </div>
-
-              <div className="space-y-2">
-                <Label>Packaging *</Label>
-                <Select value={packagingMode} onValueChange={(val) => setPackagingMode(val as 'with_strip' | 'no_strip')}>
-                  <SelectTrigger><SelectValue /></SelectTrigger>
-                  <SelectContent>
-                    <SelectItem value="no_strip">No strip (loose pieces)</SelectItem>
-                    <SelectItem value="with_strip">With strip (e.g. tablets in blister)</SelectItem>
-                  </SelectContent>
-                </Select>
-              </div>
-
-              {packagingMode === 'with_strip' ? (
-                <>
-                  <div className="grid grid-cols-2 gap-4">
-                    <div className="space-y-2">
-                      <Label>Strips per Item *</Label>
-                      <Input type="number" min="1" value={stripsPerPack} onChange={(e) => setStripsPerPack(e.target.value)} placeholder="e.g. 10" />
-                    </div>
-                    <div className="space-y-2">
-                      <Label>Total Items *</Label>
-                      <Input type="number" min="1" value={unitsPerStrip} onChange={(e) => setUnitsPerStrip(e.target.value)} placeholder="e.g. 10" />
-                    </div>
-                  </div>
-                  {stripsPerPack && unitsPerStrip && parseInt(stripsPerPack) > 0 && parseInt(unitsPerStrip) > 0 && (
-                    <div className="text-xs text-muted-foreground -mt-2">
-                      Total: {parseInt(stripsPerPack) * parseInt(unitsPerStrip)} units per pack
-                    </div>
-                  )}
-                </>
-              ) : (
-                <div className="space-y-2">
-                  <Label htmlFor="units_per_pack">Units Per Stock</Label>
-                  <Input id="units_per_pack" type="number" min="1" value={medicineData.units_per_pack} onChange={(e) => setMedicineData({ ...medicineData, units_per_pack: e.target.value })} placeholder="Leave empty if not sold by unit" />
-                </div>
-              )}
-            </>
+            <PackagingEditor value={packaging} onChange={setPackaging} />
           )}
 
           {isPharmacy && (
