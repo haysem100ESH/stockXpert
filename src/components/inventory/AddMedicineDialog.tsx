@@ -55,6 +55,7 @@ export default function AddMedicineDialog({ open, onOpenChange, onMedicineAdded,
   const [suppliers, setSuppliers] = useState<Supplier[]>([]);
   const [selectedSupplierId, setSelectedSupplierId] = useState<string>('');
   const [paymentType, setPaymentType] = useState<'paid' | 'credit'>('paid');
+  const [medicineCodeId, setMedicineCodeId] = useState<string | null>(null);
   const { toast } = useToast();
   const { selectedBranch, userBranch } = useBranchContext();
   const { categories } = useCustomCategories(isGeneral ? 'general' : 'pharmacy');
