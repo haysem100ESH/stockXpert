@@ -7,12 +7,14 @@ import { supabase } from '@/lib/db';
 import { useBranchContext } from '@/hooks/useBranchContext';
 import { useAuth } from '@/hooks/useAuth';
 import { useOwnerBranchIds } from '@/hooks/useOwnerBranchIds';
+import { formatStock, defaultPackaging, type Packaging } from '@/lib/packaging';
 
 interface LowStockItem {
   id: string;
   name: string;
   stock_quantity: number;
   minimum_stock_level: number;
+  packaging?: Packaging | null;
 }
 
 export default function LowStockItemsTable() {
@@ -56,14 +58,28 @@ export default function LowStockItemsTable() {
 
       if (error) throw error;
 
-      const lowStock = (data || [])
-        .filter((item: any) => item.quantity <= (item.medicines?.minimum_stock_level || 0))
-        .map((item: any) => ({
-          id: item.id,
-          name: item.medicines?.name || 'Unknown',
-          stock_quantity: item.quantity,
-          minimum_stock_level: item.medicines?.minimum_stock_level || 0,
-        }));
+      const filtered = (data || []).filter(
+        (item: any) => item.quantity <= (item.medicines?.minimum_stock_level || 0)
+      );
+
+      // Fetch packaging in one batch
+      const medIds = [...new Set(filtered.map((i: any) => i.medicine_id))];
+      const packMap: Record<string, Packaging> = {};
+      if (medIds.length > 0) {
+        const { data: packs } = await (supabase as any)
+          .from('medicine_packaging')
+          .select('*')
+          .in('medicine_id', medIds);
+        (packs || []).forEach((p: any) => { packMap[p.medicine_id] = p as Packaging; });
+      }
+
+      const lowStock = filtered.map((item: any) => ({
+        id: item.id,
+        name: item.medicines?.name || 'Unknown',
+        stock_quantity: item.quantity,
+        minimum_stock_level: item.medicines?.minimum_stock_level || 0,
+        packaging: packMap[item.medicine_id] || null,
+      }));
 
       setLowStockItems(lowStock);
     } catch (error) {
@@ -109,7 +125,7 @@ export default function LowStockItemsTable() {
                 <TableCell className="font-medium">{item.name}</TableCell>
                 <TableCell>
                   <Badge variant="secondary" className="text-warning">
-                    {item.stock_quantity}
+                    {item.packaging ? formatStock(item.stock_quantity, item.packaging) : item.stock_quantity}
                   </Badge>
                 </TableCell>
                 <TableCell>{item.minimum_stock_level}</TableCell>
