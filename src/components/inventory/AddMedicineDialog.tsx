@@ -14,6 +14,7 @@ import { useCustomCategories } from '@/hooks/useCustomCategories';
 import { MEASURABLE_UNIT_OPTIONS } from '@/lib/itemTypes';
 import MedicineCodeCombobox from './MedicineCodeCombobox';
 import PackagingEditor from './PackagingEditor';
+import StockEntryFields, { StockEntry, emptyStockEntry, entryToUnits } from './StockEntryFields';
 import { defaultPackaging, Packaging, autoStripPrice, autoPackPrice } from '@/lib/packaging';
 
 interface Medicine {
