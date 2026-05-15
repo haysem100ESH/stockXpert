@@ -440,7 +440,14 @@ export default function AddMedicineDialog({ open, onOpenChange, onMedicineAdded,
 
           {/* Unit / Strip / Pack — only for Full PCS */}
           {itemType === 'full_pcs' && (
-            <PackagingEditor value={packaging} onChange={setPackaging} />
+            <>
+              <PackagingEditor value={packaging} onChange={setPackaging} />
+              <StockEntryFields
+                packaging={packaging}
+                value={stockEntry}
+                onChange={setStockEntry}
+              />
+            </>
           )}
 
           <div className="space-y-2">
