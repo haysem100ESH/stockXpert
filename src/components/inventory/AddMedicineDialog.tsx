@@ -425,25 +425,19 @@ export default function AddMedicineDialog({ open, onOpenChange, onMedicineAdded,
               </div>
             )}
 
-            {/* Unit Label & Units Per Pack — only for Full PCS */}
-            {itemType === 'full_pcs' && (
-              <>
-                <div className="space-y-2">
-                  <Label htmlFor="unit_label">Unit Label</Label>
-                  <Input id="unit_label" name="unit_label" placeholder="e.g. strip, piece, bottle" defaultValue="strip" />
-                </div>
-                <div className="space-y-2">
-                  <Label htmlFor="units_per_pack">Units Per Stock</Label>
-                  <Input id="units_per_pack" name="units_per_pack" type="number" min="1" placeholder="Leave empty if not sold by unit" />
-                </div>
-              </>
-            )}
-
             <div className="space-y-2">
               <Label htmlFor="expiry_date">Expiry Date</Label>
               <Input id="expiry_date" name="expiry_date" type="date" defaultValue={replicateData?.expiry_date} />
             </div>
           </div>
+
+          {/* Unit / Strip / Pack — only for Full PCS */}
+          {itemType === 'full_pcs' && (
+            <PackagingEditor value={packaging} onChange={setPackaging} />
+          )}
+
+          <div className="hidden">
+            {/* spacer to keep grid above closed */}
 
           <div className="space-y-2">
             <Label htmlFor="expiry_alert_enabled">Alert me before expiry</Label>
