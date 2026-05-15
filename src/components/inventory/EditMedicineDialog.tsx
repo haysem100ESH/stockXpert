@@ -160,6 +160,33 @@ export default function EditMedicineDialog({
       setCustomGroup('');
       setMedicineCodeId(medicine.medicine_code_id ?? null);
 
+      // Load packaging row (or build from legacy fields as fallback)
+      (async () => {
+        const { data: pack } = await (supabase as any)
+          .from('medicine_packaging')
+          .select('*')
+          .eq('medicine_id', medicine.id)
+          .maybeSingle();
+        if (pack) {
+          setPackaging(pack as Packaging);
+        } else {
+          const fallback = defaultPackaging();
+          fallback.unit_name = unitLbl || 'unit';
+          if (hasStripBreakdown) {
+            fallback.strip_enabled = true;
+            fallback.units_per_strip = medicineWithBranch.units_per_strip!;
+            fallback.strip_name = 'strip';
+            if ((medicineWithBranch.strips_per_pack ?? 0) > 1) {
+              fallback.pack_enabled = true;
+              fallback.strips_per_pack = medicineWithBranch.strips_per_pack!;
+              fallback.pack_name = 'pack';
+            }
+          }
+          fallback.pack_selling_price = medicine.selling_price ?? null;
+          setPackaging(fallback);
+        }
+      })();
+
       // Check if an expense exists for this item
       (async () => {
         const { data: existingExpense } = await supabase
