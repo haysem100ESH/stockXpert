@@ -340,6 +340,80 @@ export default function MedicineCodes() {
         description={confirmDelete ? `Delete code "${confirmDelete.code}"? Linked medicines will be unlinked but not deleted.` : ''}
         onConfirm={handleDelete}
       />
+
+      {/* Assign items dialog */}
+      <Dialog open={!!assignFor} onOpenChange={(v) => { if (!v) setAssignFor(null); }}>
+        <DialogContent className="sm:max-w-lg max-h-[90vh] flex flex-col">
+          <DialogHeader>
+            <DialogTitle>Assign Items</DialogTitle>
+            <DialogDescription>
+              {assignFor ? (
+                <>Select medicines to group under <span className="font-mono">{assignFor.code}</span> — {assignFor.label}. Items already in another group appear faded; selecting one will move it to this group.</>
+              ) : null}
+            </DialogDescription>
+          </DialogHeader>
+
+          <div className="relative">
+            <Search className="absolute left-2 top-2.5 h-4 w-4 text-muted-foreground" />
+            <Input
+              placeholder="Search items…"
+              value={assignSearch}
+              onChange={(e) => setAssignSearch(e.target.value)}
+              className="pl-8"
+            />
+          </div>
+
+          <ScrollArea className="flex-1 min-h-[240px] max-h-[50vh] border rounded-md">
+            {filteredAssignMeds.length === 0 ? (
+              <div className="p-6 text-center text-sm text-muted-foreground">
+                No items in this branch.
+              </div>
+            ) : (
+              <div className="divide-y">
+                {filteredAssignMeds.map((m) => {
+                  const checked = assignSelection.has(m.medicine_id);
+                  const otherCode = m.code_id && m.code_id !== assignFor?.id ? codeById.get(m.code_id) : null;
+                  return (
+                    <label
+                      key={m.medicine_id}
+                      htmlFor={`assign-${m.medicine_id}`}
+                      className={cn(
+                        'flex items-center gap-3 px-3 py-2.5 cursor-pointer hover:bg-accent/40 transition-colors',
+                        otherCode && !checked && 'opacity-50',
+                      )}
+                    >
+                      <Checkbox
+                        id={`assign-${m.medicine_id}`}
+                        checked={checked}
+                        onCheckedChange={() => toggleAssignItem(m.medicine_id)}
+                      />
+                      <div className="min-w-0 flex-1">
+                        <div className="text-sm truncate">{m.name}</div>
+                        {otherCode && (
+                          <div className="text-xs text-muted-foreground truncate">
+                            In group: <span className="font-mono">{otherCode.code}</span> · {otherCode.label}
+                          </div>
+                        )}
+                      </div>
+                    </label>
+                  );
+                })}
+              </div>
+            )}
+          </ScrollArea>
+
+          <div className="text-xs text-muted-foreground">
+            {assignSelection.size} selected
+          </div>
+
+          <DialogFooter>
+            <Button variant="outline" onClick={() => setAssignFor(null)}>Cancel</Button>
+            <Button onClick={handleAssign} disabled={assignBusy}>
+              {assignBusy ? 'Saving…' : 'Save assignments'}
+            </Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
     </div>
   );
 }
