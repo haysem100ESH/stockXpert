@@ -17,7 +17,8 @@ import {
   MessageCircle,
   ExternalLink,
   Send,
-  CreditCard
+  CreditCard,
+  Tag
 } from 'lucide-react';
 import { BarChart, Bar, XAxis, YAxis, CartesianGrid, ResponsiveContainer, PieChart, Pie, Cell } from 'recharts';
 import { supabase } from '@/lib/db';
@@ -92,6 +93,8 @@ export default function OwnerDashboard() {
     topItems,
     paymentMethodData,
     creditOverview,
+    totalGroups,
+    topGroupSales,
   } = overview;
 
   const handleConnectTelegram = () => {
@@ -261,6 +264,19 @@ export default function OwnerDashboard() {
             <p className="text-xs text-muted-foreground">{isPharmacy ? 'Medicines expired' : 'Items expired'}</p>
           </CardContent>
         </Card>
+
+        {isPharmacy && (
+          <Card>
+            <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
+              <CardTitle className="text-sm font-medium">Medicine Groups</CardTitle>
+              <Tag className="h-4 w-4 text-muted-foreground" />
+            </CardHeader>
+            <CardContent>
+              <div className="text-2xl font-bold">{totalGroups}</div>
+              <p className="text-xs text-muted-foreground">Total medicine codes</p>
+            </CardContent>
+          </Card>
+        )}
       </div>
 
       {/* Main Tabs */}
@@ -377,6 +393,35 @@ export default function OwnerDashboard() {
                 </div>
               </CardContent>
             </Card>
+
+            {/* Top-Selling Groups (medicine codes) */}
+            {isPharmacy && topGroupSales.length > 0 && (
+              <Card className="min-w-0">
+                <CardHeader>
+                  <CardTitle>Top-Selling Groups</CardTitle>
+                  <CardDescription>Sales transactions per medicine code</CardDescription>
+                </CardHeader>
+                <CardContent className="p-3 sm:p-6 pt-0 sm:pt-0">
+                  <ResponsiveContainer width="100%" height={220}>
+                    <PieChart>
+                      <Pie data={topGroupSales.slice(0, 6)} cx="50%" cy="50%" outerRadius="55%" dataKey="sales" nameKey="name" label={false}>
+                        {topGroupSales.slice(0, 6).map((_, index) => (
+                          <Cell key={`gcell-${index}`} fill={`hsl(${(index * 55 + 200) % 360}, 65%, 55%)`} />
+                        ))}
+                      </Pie>
+                    </PieChart>
+                  </ResponsiveContainer>
+                  <div className="mt-2 flex flex-wrap gap-2 justify-center">
+                    {topGroupSales.slice(0, 6).map((entry, index) => (
+                      <div key={entry.code || entry.name} className="flex items-center gap-1 text-xs">
+                        <div className="w-3 h-3 rounded-full shrink-0" style={{ backgroundColor: `hsl(${(index * 55 + 200) % 360}, 65%, 55%)` }} />
+                        <span className="truncate max-w-[140px]">{entry.name} ({entry.sales})</span>
+                      </div>
+                    ))}
+                  </div>
+                </CardContent>
+              </Card>
+            )}
 
             {/* Payment Methods */}
             <Card className="min-w-0">

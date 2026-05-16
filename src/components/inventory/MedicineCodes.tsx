@@ -9,6 +9,8 @@ import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
 import { Badge } from '@/components/ui/badge';
 import { Textarea } from '@/components/ui/textarea';
+import { Checkbox } from '@/components/ui/checkbox';
+import { ScrollArea } from '@/components/ui/scroll-area';
 import {
   Dialog, DialogContent, DialogHeader, DialogTitle, DialogDescription, DialogFooter,
 } from '@/components/ui/dialog';
@@ -16,7 +18,8 @@ import {
   Collapsible, CollapsibleContent, CollapsibleTrigger,
 } from '@/components/ui/collapsible';
 import { ConfirmationDialog } from '@/components/ui/confirmation-dialog';
-import { Plus, Edit, Trash2, ChevronDown, Tag, Search } from 'lucide-react';
+import { Plus, Edit, Trash2, ChevronDown, Tag, Search, Link2 } from 'lucide-react';
+import { cn } from '@/lib/utils';
 import { supabase } from '@/lib/db';
 import { useToast } from '@/hooks/use-toast';
 import { useMedicineCodes, type MedicineCode } from '@/hooks/useMedicineCodes';
@@ -43,6 +46,12 @@ export default function MedicineCodes() {
   const [confirmDelete, setConfirmDelete] = useState<MedicineCode | null>(null);
   const [form, setForm] = useState({ code: '', label: '', notes: '' });
   const [busy, setBusy] = useState(false);
+
+  // Assign items dialog state
+  const [assignFor, setAssignFor] = useState<MedicineCode | null>(null);
+  const [assignSearch, setAssignSearch] = useState('');
+  const [assignSelection, setAssignSelection] = useState<Set<string>>(new Set());
+  const [assignBusy, setAssignBusy] = useState(false);
 
   // Pull packaging rows for all medicines so we can format stock.
   useEffect(() => {
@@ -122,6 +131,89 @@ export default function MedicineCodes() {
     } finally { setConfirmDelete(null); }
   };
 
+  // ----- Assign items helpers -----
+  const uniqueMedicines = useMemo(() => {
+    const map = new Map<string, { medicine_id: string; name: string; code_id: string | null }>();
+    for (const it of items as any[]) {
+      if (!map.has(it.medicine_id)) {
+        map.set(it.medicine_id, {
+          medicine_id: it.medicine_id,
+          name: it.name,
+          code_id: it.medicine_code_id ?? null,
+        });
+      }
+    }
+    return Array.from(map.values()).sort((a, b) => a.name.localeCompare(b.name));
+  }, [items]);
+
+  const codeById = useMemo(() => {
+    const m = new Map<string, MedicineCode>();
+    codes.forEach((c) => m.set(c.id, c));
+    return m;
+  }, [codes]);
+
+  const filteredAssignMeds = useMemo(() => {
+    const q = assignSearch.trim().toLowerCase();
+    if (!q) return uniqueMedicines;
+    return uniqueMedicines.filter((m) => m.name.toLowerCase().includes(q));
+  }, [uniqueMedicines, assignSearch]);
+
+  const openAssign = (c: MedicineCode) => {
+    setAssignFor(c);
+    setAssignSearch('');
+    const preset = new Set<string>(
+      uniqueMedicines.filter((m) => m.code_id === c.id).map((m) => m.medicine_id),
+    );
+    setAssignSelection(preset);
+  };
+
+  const toggleAssignItem = (medicineId: string) => {
+    setAssignSelection((prev) => {
+      const next = new Set(prev);
+      if (next.has(medicineId)) next.delete(medicineId);
+      else next.add(medicineId);
+      return next;
+    });
+  };
+
+  const handleAssign = async () => {
+    if (!assignFor) return;
+    setAssignBusy(true);
+    try {
+      const targetId = assignFor.id;
+      const currentlyInThisCode = new Set(
+        uniqueMedicines.filter((m) => m.code_id === targetId).map((m) => m.medicine_id),
+      );
+      const toAssign = [...assignSelection].filter((id) => !currentlyInThisCode.has(id));
+      const toUnassign = [...currentlyInThisCode].filter((id) => !assignSelection.has(id));
+
+      if (toAssign.length > 0) {
+        const { error } = await (supabase as any)
+          .from('medicines')
+          .update({ medicine_code_id: targetId })
+          .in('id', toAssign);
+        if (error) throw error;
+      }
+      if (toUnassign.length > 0) {
+        const { error } = await (supabase as any)
+          .from('medicines')
+          .update({ medicine_code_id: null })
+          .in('id', toUnassign);
+        if (error) throw error;
+      }
+      toast({
+        title: 'Assignments updated',
+        description: `${toAssign.length} added, ${toUnassign.length} removed.`,
+      });
+      setAssignFor(null);
+      window.dispatchEvent(new Event('app:refresh'));
+    } catch (e: any) {
+      toast({ title: 'Failed', description: e?.message || 'Unknown error', variant: 'destructive' });
+    } finally {
+      setAssignBusy(false);
+    }
+  };
+
   return (
     <div className="space-y-6">
       <div className="flex flex-col md:flex-row md:items-center md:justify-between gap-3">
@@ -167,9 +259,13 @@ export default function MedicineCodes() {
                           {c.notes && <p className="text-xs text-muted-foreground mt-0.5">{c.notes}</p>}
                         </div>
                       </div>
-                      <div className="flex items-center gap-2">
+                      <div className="flex items-center gap-1 sm:gap-2 flex-wrap justify-end">
                         <Badge variant="secondary">{linked.length} item{linked.length === 1 ? '' : 's'}</Badge>
                         <Badge>{formatStock(totalUnits, basis)}</Badge>
+                        <Button variant="outline" size="sm" onClick={() => openAssign(c)} title="Assign items">
+                          <Link2 className="h-4 w-4 sm:mr-1" />
+                          <span className="hidden sm:inline">Assign</span>
+                        </Button>
                         <Button variant="ghost" size="icon" onClick={() => openEdit(c)} title="Edit">
                           <Edit className="h-4 w-4" />
                         </Button>
@@ -244,6 +340,80 @@ export default function MedicineCodes() {
         description={confirmDelete ? `Delete code "${confirmDelete.code}"? Linked medicines will be unlinked but not deleted.` : ''}
         onConfirm={handleDelete}
       />
+
+      {/* Assign items dialog */}
+      <Dialog open={!!assignFor} onOpenChange={(v) => { if (!v) setAssignFor(null); }}>
+        <DialogContent className="sm:max-w-lg max-h-[90vh] flex flex-col">
+          <DialogHeader>
+            <DialogTitle>Assign Items</DialogTitle>
+            <DialogDescription>
+              {assignFor ? (
+                <>Select medicines to group under <span className="font-mono">{assignFor.code}</span> — {assignFor.label}. Items already in another group appear faded; selecting one will move it to this group.</>
+              ) : null}
+            </DialogDescription>
+          </DialogHeader>
+
+          <div className="relative">
+            <Search className="absolute left-2 top-2.5 h-4 w-4 text-muted-foreground" />
+            <Input
+              placeholder="Search items…"
+              value={assignSearch}
+              onChange={(e) => setAssignSearch(e.target.value)}
+              className="pl-8"
+            />
+          </div>
+
+          <ScrollArea className="flex-1 min-h-[240px] max-h-[50vh] border rounded-md">
+            {filteredAssignMeds.length === 0 ? (
+              <div className="p-6 text-center text-sm text-muted-foreground">
+                No items in this branch.
+              </div>
+            ) : (
+              <div className="divide-y">
+                {filteredAssignMeds.map((m) => {
+                  const checked = assignSelection.has(m.medicine_id);
+                  const otherCode = m.code_id && m.code_id !== assignFor?.id ? codeById.get(m.code_id) : null;
+                  return (
+                    <label
+                      key={m.medicine_id}
+                      htmlFor={`assign-${m.medicine_id}`}
+                      className={cn(
+                        'flex items-center gap-3 px-3 py-2.5 cursor-pointer hover:bg-accent/40 transition-colors',
+                        otherCode && !checked && 'opacity-50',
+                      )}
+                    >
+                      <Checkbox
+                        id={`assign-${m.medicine_id}`}
+                        checked={checked}
+                        onCheckedChange={() => toggleAssignItem(m.medicine_id)}
+                      />
+                      <div className="min-w-0 flex-1">
+                        <div className="text-sm truncate">{m.name}</div>
+                        {otherCode && (
+                          <div className="text-xs text-muted-foreground truncate">
+                            In group: <span className="font-mono">{otherCode.code}</span> · {otherCode.label}
+                          </div>
+                        )}
+                      </div>
+                    </label>
+                  );
+                })}
+              </div>
+            )}
+          </ScrollArea>
+
+          <div className="text-xs text-muted-foreground">
+            {assignSelection.size} selected
+          </div>
+
+          <DialogFooter>
+            <Button variant="outline" onClick={() => setAssignFor(null)}>Cancel</Button>
+            <Button onClick={handleAssign} disabled={assignBusy}>
+              {assignBusy ? 'Saving…' : 'Save assignments'}
+            </Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
     </div>
   );
 }
