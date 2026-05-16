@@ -148,10 +148,14 @@ export default function EditBranchItemDialog({ open, onOpenChange, item, onItemU
     return Array.from(set).sort((a, b) => a.localeCompare(b));
   })();
 
+  // Original units-per-pack used to convert stored pack-level prices into LPI for display
+  const originalUpp = Math.max(1, Number(item?.units_per_pack || 1));
+
   useEffect(() => {
     if (item && open) {
-      setSellingPrice(item.selling_price.toString());
-      setPurchasePrice(item.purchase_price.toString());
+      const upp = Math.max(1, Number(item.units_per_pack || 1));
+      setSellingPrice((Number(item.selling_price) / upp).toString());
+      setPurchasePrice((Number(item.purchase_price) / upp).toString());
       setExpiryDate(item.expiry_date || '');
       setItemName(item.name || '');
       setGenericName(item.generic_name || '');
