@@ -94,7 +94,7 @@ async function fetchDashboardOverview({ selectedBranch, ownerBranchIds, dateFilt
   // We also dropped the redundant `salesQuery` — `salesWithItemsQuery` returns the
   // same rows plus the joined sale_items, so one round-trip is enough.
   let salesWithItemsQuery = supabase.from('sales')
-    .select('id, total_amount, payment_method, discount_amount, branch_id, created_at, sale_items(quantity, medicines(name, category))')
+    .select('id, total_amount, payment_method, discount_amount, branch_id, created_at, sale_items(quantity, medicine_id, medicines(name, category, medicine_code_id))')
     .gte('created_at', startDate.toISOString())
     .lte('created_at', now.toISOString())
     .range(0, 49999);
