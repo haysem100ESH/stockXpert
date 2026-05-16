@@ -458,6 +458,37 @@ export default function Dashboard() {
         amount: amount
       }));
 
+      // Fetch medicine codes (groups) for owner scope
+      let codesQuery = supabase.from('medicine_codes').select('id, code, label');
+      if (profile?.role === 'owner' && profile?.id) {
+        codesQuery = codesQuery.eq('pharmacy_owner_id', profile.id);
+      }
+      const { data: codesData } = await codesQuery;
+      const codeMap = new Map<string, { code: string; label: string }>();
+      (codesData || []).forEach((c: any) => codeMap.set(c.id, { code: c.code, label: c.label }));
+
+      // Count distinct sales transactions per group within date range
+      const groupSalesIds = new Map<string, Set<string>>();
+      salesWithItems?.forEach((sale: any) => {
+        const codeIdsInSale = new Set<string>();
+        (sale.sale_items || []).forEach((si: any) => {
+          const cid = si.medicines?.medicine_code_id;
+          if (cid && codeMap.has(cid)) codeIdsInSale.add(cid);
+        });
+        codeIdsInSale.forEach((cid) => {
+          if (!groupSalesIds.has(cid)) groupSalesIds.set(cid, new Set());
+          groupSalesIds.get(cid)!.add(sale.id);
+        });
+      });
+      const topGroupSalesArr: GroupSalesData[] = Array.from(groupSalesIds.entries())
+        .map(([cid, ids]) => ({
+          name: codeMap.get(cid)?.label || codeMap.get(cid)?.code || 'Unknown',
+          code: codeMap.get(cid)?.code || '',
+          sales: ids.size,
+        }))
+        .sort((a, b) => b.sales - a.sales)
+        .slice(0, 7);
+
       setStats({
         totalRevenue,
         totalProducts,
@@ -474,6 +505,8 @@ export default function Dashboard() {
       setProductPerformance(productPerformanceArray);
       setIncomeExpenseData(incomeExpenseArray);
       setPaymentMethodData(paymentMethodArray);
+      setTotalGroups((codesData || []).length);
+      setTopGroupSales(topGroupSalesArr);
     } catch (error) {
       console.error('Error fetching dashboard data:', error);
     } finally {
