@@ -87,6 +87,10 @@ interface CartItem {
   total: number;
   saleType: 'full_pack' | 'by_stripe';
   stripesCount?: number;
+  // New multi-level packaging flow
+  sellLevel?: 'unit' | 'strip' | 'pack';
+  unitsPerLevel?: number;
+  sellLevelLabel?: string;
 }
 
 interface Customer {
