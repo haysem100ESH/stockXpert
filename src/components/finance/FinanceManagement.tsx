@@ -139,11 +139,12 @@ interface Branch {
 
 interface ItemSummary {
   name: string;
-  totalQuantity: number;
-  totalStripes: number;
   totalIncome: number;
   unitLabel?: string;
   unitsPerPack?: number;
+  perLevel: { unit: number; strip: number; pack: number };
+  stripName?: string;
+  packName?: string;
 }
 
 interface InventoryExpense {
