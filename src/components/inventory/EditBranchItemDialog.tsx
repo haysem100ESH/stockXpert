@@ -148,10 +148,14 @@ export default function EditBranchItemDialog({ open, onOpenChange, item, onItemU
     return Array.from(set).sort((a, b) => a.localeCompare(b));
   })();
 
+  // Original units-per-pack used to convert stored pack-level prices into LPI for display
+  const originalUpp = Math.max(1, Number(item?.units_per_pack || 1));
+
   useEffect(() => {
     if (item && open) {
-      setSellingPrice(item.selling_price.toString());
-      setPurchasePrice(item.purchase_price.toString());
+      const upp = Math.max(1, Number(item.units_per_pack || 1));
+      setSellingPrice((Number(item.selling_price) / upp).toString());
+      setPurchasePrice((Number(item.purchase_price) / upp).toString());
       setExpiryDate(item.expiry_date || '');
       setItemName(item.name || '');
       setGenericName(item.generic_name || '');
@@ -302,10 +306,17 @@ export default function EditBranchItemDialog({ open, onOpenChange, item, onItemU
     try {
       const { data: { user } } = await supabase.auth.getUser();
 
+      // Convert LPI prices entered by the user back into pack-level for storage.
+      const uppForSave = Math.max(1, Number(computeUnitsPerPack() || item.units_per_pack || 1));
+      const lpiSell = parseFloat(sellingPrice);
+      const lpiBuy = parseFloat(purchasePrice);
+      const storedSell = lpiSell * uppForSave;
+      const storedBuy = lpiBuy * uppForSave;
+
       // Always update branch-specific fields
       const branchUpdate: any = {
-        selling_price: parseFloat(sellingPrice),
-        purchase_price: parseFloat(purchasePrice),
+        selling_price: storedSell,
+        purchase_price: storedBuy,
         expiry_date: expiryDate || null,
         updated_at: new Date().toISOString(),
       };
@@ -456,8 +467,9 @@ export default function EditBranchItemDialog({ open, onOpenChange, item, onItemU
           .eq('id', item.id)
           .single();
         const targetMedId = (bi as any)?.medicine_id || item.medicine_id;
-        const stripPrice = packaging.strip_selling_price ?? autoStripPrice(packaging);
-        const packPrice = packaging.pack_selling_price ?? autoPackPrice(packaging);
+        const pkgForCalc: Packaging = { ...packaging, unit_selling_price: lpiSell };
+        const stripPrice = pkgForCalc.strip_selling_price ?? autoStripPrice(pkgForCalc);
+        const packPrice = pkgForCalc.pack_selling_price ?? autoPackPrice(pkgForCalc);
         await (supabase as any).from('medicine_packaging').upsert({
           medicine_id: targetMedId,
           unit_name: packaging.unit_name || 'unit',
@@ -467,7 +479,7 @@ export default function EditBranchItemDialog({ open, onOpenChange, item, onItemU
           pack_enabled: packaging.pack_enabled,
           strips_per_pack: packaging.pack_enabled ? packaging.strips_per_pack : null,
           pack_name: packaging.pack_enabled ? (packaging.pack_name || 'pack') : null,
-          unit_selling_price: packaging.unit_selling_price ?? null,
+          unit_selling_price: lpiSell,
           strip_selling_price: stripPrice ?? null,
           pack_selling_price: packPrice ?? null,
         }, { onConflict: 'medicine_id' });
@@ -488,8 +500,8 @@ export default function EditBranchItemDialog({ open, onOpenChange, item, onItemU
       const addQty = addQuantity ? parseFloat(addQuantity) : 0;
       if (addQty > 0) {
         const targetBranchId = (isOwner && branchId) ? branchId : item.branch_id;
-        const pp = parseFloat(purchasePrice);
-        const sp = parseFloat(sellingPrice);
+        const pp = storedBuy;
+        const sp = storedSell;
 
         const { error: batchErr } = await createBatch({
           branchId: targetBranchId,
@@ -594,11 +606,11 @@ export default function EditBranchItemDialog({ open, onOpenChange, item, onItemU
 
       try {
         const changes: Array<{ field: string; oldVal: any; newVal: any }> = [];
-        if (parseFloat(sellingPrice) !== Number(item.selling_price)) {
-          changes.push({ field: 'selling_price', oldVal: item.selling_price, newVal: parseFloat(sellingPrice) });
+        if (storedSell !== Number(item.selling_price)) {
+          changes.push({ field: 'selling_price', oldVal: item.selling_price, newVal: storedSell });
         }
-        if (parseFloat(purchasePrice) !== Number(item.purchase_price)) {
-          changes.push({ field: 'purchase_price', oldVal: item.purchase_price, newVal: parseFloat(purchasePrice) });
+        if (storedBuy !== Number(item.purchase_price)) {
+          changes.push({ field: 'purchase_price', oldVal: item.purchase_price, newVal: storedBuy });
         }
         if ((expiryDate || null) !== (item.expiry_date || null)) {
           changes.push({ field: 'expiry_date', oldVal: item.expiry_date || '—', newVal: expiryDate || '—' });
@@ -681,17 +693,37 @@ export default function EditBranchItemDialog({ open, onOpenChange, item, onItemU
               </div>
 
 
-              <div className="grid grid-cols-2 gap-4">
-                <div className="space-y-2">
-                  <Label>Selling Price *</Label>
-                  <Input type="number" step="0.01" min="0" value={sellingPrice} onChange={e => setSellingPrice(e.target.value)} required />
-                </div>
-                <div className="space-y-2">
-                  <Label>Purchase Price *</Label>
-                  <Input type="number" step="0.01" min="0" value={purchasePrice} onChange={e => setPurchasePrice(e.target.value)} required />
-                </div>
-              </div>
-
+              {(() => {
+                const unitName = packaging.unit_name || unitLabel || item.unit_label || 'unit';
+                const upp = Math.max(1, Number(computeUnitsPerPack() || item.units_per_pack || 1));
+                const lpiSellNum = parseFloat(sellingPrice);
+                const lpiBuyNum = parseFloat(purchasePrice);
+                return (
+                  <>
+                    <div className="rounded-md border border-primary/30 bg-primary/5 px-3 py-2 text-xs text-muted-foreground">
+                      Prices below are <span className="font-semibold text-foreground">per LPI (1 {unitName})</span> — the smallest sellable unit.
+                      Strip / pack prices on the sales page are computed automatically from this
+                      {upp > 1 ? <> (1 pack = {upp} {unitName}{upp === 1 ? '' : 's'})</> : null}.
+                    </div>
+                    <div className="grid grid-cols-2 gap-4">
+                      <div className="space-y-1">
+                        <Label>LPI Sell Price * <span className="text-muted-foreground font-normal">(per {unitName})</span></Label>
+                        <Input type="number" step="0.0001" min="0" value={sellingPrice} onChange={e => setSellingPrice(e.target.value)} required />
+                        {Number.isFinite(lpiSellNum) && upp > 1 && (
+                          <p className="text-[11px] text-muted-foreground">= ETB {(lpiSellNum * upp).toFixed(2)} per pack</p>
+                        )}
+                      </div>
+                      <div className="space-y-1">
+                        <Label>LPI Buy Price * <span className="text-muted-foreground font-normal">(per {unitName})</span></Label>
+                        <Input type="number" step="0.0001" min="0" value={purchasePrice} onChange={e => setPurchasePrice(e.target.value)} required />
+                        {Number.isFinite(lpiBuyNum) && upp > 1 && (
+                          <p className="text-[11px] text-muted-foreground">= ETB {(lpiBuyNum * upp).toFixed(2)} per pack</p>
+                        )}
+                      </div>
+                    </div>
+                  </>
+                );
+              })()}
               <div className="space-y-2">
                 <Label>Expiry Date</Label>
                 <Input type="date" value={expiryDate} onChange={e => setExpiryDate(e.target.value)} />
