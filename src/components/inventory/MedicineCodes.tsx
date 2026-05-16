@@ -47,6 +47,12 @@ export default function MedicineCodes() {
   const [form, setForm] = useState({ code: '', label: '', notes: '' });
   const [busy, setBusy] = useState(false);
 
+  // Assign items dialog state
+  const [assignFor, setAssignFor] = useState<MedicineCode | null>(null);
+  const [assignSearch, setAssignSearch] = useState('');
+  const [assignSelection, setAssignSelection] = useState<Set<string>>(new Set());
+  const [assignBusy, setAssignBusy] = useState(false);
+
   // Pull packaging rows for all medicines so we can format stock.
   useEffect(() => {
     const ids = [...new Set(items.map((i: any) => i.medicine_id))];
