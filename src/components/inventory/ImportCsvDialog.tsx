@@ -519,15 +519,20 @@ export default function ImportCsvDialog({ open, onOpenChange, onImported }: Impo
       if (keyIndex[k] === undefined) keyIndex[k] = +i;
     });
 
-    // Required columns. Either "selling_price" OR "pack_price" satisfies the price requirement.
-    const required = ['name', 'purchase_price', 'stock_quantity'];
+    // Required columns. LPI-based template (LPI BUY / LPI SELL / LPI STOCK) is
+    // accepted as an alternative to the legacy (purchase_price / selling_price /
+    // stock_quantity) columns.
+    const hasLpiBuy   = keyIndex['lpi_buy']   !== undefined;
+    const hasLpiSell  = keyIndex['lpi_sell']  !== undefined;
+    const hasLpiStock = keyIndex['lpi_stock'] !== undefined;
+    const required = ['name'];
     const missingReq = required.filter(k => keyIndex[k] === undefined);
-    if (keyIndex['selling_price'] === undefined && keyIndex['pack_price'] === undefined) {
-      missingReq.push('selling_price (or medicine/item/pack price)');
-    }
+    if (!hasLpiBuy   && keyIndex['purchase_price']  === undefined) missingReq.push('LPI BUY (or purchase price)');
+    if (!hasLpiSell  && keyIndex['selling_price']   === undefined && keyIndex['pack_price'] === undefined) missingReq.push('LPI SELL (or selling/medicine/item price)');
+    if (!hasLpiStock && keyIndex['stock_quantity']  === undefined) missingReq.push('LPI STOCK (or stock quantity)');
     if (missingReq.length > 0) {
       const recognizedList = Object.values(headerToKey).join(', ') || '(none)';
-      return { ok: [], errs: [`Missing required column(s): ${missingReq.join(', ')}. Header row detected at row ${headerRowIdx + 1}. Recognized headers: ${recognizedList}. Tip: make sure your header row is the first non-empty row and column names match (e.g. "NAME OF ITEMS", "MEDICINE PRICE", "QUANTITY").`] };
+      return { ok: [], errs: [`Missing required column(s): ${missingReq.join(', ')}. Header row detected at row ${headerRowIdx + 1}. Recognized headers: ${recognizedList}. Tip: make sure your header row is the first non-empty row and column names match (e.g. "NAME OF ITEMS", "NAME OF UNIT", "LPI BUY", "LPI SELL", "LPI STOCK").`] };
     }
     const get = (cells: any[], k: string): string => {
       const i = keyIndex[k];
