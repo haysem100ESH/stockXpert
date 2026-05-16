@@ -405,6 +405,25 @@ export default function FinanceManagement() {
       setSales(salesWithSeller || []);
       setExpenses(expensesData || []);
 
+      // Fetch packaging metadata for all medicines referenced in these sales
+      const medIds = Array.from(new Set(
+        (salesWithSeller || [])
+          .flatMap((s: any) => s.sale_items || [])
+          .map((si: any) => si.medicine_id || si.medicines?.id)
+          .filter(Boolean) as string[]
+      ));
+      if (medIds.length > 0) {
+        const { data: pkgRows } = await (supabase as any)
+          .from('medicine_packaging')
+          .select('*')
+          .in('medicine_id', medIds);
+        const map: Record<string, Packaging> = {};
+        (pkgRows || []).forEach((p: any) => { map[p.medicine_id] = p as Packaging; });
+        setPackagingMap(map);
+      } else {
+        setPackagingMap({});
+      }
+
       // Calculate stats - include inventory expenses in total
       const totalIncome = salesData?.reduce((sum, sale) => sum + Number(sale.total_amount), 0) || 0;
       const totalCustomExpenses = expensesData?.reduce((sum, expense) => sum + Number(expense.amount), 0) || 0;
