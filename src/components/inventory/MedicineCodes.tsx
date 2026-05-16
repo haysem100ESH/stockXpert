@@ -259,9 +259,13 @@ export default function MedicineCodes() {
                           {c.notes && <p className="text-xs text-muted-foreground mt-0.5">{c.notes}</p>}
                         </div>
                       </div>
-                      <div className="flex items-center gap-2">
+                      <div className="flex items-center gap-1 sm:gap-2 flex-wrap justify-end">
                         <Badge variant="secondary">{linked.length} item{linked.length === 1 ? '' : 's'}</Badge>
                         <Badge>{formatStock(totalUnits, basis)}</Badge>
+                        <Button variant="outline" size="sm" onClick={() => openAssign(c)} title="Assign items">
+                          <Link2 className="h-4 w-4 sm:mr-1" />
+                          <span className="hidden sm:inline">Assign</span>
+                        </Button>
                         <Button variant="ghost" size="icon" onClick={() => openEdit(c)} title="Edit">
                           <Edit className="h-4 w-4" />
                         </Button>
