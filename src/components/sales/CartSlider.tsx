@@ -115,6 +115,7 @@ interface CartSliderProps {
   onRemove: (id: string, saleType: 'full_pack' | 'by_stripe') => void;
   onUpdateQuantity: (id: string, saleType: 'full_pack' | 'by_stripe', delta: number) => void;
   onChangeSaleType: (id: string, newSaleType: 'full_pack' | 'by_stripe') => void;
+  onChangeSellLevel?: (id: string, newLevel: 'unit' | 'strip' | 'pack') => void;
   onSetMeasurableQuantity?: (id: string, quantity: number) => void;
   customers: Customer[];
   selectedCustomerId: string;
