@@ -992,7 +992,58 @@ export default function Dashboard() {
           </CardContent>
         </Card>
 
-        {/* Seasonal Trends */}
+        {/* Top-Selling Groups (medicine codes) */}
+        <Card>
+          <CardHeader>
+            <CardTitle>Top-Selling {isPharmacy ? 'Medicine' : 'Item'} Groups</CardTitle>
+            <CardDescription>Sales transactions per group (top 7)</CardDescription>
+          </CardHeader>
+          <CardContent className="overflow-hidden p-2 sm:p-6 pt-0 sm:pt-0">
+            {topGroupSales.length > 0 ? (
+              <>
+                <ChartContainer
+                  config={{ sales: { label: "Sales", color: "hsl(271 81% 56%)" } }}
+                  className="h-[300px] w-full"
+                >
+                  <PieChart>
+                    <Pie
+                      data={topGroupSales}
+                      cx="50%"
+                      cy="50%"
+                      outerRadius={70}
+                      dataKey="sales"
+                      nameKey="code"
+                      label={false}
+                    >
+                      {topGroupSales.map((_, index) => (
+                        <Cell key={`gcell-${index}`} fill={COLORS[index % COLORS.length]} />
+                      ))}
+                    </Pie>
+                    <ChartTooltip content={<ChartTooltipContent />} />
+                  </PieChart>
+                </ChartContainer>
+                <div className="mt-2 flex flex-wrap gap-2 justify-center">
+                  {topGroupSales.map((entry, index) => (
+                    <div key={entry.code || entry.name} className="flex items-center gap-1 text-xs">
+                      <div className="w-3 h-3 rounded-full shrink-0" style={{ backgroundColor: COLORS[index % COLORS.length] }} />
+                      <span className="truncate max-w-[160px]">{entry.code} ({entry.sales})</span>
+                    </div>
+                  ))}
+                </div>
+              </>
+            ) : (
+              <div className="h-[300px] flex flex-col items-center justify-center text-center text-sm text-muted-foreground gap-1 px-4">
+                <p className="font-medium text-foreground">No grouped sales yet</p>
+                <p className="text-xs">
+                  {totalGroups === 0
+                    ? 'Create medicine codes and assign items to start tracking group sales here.'
+                    : 'Assign items to your medicine codes, then sell them — group sales appear once linked items are sold in this date range.'}
+                </p>
+              </div>
+            )}
+          </CardContent>
+        </Card>
+
         <SeasonalTrendsWidget
           topItems={topSeasonalThisMonth}
           currentMonthName={currentMonthName}
