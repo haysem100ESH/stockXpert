@@ -1153,17 +1153,20 @@ export default function FinanceManagement() {
                             {selectedItem}
                           </div>
                           <div className="text-sm text-muted-foreground space-x-3">
-                            {sale.itemQty > 0 && (
-                              <span>
-                                {sale.itemQty} pack{sale.itemQty !== 1 ? 's' : ''}
-                                {sale.unitsPerPack > 1 && sale.unitLabel && (
-                                  <span className="text-xs ml-1">({sale.itemQty * sale.unitsPerPack} {sale.unitLabel})</span>
-                                )}
-                              </span>
-                            )}
-                            {sale.itemStripes > 0 && (
-                              <span>{sale.itemStripes} {sale.unitLabel || 'unit'}{sale.itemStripes !== 1 ? 's' : ''}</span>
-                            )}
+                            {(['pack','strip','unit'] as SaleLevel[]).map(lvl => {
+                              const seg = sale.perLevel[lvl];
+                              if (!seg.qty) return null;
+                              return (
+                                <span key={lvl}>
+                                  {seg.qty % 1 === 0 ? seg.qty : seg.qty.toFixed(2)} {pluralLabel(seg.levelLabel, seg.qty)}
+                                  {lvl !== 'unit' && seg.baseUnits > 0 && (
+                                    <span className="text-xs ml-1">
+                                      ({seg.baseUnits} {pluralLabel(seg.baseLabel, seg.baseUnits)})
+                                    </span>
+                                  )}
+                                </span>
+                              );
+                            })}
                           </div>
                           <div className="text-xs text-muted-foreground">
                             {new Date(sale.created_at).toLocaleDateString()} · {new Date(sale.created_at).toLocaleTimeString()}
