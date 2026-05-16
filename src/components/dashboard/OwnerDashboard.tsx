@@ -17,7 +17,8 @@ import {
   MessageCircle,
   ExternalLink,
   Send,
-  CreditCard
+  CreditCard,
+  Tag
 } from 'lucide-react';
 import { BarChart, Bar, XAxis, YAxis, CartesianGrid, ResponsiveContainer, PieChart, Pie, Cell } from 'recharts';
 import { supabase } from '@/lib/db';
