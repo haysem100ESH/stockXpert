@@ -74,6 +74,12 @@ interface ProductPerformanceData {
   revenue: number;
 }
 
+interface GroupSalesData {
+  name: string;
+  code: string;
+  sales: number;
+}
+
 interface IncomeExpenseData {
   date: string;
   income: number;
