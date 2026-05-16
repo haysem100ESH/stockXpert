@@ -1060,6 +1060,7 @@ export default function SalesManagement() {
         onRemove={removeFromCart}
         onUpdateQuantity={updateCartQuantity}
         onChangeSaleType={changeSaleType}
+        onChangeSellLevel={changeSellLevel}
         customers={customers}
         selectedCustomerId={selectedCustomerId}
         onSelectCustomer={setSelectedCustomerId}
