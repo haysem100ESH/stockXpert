@@ -156,11 +156,16 @@ export default function SalesManagement() {
     return expiry <= thirtyDaysFromNow;
   };
 
-  // Instant add — no dialog for full_pcs, open dialog for measurable
+  // Instant add — no dialog for full_pcs, open dialog for measurable or new packaging
   const addToCartInstant = (medicine: Medicine) => {
     if (medicine.item_type === 'measurable') {
-      // For measurable items, we need the dialog for structured input
-      // We'll use AddToCartDialog — set state to open it
+      setSelectedMedicineForDialog(medicine);
+      return;
+    }
+    const pkg = packagingMap[medicine.medicine_id];
+    // If item has new multi-level packaging configured, always open dialog
+    // so user can pick unit / strip / pack.
+    if (pkg && (pkg.strip_enabled || pkg.pack_enabled)) {
       setSelectedMedicineForDialog(medicine);
       return;
     }
