@@ -693,17 +693,37 @@ export default function EditBranchItemDialog({ open, onOpenChange, item, onItemU
               </div>
 
 
-              <div className="grid grid-cols-2 gap-4">
-                <div className="space-y-2">
-                  <Label>Selling Price *</Label>
-                  <Input type="number" step="0.01" min="0" value={sellingPrice} onChange={e => setSellingPrice(e.target.value)} required />
-                </div>
-                <div className="space-y-2">
-                  <Label>Purchase Price *</Label>
-                  <Input type="number" step="0.01" min="0" value={purchasePrice} onChange={e => setPurchasePrice(e.target.value)} required />
-                </div>
-              </div>
-
+              {(() => {
+                const unitName = packaging.unit_name || unitLabel || item.unit_label || 'unit';
+                const upp = Math.max(1, Number(computeUnitsPerPack() || item.units_per_pack || 1));
+                const lpiSellNum = parseFloat(sellingPrice);
+                const lpiBuyNum = parseFloat(purchasePrice);
+                return (
+                  <>
+                    <div className="rounded-md border border-primary/30 bg-primary/5 px-3 py-2 text-xs text-muted-foreground">
+                      Prices below are <span className="font-semibold text-foreground">per LPI (1 {unitName})</span> — the smallest sellable unit.
+                      Strip / pack prices on the sales page are computed automatically from this
+                      {upp > 1 ? <> (1 pack = {upp} {unitName}{upp === 1 ? '' : 's'})</> : null}.
+                    </div>
+                    <div className="grid grid-cols-2 gap-4">
+                      <div className="space-y-1">
+                        <Label>LPI Sell Price * <span className="text-muted-foreground font-normal">(per {unitName})</span></Label>
+                        <Input type="number" step="0.0001" min="0" value={sellingPrice} onChange={e => setSellingPrice(e.target.value)} required />
+                        {Number.isFinite(lpiSellNum) && upp > 1 && (
+                          <p className="text-[11px] text-muted-foreground">= ETB {(lpiSellNum * upp).toFixed(2)} per pack</p>
+                        )}
+                      </div>
+                      <div className="space-y-1">
+                        <Label>LPI Buy Price * <span className="text-muted-foreground font-normal">(per {unitName})</span></Label>
+                        <Input type="number" step="0.0001" min="0" value={purchasePrice} onChange={e => setPurchasePrice(e.target.value)} required />
+                        {Number.isFinite(lpiBuyNum) && upp > 1 && (
+                          <p className="text-[11px] text-muted-foreground">= ETB {(lpiBuyNum * upp).toFixed(2)} per pack</p>
+                        )}
+                      </div>
+                    </div>
+                  </>
+                );
+              })()}
               <div className="space-y-2">
                 <Label>Expiry Date</Label>
                 <Input type="date" value={expiryDate} onChange={e => setExpiryDate(e.target.value)} />
