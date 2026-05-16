@@ -9,6 +9,8 @@ import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
 import { Badge } from '@/components/ui/badge';
 import { Textarea } from '@/components/ui/textarea';
+import { Checkbox } from '@/components/ui/checkbox';
+import { ScrollArea } from '@/components/ui/scroll-area';
 import {
   Dialog, DialogContent, DialogHeader, DialogTitle, DialogDescription, DialogFooter,
 } from '@/components/ui/dialog';
@@ -16,7 +18,8 @@ import {
   Collapsible, CollapsibleContent, CollapsibleTrigger,
 } from '@/components/ui/collapsible';
 import { ConfirmationDialog } from '@/components/ui/confirmation-dialog';
-import { Plus, Edit, Trash2, ChevronDown, Tag, Search } from 'lucide-react';
+import { Plus, Edit, Trash2, ChevronDown, Tag, Search, Link2 } from 'lucide-react';
+import { cn } from '@/lib/utils';
 import { supabase } from '@/lib/db';
 import { useToast } from '@/hooks/use-toast';
 import { useMedicineCodes, type MedicineCode } from '@/hooks/useMedicineCodes';
