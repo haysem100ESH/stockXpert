@@ -60,6 +60,10 @@ interface CartItem extends Medicine {
   sellLevel?: 'unit' | 'strip' | 'pack';
   unitsPerLevel?: number;
   sellLevelLabel?: string;
+  availableLevels?: Array<'unit' | 'strip' | 'pack'>;
+  levelPrices?: { unit?: number; strip?: number; pack?: number };
+  levelLabels?: { unit?: string; strip?: string; pack?: string };
+  levelUnitsPer?: { unit: number; strip: number; pack: number };
 }
 
 type ChangeAction = 'keep_profit' | 'deduct_debt' | 'give_change' | null;
