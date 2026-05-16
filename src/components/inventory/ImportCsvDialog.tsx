@@ -32,18 +32,26 @@ const HEADER_ALIASES: Record<string, string> = {
   batch_number: 'batch_number', 'batch no': 'batch_number', 'bach no': 'batch_number', batch: 'batch_number', 'batch number': 'batch_number',
   item_type: 'item_type', 'item type': 'item_type', type: 'item_type',
   unit_label: 'unit_label', 'unit by label': 'unit_label', 'unit label': 'unit_label', unit: 'unit_label',
+  // New LPI-based "Name of unit" column — renames the LPI (tablet / pcs / capsule / ml…)
+  'name of unit': 'unit_label', 'unit name': 'unit_label', 'lpi name': 'unit_label', 'lpi unit': 'unit_label',
   packaging_mode: 'packaging_mode', 'packaging mode': 'packaging_mode', packaging: 'packaging_mode', pack: 'packaging_mode',
   strips_per_pack: 'strips_per_pack', 'strips per pack': 'strips_per_pack',
   units_per_strip: 'units_per_strip', 'units per strip': 'units_per_strip', 'tablets per strip': 'units_per_strip',
+  // LPI per strip / LPI per pack
+  'lpi per strip': 'units_per_strip', 'lpis per strip': 'units_per_strip',
   units_per_pack: 'units_per_pack', 'units per pack': 'units_per_pack', 'unit per pack': 'units_per_pack', 'units per item': 'units_per_pack',
+  'lpi per pack': 'units_per_pack', 'lpis per pack': 'units_per_pack', 'lpi per item': 'units_per_pack',
   purchase_price: 'purchase_price', 'purchase price': 'purchase_price', 'perchasing price': 'purchase_price',
   'perchasing price strip': 'purchase_price', 'purchase price strip': 'purchase_price',
   'cost price': 'purchase_price', cost: 'purchase_price',
   selling_price: 'selling_price', 'selling price': 'selling_price', 'selling price strip': 'selling_price',
   price: 'selling_price', sale: 'selling_price', 'sale price': 'selling_price',
-  // Pack-level price (final template): "MEDICINE PRICE" / "ITEM PRICE" / "PACK PRICE"
-  // Different from selling_price because it must NOT be multiplied by strips_per_pack.
+  // Pack-level price (legacy template): "MEDICINE PRICE" / "ITEM PRICE" / "PACK PRICE"
   pack_price: 'pack_price', 'pack price': 'pack_price', 'medicine price': 'pack_price', 'item price': 'pack_price',
+  // LPI-level prices (NEW canonical) — price per indivisible unit (tablet / pcs / ml…)
+  lpi_sell: 'lpi_sell', 'lpi sell': 'lpi_sell', 'lpi sell price': 'lpi_sell', 'lpi price': 'lpi_sell', 'sell per lpi': 'lpi_sell', 'sell lpi': 'lpi_sell',
+  lpi_buy: 'lpi_buy', 'lpi buy': 'lpi_buy', 'lpi buy price': 'lpi_buy', 'lpi cost': 'lpi_buy', 'buy per lpi': 'lpi_buy', 'buy lpi': 'lpi_buy', 'lpi purchase': 'lpi_buy',
+  lpi_stock: 'lpi_stock', 'lpi stock': 'lpi_stock', 'stock lpi': 'lpi_stock', 'lpi qty': 'lpi_stock', 'lpi quantity': 'lpi_stock',
   stock_quantity: 'stock_quantity', 'stock quantity': 'stock_quantity', quantity: 'stock_quantity',
   'quantity pk': 'stock_quantity', qty: 'stock_quantity', stock: 'stock_quantity',
   minimum_stock_level: 'minimum_stock_level', 'minimum stock level': 'minimum_stock_level',
@@ -241,39 +249,38 @@ interface ParsedRow {
 // Final-template column order — pharmacy and general share the parser, but the
 // downloaded template surfaces only the columns relevant to that branch type.
 const PHARMACY_HEADERS = [
-  'GROUP', 'NAME OF ITEMS', 'GENERIC NAME', 'STRENGTH', 'CATEGORY',
-  'BATCH NO', 'ITEM TYPE', 'UNIT BY LABEL', 'PACKAGING MODE',
+  'NAME OF ITEMS', 'GENERIC NAME', 'STRENGTH', 'CATEGORY',
+  'BATCH NO', 'NAME OF UNIT',
   'STRIPS PER PACK', 'TABLETS PER STRIP',
-  'MEDICINE PRICE', 'STRIP PRICE', 'TABLET PRICE',
-  'PURCHASE PRICE', 'STOCK QUANTITY', 'EXPIRY DATE',
+  'LPI BUY', 'LPI SELL', 'LPI STOCK', 'EXPIRY DATE',
 ];
 
 const GENERAL_HEADERS = [
-  'ITEM NAME', 'CATEGORY', 'PACKAGING MODE',
-  'UNITS PER ITEM', 'ITEM PRICE', 'UNIT PRICE',
-  'PURCHASE PRICE', 'STOCK QUANTITY', 'EXPIRY DATE',
+  'ITEM NAME', 'CATEGORY', 'NAME OF UNIT',
+  'UNITS PER ITEM',
+  'LPI BUY', 'LPI SELL', 'LPI STOCK', 'EXPIRY DATE',
 ];
 
-// Pharmacy-only optional columns (may be missing in older templates / general branch)
+// Optional canonical columns (may be missing — alias-matched only when present)
 const OPTIONAL_HEADERS = new Set(['medicine_group', 'strength']);
 
-// Pharmacy template demonstrates:
-//   - Row with NAME OF ITEMS filled = new medicine
-//   - Subsequent rows with empty NAME OF ITEMS = active ingredients of the
-//     previous medicine (only GENERIC NAME + optional STRENGTH matter)
-//   - "no_strip" packaging (bottle/sachet/tube) sells as full pack only.
+// NAME OF UNIT = friendly label of the LPI (Least Possible Item / smallest
+// indivisible unit, e.g. tablet, capsule, pcs, ml). All LPI BUY / LPI SELL /
+// LPI STOCK values are expressed in this unit. Packaging mode is auto-derived:
+// filling both STRIPS PER PACK and TABLETS PER STRIP marks the item as stripped;
+// otherwise it's a no-strip item (bottle / sachet / single pcs).
 const SAMPLE_PHARMACY = [
-  // GROUP, NAME, GENERIC, STRENGTH, CATEGORY, BATCH, ITEM TYPE, UNIT, PACKAGING, STRIPS/PACK, TABLETS/STRIP, MED PRICE, STRIP PRICE, TABLET PRICE, PURCHASE, QTY, EXPIRY
-  ['NSAIDS and anti-pain', 'Paracetamol 500mg', 'Paracetamol', '500mg', 'tablet', 'BN-PCM-01', 'full_pcs', 'tablet', 'standard_strip', '3', '10', '300', '100', '10', '180', '50', '2027-06-30'],
-  ['NSAIDS and anti-pain', 'Etricox 90mg',      'Etoricoxib',  '90mg',  'tablet', 'BN-ETR-09', 'full_pcs', 'tablet', 'standard_strip', '3', '10', '600', '',    '',   '420', '30', '2026-12-31'],
-  ['Antibiotics',          'Amoxicillin Syrup', 'Amoxicillin', '250mg/5ml', 'syrup', 'BN-AMX-2026', 'full_pcs', 'bottle', 'no_strip', '', '', '70', '', '', '45', '15', '2026-08-15'],
+  // NAME, GENERIC, STRENGTH, CATEGORY, BATCH, NAME OF UNIT, STRIPS/PACK, TABLETS/STRIP, LPI BUY, LPI SELL, LPI STOCK, EXPIRY
+  ['Paracetamol 500mg', 'Paracetamol', '500mg',     'tablet', 'BN-PCM-01',   'tablet', '3', '10', '6',   '10',  '1500', '2027-06-30'],
+  ['Etricox 90mg',      'Etoricoxib',  '90mg',      'tablet', 'BN-ETR-09',   'tablet', '3', '10', '14',  '20',  '900',  '2026-12-31'],
+  ['Amoxicillin Syrup', 'Amoxicillin', '250mg/5ml', 'syrup',  'BN-AMX-2026', 'ml',     '',  '',   '0.6', '0.93','1875', '2026-08-15'],
 ];
 
 const SAMPLE_GENERAL = [
-  // ITEM NAME, CATEGORY, PACKAGING MODE, UNITS PER ITEM, ITEM PRICE, UNIT PRICE, PURCHASE PRICE, QTY, EXPIRY
-  ['Carton Milk 1L',  'grocery',  'carton',  '24', '2400', '100', '1800', '20',  ''],
-  ['Cooking Oil 1L',  'grocery',  'bottle',  '1',  '150',  '',    '120',  '60',  '2027-01-31'],
-  ['Soap Bar Pack',   'cleaning', 'pack',    '6',  '120',  '20',  '90',   '40',  ''],
+  // ITEM NAME, CATEGORY, NAME OF UNIT, UNITS PER ITEM, LPI BUY, LPI SELL, LPI STOCK, EXPIRY
+  ['Carton Milk 1L',  'grocery',  'bottle', '24', '75',  '100', '480', ''],
+  ['Cooking Oil 1L',  'grocery',  'bottle', '1',  '120', '150', '60',  '2027-01-31'],
+  ['Soap Bar Pack',   'cleaning', 'pcs',    '6',  '15',  '20',  '240', ''],
 ];
 
 function escapeCsv(v: string): string {
@@ -295,10 +302,10 @@ function buildTemplate(mode: 'pharmacy' | 'general'): string {
 
 // Required columns by template mode (highlighted red + frozen in xlsx export)
 const REQUIRED_PHARMACY = new Set([
-  'NAME OF ITEMS', 'MEDICINE PRICE', 'PURCHASE PRICE', 'STOCK QUANTITY',
+  'NAME OF ITEMS', 'NAME OF UNIT', 'LPI BUY', 'LPI SELL', 'LPI STOCK',
 ]);
 const REQUIRED_GENERAL = new Set([
-  'ITEM NAME', 'ITEM PRICE', 'PURCHASE PRICE', 'STOCK QUANTITY',
+  'ITEM NAME', 'NAME OF UNIT', 'LPI BUY', 'LPI SELL', 'LPI STOCK',
 ]);
 
 async function buildTemplateXlsx(mode: 'pharmacy' | 'general'): Promise<Blob> {
@@ -512,15 +519,20 @@ export default function ImportCsvDialog({ open, onOpenChange, onImported }: Impo
       if (keyIndex[k] === undefined) keyIndex[k] = +i;
     });
 
-    // Required columns. Either "selling_price" OR "pack_price" satisfies the price requirement.
-    const required = ['name', 'purchase_price', 'stock_quantity'];
+    // Required columns. LPI-based template (LPI BUY / LPI SELL / LPI STOCK) is
+    // accepted as an alternative to the legacy (purchase_price / selling_price /
+    // stock_quantity) columns.
+    const hasLpiBuy   = keyIndex['lpi_buy']   !== undefined;
+    const hasLpiSell  = keyIndex['lpi_sell']  !== undefined;
+    const hasLpiStock = keyIndex['lpi_stock'] !== undefined;
+    const required = ['name'];
     const missingReq = required.filter(k => keyIndex[k] === undefined);
-    if (keyIndex['selling_price'] === undefined && keyIndex['pack_price'] === undefined) {
-      missingReq.push('selling_price (or medicine/item/pack price)');
-    }
+    if (!hasLpiBuy   && keyIndex['purchase_price']  === undefined) missingReq.push('LPI BUY (or purchase price)');
+    if (!hasLpiSell  && keyIndex['selling_price']   === undefined && keyIndex['pack_price'] === undefined) missingReq.push('LPI SELL (or selling/medicine/item price)');
+    if (!hasLpiStock && keyIndex['stock_quantity']  === undefined) missingReq.push('LPI STOCK (or stock quantity)');
     if (missingReq.length > 0) {
       const recognizedList = Object.values(headerToKey).join(', ') || '(none)';
-      return { ok: [], errs: [`Missing required column(s): ${missingReq.join(', ')}. Header row detected at row ${headerRowIdx + 1}. Recognized headers: ${recognizedList}. Tip: make sure your header row is the first non-empty row and column names match (e.g. "NAME OF ITEMS", "MEDICINE PRICE", "QUANTITY").`] };
+      return { ok: [], errs: [`Missing required column(s): ${missingReq.join(', ')}. Header row detected at row ${headerRowIdx + 1}. Recognized headers: ${recognizedList}. Tip: make sure your header row is the first non-empty row and column names match (e.g. "NAME OF ITEMS", "NAME OF UNIT", "LPI BUY", "LPI SELL", "LPI STOCK").`] };
     }
     const get = (cells: any[], k: string): string => {
       const i = keyIndex[k];
@@ -587,6 +599,12 @@ export default function ImportCsvDialog({ open, onOpenChange, onImported }: Impo
       const unitLabelRaw = get(cells, 'unit_label');
       const packagingRaw = get(cells, 'packaging_mode');
 
+      // Detect strip-style packaging from explicit cells FIRST so item_type can
+      // infer from unit label without forcing "tablet" → measurable later.
+      const stripsCell = parseInt(get(cells, 'strips_per_pack'));
+      const tabletsCell = parseInt(get(cells, 'units_per_strip'));
+      const unitsPerPackCell = parseInt(get(cells, 'units_per_pack'));
+
       const item_type: 'full_pcs' | 'measurable' = (() => {
         const v = itemTypeRaw.toLowerCase();
         if (v === 'measurable' || v === 'full_pcs') return v as any;
@@ -594,75 +612,122 @@ export default function ImportCsvDialog({ open, onOpenChange, onImported }: Impo
       })();
       const unit_label = inferUnitLabel(item_type, unitLabelRaw, packagingRaw);
       if (item_type === 'measurable' && !MEASURABLE_UNITS.includes(unit_label as any)) {
-        rowErrors.push(`column "UNIT By LABEL" = "${unit_label}" is invalid for a measurable item — use one of: ${MEASURABLE_UNITS.join(', ')}`);
+        rowErrors.push(`column "NAME OF UNIT" = "${unit_label}" is invalid for a measurable item — use one of: ${MEASURABLE_UNITS.join(', ')}`);
       }
 
-      // Packaging: accept canonical (with_strip/no_strip) OR real-world like "3*10".
+      // Packaging is auto-derived from STRIPS PER PACK + TABLETS PER STRIP.
+      // Backwards compatible: still accept a legacy PACKAGING MODE cell when present.
       let packaging_mode: 'with_strip' | 'no_strip' = 'no_strip';
       let strips_per_pack: number | null = null;
       let units_per_strip: number | null = null;
       let units_per_pack: number | null = null;
 
-      // Final-template values: 'standard_strip' → with_strip; bottle/sachet/tube → no_strip.
-      const packagingNorm = packagingRaw.toLowerCase().trim();
-      if (packagingNorm === 'with_strip' || packagingNorm === 'standard_strip') {
+      if (!isNaN(stripsCell) && stripsCell > 0 && !isNaN(tabletsCell) && tabletsCell > 0) {
         packaging_mode = 'with_strip';
-      } else if (['no_strip', 'bottle', 'sachet', 'tube', 'carton', 'box', 'pack', 'piece'].includes(packagingNorm)) {
-        packaging_mode = 'no_strip';
-      } else {
-        const parsed = parsePackagingMode(packagingRaw);
-        if (parsed.isStripLayout) {
+        strips_per_pack = stripsCell;
+        units_per_strip = tabletsCell;
+        units_per_pack = stripsCell * tabletsCell;
+      } else if (packagingRaw) {
+        const packagingNorm = packagingRaw.toLowerCase().trim();
+        if (packagingNorm === 'with_strip' || packagingNorm === 'standard_strip') {
           packaging_mode = 'with_strip';
-          strips_per_pack = parsed.stripsPerPack;
-          units_per_strip = parsed.unitsPerStrip;
-          units_per_pack = (parsed.stripsPerPack || 0) * (parsed.unitsPerStrip || 0);
+        } else {
+          const parsed = parsePackagingMode(packagingRaw);
+          if (parsed.isStripLayout) {
+            packaging_mode = 'with_strip';
+            strips_per_pack = parsed.stripsPerPack;
+            units_per_strip = parsed.unitsPerStrip;
+            units_per_pack = (parsed.stripsPerPack || 0) * (parsed.unitsPerStrip || 0);
+          }
         }
       }
+      if (units_per_pack == null && !isNaN(unitsPerPackCell) && unitsPerPackCell >= 1) {
+        units_per_pack = unitsPerPackCell;
+      }
 
-      // Allow explicit columns to override / fill in
-      if (item_type === 'full_pcs' && packaging_mode === 'with_strip') {
-        const sp = parseInt(get(cells, 'strips_per_pack')) || strips_per_pack;
-        const ups = parseInt(get(cells, 'units_per_strip')) || units_per_strip;
-        if (!sp || sp < 1) rowErrors.push(`column "STRIPS PER PACK" must be ≥ 1 (PACKAGING MODE "${packagingRaw}" looks like a strip layout)`);
-        if (!ups || ups < 1) rowErrors.push(`column "UNITS PER STRIP" must be ≥ 1 (PACKAGING MODE "${packagingRaw}" looks like a strip layout)`);
-        if (sp && ups) {
-          strips_per_pack = sp;
-          units_per_strip = ups;
-          units_per_pack = sp * ups;
+      // ---- PRICES & STOCK -------------------------------------------------
+      // Two accepted modes:
+      //   (A) NEW  LPI-based: LPI BUY / LPI SELL / LPI STOCK are per-LPI values.
+      //       Pack-level prices/stock are derived using units_per_pack.
+      //   (B) LEGACY pack-level: PURCHASE PRICE / SELLING PRICE / STOCK QUANTITY.
+      const lpiBuyRaw   = get(cells, 'lpi_buy');
+      const lpiSellRaw  = get(cells, 'lpi_sell');
+      const lpiStockRaw = get(cells, 'lpi_stock');
+      const purchaseRaw = get(cells, 'purchase_price');
+      const sellingRaw  = get(cells, 'selling_price');
+      const packPriceRaw = get(cells, 'pack_price');
+      const stockRaw    = get(cells, 'stock_quantity');
+
+      const unitsPerPackForCalc = units_per_pack && units_per_pack > 0 ? units_per_pack : 1;
+
+      let purchase_price: number;
+      let selling_price: number;
+      let usingPackLevelPrice = false; // tracks whether the SELL side is already pack-level
+
+      // BUY price
+      if (lpiBuyRaw !== '') {
+        const lpiBuy = parseFloat(lpiBuyRaw);
+        if (isNaN(lpiBuy) || lpiBuy < 0) {
+          rowErrors.push(`column "LPI BUY" = "${lpiBuyRaw}" is not a valid number ≥ 0`);
+          purchase_price = 0;
+        } else {
+          purchase_price = +(lpiBuy * unitsPerPackForCalc).toFixed(2);
         }
       } else {
-        const upp = get(cells, 'units_per_pack');
-        if (upp) {
-          const v = parseInt(upp);
-          if (!isNaN(v) && v >= 1) units_per_pack = v;
+        purchase_price = parseFloat(purchaseRaw);
+        if (!purchaseRaw || isNaN(purchase_price) || purchase_price < 0) {
+          rowErrors.push(`column "LPI BUY" (or PURCHASE PRICE) = "${purchaseRaw}" is missing or not a valid number ≥ 0`);
+          purchase_price = 0;
         }
       }
 
-      const purchaseRaw = get(cells, 'purchase_price');
-      const sellingRaw = get(cells, 'selling_price');
-      const packPriceRaw = get(cells, 'pack_price');
-      let purchase_price = parseFloat(purchaseRaw);
-      // Pack-level price ("MEDICINE PRICE" / "ITEM PRICE" / "PACK PRICE") wins
-      // over generic "selling price". When present we treat it as the final pack
-      // price and skip the per-strip→per-pack multiplier below.
-      const pickedPackPrice = packPriceRaw ? parseFloat(packPriceRaw) : NaN;
-      const usingPackLevelPrice = !isNaN(pickedPackPrice);
-      let selling_price = usingPackLevelPrice ? pickedPackPrice : parseFloat(sellingRaw);
-      const sellingLabel = usingPackLevelPrice ? 'MEDICINE/ITEM PRICE' : 'SELLING PRICE (strip)';
-      if (!purchaseRaw || isNaN(purchase_price) || purchase_price < 0) rowErrors.push(`column "PERCHASING PRICE (strip)" = "${purchaseRaw}" is missing or not a valid number ≥ 0`);
-      if ((!sellingRaw && !packPriceRaw) || isNaN(selling_price) || selling_price < 0) rowErrors.push(`column "${sellingLabel}" = "${sellingRaw || packPriceRaw}" is missing or not a valid number ≥ 0`);
+      // SELL price
+      if (lpiSellRaw !== '') {
+        const lpiSell = parseFloat(lpiSellRaw);
+        if (isNaN(lpiSell) || lpiSell < 0) {
+          rowErrors.push(`column "LPI SELL" = "${lpiSellRaw}" is not a valid number ≥ 0`);
+          selling_price = 0;
+        } else {
+          selling_price = +(lpiSell * unitsPerPackForCalc).toFixed(2);
+          usingPackLevelPrice = true; // already pack-level after the LPI multiply
+        }
+      } else {
+        const pickedPackPrice = packPriceRaw ? parseFloat(packPriceRaw) : NaN;
+        usingPackLevelPrice = !isNaN(pickedPackPrice);
+        selling_price = usingPackLevelPrice ? pickedPackPrice : parseFloat(sellingRaw);
+        const sellingLabel = usingPackLevelPrice ? 'MEDICINE/ITEM PRICE' : 'SELLING PRICE';
+        if ((!sellingRaw && !packPriceRaw) || isNaN(selling_price) || selling_price < 0) {
+          rowErrors.push(`column "LPI SELL" (or ${sellingLabel}) = "${sellingRaw || packPriceRaw}" is missing or not a valid number ≥ 0`);
+          selling_price = 0;
+        }
+      }
 
-      // Per-strip → per-pack conversion: only when the price came from a
-      // strip-level header (legacy "SELLING PRICE (strip)"). Pack-level prices
-      // already represent the full pack and must NOT be multiplied.
-      if (!usingPackLevelPrice && packaging_mode === 'with_strip' && strips_per_pack && strips_per_pack > 1) {
+      // Legacy per-strip → per-pack conversion (only when neither LPI nor pack price was used)
+      if (!usingPackLevelPrice && lpiSellRaw === '' && packaging_mode === 'with_strip' && strips_per_pack && strips_per_pack > 1) {
         if (!isNaN(purchase_price)) purchase_price = +(purchase_price * strips_per_pack).toFixed(2);
         if (!isNaN(selling_price)) selling_price = +(selling_price * strips_per_pack).toFixed(2);
       }
 
-      const stockRaw = get(cells, 'stock_quantity');
-      const stock_quantity = item_type === 'measurable' ? parseFloat(stockRaw) : parseInt(stockRaw);
-      if (!stockRaw || isNaN(stock_quantity) || stock_quantity < 0) rowErrors.push(`column "QUANTITY (PK)" = "${stockRaw}" is missing or not a valid number ≥ 0`);
+      // STOCK
+      let stock_quantity: number;
+      if (lpiStockRaw !== '') {
+        const lpiStock = parseFloat(lpiStockRaw);
+        if (isNaN(lpiStock) || lpiStock < 0) {
+          rowErrors.push(`column "LPI STOCK" = "${lpiStockRaw}" is not a valid number ≥ 0`);
+          stock_quantity = 0;
+        } else if (item_type === 'measurable') {
+          stock_quantity = lpiStock;
+        } else {
+          // Convert LPI count → pack count. Fractional remainder is rounded to nearest pack.
+          stock_quantity = Math.round(lpiStock / unitsPerPackForCalc);
+        }
+      } else {
+        stock_quantity = item_type === 'measurable' ? parseFloat(stockRaw) : parseInt(stockRaw);
+        if (!stockRaw || isNaN(stock_quantity) || stock_quantity < 0) {
+          rowErrors.push(`column "LPI STOCK" (or STOCK QUANTITY) = "${stockRaw}" is missing or not a valid number ≥ 0`);
+          stock_quantity = 0;
+        }
+      }
 
       const minRaw = get(cells, 'minimum_stock_level');
       // accept "1 PK", "3 tubes" etc.
@@ -1002,14 +1067,12 @@ export default function ImportCsvDialog({ open, onOpenChange, onImported }: Impo
             <Alert>
               <AlertCircle className="h-4 w-4" />
               <AlertDescription className="text-xs space-y-1">
-                <p><strong>Accepted files:</strong> .csv, .xlsx, .xls. Real-world headers like <code>NAME OF ITEMS</code>, <code>CATAGORY</code>, <code>BACH NO</code>, <code>EX-DATE</code>, <code>PERCHASING PRICE (strip)</code>, <code>QUANTITY (PK)</code> are auto-detected.</p>
-                <p><strong>Required:</strong> name, purchase_price, selling_price, stock_quantity.</p>
-                <p><strong>Packaging:</strong> use <code>3*10</code> / <code>6*10</code> for strip layouts (auto-converted). Prices in <em>per-strip</em> are auto-multiplied to per-pack.</p>
+                <p><strong>Accepted files:</strong> .csv, .xlsx, .xls.</p>
+                <p><strong>Required:</strong> <code>NAME OF ITEMS</code>, <code>NAME OF UNIT</code>, <code>LPI BUY</code>, <code>LPI SELL</code>, <code>LPI STOCK</code>.</p>
+                <p><strong>LPI</strong> = <em>Least Possible Item</em> — the smallest indivisible unit (e.g. <code>tablet</code>, <code>capsule</code>, <code>pcs</code>, <code>ml</code>). <code>NAME OF UNIT</code> renames it.</p>
+                <p><strong>Packaging is auto-derived:</strong> filling both <code>STRIPS PER PACK</code> and <code>TABLETS PER STRIP</code> = stripped layout; otherwise no-strip.</p>
                 {isPharmacy && (
-                  <>
-                    <p className="pt-1 border-t mt-1"><strong>💊 GROUP inheritance:</strong> Fill <code>GROUP</code> only on the first item of a group; subsequent rows inherit it until the next group.</p>
-                    <p><strong>💊 Composition:</strong> Leave <code>NAME OF ITEMS</code> empty on a row to add it as an <em>active ingredient</em> of the medicine above (just fill GENERIC NAME + STRENGTH).</p>
-                  </>
+                  <p className="pt-1 border-t mt-1"><strong>💊 Composition:</strong> Leave <code>NAME OF ITEMS</code> empty on a row to add it as an <em>active ingredient</em> of the medicine above (just fill GENERIC NAME + STRENGTH).</p>
                 )}
               </AlertDescription>
             </Alert>
