@@ -204,6 +204,25 @@ export default function SalesManagement() {
       }
 
       const existing = cart.find(it => it.id === medicine.id && it.sellLevel === meta.sellLevel);
+      // Resolve cross-level info from packagingMap so user can switch later.
+      const pkg = packagingMap[medicine.medicine_id];
+      const availableLevels: Array<'unit' | 'strip' | 'pack'> = ['unit'];
+      let levelPrices: { unit?: number; strip?: number; pack?: number } = { unit: levelPrice };
+      let levelLabels: { unit?: string; strip?: string; pack?: string } = { unit: medicine.unit_label || 'unit' };
+      let levelUnitsPer = { unit: 1, strip: 1, pack: 1 };
+      if (pkg) {
+        const upStrip = unitsPerStripSafe(pkg);
+        const upPack = unitsPerPackSafe(pkg);
+        const uPrice = pkg.unit_selling_price ?? (medicine.selling_price && upPack ? medicine.selling_price / upPack : medicine.selling_price);
+        const sPrice = pkg.strip_selling_price ?? (autoStripPrice(pkg) ?? uPrice * upStrip);
+        const pPrice = pkg.pack_selling_price ?? (autoPackPrice(pkg) ?? uPrice * upPack);
+        levelPrices = { unit: uPrice, strip: sPrice, pack: pPrice };
+        levelLabels = { unit: pkg.unit_name || 'unit', strip: pkg.strip_name || 'strip', pack: pkg.pack_name || 'pack' };
+        levelUnitsPer = { unit: 1, strip: upStrip, pack: upPack };
+        if (pkg.strip_enabled) availableLevels.push('strip');
+        if (pkg.pack_enabled) availableLevels.push('pack');
+      }
+
       if (existing) {
         const newQty = existing.quantity + count;
         setCart(prev => prev.map(it =>
@@ -223,6 +242,10 @@ export default function SalesManagement() {
           selling_price: levelPrice,
           unit_label: meta.levelLabel || medicine.unit_label,
           total: parseFloat((count * levelPrice).toFixed(2)),
+          availableLevels,
+          levelPrices,
+          levelLabels,
+          levelUnitsPer,
         }]);
       }
       return;
