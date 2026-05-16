@@ -459,9 +459,11 @@ export default function Dashboard() {
       }));
 
       // Fetch medicine codes (groups) for owner scope
+      // medicine_codes belongs to profiles through owner_id; using the wrong
+      // owner column makes Supabase return no rows, so group cards/charts stay 0.
       let codesQuery = supabase.from('medicine_codes').select('id, code, label');
       if (profile?.role === 'owner' && profile?.id) {
-        codesQuery = codesQuery.eq('pharmacy_owner_id', profile.id);
+        codesQuery = codesQuery.eq('owner_id', profile.id);
       }
       const { data: codesData } = await codesQuery;
       const codeMap = new Map<string, { code: string; label: string }>();
