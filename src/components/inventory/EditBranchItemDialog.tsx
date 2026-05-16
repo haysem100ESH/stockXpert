@@ -722,7 +722,6 @@ export default function EditBranchItemDialog({ open, onOpenChange, item, onItemU
                 }}
               />
 
-              )}
 
               {/* Container / packaging type */}
               <div className="space-y-2">
