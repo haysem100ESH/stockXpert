@@ -25,6 +25,64 @@ import { useReadOnly } from '@/hooks/useReadOnly';
 import DebtManagement from './DebtManagement';
 import SalaryHistory from '@/components/staff/SalaryHistory';
 import { BarChart, Bar, XAxis, YAxis, CartesianGrid, Tooltip, Legend, ResponsiveContainer } from 'recharts';
+import type { Packaging } from '@/lib/packaging';
+
+type SaleLevel = 'unit' | 'strip' | 'pack';
+
+const approxEq = (a: number, b: number) => Math.abs(a - b) < 0.01;
+
+function inferSaleLevel(si: any, pkg?: Packaging | null): SaleLevel {
+  if (si?.sale_type === 'by_stripe') return 'unit';
+  const price = Number(si?.unit_price || 0);
+  if (pkg) {
+    if (pkg.pack_enabled && pkg.pack_selling_price && approxEq(price, Number(pkg.pack_selling_price))) return 'pack';
+    if (pkg.strip_enabled && pkg.strip_selling_price && approxEq(price, Number(pkg.strip_selling_price))) return 'strip';
+    if (pkg.unit_selling_price && approxEq(price, Number(pkg.unit_selling_price))) return 'unit';
+    if (pkg.strip_enabled && pkg.units_per_strip && pkg.unit_selling_price &&
+        approxEq(price, Number(pkg.unit_selling_price) * Number(pkg.units_per_strip))) return 'strip';
+    if (pkg.pack_enabled && pkg.strips_per_pack && pkg.units_per_strip && pkg.unit_selling_price &&
+        approxEq(price, Number(pkg.unit_selling_price) * Number(pkg.units_per_strip) * Number(pkg.strips_per_pack))) return 'pack';
+  }
+  return 'pack';
+}
+
+interface SaleItemFormatted {
+  qty: number;
+  level: SaleLevel;
+  levelLabel: string;
+  baseUnits: number;
+  baseLabel: string;
+}
+
+function formatSaleItem(si: any, pkg?: Packaging | null): SaleItemFormatted {
+  const level = inferSaleLevel(si, pkg);
+  let qty: number;
+  if (si?.sale_type === 'by_stripe') {
+    const raw = Number(si?.stripes_sold || si?.quantity || 0);
+    qty = raw >= 100 ? raw / 1000 : raw;
+  } else {
+    qty = Number(si?.quantity || 0);
+  }
+  const unitName = pkg?.unit_name || si?.medicines?.unit_label || 'tablet';
+  const stripName = pkg?.strip_name || 'strip';
+  const packName = pkg?.pack_name || 'pack';
+  const ups = Number(pkg?.units_per_strip || 0);
+  const spp = Number(pkg?.strips_per_pack || 0);
+  const unitsPerPack = (ups && spp) ? ups * spp : Number(si?.medicines?.units_per_pack || 1);
+  const baseUnits =
+    level === 'unit' ? qty :
+    level === 'strip' ? qty * (ups || 1) :
+    qty * (unitsPerPack || 1);
+  const levelLabel = level === 'unit' ? unitName : level === 'strip' ? stripName : packName;
+  return { qty, level, levelLabel, baseUnits, baseLabel: unitName };
+}
+
+const pluralLabel = (label: string, n: number) => {
+  const safe = (label || 'unit').trim() || 'unit';
+  if (Math.abs(n - 1) < 1e-9) return safe;
+  if (/(s|x|z|ch|sh)$/i.test(safe)) return `${safe}es`;
+  return `${safe}s`;
+};
 
 interface FinanceStats {
   totalIncome: number;
@@ -52,7 +110,9 @@ interface Sale {
     role: string;
   };
   sale_items?: {
+    medicine_id?: string;
     medicines: {
+      id?: string;
       name: string;
       unit_label?: string;
       units_per_pack?: number;
@@ -79,11 +139,12 @@ interface Branch {
 
 interface ItemSummary {
   name: string;
-  totalQuantity: number;
-  totalStripes: number;
   totalIncome: number;
   unitLabel?: string;
   unitsPerPack?: number;
+  perLevel: { unit: number; strip: number; pack: number };
+  stripName?: string;
+  packName?: string;
 }
 
 interface InventoryExpense {
@@ -122,6 +183,7 @@ export default function FinanceManagement() {
   
   // Income drill-down state
   const [selectedItem, setSelectedItem] = useState<string | null>(null);
+  const [packagingMap, setPackagingMap] = useState<Record<string, Packaging>>({});
   
   const { profile } = useAuth();
   const { toast } = useToast();
@@ -198,12 +260,14 @@ export default function FinanceManagement() {
         .select(`
           *,
           sale_items (
+            medicine_id,
             quantity,
             unit_price,
             total_price,
             sale_type,
             stripes_sold,
             medicines (
+              id,
               name,
               unit_label,
               units_per_pack
@@ -341,6 +405,25 @@ export default function FinanceManagement() {
       setSales(salesWithSeller || []);
       setExpenses(expensesData || []);
 
+      // Fetch packaging metadata for all medicines referenced in these sales
+      const medIds = Array.from(new Set(
+        (salesWithSeller || [])
+          .flatMap((s: any) => s.sale_items || [])
+          .map((si: any) => si.medicine_id || si.medicines?.id)
+          .filter(Boolean) as string[]
+      ));
+      if (medIds.length > 0) {
+        const { data: pkgRows } = await (supabase as any)
+          .from('medicine_packaging')
+          .select('*')
+          .in('medicine_id', medIds);
+        const map: Record<string, Packaging> = {};
+        (pkgRows || []).forEach((p: any) => { map[p.medicine_id] = p as Packaging; });
+        setPackagingMap(map);
+      } else {
+        setPackagingMap({});
+      }
+
       // Calculate stats - include inventory expenses in total
       const totalIncome = salesData?.reduce((sum, sale) => sum + Number(sale.total_amount), 0) || 0;
       const totalCustomExpenses = expensesData?.reduce((sum, expense) => sum + Number(expense.amount), 0) || 0;
@@ -412,53 +495,60 @@ export default function FinanceManagement() {
 
   // Group sales by item name for income drill-down
   const itemSummaries = useMemo<ItemSummary[]>(() => {
-    const mapFixed = new Map<string, { totalQuantity: number; totalStripes: number; totalIncome: number; unitLabel?: string; unitsPerPack?: number }>();
+    const acc = new Map<string, ItemSummary>();
     for (const sale of sales) {
-      if (sale.sale_items) {
-        for (const item of sale.sale_items) {
-          const name = item.medicines?.name || 'Unknown';
-          const existing = mapFixed.get(name) || { totalQuantity: 0, totalStripes: 0, totalIncome: 0 };
-          // Capture unit info from first occurrence
-          if (!existing.unitLabel && item.medicines?.unit_label) {
-            existing.unitLabel = item.medicines.unit_label;
-            existing.unitsPerPack = item.medicines.units_per_pack;
-          }
-          if (item.sale_type === 'by_stripe') {
-            const rawStripes = item.stripes_sold || item.quantity || 0;
-            existing.totalStripes += rawStripes >= 100 ? rawStripes / 1000 : rawStripes;
-          } else {
-            existing.totalQuantity += item.quantity || 0;
-          }
-          existing.totalIncome += Number(item.total_price || 0);
-          mapFixed.set(name, existing);
+      if (!sale.sale_items) continue;
+      for (const item of sale.sale_items) {
+        const name = item.medicines?.name || 'Unknown';
+        const medId = (item as any).medicine_id || item.medicines?.id;
+        const pkg = medId ? packagingMap[medId] : undefined;
+        const existing: ItemSummary = acc.get(name) || {
+          name,
+          totalIncome: 0,
+          perLevel: { unit: 0, strip: 0, pack: 0 },
+        };
+        if (!existing.unitLabel) {
+          existing.unitLabel = pkg?.unit_name || item.medicines?.unit_label;
+          existing.unitsPerPack = item.medicines?.units_per_pack;
+          existing.stripName = pkg?.strip_name || undefined;
+          existing.packName = pkg?.pack_name || undefined;
         }
+        const f = formatSaleItem(item, pkg);
+        existing.perLevel[f.level] += f.qty;
+        existing.totalIncome += Number(item.total_price || 0);
+        acc.set(name, existing);
       }
     }
-    return Array.from(mapFixed.entries())
-      .map(([name, data]) => ({ name, ...data }))
-      .sort((a, b) => b.totalIncome - a.totalIncome);
-  }, [sales]);
+    return Array.from(acc.values()).sort((a, b) => b.totalIncome - a.totalIncome);
+  }, [sales, packagingMap]);
 
   // Get transactions for a specific item
   const selectedItemTransactions = useMemo(() => {
     if (!selectedItem) return [];
-    // Get unit info from itemSummaries
-    const itemInfo = itemSummaries.find(i => i.name === selectedItem);
-    const unitLabel = itemInfo?.unitLabel || 'unit';
-    const unitsPerPack = itemInfo?.unitsPerPack || 1;
-    
     return sales
       .filter(sale => sale.sale_items?.some(si => si.medicines?.name === selectedItem))
       .map(sale => {
         const relevantItems = sale.sale_items?.filter(si => si.medicines?.name === selectedItem) || [];
-        const itemQty = relevantItems.filter(si => si.sale_type !== 'by_stripe').reduce((sum, si) => sum + (si.quantity || 0), 0);
-        const itemStripesRaw = relevantItems.filter(si => si.sale_type === 'by_stripe').reduce((sum, si) => sum + (si.stripes_sold || si.quantity || 0), 0);
-        const itemStripes = itemStripesRaw >= 100 ? itemStripesRaw / 1000 : itemStripesRaw;
-        const itemTotal = relevantItems.reduce((sum, si) => sum + Number(si.total_price || 0), 0);
-        return { ...sale, itemQty, itemStripes, itemTotal, unitLabel, unitsPerPack };
+        const perLevel: Record<SaleLevel, { qty: number; baseUnits: number; levelLabel: string; baseLabel: string }> = {
+          unit: { qty: 0, baseUnits: 0, levelLabel: 'unit', baseLabel: 'unit' },
+          strip: { qty: 0, baseUnits: 0, levelLabel: 'strip', baseLabel: 'unit' },
+          pack: { qty: 0, baseUnits: 0, levelLabel: 'pack', baseLabel: 'unit' },
+        };
+        let itemTotal = 0;
+        for (const si of relevantItems) {
+          const medId = (si as any).medicine_id || si.medicines?.id;
+          const pkg = medId ? packagingMap[medId] : undefined;
+          const f = formatSaleItem(si, pkg);
+          perLevel[f.level].qty += f.qty;
+          perLevel[f.level].baseUnits += f.baseUnits;
+          perLevel[f.level].levelLabel = f.levelLabel;
+          perLevel[f.level].baseLabel = f.baseLabel;
+          itemTotal += Number(si.total_price || 0);
+        }
+        return { ...sale, perLevel, itemTotal };
       })
       .sort((a, b) => new Date(b.created_at).getTime() - new Date(a.created_at).getTime());
-  }, [sales, selectedItem, itemSummaries]);
+  }, [sales, selectedItem, packagingMap]);
 
   const fetchBranches = async () => {
     try {
@@ -583,9 +673,15 @@ export default function FinanceManagement() {
       const row = ws.getRow(txH + 1 + i);
       const itemNames = sale.sale_items?.map(si => {
         const nm = si.medicines?.name || 'Unknown';
-        if (si.sale_type === 'by_stripe' && si.stripes_sold) { const q = si.stripes_sold / 1000; return `${nm} (${q % 1 === 0 ? q.toFixed(0) : q} ${si.medicines?.unit_label || 'unit'})`; }
-        if (si.quantity > 0) return `${nm} ×${si.quantity}`;
-        return nm;
+        const medId = (si as any).medicine_id || si.medicines?.id;
+        const pkg = medId ? packagingMap[medId] : undefined;
+        const f = formatSaleItem(si, pkg);
+        if (!f.qty) return nm;
+        const qtyStr = f.qty % 1 === 0 ? f.qty : f.qty.toFixed(2);
+        const detail = f.level !== 'unit' && f.baseUnits > 0
+          ? ` (${f.baseUnits} ${pluralLabel(f.baseLabel, f.baseUnits)})`
+          : '';
+        return `${nm} ×${qtyStr} ${pluralLabel(f.levelLabel, f.qty)}${detail}`;
       }).join(', ') || '—';
       const isPaid = Number(sale.total_amount) <= ((sale as any).amount_paid || 0);
       const isPartial = !isPaid && ((sale as any).amount_paid || 0) > 0;
@@ -635,9 +731,15 @@ export default function FinanceManagement() {
       body: sales.map(sale => {
         const itemNames = sale.sale_items?.map(si => {
           const nm = si.medicines?.name || 'Unknown';
-          if (si.sale_type === 'by_stripe' && si.stripes_sold) { const q = si.stripes_sold / 1000; return `${nm} (${q % 1 === 0 ? q.toFixed(0) : q} ${si.medicines?.unit_label || 'unit'})`; }
-          if (si.quantity > 0) return `${nm} ×${si.quantity}`;
-          return nm;
+          const medId = (si as any).medicine_id || si.medicines?.id;
+          const pkg = medId ? packagingMap[medId] : undefined;
+          const f = formatSaleItem(si, pkg);
+          if (!f.qty) return nm;
+          const qtyStr = f.qty % 1 === 0 ? f.qty : f.qty.toFixed(2);
+          const detail = f.level !== 'unit' && f.baseUnits > 0
+            ? ` (${f.baseUnits} ${pluralLabel(f.baseLabel, f.baseUnits)})`
+            : '';
+          return `${nm} ×${qtyStr} ${pluralLabel(f.levelLabel, f.qty)}${detail}`;
         }).join(', ') || '—';
         const isPaid = Number(sale.total_amount) <= ((sale as any).amount_paid || 0);
         const isPartial = !isPaid && ((sale as any).amount_paid || 0) > 0;
@@ -1009,21 +1111,29 @@ export default function FinanceManagement() {
                             <TableCell className="font-medium">{item.name}</TableCell>
                             <TableCell className="text-right">
                               <div className="space-y-0.5">
-                                {item.totalQuantity > 0 && (
-                                  <div>
-                                    {item.totalQuantity} pack{item.totalQuantity !== 1 ? 's' : ''}
-                                    {item.unitsPerPack && item.unitLabel && (
-                                      <span className="text-muted-foreground text-xs ml-1">
-                                        ({item.totalQuantity * item.unitsPerPack} {item.unitLabel})
-                                      </span>
-                                    )}
-                                  </div>
-                                )}
-                                {item.totalStripes > 0 && (
-                                  <div>
-                                    {item.totalStripes} {item.unitLabel || 'unit'}{item.totalStripes !== 1 ? 's' : ''}
-                                  </div>
-                                )}
+                                {(['pack','strip','unit'] as SaleLevel[]).map(lvl => {
+                                  const q = item.perLevel[lvl];
+                                  if (!q) return null;
+                                  const label =
+                                    lvl === 'unit' ? (item.unitLabel || 'unit')
+                                    : lvl === 'strip' ? (item.stripName || 'strip')
+                                    : (item.packName || 'pack');
+                                  const ups = item.unitsPerPack || 1;
+                                  const baseUnits =
+                                    lvl === 'unit' ? q
+                                    : lvl === 'pack' ? q * ups
+                                    : 0;
+                                  return (
+                                    <div key={lvl}>
+                                      {q % 1 === 0 ? q : q.toFixed(2)} {pluralLabel(label, q)}
+                                      {lvl === 'pack' && baseUnits > 0 && item.unitLabel && (
+                                        <span className="text-muted-foreground text-xs ml-1">
+                                          ({baseUnits} {pluralLabel(item.unitLabel, baseUnits)})
+                                        </span>
+                                      )}
+                                    </div>
+                                  );
+                                })}
                               </div>
                             </TableCell>
                             <TableCell className="text-right text-success font-medium">
@@ -1055,17 +1165,20 @@ export default function FinanceManagement() {
                             {selectedItem}
                           </div>
                           <div className="text-sm text-muted-foreground space-x-3">
-                            {sale.itemQty > 0 && (
-                              <span>
-                                {sale.itemQty} pack{sale.itemQty !== 1 ? 's' : ''}
-                                {sale.unitsPerPack > 1 && sale.unitLabel && (
-                                  <span className="text-xs ml-1">({sale.itemQty * sale.unitsPerPack} {sale.unitLabel})</span>
-                                )}
-                              </span>
-                            )}
-                            {sale.itemStripes > 0 && (
-                              <span>{sale.itemStripes} {sale.unitLabel || 'unit'}{sale.itemStripes !== 1 ? 's' : ''}</span>
-                            )}
+                            {(['pack','strip','unit'] as SaleLevel[]).map(lvl => {
+                              const seg = sale.perLevel[lvl];
+                              if (!seg.qty) return null;
+                              return (
+                                <span key={lvl}>
+                                  {seg.qty % 1 === 0 ? seg.qty : seg.qty.toFixed(2)} {pluralLabel(seg.levelLabel, seg.qty)}
+                                  {lvl !== 'unit' && seg.baseUnits > 0 && (
+                                    <span className="text-xs ml-1">
+                                      ({seg.baseUnits} {pluralLabel(seg.baseLabel, seg.baseUnits)})
+                                    </span>
+                                  )}
+                                </span>
+                              );
+                            })}
                           </div>
                           <div className="text-xs text-muted-foreground">
                             {new Date(sale.created_at).toLocaleDateString()} · {new Date(sale.created_at).toLocaleTimeString()}
@@ -1268,13 +1381,15 @@ export default function FinanceManagement() {
                           {paginatedSales.map((sale, idx) => {
                             const itemNames = sale.sale_items?.map(si => {
                               const name = si.medicines?.name || 'Unknown';
-                              if (si.sale_type === 'by_stripe' && si.stripes_sold) {
-                                const qty = si.stripes_sold / 1000;
-                                const label = si.medicines?.unit_label || 'unit';
-                                return `${name} (${qty % 1 === 0 ? qty.toFixed(0) : qty} ${label})`;
-                              }
-                              if (si.quantity > 0) return `${name} ×${si.quantity}`;
-                              return name;
+                              const medId = (si as any).medicine_id || si.medicines?.id;
+                              const pkg = medId ? packagingMap[medId] : undefined;
+                              const f = formatSaleItem(si, pkg);
+                              if (!f.qty) return name;
+                              const qtyStr = f.qty % 1 === 0 ? f.qty : f.qty.toFixed(2);
+                              const detail = f.level !== 'unit' && f.baseUnits > 0
+                                ? ` (${f.baseUnits} ${pluralLabel(f.baseLabel, f.baseUnits)})`
+                                : '';
+                              return `${name} ×${qtyStr} ${pluralLabel(f.levelLabel, f.qty)}${detail}`;
                             }).join(', ') || '—';
 
                             const isPaid = Number(sale.total_amount) <= ((sale as any).amount_paid || 0);
