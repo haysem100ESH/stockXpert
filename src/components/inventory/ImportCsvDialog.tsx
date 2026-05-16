@@ -599,6 +599,12 @@ export default function ImportCsvDialog({ open, onOpenChange, onImported }: Impo
       const unitLabelRaw = get(cells, 'unit_label');
       const packagingRaw = get(cells, 'packaging_mode');
 
+      // Detect strip-style packaging from explicit cells FIRST so item_type can
+      // infer from unit label without forcing "tablet" → measurable later.
+      const stripsCell = parseInt(get(cells, 'strips_per_pack'));
+      const tabletsCell = parseInt(get(cells, 'units_per_strip'));
+      const unitsPerPackCell = parseInt(get(cells, 'units_per_pack'));
+
       const item_type: 'full_pcs' | 'measurable' = (() => {
         const v = itemTypeRaw.toLowerCase();
         if (v === 'measurable' || v === 'full_pcs') return v as any;
@@ -606,75 +612,122 @@ export default function ImportCsvDialog({ open, onOpenChange, onImported }: Impo
       })();
       const unit_label = inferUnitLabel(item_type, unitLabelRaw, packagingRaw);
       if (item_type === 'measurable' && !MEASURABLE_UNITS.includes(unit_label as any)) {
-        rowErrors.push(`column "UNIT By LABEL" = "${unit_label}" is invalid for a measurable item — use one of: ${MEASURABLE_UNITS.join(', ')}`);
+        rowErrors.push(`column "NAME OF UNIT" = "${unit_label}" is invalid for a measurable item — use one of: ${MEASURABLE_UNITS.join(', ')}`);
       }
 
-      // Packaging: accept canonical (with_strip/no_strip) OR real-world like "3*10".
+      // Packaging is auto-derived from STRIPS PER PACK + TABLETS PER STRIP.
+      // Backwards compatible: still accept a legacy PACKAGING MODE cell when present.
       let packaging_mode: 'with_strip' | 'no_strip' = 'no_strip';
       let strips_per_pack: number | null = null;
       let units_per_strip: number | null = null;
       let units_per_pack: number | null = null;
 
-      // Final-template values: 'standard_strip' → with_strip; bottle/sachet/tube → no_strip.
-      const packagingNorm = packagingRaw.toLowerCase().trim();
-      if (packagingNorm === 'with_strip' || packagingNorm === 'standard_strip') {
+      if (!isNaN(stripsCell) && stripsCell > 0 && !isNaN(tabletsCell) && tabletsCell > 0) {
         packaging_mode = 'with_strip';
-      } else if (['no_strip', 'bottle', 'sachet', 'tube', 'carton', 'box', 'pack', 'piece'].includes(packagingNorm)) {
-        packaging_mode = 'no_strip';
-      } else {
-        const parsed = parsePackagingMode(packagingRaw);
-        if (parsed.isStripLayout) {
+        strips_per_pack = stripsCell;
+        units_per_strip = tabletsCell;
+        units_per_pack = stripsCell * tabletsCell;
+      } else if (packagingRaw) {
+        const packagingNorm = packagingRaw.toLowerCase().trim();
+        if (packagingNorm === 'with_strip' || packagingNorm === 'standard_strip') {
           packaging_mode = 'with_strip';
-          strips_per_pack = parsed.stripsPerPack;
-          units_per_strip = parsed.unitsPerStrip;
-          units_per_pack = (parsed.stripsPerPack || 0) * (parsed.unitsPerStrip || 0);
+        } else {
+          const parsed = parsePackagingMode(packagingRaw);
+          if (parsed.isStripLayout) {
+            packaging_mode = 'with_strip';
+            strips_per_pack = parsed.stripsPerPack;
+            units_per_strip = parsed.unitsPerStrip;
+            units_per_pack = (parsed.stripsPerPack || 0) * (parsed.unitsPerStrip || 0);
+          }
         }
       }
+      if (units_per_pack == null && !isNaN(unitsPerPackCell) && unitsPerPackCell >= 1) {
+        units_per_pack = unitsPerPackCell;
+      }
 
-      // Allow explicit columns to override / fill in
-      if (item_type === 'full_pcs' && packaging_mode === 'with_strip') {
-        const sp = parseInt(get(cells, 'strips_per_pack')) || strips_per_pack;
-        const ups = parseInt(get(cells, 'units_per_strip')) || units_per_strip;
-        if (!sp || sp < 1) rowErrors.push(`column "STRIPS PER PACK" must be ≥ 1 (PACKAGING MODE "${packagingRaw}" looks like a strip layout)`);
-        if (!ups || ups < 1) rowErrors.push(`column "UNITS PER STRIP" must be ≥ 1 (PACKAGING MODE "${packagingRaw}" looks like a strip layout)`);
-        if (sp && ups) {
-          strips_per_pack = sp;
-          units_per_strip = ups;
-          units_per_pack = sp * ups;
+      // ---- PRICES & STOCK -------------------------------------------------
+      // Two accepted modes:
+      //   (A) NEW  LPI-based: LPI BUY / LPI SELL / LPI STOCK are per-LPI values.
+      //       Pack-level prices/stock are derived using units_per_pack.
+      //   (B) LEGACY pack-level: PURCHASE PRICE / SELLING PRICE / STOCK QUANTITY.
+      const lpiBuyRaw   = get(cells, 'lpi_buy');
+      const lpiSellRaw  = get(cells, 'lpi_sell');
+      const lpiStockRaw = get(cells, 'lpi_stock');
+      const purchaseRaw = get(cells, 'purchase_price');
+      const sellingRaw  = get(cells, 'selling_price');
+      const packPriceRaw = get(cells, 'pack_price');
+      const stockRaw    = get(cells, 'stock_quantity');
+
+      const unitsPerPackForCalc = units_per_pack && units_per_pack > 0 ? units_per_pack : 1;
+
+      let purchase_price: number;
+      let selling_price: number;
+      let usingPackLevelPrice = false; // tracks whether the SELL side is already pack-level
+
+      // BUY price
+      if (lpiBuyRaw !== '') {
+        const lpiBuy = parseFloat(lpiBuyRaw);
+        if (isNaN(lpiBuy) || lpiBuy < 0) {
+          rowErrors.push(`column "LPI BUY" = "${lpiBuyRaw}" is not a valid number ≥ 0`);
+          purchase_price = 0;
+        } else {
+          purchase_price = +(lpiBuy * unitsPerPackForCalc).toFixed(2);
         }
       } else {
-        const upp = get(cells, 'units_per_pack');
-        if (upp) {
-          const v = parseInt(upp);
-          if (!isNaN(v) && v >= 1) units_per_pack = v;
+        purchase_price = parseFloat(purchaseRaw);
+        if (!purchaseRaw || isNaN(purchase_price) || purchase_price < 0) {
+          rowErrors.push(`column "LPI BUY" (or PURCHASE PRICE) = "${purchaseRaw}" is missing or not a valid number ≥ 0`);
+          purchase_price = 0;
         }
       }
 
-      const purchaseRaw = get(cells, 'purchase_price');
-      const sellingRaw = get(cells, 'selling_price');
-      const packPriceRaw = get(cells, 'pack_price');
-      let purchase_price = parseFloat(purchaseRaw);
-      // Pack-level price ("MEDICINE PRICE" / "ITEM PRICE" / "PACK PRICE") wins
-      // over generic "selling price". When present we treat it as the final pack
-      // price and skip the per-strip→per-pack multiplier below.
-      const pickedPackPrice = packPriceRaw ? parseFloat(packPriceRaw) : NaN;
-      const usingPackLevelPrice = !isNaN(pickedPackPrice);
-      let selling_price = usingPackLevelPrice ? pickedPackPrice : parseFloat(sellingRaw);
-      const sellingLabel = usingPackLevelPrice ? 'MEDICINE/ITEM PRICE' : 'SELLING PRICE (strip)';
-      if (!purchaseRaw || isNaN(purchase_price) || purchase_price < 0) rowErrors.push(`column "PERCHASING PRICE (strip)" = "${purchaseRaw}" is missing or not a valid number ≥ 0`);
-      if ((!sellingRaw && !packPriceRaw) || isNaN(selling_price) || selling_price < 0) rowErrors.push(`column "${sellingLabel}" = "${sellingRaw || packPriceRaw}" is missing or not a valid number ≥ 0`);
+      // SELL price
+      if (lpiSellRaw !== '') {
+        const lpiSell = parseFloat(lpiSellRaw);
+        if (isNaN(lpiSell) || lpiSell < 0) {
+          rowErrors.push(`column "LPI SELL" = "${lpiSellRaw}" is not a valid number ≥ 0`);
+          selling_price = 0;
+        } else {
+          selling_price = +(lpiSell * unitsPerPackForCalc).toFixed(2);
+          usingPackLevelPrice = true; // already pack-level after the LPI multiply
+        }
+      } else {
+        const pickedPackPrice = packPriceRaw ? parseFloat(packPriceRaw) : NaN;
+        usingPackLevelPrice = !isNaN(pickedPackPrice);
+        selling_price = usingPackLevelPrice ? pickedPackPrice : parseFloat(sellingRaw);
+        const sellingLabel = usingPackLevelPrice ? 'MEDICINE/ITEM PRICE' : 'SELLING PRICE';
+        if ((!sellingRaw && !packPriceRaw) || isNaN(selling_price) || selling_price < 0) {
+          rowErrors.push(`column "LPI SELL" (or ${sellingLabel}) = "${sellingRaw || packPriceRaw}" is missing or not a valid number ≥ 0`);
+          selling_price = 0;
+        }
+      }
 
-      // Per-strip → per-pack conversion: only when the price came from a
-      // strip-level header (legacy "SELLING PRICE (strip)"). Pack-level prices
-      // already represent the full pack and must NOT be multiplied.
-      if (!usingPackLevelPrice && packaging_mode === 'with_strip' && strips_per_pack && strips_per_pack > 1) {
+      // Legacy per-strip → per-pack conversion (only when neither LPI nor pack price was used)
+      if (!usingPackLevelPrice && lpiSellRaw === '' && packaging_mode === 'with_strip' && strips_per_pack && strips_per_pack > 1) {
         if (!isNaN(purchase_price)) purchase_price = +(purchase_price * strips_per_pack).toFixed(2);
         if (!isNaN(selling_price)) selling_price = +(selling_price * strips_per_pack).toFixed(2);
       }
 
-      const stockRaw = get(cells, 'stock_quantity');
-      const stock_quantity = item_type === 'measurable' ? parseFloat(stockRaw) : parseInt(stockRaw);
-      if (!stockRaw || isNaN(stock_quantity) || stock_quantity < 0) rowErrors.push(`column "QUANTITY (PK)" = "${stockRaw}" is missing or not a valid number ≥ 0`);
+      // STOCK
+      let stock_quantity: number;
+      if (lpiStockRaw !== '') {
+        const lpiStock = parseFloat(lpiStockRaw);
+        if (isNaN(lpiStock) || lpiStock < 0) {
+          rowErrors.push(`column "LPI STOCK" = "${lpiStockRaw}" is not a valid number ≥ 0`);
+          stock_quantity = 0;
+        } else if (item_type === 'measurable') {
+          stock_quantity = lpiStock;
+        } else {
+          // Convert LPI count → pack count. Fractional remainder is rounded to nearest pack.
+          stock_quantity = Math.round(lpiStock / unitsPerPackForCalc);
+        }
+      } else {
+        stock_quantity = item_type === 'measurable' ? parseFloat(stockRaw) : parseInt(stockRaw);
+        if (!stockRaw || isNaN(stock_quantity) || stock_quantity < 0) {
+          rowErrors.push(`column "LPI STOCK" (or STOCK QUANTITY) = "${stockRaw}" is missing or not a valid number ≥ 0`);
+          stock_quantity = 0;
+        }
+      }
 
       const minRaw = get(cells, 'minimum_stock_level');
       // accept "1 PK", "3 tubes" etc.
