@@ -160,17 +160,28 @@ export default function SalesManagement() {
     return expiry <= thirtyDaysFromNow;
   };
 
-  // Instant add — no dialog for full_pcs, open dialog for measurable or new packaging
+  // Instant add — measurable items still need the dialog for quantity entry.
+  // Everything else is added straight to the cart (defaults to selling by piece/unit);
+  // the user can switch unit / strip / pack from inside the cart.
   const addToCartInstant = (medicine: Medicine) => {
     if (medicine.item_type === 'measurable') {
       setSelectedMedicineForDialog(medicine);
       return;
     }
     const pkg = packagingMap[medicine.medicine_id];
-    // If item has new multi-level packaging configured, always open dialog
-    // so user can pick unit / strip / pack.
     if (pkg && (pkg.strip_enabled || pkg.pack_enabled)) {
-      setSelectedMedicineForDialog(medicine);
+      // Add directly at the unit level — user can change level in the cart.
+      const unitPrice = pkg.unit_selling_price
+        ?? (medicine.selling_price && unitsPerPackSafe(pkg)
+          ? medicine.selling_price / unitsPerPackSafe(pkg)
+          : medicine.selling_price);
+      addToCart(medicine, 'full_pack', 1, {
+        sellLevel: 'unit',
+        unitsPerLevel: 1,
+        levelPrice: unitPrice,
+        levelLabel: pkg.unit_name || medicine.unit_label || 'unit',
+      });
+      if (isSmallScreen) setCartOpen(true);
       return;
     }
     const defaultSaleType: 'full_pack' | 'by_stripe' = medicine.units_per_pack ? 'by_stripe' : 'full_pack';
