@@ -1099,21 +1099,29 @@ export default function FinanceManagement() {
                             <TableCell className="font-medium">{item.name}</TableCell>
                             <TableCell className="text-right">
                               <div className="space-y-0.5">
-                                {item.totalQuantity > 0 && (
-                                  <div>
-                                    {item.totalQuantity} pack{item.totalQuantity !== 1 ? 's' : ''}
-                                    {item.unitsPerPack && item.unitLabel && (
-                                      <span className="text-muted-foreground text-xs ml-1">
-                                        ({item.totalQuantity * item.unitsPerPack} {item.unitLabel})
-                                      </span>
-                                    )}
-                                  </div>
-                                )}
-                                {item.totalStripes > 0 && (
-                                  <div>
-                                    {item.totalStripes} {item.unitLabel || 'unit'}{item.totalStripes !== 1 ? 's' : ''}
-                                  </div>
-                                )}
+                                {(['pack','strip','unit'] as SaleLevel[]).map(lvl => {
+                                  const q = item.perLevel[lvl];
+                                  if (!q) return null;
+                                  const label =
+                                    lvl === 'unit' ? (item.unitLabel || 'unit')
+                                    : lvl === 'strip' ? (item.stripName || 'strip')
+                                    : (item.packName || 'pack');
+                                  const ups = item.unitsPerPack || 1;
+                                  const baseUnits =
+                                    lvl === 'unit' ? q
+                                    : lvl === 'pack' ? q * ups
+                                    : 0;
+                                  return (
+                                    <div key={lvl}>
+                                      {q % 1 === 0 ? q : q.toFixed(2)} {pluralLabel(label, q)}
+                                      {lvl === 'pack' && baseUnits > 0 && item.unitLabel && (
+                                        <span className="text-muted-foreground text-xs ml-1">
+                                          ({baseUnits} {pluralLabel(item.unitLabel, baseUnits)})
+                                        </span>
+                                      )}
+                                    </div>
+                                  );
+                                })}
                               </div>
                             </TableCell>
                             <TableCell className="text-right text-success font-medium">
