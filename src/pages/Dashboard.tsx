@@ -109,6 +109,8 @@ export default function Dashboard() {
   const [productPerformance, setProductPerformance] = useState<ProductPerformanceData[]>([]);
   const [incomeExpenseData, setIncomeExpenseData] = useState<IncomeExpenseData[]>([]);
   const [paymentMethodData, setPaymentMethodData] = useState<PaymentMethodData[]>([]);
+  const [totalGroups, setTotalGroups] = useState(0);
+  const [topGroupSales, setTopGroupSales] = useState<GroupSalesData[]>([]);
   const [loading, setLoading] = useState(true);
   const [reportPeriod, setReportPeriod] = useState('monthly');
   const [customDate, setCustomDate] = useState<Date>();
