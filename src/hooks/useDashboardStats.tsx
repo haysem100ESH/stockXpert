@@ -37,6 +37,7 @@ export interface DashboardStats {
 export interface CategorySalesData { category: string; sales: number; revenue: number; }
 export interface ProductPerformanceData { name: string; sales: number; revenue: number; }
 export interface PaymentMethodData { method: string; amount: number; }
+export interface GroupSalesData { name: string; code: string; sales: number; }
 
 export interface DashboardOverview {
   stats: DashboardStats;
@@ -48,6 +49,8 @@ export interface DashboardOverview {
   topItems: ProductPerformanceData[];
   paymentMethodData: PaymentMethodData[];
   creditOverview: { avgScore: number; atRisk: number; totalExposure: number; totalCustomers: number };
+  totalGroups: number;
+  topGroupSales: GroupSalesData[];
 }
 
 const MEDICINE_CATEGORIES = ['tablet', 'capsule', 'syrup', 'injection', 'cream', 'ointment', 'drops', 'inhaler'];
@@ -57,6 +60,7 @@ const EMPTY_OVERVIEW: DashboardOverview = {
   categorySales: [], medicinesCategorySales: [], itemsCategorySales: [],
   productPerformance: [], topMedicines: [], topItems: [], paymentMethodData: [],
   creditOverview: { avgScore: 0, atRisk: 0, totalExposure: 0, totalCustomers: 0 },
+  totalGroups: 0, topGroupSales: [],
 };
 
 function getStartDate(dateFilter: DateFilter): Date {
