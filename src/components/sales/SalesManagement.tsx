@@ -738,7 +738,24 @@ export default function SalesManagement() {
   const discount = calculateDiscount();
   const total = calculateTotal();
 
-  const renderSaleCard = (medicine: Medicine) => (
+  const renderSaleCard = (medicine: Medicine) => {
+    const pkg = packagingMap[medicine.medicine_id];
+    const hasNewPackaging = !!pkg && (pkg.strip_enabled || pkg.pack_enabled);
+    const unitName = pkg?.unit_name || medicine.unit_label || 'unit';
+    const stripName = pkg?.strip_name || 'strip';
+    const packName = pkg?.pack_name || 'pack';
+
+    // Resolve per-level prices when new packaging exists.
+    let unitPrice = 0, stripPrice = 0, packPrice = 0;
+    if (hasNewPackaging) {
+      const upStrip = unitsPerStripSafe(pkg!);
+      const upPack = unitsPerPackSafe(pkg!);
+      unitPrice = pkg!.unit_selling_price ?? (medicine.selling_price && upPack ? medicine.selling_price / upPack : medicine.selling_price);
+      stripPrice = pkg!.strip_selling_price ?? (autoStripPrice(pkg!) ?? unitPrice * upStrip);
+      packPrice = pkg!.pack_selling_price ?? (autoPackPrice(pkg!) ?? unitPrice * upPack);
+    }
+
+    return (
     <Card key={medicine.id} className="cursor-pointer hover:shadow-md transition-shadow">
       <CardHeader>
         <div className="flex items-start justify-between">
@@ -759,6 +776,8 @@ export default function SalesManagement() {
             {medicine.category && <Badge variant="outline" className="text-xs">{medicine.category}</Badge>}
             {isMeasurable(medicine.unit_label) ? (
               <Badge variant="secondary" className="text-xs">Measurable ({medicine.unit_label})</Badge>
+            ) : hasNewPackaging ? (
+              <Badge variant="secondary" className="text-xs">By {unitName}</Badge>
             ) : medicine.units_per_pack ? (
               <Badge variant="secondary" className="text-xs">By {medicine.unit_label || 'unit'}</Badge>
             ) : null}
@@ -767,31 +786,46 @@ export default function SalesManagement() {
       </CardHeader>
       <CardContent>
         <div className="space-y-2">
-          <div className="flex justify-between text-sm">
-            <span>Price:</span>
-            <span className="font-medium">ETB {medicine.selling_price}</span>
-          </div>
-          {medicine.units_per_pack && (
-            <div className="flex justify-between text-sm text-muted-foreground">
-              <span>Per {medicine.unit_label || 'unit'}:</span>
-              <span>ETB {(medicine.selling_price / medicine.units_per_pack).toFixed(2)}</span>
-            </div>
-          )}
-          <div className="flex justify-between text-sm">
-            <span>{isMeasurable(medicine.unit_label) ? 'Stock:' : medicine.units_per_pack ? 'Unopened Packs:' : 'Stock:'}</span>
-            <Badge variant={medicine.stock_quantity <= 10 ? 'destructive' : 'secondary'}>
-              {isMeasurable(medicine.unit_label)
-                ? `${medicine.stock_quantity + ((medicine.open_pack_units || 0) / 1000)} ${medicine.unit_label}`
-                : `${medicine.stock_quantity} ${medicine.stock_quantity === 1 ? 'pack' : 'packs'}`}
-            </Badge>
-          </div>
-          {!isMeasurable(medicine.unit_label) && medicine.units_per_pack && (
-            <div className="flex justify-between text-sm text-muted-foreground">
-              <span>Open pack:</span>
-              <Badge variant="outline" className="text-xs">
-                {medicine.open_pack_units || 0}/{medicine.units_per_pack} {medicine.unit_label || 'unit'}s remaining
-              </Badge>
-            </div>
+          {hasNewPackaging ? (
+            <>
+              <div className="flex justify-between text-sm">
+                <span>{unitName} price:</span>
+                <span className="font-medium">ETB {Number(unitPrice || 0).toFixed(2)}</span>
+              </div>
+              {pkg!.strip_enabled && (
+                <div className="flex justify-between text-sm text-muted-foreground">
+                  <span>{stripName} price:</span>
+                  <span>ETB {Number(stripPrice || 0).toFixed(2)}</span>
+                </div>
+              )}
+              {pkg!.pack_enabled && (
+                <div className="flex justify-between text-sm text-muted-foreground">
+                  <span>{packName} price:</span>
+                  <span>ETB {Number(packPrice || 0).toFixed(2)}</span>
+                </div>
+              )}
+              <div className="flex justify-between text-sm">
+                <span>Stock:</span>
+                <Badge variant={medicine.stock_quantity <= 10 ? 'destructive' : 'secondary'}>
+                  {formatStock(medicine.stock_quantity, pkg!)}
+                </Badge>
+              </div>
+            </>
+          ) : (
+            <>
+              <div className="flex justify-between text-sm">
+                <span>Price:</span>
+                <span className="font-medium">ETB {medicine.selling_price}</span>
+              </div>
+              <div className="flex justify-between text-sm">
+                <span>Stock:</span>
+                <Badge variant={medicine.stock_quantity <= 10 ? 'destructive' : 'secondary'}>
+                  {isMeasurable(medicine.unit_label)
+                    ? `${medicine.stock_quantity} ${medicine.unit_label}`
+                    : `${medicine.stock_quantity} ${unitName}${medicine.stock_quantity === 1 ? '' : 's'}`}
+                </Badge>
+              </div>
+            </>
           )}
           {isPharmacy && medicine.expiry_date && (
             <div className="flex justify-between text-sm">
@@ -822,7 +856,8 @@ export default function SalesManagement() {
         </div>
       </CardContent>
     </Card>
-  );
+    );
+  };
 
   if (loading) {
     return <div className="p-4 text-muted-foreground">Loading {isPharmacy ? 'medicines' : 'items'}...</div>;
