@@ -631,7 +631,7 @@ export default function EditBranchItemDialog({ open, onOpenChange, item, onItemU
             </TabsList>
 
             <TabsContent value="branch" className="space-y-4 mt-4">
-              {/* Read-only stock info */}
+              {/* Read-only stock info — total never changes when packaging is reconfigured */}
               <div className="bg-muted/40 rounded-lg p-3 space-y-1">
                 <p className="font-semibold">{item.name}</p>
                 <div className="flex gap-2 flex-wrap">
@@ -639,10 +639,19 @@ export default function EditBranchItemDialog({ open, onOpenChange, item, onItemU
                   {item.item_type && <Badge variant="secondary">{item.item_type}</Badge>}
                 </div>
                 <div className="text-sm text-muted-foreground">
-                  Current Stock: <span className="font-medium text-foreground">{item.quantity}</span>
-                  {item.unit_label && ` ${item.unit_label}`}
+                  Current Stock:{' '}
+                  <span className="font-medium text-foreground">
+                    {formatStock(Number(item.quantity || 0), packaging)}
+                  </span>
                 </div>
+                <div className="text-xs text-muted-foreground">
+                  Total: {Number(item.quantity || 0)} {packaging.unit_name || item.unit_label || 'unit'}{Number(item.quantity || 0) === 1 ? '' : 's'} · {packagingSummary(packaging)}
+                </div>
+                <p className="text-[11px] text-muted-foreground italic">
+                  Changing strip / pack settings only regroups the breakdown — the total stays the same. Use "Adjust Stock" to change it.
+                </p>
               </div>
+
 
               <div className="grid grid-cols-2 gap-4">
                 <div className="space-y-2">
