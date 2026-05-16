@@ -20,6 +20,8 @@ import { updateCreditScore } from '@/hooks/useCreditScore';
 import { isMeasurable } from '@/lib/itemTypes';
 import { deductFIFO, recordSaleItemBatches } from '@/lib/batchInventory';
 import { useReadOnly } from '@/hooks/useReadOnly';
+import { usePackagingMap } from '@/hooks/usePackaging';
+import { formatStock, unitsPerStripSafe, unitsPerPackSafe, autoStripPrice, autoPackPrice } from '@/lib/packaging';
 
 interface Medicine {
   id: string; // branch_items.id
