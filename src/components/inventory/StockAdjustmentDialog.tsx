@@ -65,6 +65,14 @@ export default function StockAdjustmentDialog({ open, onOpenChange, medicine, on
     }
   }, [open, medicine]);
 
+  useEffect(() => {
+    if (!open) return;
+    (async () => {
+      const { data } = await supabase.from('suppliers').select('id, name').order('name');
+      setSuppliers((data || []) as Array<{ id: string; name: string }>);
+    })();
+  }, [open]);
+
   const resetForm = () => {
     setMode('adjust');
     setAdjustmentType('increase');
@@ -77,6 +85,8 @@ export default function StockAdjustmentDialog({ open, onOpenChange, medicine, on
     setBatchExpiry('');
     setBatchNumber('');
     setBatchRecordExpense(true);
+    setBatchSupplierId('none');
+    setBatchPaymentType('paid');
   };
 
   // Resolve real medicine_id (FK target). Falls back to lookup if not provided.
