@@ -606,11 +606,11 @@ export default function EditBranchItemDialog({ open, onOpenChange, item, onItemU
 
       try {
         const changes: Array<{ field: string; oldVal: any; newVal: any }> = [];
-        if (parseFloat(sellingPrice) !== Number(item.selling_price)) {
-          changes.push({ field: 'selling_price', oldVal: item.selling_price, newVal: parseFloat(sellingPrice) });
+        if (storedSell !== Number(item.selling_price)) {
+          changes.push({ field: 'selling_price', oldVal: item.selling_price, newVal: storedSell });
         }
-        if (parseFloat(purchasePrice) !== Number(item.purchase_price)) {
-          changes.push({ field: 'purchase_price', oldVal: item.purchase_price, newVal: parseFloat(purchasePrice) });
+        if (storedBuy !== Number(item.purchase_price)) {
+          changes.push({ field: 'purchase_price', oldVal: item.purchase_price, newVal: storedBuy });
         }
         if ((expiryDate || null) !== (item.expiry_date || null)) {
           changes.push({ field: 'expiry_date', oldVal: item.expiry_date || '—', newVal: expiryDate || '—' });
