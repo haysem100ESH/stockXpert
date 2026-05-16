@@ -124,7 +124,12 @@ export default function AddToCartDialog({ open, onOpenChange, medicine, onAddToC
     } else {
       const n = parseInt(count);
       if (!n || n <= 0 || n > maxAtLevel) return;
-      onAddToCart(buildClone(n), 'full_pack', n);
+      onAddToCart(medicine, 'full_pack', n, {
+        sellLevel: level,
+        unitsPerLevel,
+        levelPrice,
+        levelLabel,
+      });
     }
     onOpenChange(false);
   };
