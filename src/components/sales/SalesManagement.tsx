@@ -51,6 +51,13 @@ interface CartItem extends Medicine {
   total: number;
   saleType: 'full_pack' | 'by_stripe';
   stripesCount?: number;
+  // New multi-level packaging flow.
+  // When set, `quantity` is in `sellLevel` units and `selling_price`
+  // is the price per one `sellLevel`. `unitsPerLevel` is the number
+  // of base pieces contained in one `sellLevel`.
+  sellLevel?: 'unit' | 'strip' | 'pack';
+  unitsPerLevel?: number;
+  sellLevelLabel?: string;
 }
 
 type ChangeAction = 'keep_profit' | 'deduct_debt' | 'give_change' | null;
