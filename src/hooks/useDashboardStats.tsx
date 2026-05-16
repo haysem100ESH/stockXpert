@@ -219,12 +219,38 @@ async function fetchDashboardOverview({ selectedBranch, ownerBranchIds, dateFilt
     creditOverview = { avgScore, atRisk, totalExposure, totalCustomers: custData.length };
   }
 
+  // Group (medicine_code) aggregations — number of distinct sales transactions per group.
+  const codeMap = new Map<string, { code: string; label: string }>();
+  codesData.forEach((c) => codeMap.set(c.id, { code: c.code, label: c.label }));
+  const groupSalesIds = new Map<string, Set<string>>();
+  salesWithItems.forEach((sale: any) => {
+    const codeIdsInSale = new Set<string>();
+    (sale.sale_items || []).forEach((si: any) => {
+      const cid = si.medicines?.medicine_code_id;
+      if (cid && codeMap.has(cid)) codeIdsInSale.add(cid);
+    });
+    codeIdsInSale.forEach((cid) => {
+      if (!groupSalesIds.has(cid)) groupSalesIds.set(cid, new Set());
+      groupSalesIds.get(cid)!.add(sale.id);
+    });
+  });
+  const topGroupSales: GroupSalesData[] = Array.from(groupSalesIds.entries())
+    .map(([cid, ids]) => ({
+      name: codeMap.get(cid)?.label || codeMap.get(cid)?.code || 'Unknown',
+      code: codeMap.get(cid)?.code || '',
+      sales: ids.size,
+    }))
+    .sort((a, b) => b.sales - a.sales)
+    .slice(0, 8);
+
   return {
     stats: { totalRevenue, totalProducts, totalMedicines, totalItems, totalSoldItems, lowStockItems, outOfStockItems, expiredItems },
     categorySales: toArr(categoryMap),
     medicinesCategorySales: toArr(medicineCategoryMap),
     itemsCategorySales: toArr(itemCategoryMap),
     productPerformance, topMedicines, topItems, paymentMethodData, creditOverview,
+    totalGroups: codesData.length,
+    topGroupSales,
   };
 }
 
