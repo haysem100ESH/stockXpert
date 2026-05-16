@@ -309,7 +309,7 @@ export default function Dashboard() {
               sale_type,
               stripes_sold,
               total_price,
-              medicines (name, category)
+              medicines (name, category, medicine_code_id)
             )
           `)
           .gte('created_at', start.toISOString())
