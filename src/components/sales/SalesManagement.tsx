@@ -401,6 +401,44 @@ export default function SalesManagement() {
     return received - total;
   };
 
+  // Switch selling level (unit/strip/pack) for a cart item using its
+  // stored per-level metadata. Quantity resets to 1, clamped to stock.
+  const changeSellLevel = (id: string, newLevel: 'unit' | 'strip' | 'pack') => {
+    setCart(prev => prev.map(it => {
+      if (it.id !== id || !it.sellLevel) return it;
+      const upl = it.levelUnitsPer?.[newLevel] ?? (newLevel === 'unit' ? 1 : it.unitsPerLevel || 1);
+      const price = it.levelPrices?.[newLevel] ?? it.selling_price;
+      const label = it.levelLabels?.[newLevel] ?? newLevel;
+      // Detect merge target — same id + same target level already in cart
+      const dupe = prev.find(p => p.id === id && p.sellLevel === newLevel && p !== it);
+      if (dupe) return it; // skip; merge handled below
+      const maxAtLevel = Math.max(1, Math.floor((it.stock_quantity || 0) / upl));
+      const newQty = Math.min(Math.max(1, it.quantity), maxAtLevel);
+      return {
+        ...it,
+        sellLevel: newLevel,
+        unitsPerLevel: upl,
+        sellLevelLabel: label,
+        selling_price: price,
+        unit_label: label,
+        quantity: newQty,
+        total: parseFloat((newQty * price).toFixed(2)),
+      };
+    }).reduce<CartItem[]>((acc, cur) => {
+      // Merge if a same-level entry already exists
+      const existingIdx = acc.findIndex(a => a.id === cur.id && a.sellLevel === cur.sellLevel);
+      if (existingIdx >= 0 && acc[existingIdx] !== cur) {
+        const merged = { ...acc[existingIdx] };
+        merged.quantity = merged.quantity + cur.quantity;
+        merged.total = parseFloat((merged.quantity * merged.selling_price).toFixed(2));
+        acc[existingIdx] = merged;
+      } else {
+        acc.push(cur);
+      }
+      return acc;
+    }, []));
+  };
+
   const selectedCustomer = customers.find(c => c.id === selectedCustomerId);
   const customerHasDebt = selectedCustomer && (selectedCustomer.computed_debt || 0) > 0;
 
