@@ -107,6 +107,7 @@ export default function EditBranchItemDialog({ open, onOpenChange, item, onItemU
   const [availableBatches, setAvailableBatches] = useState<InventoryBatch[]>([]);
 
   const [loading, setLoading] = useState(false);
+  const [packaging, setPackaging] = useState<Packaging>(defaultPackaging());
   const { toast } = useToast();
   const { profile } = useAuth();
   const { branchType } = useBranchContext();
