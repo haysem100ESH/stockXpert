@@ -32,18 +32,26 @@ const HEADER_ALIASES: Record<string, string> = {
   batch_number: 'batch_number', 'batch no': 'batch_number', 'bach no': 'batch_number', batch: 'batch_number', 'batch number': 'batch_number',
   item_type: 'item_type', 'item type': 'item_type', type: 'item_type',
   unit_label: 'unit_label', 'unit by label': 'unit_label', 'unit label': 'unit_label', unit: 'unit_label',
+  // New LPI-based "Name of unit" column — renames the LPI (tablet / pcs / capsule / ml…)
+  'name of unit': 'unit_label', 'unit name': 'unit_label', 'lpi name': 'unit_label', 'lpi unit': 'unit_label',
   packaging_mode: 'packaging_mode', 'packaging mode': 'packaging_mode', packaging: 'packaging_mode', pack: 'packaging_mode',
   strips_per_pack: 'strips_per_pack', 'strips per pack': 'strips_per_pack',
   units_per_strip: 'units_per_strip', 'units per strip': 'units_per_strip', 'tablets per strip': 'units_per_strip',
+  // LPI per strip / LPI per pack
+  'lpi per strip': 'units_per_strip', 'lpis per strip': 'units_per_strip',
   units_per_pack: 'units_per_pack', 'units per pack': 'units_per_pack', 'unit per pack': 'units_per_pack', 'units per item': 'units_per_pack',
+  'lpi per pack': 'units_per_pack', 'lpis per pack': 'units_per_pack', 'lpi per item': 'units_per_pack',
   purchase_price: 'purchase_price', 'purchase price': 'purchase_price', 'perchasing price': 'purchase_price',
   'perchasing price strip': 'purchase_price', 'purchase price strip': 'purchase_price',
   'cost price': 'purchase_price', cost: 'purchase_price',
   selling_price: 'selling_price', 'selling price': 'selling_price', 'selling price strip': 'selling_price',
   price: 'selling_price', sale: 'selling_price', 'sale price': 'selling_price',
-  // Pack-level price (final template): "MEDICINE PRICE" / "ITEM PRICE" / "PACK PRICE"
-  // Different from selling_price because it must NOT be multiplied by strips_per_pack.
+  // Pack-level price (legacy template): "MEDICINE PRICE" / "ITEM PRICE" / "PACK PRICE"
   pack_price: 'pack_price', 'pack price': 'pack_price', 'medicine price': 'pack_price', 'item price': 'pack_price',
+  // LPI-level prices (NEW canonical) — price per indivisible unit (tablet / pcs / ml…)
+  lpi_sell: 'lpi_sell', 'lpi sell': 'lpi_sell', 'lpi sell price': 'lpi_sell', 'lpi price': 'lpi_sell', 'sell per lpi': 'lpi_sell', 'sell lpi': 'lpi_sell',
+  lpi_buy: 'lpi_buy', 'lpi buy': 'lpi_buy', 'lpi buy price': 'lpi_buy', 'lpi cost': 'lpi_buy', 'buy per lpi': 'lpi_buy', 'buy lpi': 'lpi_buy', 'lpi purchase': 'lpi_buy',
+  lpi_stock: 'lpi_stock', 'lpi stock': 'lpi_stock', 'stock lpi': 'lpi_stock', 'lpi qty': 'lpi_stock', 'lpi quantity': 'lpi_stock',
   stock_quantity: 'stock_quantity', 'stock quantity': 'stock_quantity', quantity: 'stock_quantity',
   'quantity pk': 'stock_quantity', qty: 'stock_quantity', stock: 'stock_quantity',
   minimum_stock_level: 'minimum_stock_level', 'minimum stock level': 'minimum_stock_level',
