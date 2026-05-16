@@ -265,10 +265,10 @@ export default function OwnerDashboard() {
           </CardContent>
         </Card>
 
-        {isPharmacy && (
+        {(
           <Card>
             <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
-              <CardTitle className="text-sm font-medium">Medicine Groups</CardTitle>
+              <CardTitle className="text-sm font-medium">{isPharmacy ? 'Medicine Groups' : 'Item Groups'}</CardTitle>
               <Tag className="h-4 w-4 text-muted-foreground" />
             </CardHeader>
             <CardContent>
