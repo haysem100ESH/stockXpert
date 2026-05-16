@@ -306,10 +306,17 @@ export default function EditBranchItemDialog({ open, onOpenChange, item, onItemU
     try {
       const { data: { user } } = await supabase.auth.getUser();
 
+      // Convert LPI prices entered by the user back into pack-level for storage.
+      const uppForSave = Math.max(1, Number(computeUnitsPerPack() || item.units_per_pack || 1));
+      const lpiSell = parseFloat(sellingPrice);
+      const lpiBuy = parseFloat(purchasePrice);
+      const storedSell = lpiSell * uppForSave;
+      const storedBuy = lpiBuy * uppForSave;
+
       // Always update branch-specific fields
       const branchUpdate: any = {
-        selling_price: parseFloat(sellingPrice),
-        purchase_price: parseFloat(purchasePrice),
+        selling_price: storedSell,
+        purchase_price: storedBuy,
         expiry_date: expiryDate || null,
         updated_at: new Date().toISOString(),
       };
