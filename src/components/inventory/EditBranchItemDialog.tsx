@@ -16,6 +16,15 @@ import { useMedicineGroups } from '@/hooks/useMedicineGroups';
 import { useQuery } from '@tanstack/react-query';
 import { createBatch, deductFIFO, getFIFOBatches, syncBranchItemQuantity, type InventoryBatch } from '@/lib/batchInventory';
 import { Textarea } from '@/components/ui/textarea';
+import PackagingEditor from './PackagingEditor';
+import {
+  defaultPackaging,
+  Packaging,
+  autoStripPrice,
+  autoPackPrice,
+  formatStock,
+  packagingSummary,
+} from '@/lib/packaging';
 
 export interface BranchItem {
   id: string;
@@ -98,6 +107,7 @@ export default function EditBranchItemDialog({ open, onOpenChange, item, onItemU
   const [availableBatches, setAvailableBatches] = useState<InventoryBatch[]>([]);
 
   const [loading, setLoading] = useState(false);
+  const [packaging, setPackaging] = useState<Packaging>(defaultPackaging());
   const { toast } = useToast();
   const { profile } = useAuth();
   const { branchType } = useBranchContext();
@@ -174,6 +184,33 @@ export default function EditBranchItemDialog({ open, onOpenChange, item, onItemU
       setReduceQuantity('');
       setReduceReason('');
       setReduceBatchId('auto');
+      // Load packaging row (new model) or build fallback from legacy fields
+      (async () => {
+        const { data: pack } = await (supabase as any)
+          .from('medicine_packaging')
+          .select('*')
+          .eq('medicine_id', item.medicine_id)
+          .maybeSingle();
+        let resolved: Packaging;
+        if (pack) {
+          resolved = pack as Packaging;
+        } else {
+          const fallback = defaultPackaging();
+          fallback.unit_name = item.unit_label || 'unit';
+          if (hasStrip) {
+            fallback.strip_enabled = true;
+            fallback.units_per_strip = item.units_per_strip!;
+            fallback.strip_name = 'strip';
+            if ((item.strips_per_pack ?? 0) > 1) {
+              fallback.pack_enabled = true;
+              fallback.strips_per_pack = item.strips_per_pack!;
+              fallback.pack_name = 'pack';
+            }
+          }
+          resolved = fallback;
+        }
+        setPackaging(resolved);
+      })();
       // Load batches for FIFO/specific selection
       getFIFOBatches(item.id).then(setAvailableBatches).catch(() => setAvailableBatches([]));
     }
@@ -411,6 +448,34 @@ export default function EditBranchItemDialog({ open, onOpenChange, item, onItemU
 
       if (error) throw error;
 
+      // Upsert medicine_packaging for whichever medicine_id the branch_item now points to.
+      try {
+        const { data: bi } = await supabase
+          .from('branch_items')
+          .select('medicine_id')
+          .eq('id', item.id)
+          .single();
+        const targetMedId = (bi as any)?.medicine_id || item.medicine_id;
+        const stripPrice = packaging.strip_selling_price ?? autoStripPrice(packaging);
+        const packPrice = packaging.pack_selling_price ?? autoPackPrice(packaging);
+        await (supabase as any).from('medicine_packaging').upsert({
+          medicine_id: targetMedId,
+          unit_name: packaging.unit_name || 'unit',
+          strip_enabled: packaging.strip_enabled,
+          units_per_strip: packaging.strip_enabled ? packaging.units_per_strip : null,
+          strip_name: packaging.strip_enabled ? (packaging.strip_name || 'strip') : null,
+          pack_enabled: packaging.pack_enabled,
+          strips_per_pack: packaging.pack_enabled ? packaging.strips_per_pack : null,
+          pack_name: packaging.pack_enabled ? (packaging.pack_name || 'pack') : null,
+          unit_selling_price: packaging.unit_selling_price ?? null,
+          strip_selling_price: stripPrice ?? null,
+          pack_selling_price: packPrice ?? null,
+        }, { onConflict: 'medicine_id' });
+      } catch (e) {
+        console.warn('Failed to upsert medicine_packaging', e);
+      }
+
+
       // Update master medicine's minimum_stock_level if changed
       if (minStockLevel !== '') {
         const newMin = parseInt(minStockLevel);
@@ -594,7 +659,7 @@ export default function EditBranchItemDialog({ open, onOpenChange, item, onItemU
             </TabsList>
 
             <TabsContent value="branch" className="space-y-4 mt-4">
-              {/* Read-only stock info */}
+              {/* Read-only stock info — total never changes when packaging is reconfigured */}
               <div className="bg-muted/40 rounded-lg p-3 space-y-1">
                 <p className="font-semibold">{item.name}</p>
                 <div className="flex gap-2 flex-wrap">
@@ -602,10 +667,19 @@ export default function EditBranchItemDialog({ open, onOpenChange, item, onItemU
                   {item.item_type && <Badge variant="secondary">{item.item_type}</Badge>}
                 </div>
                 <div className="text-sm text-muted-foreground">
-                  Current Stock: <span className="font-medium text-foreground">{item.quantity}</span>
-                  {item.unit_label && ` ${item.unit_label}`}
+                  Current Stock:{' '}
+                  <span className="font-medium text-foreground">
+                    {formatStock(Number(item.quantity || 0), packaging)}
+                  </span>
                 </div>
+                <div className="text-xs text-muted-foreground">
+                  Total: {Number(item.quantity || 0)} {packaging.unit_name || item.unit_label || 'unit'}{Number(item.quantity || 0) === 1 ? '' : 's'} · {packagingSummary(packaging)}
+                </div>
+                <p className="text-[11px] text-muted-foreground italic">
+                  Changing strip / pack settings only regroups the breakdown — the total stays the same. Use "Adjust Stock" to change it.
+                </p>
               </div>
+
 
               <div className="grid grid-cols-2 gap-4">
                 <div className="space-y-2">
@@ -649,39 +723,33 @@ export default function EditBranchItemDialog({ open, onOpenChange, item, onItemU
                 </div>
               )}
 
-              {/* Packaging mode */}
-              <div className="space-y-2">
-                <Label>Packaging *</Label>
-                <Select value={packagingMode} onValueChange={(val) => setPackagingMode(val as 'with_strip' | 'no_strip')}>
-                  <SelectTrigger><SelectValue /></SelectTrigger>
-                  <SelectContent>
-                    <SelectItem value="no_strip">No strip (loose pieces)</SelectItem>
-                    <SelectItem value="with_strip">With strip (e.g. tablets in blister)</SelectItem>
-                  </SelectContent>
-                </Select>
-              </div>
+              {/* Packaging — new Unit / Strip / Pack model */}
+              <PackagingEditor
+                value={packaging}
+                hidePrices
+                onChange={(next) => {
+                  setPackaging(next);
+                  // Mirror into legacy state so the existing save path stays in sync.
+                  if (next.strip_enabled && next.units_per_strip) {
+                    setPackagingMode('with_strip');
+                    setUnitsPerStrip(String(next.units_per_strip));
+                    if (next.pack_enabled && next.strips_per_pack) {
+                      setStripsPerPack(String(next.strips_per_pack));
+                      setUnitsPerPack(String(next.strips_per_pack * next.units_per_strip));
+                    } else {
+                      setStripsPerPack('');
+                      setUnitsPerPack(String(next.units_per_strip));
+                    }
+                  } else {
+                    setPackagingMode('no_strip');
+                    setStripsPerPack('');
+                    setUnitsPerStrip('');
+                    setUnitsPerPack('');
+                  }
+                  if (next.unit_name) setUnitLabel(next.unit_name);
+                }}
+              />
 
-              {packagingMode === 'with_strip' && (
-                <>
-                  <div className="grid grid-cols-2 gap-4">
-                    <div className="space-y-2">
-                      <Label>Strips per Item *</Label>
-                      <Input type="number" min="1" value={stripsPerPack} onChange={e => setStripsPerPack(e.target.value)} placeholder="e.g. 10" />
-                    </div>
-                    <div className="space-y-2">
-                      <Label>Units per Strip *</Label>
-                      <Input type="number" min="1" value={unitsPerStrip} onChange={e => setUnitsPerStrip(e.target.value)} placeholder="e.g. 10" />
-                    </div>
-                  </div>
-                  {stripsPerPack && unitsPerStrip && parseInt(stripsPerPack) > 0 && parseInt(unitsPerStrip) > 0 && (
-                    <div className="rounded-md bg-primary/10 border border-primary/20 px-3 py-2 -mt-2">
-                      <p className="text-sm font-semibold">
-                        Total stock per item: {parseInt(stripsPerPack) * parseInt(unitsPerStrip)} units
-                      </p>
-                    </div>
-                  )}
-                </>
-              )}
 
               {/* Container / packaging type */}
               <div className="space-y-2">

@@ -52,12 +52,10 @@ export default function AddToCartDialog({ open, onOpenChange, medicine, onAddToC
   const [measurableWhole, setMeasurableWhole] = useState<string>('1');
   const [measurableDecimal, setMeasurableDecimal] = useState<string>('0');
 
-  // When packaging loads, auto-pick the highest available level (pack > strip > unit).
+  // Default to selling per unit (piece). User can pick strip/pack if enabled.
   useEffect(() => {
     if (!open) return;
-    if (levels.includes('pack')) setLevel('pack');
-    else if (levels.includes('strip')) setLevel('strip');
-    else setLevel('unit');
+    setLevel('unit');
     setCount('1');
     setMeasurableWhole('1');
     setMeasurableDecimal('0');
