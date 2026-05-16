@@ -967,6 +967,44 @@ export default function ImportCsvDialog({ open, onOpenChange, onImported }: Impo
             await supabase.from('grouped_item_members').insert({ group_id: groupId, medicine_id: medicineId });
           }
 
+          // Persist multi-level packaging so Sales shows unit/strip/pack options
+          // immediately (without requiring the user to open Edit + Save first).
+          try {
+            const stripEnabled = row.packaging_mode === 'with_strip'
+              && !!row.units_per_strip && row.units_per_strip > 0;
+            const packEnabled = stripEnabled
+              && !!row.strips_per_pack && row.strips_per_pack > 1;
+            const upp = (row.units_per_pack && row.units_per_pack > 0)
+              ? row.units_per_pack
+              : (stripEnabled && packEnabled
+                  ? (row.strips_per_pack! * row.units_per_strip!)
+                  : (stripEnabled ? row.units_per_strip! : 1));
+            const unitSell = row.selling_price && upp > 0
+              ? +(row.selling_price / upp).toFixed(4)
+              : null;
+            const stripSell = stripEnabled && unitSell != null && row.units_per_strip
+              ? +(unitSell * row.units_per_strip).toFixed(2)
+              : null;
+            const packSell = packEnabled && stripSell != null && row.strips_per_pack
+              ? +(stripSell * row.strips_per_pack).toFixed(2)
+              : null;
+            await (supabase as any).from('medicine_packaging').upsert({
+              medicine_id: medicineId,
+              unit_name: row.unit_label || 'unit',
+              strip_enabled: stripEnabled,
+              units_per_strip: stripEnabled ? row.units_per_strip : null,
+              strip_name: stripEnabled ? 'strip' : null,
+              pack_enabled: packEnabled,
+              strips_per_pack: packEnabled ? row.strips_per_pack : null,
+              pack_name: packEnabled ? 'pack' : null,
+              unit_selling_price: unitSell,
+              strip_selling_price: stripSell,
+              pack_selling_price: packSell,
+            }, { onConflict: 'medicine_id' });
+          } catch (e) {
+            console.warn('Failed to upsert medicine_packaging during import', e);
+          }
+
           // Persist active ingredients (pharmacy hierarchical composition)
           if (isPharmacy && medicineId && row.active_ingredients.length > 0) {
             const ingredientRows = row.active_ingredients.map((ing, i) => ({
