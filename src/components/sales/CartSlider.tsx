@@ -91,6 +91,10 @@ interface CartItem {
   sellLevel?: 'unit' | 'strip' | 'pack';
   unitsPerLevel?: number;
   sellLevelLabel?: string;
+  availableLevels?: Array<'unit' | 'strip' | 'pack'>;
+  levelPrices?: { unit?: number; strip?: number; pack?: number };
+  levelLabels?: { unit?: string; strip?: string; pack?: string };
+  levelUnitsPer?: { unit: number; strip: number; pack: number };
 }
 
 interface Customer {
@@ -111,6 +115,7 @@ interface CartSliderProps {
   onRemove: (id: string, saleType: 'full_pack' | 'by_stripe') => void;
   onUpdateQuantity: (id: string, saleType: 'full_pack' | 'by_stripe', delta: number) => void;
   onChangeSaleType: (id: string, newSaleType: 'full_pack' | 'by_stripe') => void;
+  onChangeSellLevel?: (id: string, newLevel: 'unit' | 'strip' | 'pack') => void;
   onSetMeasurableQuantity?: (id: string, quantity: number) => void;
   customers: Customer[];
   selectedCustomerId: string;
@@ -135,7 +140,7 @@ interface CartSliderProps {
 
 export default function CartSlider({
   open, onClose,
-  cart, onRemove, onUpdateQuantity, onChangeSaleType, onSetMeasurableQuantity,
+  cart, onRemove, onUpdateQuantity, onChangeSaleType, onChangeSellLevel, onSetMeasurableQuantity,
   customers, selectedCustomerId, onSelectCustomer,
   paymentMethod, onPaymentMethodChange,
   discountPercent, onDiscountChange,
@@ -259,9 +264,42 @@ export default function CartSlider({
                       )}
 
                       {isNewFlow && (
-                        <Badge variant="outline" className="text-[10px] font-normal">
-                          Selling by {levelLabel}
-                        </Badge>
+                        (() => {
+                          const levels = (item.availableLevels && item.availableLevels.length > 0)
+                            ? item.availableLevels
+                            : ([item.sellLevel!] as Array<'unit' | 'strip' | 'pack'>);
+                          const labelFor = (lv: 'unit' | 'strip' | 'pack') =>
+                            (item.levelLabels?.[lv]) || lv;
+                          const upl = (lv: 'unit' | 'strip' | 'pack') =>
+                            item.levelUnitsPer?.[lv] ?? 1;
+                          return (
+                            <div className="space-y-1">
+                              <p className="text-[10px] uppercase tracking-wide text-muted-foreground">Sell by</p>
+                              <div className="flex flex-wrap gap-1">
+                                {levels.map((lv) => {
+                                  const isActive = item.sellLevel === lv;
+                                  const max = Math.floor((item.stock_quantity || 0) / upl(lv));
+                                  const disabled = !onChangeSellLevel || max < 1 || isActive;
+                                  return (
+                                    <Button
+                                      key={lv}
+                                      type="button"
+                                      size="sm"
+                                      variant={isActive ? 'default' : 'outline'}
+                                      className="h-7 px-2 text-xs capitalize"
+                                      disabled={!isActive && (!onChangeSellLevel || max < 1)}
+                                      onClick={() => !isActive && onChangeSellLevel?.(item.id, lv)}
+                                      title={`${max} ${labelFor(lv)}${max === 1 ? '' : 's'} available`}
+                                    >
+                                      {labelFor(lv)}
+                                      <span className="ml-1 text-[10px] opacity-70">({max})</span>
+                                    </Button>
+                                  );
+                                })}
+                              </div>
+                            </div>
+                          );
+                        })()
                       )}
 
                       {/* Quantity controls */}

@@ -259,6 +259,21 @@ export function useBranchInventory() {
     return () => window.removeEventListener('app:refresh', handler);
   }, [queryClient]);
 
+  // Realtime: refresh on stock-affecting changes for the in-scope branches.
+  useEffect(() => {
+    if (!enabled || branchIds.length === 0) return;
+    const invalidate = () => {
+      queryClient.invalidateQueries({ queryKey: ['branch-inventory'] });
+      queryClient.invalidateQueries({ queryKey: ['sales-inventory'] });
+    };
+    const channel = (supabase as any)
+      .channel(`branch-inv-${branchIds.join('-')}`)
+      .on('postgres_changes', { event: '*', schema: 'public', table: 'branch_items' }, invalidate)
+      .on('postgres_changes', { event: '*', schema: 'public', table: 'inventory_batches' }, invalidate)
+      .subscribe();
+    return () => { (supabase as any).removeChannel(channel); };
+  }, [enabled, branchIds.join(','), queryClient]);
+
   return {
     items,
     loading: query.isLoading,

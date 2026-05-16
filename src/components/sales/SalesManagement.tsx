@@ -60,6 +60,10 @@ interface CartItem extends Medicine {
   sellLevel?: 'unit' | 'strip' | 'pack';
   unitsPerLevel?: number;
   sellLevelLabel?: string;
+  availableLevels?: Array<'unit' | 'strip' | 'pack'>;
+  levelPrices?: { unit?: number; strip?: number; pack?: number };
+  levelLabels?: { unit?: string; strip?: string; pack?: string };
+  levelUnitsPer?: { unit: number; strip: number; pack: number };
 }
 
 type ChangeAction = 'keep_profit' | 'deduct_debt' | 'give_change' | null;
@@ -200,6 +204,25 @@ export default function SalesManagement() {
       }
 
       const existing = cart.find(it => it.id === medicine.id && it.sellLevel === meta.sellLevel);
+      // Resolve cross-level info from packagingMap so user can switch later.
+      const pkg = packagingMap[medicine.medicine_id];
+      const availableLevels: Array<'unit' | 'strip' | 'pack'> = ['unit'];
+      let levelPrices: { unit?: number; strip?: number; pack?: number } = { unit: levelPrice };
+      let levelLabels: { unit?: string; strip?: string; pack?: string } = { unit: medicine.unit_label || 'unit' };
+      let levelUnitsPer = { unit: 1, strip: 1, pack: 1 };
+      if (pkg) {
+        const upStrip = unitsPerStripSafe(pkg);
+        const upPack = unitsPerPackSafe(pkg);
+        const uPrice = pkg.unit_selling_price ?? (medicine.selling_price && upPack ? medicine.selling_price / upPack : medicine.selling_price);
+        const sPrice = pkg.strip_selling_price ?? (autoStripPrice(pkg) ?? uPrice * upStrip);
+        const pPrice = pkg.pack_selling_price ?? (autoPackPrice(pkg) ?? uPrice * upPack);
+        levelPrices = { unit: uPrice, strip: sPrice, pack: pPrice };
+        levelLabels = { unit: pkg.unit_name || 'unit', strip: pkg.strip_name || 'strip', pack: pkg.pack_name || 'pack' };
+        levelUnitsPer = { unit: 1, strip: upStrip, pack: upPack };
+        if (pkg.strip_enabled) availableLevels.push('strip');
+        if (pkg.pack_enabled) availableLevels.push('pack');
+      }
+
       if (existing) {
         const newQty = existing.quantity + count;
         setCart(prev => prev.map(it =>
@@ -219,6 +242,10 @@ export default function SalesManagement() {
           selling_price: levelPrice,
           unit_label: meta.levelLabel || medicine.unit_label,
           total: parseFloat((count * levelPrice).toFixed(2)),
+          availableLevels,
+          levelPrices,
+          levelLabels,
+          levelUnitsPer,
         }]);
       }
       return;
@@ -372,6 +399,44 @@ export default function SalesManagement() {
     const total = calculateTotal();
     const received = amountReceived ? parseFloat(amountReceived) : total;
     return received - total;
+  };
+
+  // Switch selling level (unit/strip/pack) for a cart item using its
+  // stored per-level metadata. Quantity resets to 1, clamped to stock.
+  const changeSellLevel = (id: string, newLevel: 'unit' | 'strip' | 'pack') => {
+    setCart(prev => prev.map(it => {
+      if (it.id !== id || !it.sellLevel) return it;
+      const upl = it.levelUnitsPer?.[newLevel] ?? (newLevel === 'unit' ? 1 : it.unitsPerLevel || 1);
+      const price = it.levelPrices?.[newLevel] ?? it.selling_price;
+      const label = it.levelLabels?.[newLevel] ?? newLevel;
+      // Detect merge target — same id + same target level already in cart
+      const dupe = prev.find(p => p.id === id && p.sellLevel === newLevel && p !== it);
+      if (dupe) return it; // skip; merge handled below
+      const maxAtLevel = Math.max(1, Math.floor((it.stock_quantity || 0) / upl));
+      const newQty = Math.min(Math.max(1, it.quantity), maxAtLevel);
+      return {
+        ...it,
+        sellLevel: newLevel,
+        unitsPerLevel: upl,
+        sellLevelLabel: label,
+        selling_price: price,
+        unit_label: label,
+        quantity: newQty,
+        total: parseFloat((newQty * price).toFixed(2)),
+      };
+    }).reduce<CartItem[]>((acc, cur) => {
+      // Merge if a same-level entry already exists
+      const existingIdx = acc.findIndex(a => a.id === cur.id && a.sellLevel === cur.sellLevel);
+      if (existingIdx >= 0 && acc[existingIdx] !== cur) {
+        const merged = { ...acc[existingIdx] };
+        merged.quantity = merged.quantity + cur.quantity;
+        merged.total = parseFloat((merged.quantity * merged.selling_price).toFixed(2));
+        acc[existingIdx] = merged;
+      } else {
+        acc.push(cur);
+      }
+      return acc;
+    }, []));
   };
 
   const selectedCustomer = customers.find(c => c.id === selectedCustomerId);
@@ -995,6 +1060,7 @@ export default function SalesManagement() {
         onRemove={removeFromCart}
         onUpdateQuantity={updateCartQuantity}
         onChangeSaleType={changeSaleType}
+        onChangeSellLevel={changeSellLevel}
         customers={customers}
         selectedCustomerId={selectedCustomerId}
         onSelectCustomer={setSelectedCustomerId}

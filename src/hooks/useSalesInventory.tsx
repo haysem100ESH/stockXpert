@@ -219,6 +219,22 @@ export function useSalesInventory() {
     return () => window.removeEventListener('app:refresh', handler);
   }, [queryClient]);
 
+  // Realtime: refetch when branch_items / inventory_batches change for our scope.
+  useEffect(() => {
+    if (!enabled || branchIds.length === 0) return;
+    const invalidate = () => {
+      queryClient.invalidateQueries({ queryKey: ['sales-inventory'] });
+      queryClient.invalidateQueries({ queryKey: ['branch-inventory'] });
+    };
+    const channel = (supabase as any)
+      .channel(`sales-inv-${branchIds.join('-')}`)
+      .on('postgres_changes', { event: '*', schema: 'public', table: 'branch_items' }, invalidate)
+      .on('postgres_changes', { event: '*', schema: 'public', table: 'inventory_batches' }, invalidate)
+      .on('postgres_changes', { event: '*', schema: 'public', table: 'sale_items' }, invalidate)
+      .subscribe();
+    return () => { (supabase as any).removeChannel(channel); };
+  }, [enabled, branchIds.join(','), queryClient]);
+
   return {
     medicines: inventoryQuery.data ?? [],
     customers: customersQuery.data ?? [],
