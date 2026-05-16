@@ -1067,14 +1067,12 @@ export default function ImportCsvDialog({ open, onOpenChange, onImported }: Impo
             <Alert>
               <AlertCircle className="h-4 w-4" />
               <AlertDescription className="text-xs space-y-1">
-                <p><strong>Accepted files:</strong> .csv, .xlsx, .xls. Real-world headers like <code>NAME OF ITEMS</code>, <code>CATAGORY</code>, <code>BACH NO</code>, <code>EX-DATE</code>, <code>PERCHASING PRICE (strip)</code>, <code>QUANTITY (PK)</code> are auto-detected.</p>
-                <p><strong>Required:</strong> name, purchase_price, selling_price, stock_quantity.</p>
-                <p><strong>Packaging:</strong> use <code>3*10</code> / <code>6*10</code> for strip layouts (auto-converted). Prices in <em>per-strip</em> are auto-multiplied to per-pack.</p>
+                <p><strong>Accepted files:</strong> .csv, .xlsx, .xls.</p>
+                <p><strong>Required:</strong> <code>NAME OF ITEMS</code>, <code>NAME OF UNIT</code>, <code>LPI BUY</code>, <code>LPI SELL</code>, <code>LPI STOCK</code>.</p>
+                <p><strong>LPI</strong> = <em>Least Possible Item</em> — the smallest indivisible unit (e.g. <code>tablet</code>, <code>capsule</code>, <code>pcs</code>, <code>ml</code>). <code>NAME OF UNIT</code> renames it.</p>
+                <p><strong>Packaging is auto-derived:</strong> filling both <code>STRIPS PER PACK</code> and <code>TABLETS PER STRIP</code> = stripped layout; otherwise no-strip.</p>
                 {isPharmacy && (
-                  <>
-                    <p className="pt-1 border-t mt-1"><strong>💊 GROUP inheritance:</strong> Fill <code>GROUP</code> only on the first item of a group; subsequent rows inherit it until the next group.</p>
-                    <p><strong>💊 Composition:</strong> Leave <code>NAME OF ITEMS</code> empty on a row to add it as an <em>active ingredient</em> of the medicine above (just fill GENERIC NAME + STRENGTH).</p>
-                  </>
+                  <p className="pt-1 border-t mt-1"><strong>💊 Composition:</strong> Leave <code>NAME OF ITEMS</code> empty on a row to add it as an <em>active ingredient</em> of the medicine above (just fill GENERIC NAME + STRENGTH).</p>
                 )}
               </AlertDescription>
             </Alert>
