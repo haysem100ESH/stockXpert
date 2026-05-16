@@ -140,7 +140,7 @@ interface CartSliderProps {
 
 export default function CartSlider({
   open, onClose,
-  cart, onRemove, onUpdateQuantity, onChangeSaleType, onSetMeasurableQuantity,
+  cart, onRemove, onUpdateQuantity, onChangeSaleType, onChangeSellLevel, onSetMeasurableQuantity,
   customers, selectedCustomerId, onSelectCustomer,
   paymentMethod, onPaymentMethodChange,
   discountPercent, onDiscountChange,
