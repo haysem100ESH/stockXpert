@@ -443,6 +443,33 @@ export default function StockAdjustmentDialog({ open, onOpenChange, medicine, on
               <Input type="date" value={batchExpiry} onChange={(e) => setBatchExpiry(e.target.value)} />
             </div>
 
+            <div className="grid grid-cols-2 gap-3">
+              <div>
+                <Label>Supplier (optional)</Label>
+                <Select value={batchSupplierId} onValueChange={setBatchSupplierId}>
+                  <SelectTrigger><SelectValue placeholder="Link supplier" /></SelectTrigger>
+                  <SelectContent>
+                    <SelectItem value="none">— None —</SelectItem>
+                    {suppliers.map(s => (
+                      <SelectItem key={s.id} value={s.id}>{s.name}</SelectItem>
+                    ))}
+                  </SelectContent>
+                </Select>
+              </div>
+              {batchSupplierId !== 'none' && (
+                <div>
+                  <Label>Payment Type</Label>
+                  <Select value={batchPaymentType} onValueChange={(v) => setBatchPaymentType(v as 'paid' | 'credit')}>
+                    <SelectTrigger><SelectValue /></SelectTrigger>
+                    <SelectContent>
+                      <SelectItem value="paid">Paid</SelectItem>
+                      <SelectItem value="credit">Credit</SelectItem>
+                    </SelectContent>
+                  </Select>
+                </div>
+              )}
+            </div>
+
             <div className="flex items-center space-x-2 rounded-md border p-3">
               <Checkbox id="batch-expense" checked={batchRecordExpense} onCheckedChange={(c) => setBatchRecordExpense(!!c)} />
               <Label htmlFor="batch-expense" className="text-sm cursor-pointer">
