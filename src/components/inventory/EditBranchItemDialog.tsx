@@ -500,8 +500,8 @@ export default function EditBranchItemDialog({ open, onOpenChange, item, onItemU
       const addQty = addQuantity ? parseFloat(addQuantity) : 0;
       if (addQty > 0) {
         const targetBranchId = (isOwner && branchId) ? branchId : item.branch_id;
-        const pp = parseFloat(purchasePrice);
-        const sp = parseFloat(sellingPrice);
+        const pp = storedBuy;
+        const sp = storedSell;
 
         const { error: batchErr } = await createBatch({
           branchId: targetBranchId,
