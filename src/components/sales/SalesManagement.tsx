@@ -166,7 +166,57 @@ export default function SalesManagement() {
     if (isSmallScreen) setCartOpen(true);
   };
 
-  const addToCart = (medicine: Medicine, saleType: 'full_pack' | 'by_stripe', count: number) => {
+  const addToCart = (
+    medicine: Medicine,
+    saleType: 'full_pack' | 'by_stripe',
+    count: number,
+    meta?: { sellLevel?: 'unit' | 'strip' | 'pack'; unitsPerLevel?: number; levelPrice?: number; levelLabel?: string },
+  ) => {
+    // ---- New multi-level packaging flow ----
+    if (meta?.sellLevel && meta.unitsPerLevel && meta.unitsPerLevel > 0) {
+      const upl = meta.unitsPerLevel;
+      const levelPrice = Number(meta.levelPrice ?? medicine.selling_price);
+      const totalBaseAvailable = medicine.stock_quantity || 0;
+      const maxAtLevel = Math.floor(totalBaseAvailable / upl);
+
+      // Count what's already in cart for this medicine across any sellLevel,
+      // converted to base pieces, to enforce real stock limits.
+      const baseInCart = cart
+        .filter(it => it.id === medicine.id && it.sellLevel)
+        .reduce((sum, it) => sum + (it.quantity * (it.unitsPerLevel || 1)), 0);
+      const remainingBase = Math.max(0, totalBaseAvailable - baseInCart);
+      const requestedBase = count * upl;
+      if (requestedBase > remainingBase) {
+        toast({ title: 'Error', description: 'Not enough stock available', variant: 'destructive' });
+        return;
+      }
+
+      const existing = cart.find(it => it.id === medicine.id && it.sellLevel === meta.sellLevel);
+      if (existing) {
+        const newQty = existing.quantity + count;
+        setCart(prev => prev.map(it =>
+          it.id === medicine.id && it.sellLevel === meta.sellLevel
+            ? { ...it, quantity: newQty, total: parseFloat((newQty * levelPrice).toFixed(2)) }
+            : it,
+        ));
+      } else {
+        setCart(prev => [...prev, {
+          ...medicine,
+          quantity: count,
+          saleType: 'full_pack',
+          stripesCount: undefined,
+          sellLevel: meta.sellLevel,
+          unitsPerLevel: upl,
+          sellLevelLabel: meta.levelLabel || meta.sellLevel,
+          selling_price: levelPrice,
+          unit_label: meta.levelLabel || medicine.unit_label,
+          total: parseFloat((count * levelPrice).toFixed(2)),
+        }]);
+      }
+      return;
+    }
+
+    // ---- Legacy flow (unchanged) ----
     if (saleType === 'by_stripe') {
       if (!medicine.units_per_pack) {
         toast({ title: 'Error', description: 'This item is not configured for unit sales', variant: 'destructive' });
@@ -186,7 +236,7 @@ export default function SalesManagement() {
       }
     }
 
-    const existingItem = cart.find(item => item.id === medicine.id && item.saleType === saleType);
+    const existingItem = cart.find(item => item.id === medicine.id && item.saleType === saleType && !item.sellLevel);
 
     if (existingItem && saleType === 'full_pack') {
       const newQty = existingItem.quantity + count;
@@ -195,7 +245,7 @@ export default function SalesManagement() {
         return;
       }
       setCart(prev => prev.map(item =>
-        item.id === medicine.id && item.saleType === saleType
+        item.id === medicine.id && item.saleType === saleType && !item.sellLevel
           ? { ...item, quantity: newQty, total: newQty * item.selling_price }
           : item
       ));
@@ -203,7 +253,7 @@ export default function SalesManagement() {
       const newCount = parseFloat(((existingItem.stripesCount || 0) + count).toFixed(4));
       const pricePerStripe = medicine.selling_price / (medicine.units_per_pack || 1);
       setCart(prev => prev.map(item =>
-        item.id === medicine.id && item.saleType === saleType
+        item.id === medicine.id && item.saleType === saleType && !item.sellLevel
           ? { ...item, stripesCount: newCount, total: parseFloat((newCount * pricePerStripe).toFixed(2)) }
           : item
       ));
