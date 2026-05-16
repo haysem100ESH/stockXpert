@@ -121,15 +121,19 @@ async function fetchDashboardOverview({ selectedBranch, ownerBranchIds, dateFilt
     salesDebtQuery = salesDebtQuery.in('branch_id', ownerBranchIds);
   }
 
-  // Fire all 4 queries in parallel.
-  const [branchItemsRes, salesWithItemsRes, custRes, salesDebtRes] = await Promise.all([
-    branchItemsQuery, salesWithItemsQuery, custQuery, salesDebtQuery,
+  // Fire all queries in parallel.
+  const codesQuery = (supabase as any).from('medicine_codes')
+    .select('id, code, label')
+    .range(0, 9999);
+  const [branchItemsRes, salesWithItemsRes, custRes, salesDebtRes, codesRes] = await Promise.all([
+    branchItemsQuery, salesWithItemsQuery, custQuery, salesDebtQuery, codesQuery,
   ]);
 
   const branchItemsData = branchItemsRes.data || [];
   const salesWithItems = salesWithItemsRes.data || [];
   const custData = custRes.data || [];
   const salesDebt = salesDebtRes.data || [];
+  const codesData: Array<{ id: string; code: string; label: string }> = codesRes.data || [];
 
   // Derive flat sales list + sale items from the consolidated query.
   const salesData = salesWithItems;
