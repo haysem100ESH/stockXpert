@@ -91,6 +91,10 @@ interface CartItem {
   sellLevel?: 'unit' | 'strip' | 'pack';
   unitsPerLevel?: number;
   sellLevelLabel?: string;
+  availableLevels?: Array<'unit' | 'strip' | 'pack'>;
+  levelPrices?: { unit?: number; strip?: number; pack?: number };
+  levelLabels?: { unit?: string; strip?: string; pack?: string };
+  levelUnitsPer?: { unit: number; strip: number; pack: number };
 }
 
 interface Customer {
