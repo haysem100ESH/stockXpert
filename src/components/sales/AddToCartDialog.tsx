@@ -29,11 +29,23 @@ interface Medicine {
   item_type?: string;
 }
 
+export interface AddToCartMeta {
+  sellLevel?: PackagingLevel;
+  unitsPerLevel?: number;
+  levelPrice?: number;
+  levelLabel?: string;
+}
+
 interface AddToCartDialogProps {
   open: boolean;
   onOpenChange: (open: boolean) => void;
   medicine: Medicine | null;
-  onAddToCart: (medicine: Medicine, saleType: 'full_pack' | 'by_stripe', stripesCount: number) => void;
+  onAddToCart: (
+    medicine: Medicine,
+    saleType: 'full_pack' | 'by_stripe',
+    stripesCount: number,
+    meta?: AddToCartMeta,
+  ) => void;
 }
 
 export default function AddToCartDialog({ open, onOpenChange, medicine, onAddToCart }: AddToCartDialogProps) {
@@ -112,7 +124,12 @@ export default function AddToCartDialog({ open, onOpenChange, medicine, onAddToC
     } else {
       const n = parseInt(count);
       if (!n || n <= 0 || n > maxAtLevel) return;
-      onAddToCart(buildClone(n), 'full_pack', n);
+      onAddToCart(medicine, 'full_pack', n, {
+        sellLevel: level,
+        unitsPerLevel,
+        levelPrice,
+        levelLabel,
+      });
     }
     onOpenChange(false);
   };

@@ -51,6 +51,13 @@ interface CartItem extends Medicine {
   total: number;
   saleType: 'full_pack' | 'by_stripe';
   stripesCount?: number;
+  // New multi-level packaging flow.
+  // When set, `quantity` is in `sellLevel` units and `selling_price`
+  // is the price per one `sellLevel`. `unitsPerLevel` is the number
+  // of base pieces contained in one `sellLevel`.
+  sellLevel?: 'unit' | 'strip' | 'pack';
+  unitsPerLevel?: number;
+  sellLevelLabel?: string;
 }
 
 type ChangeAction = 'keep_profit' | 'deduct_debt' | 'give_change' | null;
@@ -159,7 +166,57 @@ export default function SalesManagement() {
     if (isSmallScreen) setCartOpen(true);
   };
 
-  const addToCart = (medicine: Medicine, saleType: 'full_pack' | 'by_stripe', count: number) => {
+  const addToCart = (
+    medicine: Medicine,
+    saleType: 'full_pack' | 'by_stripe',
+    count: number,
+    meta?: { sellLevel?: 'unit' | 'strip' | 'pack'; unitsPerLevel?: number; levelPrice?: number; levelLabel?: string },
+  ) => {
+    // ---- New multi-level packaging flow ----
+    if (meta?.sellLevel && meta.unitsPerLevel && meta.unitsPerLevel > 0) {
+      const upl = meta.unitsPerLevel;
+      const levelPrice = Number(meta.levelPrice ?? medicine.selling_price);
+      const totalBaseAvailable = medicine.stock_quantity || 0;
+      const maxAtLevel = Math.floor(totalBaseAvailable / upl);
+
+      // Count what's already in cart for this medicine across any sellLevel,
+      // converted to base pieces, to enforce real stock limits.
+      const baseInCart = cart
+        .filter(it => it.id === medicine.id && it.sellLevel)
+        .reduce((sum, it) => sum + (it.quantity * (it.unitsPerLevel || 1)), 0);
+      const remainingBase = Math.max(0, totalBaseAvailable - baseInCart);
+      const requestedBase = count * upl;
+      if (requestedBase > remainingBase) {
+        toast({ title: 'Error', description: 'Not enough stock available', variant: 'destructive' });
+        return;
+      }
+
+      const existing = cart.find(it => it.id === medicine.id && it.sellLevel === meta.sellLevel);
+      if (existing) {
+        const newQty = existing.quantity + count;
+        setCart(prev => prev.map(it =>
+          it.id === medicine.id && it.sellLevel === meta.sellLevel
+            ? { ...it, quantity: newQty, total: parseFloat((newQty * levelPrice).toFixed(2)) }
+            : it,
+        ));
+      } else {
+        setCart(prev => [...prev, {
+          ...medicine,
+          quantity: count,
+          saleType: 'full_pack',
+          stripesCount: undefined,
+          sellLevel: meta.sellLevel,
+          unitsPerLevel: upl,
+          sellLevelLabel: meta.levelLabel || meta.sellLevel,
+          selling_price: levelPrice,
+          unit_label: meta.levelLabel || medicine.unit_label,
+          total: parseFloat((count * levelPrice).toFixed(2)),
+        }]);
+      }
+      return;
+    }
+
+    // ---- Legacy flow (unchanged) ----
     if (saleType === 'by_stripe') {
       if (!medicine.units_per_pack) {
         toast({ title: 'Error', description: 'This item is not configured for unit sales', variant: 'destructive' });
@@ -179,7 +236,7 @@ export default function SalesManagement() {
       }
     }
 
-    const existingItem = cart.find(item => item.id === medicine.id && item.saleType === saleType);
+    const existingItem = cart.find(item => item.id === medicine.id && item.saleType === saleType && !item.sellLevel);
 
     if (existingItem && saleType === 'full_pack') {
       const newQty = existingItem.quantity + count;
@@ -188,7 +245,7 @@ export default function SalesManagement() {
         return;
       }
       setCart(prev => prev.map(item =>
-        item.id === medicine.id && item.saleType === saleType
+        item.id === medicine.id && item.saleType === saleType && !item.sellLevel
           ? { ...item, quantity: newQty, total: newQty * item.selling_price }
           : item
       ));
@@ -196,7 +253,7 @@ export default function SalesManagement() {
       const newCount = parseFloat(((existingItem.stripesCount || 0) + count).toFixed(4));
       const pricePerStripe = medicine.selling_price / (medicine.units_per_pack || 1);
       setCart(prev => prev.map(item =>
-        item.id === medicine.id && item.saleType === saleType
+        item.id === medicine.id && item.saleType === saleType && !item.sellLevel
           ? { ...item, stripesCount: newCount, total: parseFloat((newCount * pricePerStripe).toFixed(2)) }
           : item
       ));
@@ -223,6 +280,13 @@ export default function SalesManagement() {
   const updateCartQuantity = (id: string, saleType: 'full_pack' | 'by_stripe', delta: number) => {
     setCart(prev => prev.map(item => {
       if (item.id !== id || item.saleType !== saleType) return item;
+      // New multi-level flow: clamp by base-stock / unitsPerLevel.
+      if (item.sellLevel && item.unitsPerLevel) {
+        const maxAtLevel = Math.floor((item.stock_quantity || 0) / item.unitsPerLevel);
+        const integerDelta = Number.isInteger(delta) ? delta : Math.round(delta);
+        const newQty = Math.max(1, Math.min(maxAtLevel, item.quantity + integerDelta));
+        return { ...item, quantity: newQty, total: parseFloat((newQty * item.selling_price).toFixed(2)) };
+      }
       if (saleType === 'full_pack') {
         const newQty = Math.max(1, item.quantity + delta);
         if (newQty > item.stock_quantity) return item;
@@ -480,7 +544,10 @@ export default function SalesManagement() {
       // Stock deduction — FIFO batch deduction + branch_items sync
       for (const item of cart) {
         let totalQtyToDeduct = 0;
-        if (item.saleType === 'full_pack') {
+        if (item.sellLevel && item.unitsPerLevel) {
+          // New multi-level flow: quantity is in sellLevel units → convert to base pieces.
+          totalQtyToDeduct = item.quantity * item.unitsPerLevel;
+        } else if (item.saleType === 'full_pack') {
           totalQtyToDeduct = item.quantity;
         } else if (item.saleType === 'by_stripe' && item.stripesCount) {
           // Use the cart item's units_per_pack (which may be the expanded value
