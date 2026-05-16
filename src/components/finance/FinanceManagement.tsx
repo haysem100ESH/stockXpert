@@ -183,6 +183,7 @@ export default function FinanceManagement() {
   
   // Income drill-down state
   const [selectedItem, setSelectedItem] = useState<string | null>(null);
+  const [packagingMap, setPackagingMap] = useState<Record<string, Packaging>>({});
   
   const { profile } = useAuth();
   const { toast } = useToast();
