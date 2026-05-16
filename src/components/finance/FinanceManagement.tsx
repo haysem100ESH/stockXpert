@@ -1369,13 +1369,15 @@ export default function FinanceManagement() {
                           {paginatedSales.map((sale, idx) => {
                             const itemNames = sale.sale_items?.map(si => {
                               const name = si.medicines?.name || 'Unknown';
-                              if (si.sale_type === 'by_stripe' && si.stripes_sold) {
-                                const qty = si.stripes_sold / 1000;
-                                const label = si.medicines?.unit_label || 'unit';
-                                return `${name} (${qty % 1 === 0 ? qty.toFixed(0) : qty} ${label})`;
-                              }
-                              if (si.quantity > 0) return `${name} ×${si.quantity}`;
-                              return name;
+                              const medId = (si as any).medicine_id || si.medicines?.id;
+                              const pkg = medId ? packagingMap[medId] : undefined;
+                              const f = formatSaleItem(si, pkg);
+                              if (!f.qty) return name;
+                              const qtyStr = f.qty % 1 === 0 ? f.qty : f.qty.toFixed(2);
+                              const detail = f.level !== 'unit' && f.baseUnits > 0
+                                ? ` (${f.baseUnits} ${pluralLabel(f.baseLabel, f.baseUnits)})`
+                                : '';
+                              return `${name} ×${qtyStr} ${pluralLabel(f.levelLabel, f.qty)}${detail}`;
                             }).join(', ') || '—';
 
                             const isPaid = Number(sale.total_amount) <= ((sale as any).amount_paid || 0);
