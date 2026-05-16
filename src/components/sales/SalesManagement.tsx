@@ -829,6 +829,10 @@ export default function SalesManagement() {
                     : `${medicine.stock_quantity} ${unitName}${medicine.stock_quantity === 1 ? '' : 's'}`}
                 </Badge>
               </div>
+              <div className="flex justify-between text-xs text-muted-foreground">
+                <span>Total pieces:</span>
+                <span>{medicine.stock_quantity}</span>
+              </div>
             </>
           )}
           {isPharmacy && medicine.expiry_date && (
