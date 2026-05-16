@@ -673,9 +673,15 @@ export default function FinanceManagement() {
       const row = ws.getRow(txH + 1 + i);
       const itemNames = sale.sale_items?.map(si => {
         const nm = si.medicines?.name || 'Unknown';
-        if (si.sale_type === 'by_stripe' && si.stripes_sold) { const q = si.stripes_sold / 1000; return `${nm} (${q % 1 === 0 ? q.toFixed(0) : q} ${si.medicines?.unit_label || 'unit'})`; }
-        if (si.quantity > 0) return `${nm} ×${si.quantity}`;
-        return nm;
+        const medId = (si as any).medicine_id || si.medicines?.id;
+        const pkg = medId ? packagingMap[medId] : undefined;
+        const f = formatSaleItem(si, pkg);
+        if (!f.qty) return nm;
+        const qtyStr = f.qty % 1 === 0 ? f.qty : f.qty.toFixed(2);
+        const detail = f.level !== 'unit' && f.baseUnits > 0
+          ? ` (${f.baseUnits} ${pluralLabel(f.baseLabel, f.baseUnits)})`
+          : '';
+        return `${nm} ×${qtyStr} ${pluralLabel(f.levelLabel, f.qty)}${detail}`;
       }).join(', ') || '—';
       const isPaid = Number(sale.total_amount) <= ((sale as any).amount_paid || 0);
       const isPartial = !isPaid && ((sale as any).amount_paid || 0) > 0;
