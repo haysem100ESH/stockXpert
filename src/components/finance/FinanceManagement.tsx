@@ -110,7 +110,9 @@ interface Sale {
     role: string;
   };
   sale_items?: {
+    medicine_id?: string;
     medicines: {
+      id?: string;
       name: string;
       unit_label?: string;
       units_per_pack?: number;
