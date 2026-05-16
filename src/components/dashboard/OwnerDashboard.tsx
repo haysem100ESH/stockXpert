@@ -395,33 +395,44 @@ export default function OwnerDashboard() {
             </Card>
 
             {/* Top-Selling Groups (medicine codes) */}
-            {topGroupSales.length > 0 && (
-              <Card className="min-w-0">
+            <Card className="min-w-0">
                 <CardHeader>
                   <CardTitle>Top-Selling Groups</CardTitle>
                   <CardDescription>Sales transactions per medicine code</CardDescription>
                 </CardHeader>
                 <CardContent className="p-3 sm:p-6 pt-0 sm:pt-0">
-                  <ResponsiveContainer width="100%" height={220}>
-                    <PieChart>
-                      <Pie data={topGroupSales.slice(0, 6)} cx="50%" cy="50%" outerRadius="55%" dataKey="sales" nameKey="name" label={false}>
-                        {topGroupSales.slice(0, 6).map((_, index) => (
-                          <Cell key={`gcell-${index}`} fill={`hsl(${(index * 55 + 200) % 360}, 65%, 55%)`} />
+                  {topGroupSales.length > 0 ? (
+                    <>
+                      <ResponsiveContainer width="100%" height={220}>
+                        <PieChart>
+                          <Pie data={topGroupSales.slice(0, 6)} cx="50%" cy="50%" outerRadius="55%" dataKey="sales" nameKey="name" label={false}>
+                            {topGroupSales.slice(0, 6).map((_, index) => (
+                              <Cell key={`gcell-${index}`} fill={`hsl(${(index * 55 + 200) % 360}, 65%, 55%)`} />
+                            ))}
+                          </Pie>
+                        </PieChart>
+                      </ResponsiveContainer>
+                      <div className="mt-2 flex flex-wrap gap-2 justify-center">
+                        {topGroupSales.slice(0, 6).map((entry, index) => (
+                          <div key={entry.code || entry.name} className="flex items-center gap-1 text-xs">
+                            <div className="w-3 h-3 rounded-full shrink-0" style={{ backgroundColor: `hsl(${(index * 55 + 200) % 360}, 65%, 55%)` }} />
+                            <span className="truncate max-w-[140px]">{entry.name} ({entry.sales})</span>
+                          </div>
                         ))}
-                      </Pie>
-                    </PieChart>
-                  </ResponsiveContainer>
-                  <div className="mt-2 flex flex-wrap gap-2 justify-center">
-                    {topGroupSales.slice(0, 6).map((entry, index) => (
-                      <div key={entry.code || entry.name} className="flex items-center gap-1 text-xs">
-                        <div className="w-3 h-3 rounded-full shrink-0" style={{ backgroundColor: `hsl(${(index * 55 + 200) % 360}, 65%, 55%)` }} />
-                        <span className="truncate max-w-[140px]">{entry.name} ({entry.sales})</span>
                       </div>
-                    ))}
-                  </div>
+                    </>
+                  ) : (
+                    <div className="h-[220px] flex flex-col items-center justify-center text-center text-sm text-muted-foreground gap-1 px-4">
+                      <p className="font-medium text-foreground">No grouped sales yet</p>
+                      <p className="text-xs">
+                        {totalGroups === 0
+                          ? 'Create medicine codes and assign items to start tracking group sales here.'
+                          : 'Assign items to your medicine codes, then sell them — group sales appear once linked items are sold in this date range.'}
+                      </p>
+                    </div>
+                  )}
                 </CardContent>
               </Card>
-            )}
 
             {/* Payment Methods */}
             <Card className="min-w-0">

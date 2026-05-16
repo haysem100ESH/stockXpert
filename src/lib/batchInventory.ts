@@ -67,7 +67,10 @@ export async function syncBranchItemQuantity(branchItemId: string): Promise<void
     .eq('branch_item_id', branchItemId)
     .gt('remaining_quantity', 0);
 
-  const totalQty = (batches || []).reduce((sum: number, b: any) => sum + Number(b.remaining_quantity), 0);
+  const rawTotal = (batches || []).reduce((sum: number, b: any) => sum + Number(b.remaining_quantity), 0);
+  // Snap tiny float drift back to integer (e.g. 19.9999 → 20).
+  const rounded = Math.round(rawTotal);
+  const totalQty = Math.abs(rawTotal - rounded) < 0.001 ? rounded : Number(rawTotal.toFixed(4));
 
   await supabase
     .from('branch_items')
@@ -102,11 +105,19 @@ export async function deductFIFO(
   const consumed: Array<{ batchId: string; quantity: number; purchasePrice: number }> = [];
   let remaining = totalQtyToDeduct;
 
+  // Snap-to-integer helper: eliminates float drift (e.g. 9.9999 → 10)
+  // when callers deal in whole-unit quantities (tablets, strips, packs).
+  const snap = (n: number) => {
+    const r = Math.round(n);
+    return Math.abs(n - r) < 0.001 ? r : Number(n.toFixed(4));
+  };
+
   for (const batch of batches) {
     if (remaining <= 0) break;
 
-    const deduct = Math.min(remaining, Number(batch.remaining_quantity));
-    const newRemaining = Number(batch.remaining_quantity) - deduct;
+    const batchRem = Number(batch.remaining_quantity);
+    const deduct = Math.min(remaining, batchRem);
+    const newRemaining = Math.max(0, snap(batchRem - deduct));
 
     const { error } = await supabase
       .from('inventory_batches')
