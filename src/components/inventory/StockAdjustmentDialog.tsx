@@ -6,6 +6,7 @@ import { Label } from '@/components/ui/label';
 import { Textarea } from '@/components/ui/textarea';
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
 import { Checkbox } from '@/components/ui/checkbox';
+import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
 import { supabase } from '@/lib/db';
 import { useToast } from '@/hooks/use-toast';
 import { useAuth } from '@/hooks/useAuth';
@@ -47,6 +48,9 @@ export default function StockAdjustmentDialog({ open, onOpenChange, medicine, on
   const [batchExpiry, setBatchExpiry] = useState('');
   const [batchNumber, setBatchNumber] = useState('');
   const [batchRecordExpense, setBatchRecordExpense] = useState(true);
+  const [batchSupplierId, setBatchSupplierId] = useState<string>('none');
+  const [batchPaymentType, setBatchPaymentType] = useState<'paid' | 'credit'>('paid');
+  const [suppliers, setSuppliers] = useState<Array<{ id: string; name: string }>>([]);
 
   const [saving, setSaving] = useState(false);
   const { toast } = useToast();
@@ -61,6 +65,14 @@ export default function StockAdjustmentDialog({ open, onOpenChange, medicine, on
     }
   }, [open, medicine]);
 
+  useEffect(() => {
+    if (!open) return;
+    (async () => {
+      const { data } = await supabase.from('suppliers').select('id, name').order('name');
+      setSuppliers((data || []) as Array<{ id: string; name: string }>);
+    })();
+  }, [open]);
+
   const resetForm = () => {
     setMode('adjust');
     setAdjustmentType('increase');
@@ -73,6 +85,8 @@ export default function StockAdjustmentDialog({ open, onOpenChange, medicine, on
     setBatchExpiry('');
     setBatchNumber('');
     setBatchRecordExpense(true);
+    setBatchSupplierId('none');
+    setBatchPaymentType('paid');
   };
 
   // Resolve real medicine_id (FK target). Falls back to lookup if not provided.
@@ -237,6 +251,8 @@ export default function StockAdjustmentDialog({ open, onOpenChange, medicine, on
         throw new Error('Could not resolve medicine or branch context.');
       }
 
+      const supplierId = batchSupplierId !== 'none' ? batchSupplierId : null;
+
       const { error: batchErr } = await createBatch({
         branchId,
         medicineId,
@@ -246,9 +262,37 @@ export default function StockAdjustmentDialog({ open, onOpenChange, medicine, on
         sellingPrice: sp,
         expiryDate: batchExpiry || null,
         batchNumber: batchNumber.trim() || null,
+        supplierId,
         createdBy: profile?.id || null,
       });
       if (batchErr) throw batchErr;
+
+      // Record supplier purchase + debt if linked
+      if (supplierId) {
+        const totalAmount = qty * pp;
+        await supabase.from('supplier_purchases').insert({
+          supplier_id: supplierId,
+          item_name: medicine.name,
+          quantity: qty,
+          unit_cost: pp,
+          total_cost: totalAmount,
+          payment_type: batchPaymentType,
+          branch_id: branchId,
+          created_by: profile?.id || null,
+        });
+        if (batchPaymentType === 'credit') {
+          const { data: existingDebt } = await supabase
+            .from('supplier_debts')
+            .select('id, total_debt')
+            .eq('supplier_id', supplierId)
+            .maybeSingle();
+          if (existingDebt) {
+            await supabase.from('supplier_debts').update({ total_debt: Number(existingDebt.total_debt) + totalAmount }).eq('id', existingDebt.id);
+          } else {
+            await supabase.from('supplier_debts').insert({ supplier_id: supplierId, total_debt: totalAmount });
+          }
+        }
+      }
 
       // Log as an "increase" stock adjustment for audit
       const { error: logErr } = await supabase.from('inventory_stock_adjustments').insert({
@@ -397,6 +441,33 @@ export default function StockAdjustmentDialog({ open, onOpenChange, medicine, on
             <div>
               <Label>Expiry Date</Label>
               <Input type="date" value={batchExpiry} onChange={(e) => setBatchExpiry(e.target.value)} />
+            </div>
+
+            <div className="grid grid-cols-2 gap-3">
+              <div>
+                <Label>Supplier (optional)</Label>
+                <Select value={batchSupplierId} onValueChange={setBatchSupplierId}>
+                  <SelectTrigger><SelectValue placeholder="Link supplier" /></SelectTrigger>
+                  <SelectContent>
+                    <SelectItem value="none">— None —</SelectItem>
+                    {suppliers.map(s => (
+                      <SelectItem key={s.id} value={s.id}>{s.name}</SelectItem>
+                    ))}
+                  </SelectContent>
+                </Select>
+              </div>
+              {batchSupplierId !== 'none' && (
+                <div>
+                  <Label>Payment Type</Label>
+                  <Select value={batchPaymentType} onValueChange={(v) => setBatchPaymentType(v as 'paid' | 'credit')}>
+                    <SelectTrigger><SelectValue /></SelectTrigger>
+                    <SelectContent>
+                      <SelectItem value="paid">Paid</SelectItem>
+                      <SelectItem value="credit">Credit</SelectItem>
+                    </SelectContent>
+                  </Select>
+                </div>
+              )}
             </div>
 
             <div className="flex items-center space-x-2 rounded-md border p-3">
