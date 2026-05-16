@@ -695,38 +695,33 @@ export default function EditBranchItemDialog({ open, onOpenChange, item, onItemU
                 </div>
               )}
 
-              {/* Packaging mode */}
-              <div className="space-y-2">
-                <Label>Packaging *</Label>
-                <Select value={packagingMode} onValueChange={(val) => setPackagingMode(val as 'with_strip' | 'no_strip')}>
-                  <SelectTrigger><SelectValue /></SelectTrigger>
-                  <SelectContent>
-                    <SelectItem value="no_strip">No strip (loose pieces)</SelectItem>
-                    <SelectItem value="with_strip">With strip (e.g. tablets in blister)</SelectItem>
-                  </SelectContent>
-                </Select>
-              </div>
+              {/* Packaging — new Unit / Strip / Pack model */}
+              <PackagingEditor
+                value={packaging}
+                hidePrices
+                onChange={(next) => {
+                  setPackaging(next);
+                  // Mirror into legacy state so the existing save path stays in sync.
+                  if (next.strip_enabled && next.units_per_strip) {
+                    setPackagingMode('with_strip');
+                    setUnitsPerStrip(String(next.units_per_strip));
+                    if (next.pack_enabled && next.strips_per_pack) {
+                      setStripsPerPack(String(next.strips_per_pack));
+                      setUnitsPerPack(String(next.strips_per_pack * next.units_per_strip));
+                    } else {
+                      setStripsPerPack('');
+                      setUnitsPerPack(String(next.units_per_strip));
+                    }
+                  } else {
+                    setPackagingMode('no_strip');
+                    setStripsPerPack('');
+                    setUnitsPerStrip('');
+                    setUnitsPerPack('');
+                  }
+                  if (next.unit_name) setUnitLabel(next.unit_name);
+                }}
+              />
 
-              {packagingMode === 'with_strip' && (
-                <>
-                  <div className="grid grid-cols-2 gap-4">
-                    <div className="space-y-2">
-                      <Label>Strips per Item *</Label>
-                      <Input type="number" min="1" value={stripsPerPack} onChange={e => setStripsPerPack(e.target.value)} placeholder="e.g. 10" />
-                    </div>
-                    <div className="space-y-2">
-                      <Label>Units per Strip *</Label>
-                      <Input type="number" min="1" value={unitsPerStrip} onChange={e => setUnitsPerStrip(e.target.value)} placeholder="e.g. 10" />
-                    </div>
-                  </div>
-                  {stripsPerPack && unitsPerStrip && parseInt(stripsPerPack) > 0 && parseInt(unitsPerStrip) > 0 && (
-                    <div className="rounded-md bg-primary/10 border border-primary/20 px-3 py-2 -mt-2">
-                      <p className="text-sm font-semibold">
-                        Total stock per item: {parseInt(stripsPerPack) * parseInt(unitsPerStrip)} units
-                      </p>
-                    </div>
-                  )}
-                </>
               )}
 
               {/* Container / packaging type */}
