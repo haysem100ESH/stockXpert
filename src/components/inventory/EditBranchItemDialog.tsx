@@ -16,6 +16,15 @@ import { useMedicineGroups } from '@/hooks/useMedicineGroups';
 import { useQuery } from '@tanstack/react-query';
 import { createBatch, deductFIFO, getFIFOBatches, syncBranchItemQuantity, type InventoryBatch } from '@/lib/batchInventory';
 import { Textarea } from '@/components/ui/textarea';
+import PackagingEditor from './PackagingEditor';
+import {
+  defaultPackaging,
+  Packaging,
+  autoStripPrice,
+  autoPackPrice,
+  formatStock,
+  packagingSummary,
+} from '@/lib/packaging';
 
 export interface BranchItem {
   id: string;
