@@ -525,23 +525,30 @@ export default function FinanceManagement() {
   // Get transactions for a specific item
   const selectedItemTransactions = useMemo(() => {
     if (!selectedItem) return [];
-    // Get unit info from itemSummaries
-    const itemInfo = itemSummaries.find(i => i.name === selectedItem);
-    const unitLabel = itemInfo?.unitLabel || 'unit';
-    const unitsPerPack = itemInfo?.unitsPerPack || 1;
-    
     return sales
       .filter(sale => sale.sale_items?.some(si => si.medicines?.name === selectedItem))
       .map(sale => {
         const relevantItems = sale.sale_items?.filter(si => si.medicines?.name === selectedItem) || [];
-        const itemQty = relevantItems.filter(si => si.sale_type !== 'by_stripe').reduce((sum, si) => sum + (si.quantity || 0), 0);
-        const itemStripesRaw = relevantItems.filter(si => si.sale_type === 'by_stripe').reduce((sum, si) => sum + (si.stripes_sold || si.quantity || 0), 0);
-        const itemStripes = itemStripesRaw >= 100 ? itemStripesRaw / 1000 : itemStripesRaw;
-        const itemTotal = relevantItems.reduce((sum, si) => sum + Number(si.total_price || 0), 0);
-        return { ...sale, itemQty, itemStripes, itemTotal, unitLabel, unitsPerPack };
+        const perLevel: Record<SaleLevel, { qty: number; baseUnits: number; levelLabel: string; baseLabel: string }> = {
+          unit: { qty: 0, baseUnits: 0, levelLabel: 'unit', baseLabel: 'unit' },
+          strip: { qty: 0, baseUnits: 0, levelLabel: 'strip', baseLabel: 'unit' },
+          pack: { qty: 0, baseUnits: 0, levelLabel: 'pack', baseLabel: 'unit' },
+        };
+        let itemTotal = 0;
+        for (const si of relevantItems) {
+          const medId = (si as any).medicine_id || si.medicines?.id;
+          const pkg = medId ? packagingMap[medId] : undefined;
+          const f = formatSaleItem(si, pkg);
+          perLevel[f.level].qty += f.qty;
+          perLevel[f.level].baseUnits += f.baseUnits;
+          perLevel[f.level].levelLabel = f.levelLabel;
+          perLevel[f.level].baseLabel = f.baseLabel;
+          itemTotal += Number(si.total_price || 0);
+        }
+        return { ...sale, perLevel, itemTotal };
       })
       .sort((a, b) => new Date(b.created_at).getTime() - new Date(a.created_at).getTime());
-  }, [sales, selectedItem, itemSummaries]);
+  }, [sales, selectedItem, packagingMap]);
 
   const fetchBranches = async () => {
     try {
