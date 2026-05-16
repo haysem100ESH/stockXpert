@@ -448,6 +448,34 @@ export default function EditBranchItemDialog({ open, onOpenChange, item, onItemU
 
       if (error) throw error;
 
+      // Upsert medicine_packaging for whichever medicine_id the branch_item now points to.
+      try {
+        const { data: bi } = await supabase
+          .from('branch_items')
+          .select('medicine_id')
+          .eq('id', item.id)
+          .single();
+        const targetMedId = (bi as any)?.medicine_id || item.medicine_id;
+        const stripPrice = packaging.strip_selling_price ?? autoStripPrice(packaging);
+        const packPrice = packaging.pack_selling_price ?? autoPackPrice(packaging);
+        await (supabase as any).from('medicine_packaging').upsert({
+          medicine_id: targetMedId,
+          unit_name: packaging.unit_name || 'unit',
+          strip_enabled: packaging.strip_enabled,
+          units_per_strip: packaging.strip_enabled ? packaging.units_per_strip : null,
+          strip_name: packaging.strip_enabled ? (packaging.strip_name || 'strip') : null,
+          pack_enabled: packaging.pack_enabled,
+          strips_per_pack: packaging.pack_enabled ? packaging.strips_per_pack : null,
+          pack_name: packaging.pack_enabled ? (packaging.pack_name || 'pack') : null,
+          unit_selling_price: packaging.unit_selling_price ?? null,
+          strip_selling_price: stripPrice ?? null,
+          pack_selling_price: packPrice ?? null,
+        }, { onConflict: 'medicine_id' });
+      } catch (e) {
+        console.warn('Failed to upsert medicine_packaging', e);
+      }
+
+
       // Update master medicine's minimum_stock_level if changed
       if (minStockLevel !== '') {
         const newMin = parseInt(minStockLevel);
