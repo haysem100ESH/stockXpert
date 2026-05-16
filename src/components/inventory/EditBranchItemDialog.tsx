@@ -467,8 +467,9 @@ export default function EditBranchItemDialog({ open, onOpenChange, item, onItemU
           .eq('id', item.id)
           .single();
         const targetMedId = (bi as any)?.medicine_id || item.medicine_id;
-        const stripPrice = packaging.strip_selling_price ?? autoStripPrice(packaging);
-        const packPrice = packaging.pack_selling_price ?? autoPackPrice(packaging);
+        const pkgForCalc: Packaging = { ...packaging, unit_selling_price: lpiSell };
+        const stripPrice = pkgForCalc.strip_selling_price ?? autoStripPrice(pkgForCalc);
+        const packPrice = pkgForCalc.pack_selling_price ?? autoPackPrice(pkgForCalc);
         await (supabase as any).from('medicine_packaging').upsert({
           medicine_id: targetMedId,
           unit_name: packaging.unit_name || 'unit',
@@ -478,7 +479,7 @@ export default function EditBranchItemDialog({ open, onOpenChange, item, onItemU
           pack_enabled: packaging.pack_enabled,
           strips_per_pack: packaging.pack_enabled ? packaging.strips_per_pack : null,
           pack_name: packaging.pack_enabled ? (packaging.pack_name || 'pack') : null,
-          unit_selling_price: packaging.unit_selling_price ?? null,
+          unit_selling_price: lpiSell,
           strip_selling_price: stripPrice ?? null,
           pack_selling_price: packPrice ?? null,
         }, { onConflict: 'medicine_id' });
