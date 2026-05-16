@@ -242,6 +242,10 @@ export default function StaffInventoryWithActions() {
               {isLowStock(item) && <Badge variant="destructive" className="text-xs">Low Stock</Badge>}
             </div>
           </div>
+          <div className="flex justify-between text-xs text-muted-foreground">
+            <span>Total pieces:</span>
+            <span className="font-medium">{item.quantity}</span>
+          </div>
           {item.branch_name && !selectedBranch && (
             <div className="flex justify-between text-sm"><span>Branch:</span><Badge variant="outline">{item.branch_name}</Badge></div>
           )}
