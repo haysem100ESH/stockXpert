@@ -537,7 +537,10 @@ export default function SalesManagement() {
       // Stock deduction — FIFO batch deduction + branch_items sync
       for (const item of cart) {
         let totalQtyToDeduct = 0;
-        if (item.saleType === 'full_pack') {
+        if (item.sellLevel && item.unitsPerLevel) {
+          // New multi-level flow: quantity is in sellLevel units → convert to base pieces.
+          totalQtyToDeduct = item.quantity * item.unitsPerLevel;
+        } else if (item.saleType === 'full_pack') {
           totalQtyToDeduct = item.quantity;
         } else if (item.saleType === 'by_stripe' && item.stripesCount) {
           // Use the cart item's units_per_pack (which may be the expanded value
