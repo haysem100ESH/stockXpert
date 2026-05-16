@@ -260,12 +260,14 @@ export default function FinanceManagement() {
         .select(`
           *,
           sale_items (
+            medicine_id,
             quantity,
             unit_price,
             total_price,
             sale_type,
             stripes_sold,
             medicines (
+              id,
               name,
               unit_label,
               units_per_pack
