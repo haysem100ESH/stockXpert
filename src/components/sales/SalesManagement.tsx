@@ -67,6 +67,7 @@ type ChangeAction = 'keep_profit' | 'deduct_debt' | 'give_change' | null;
 export default function SalesManagement() {
   // TanStack Query–cached product list + customers (instant hydration on revisit).
   const { medicines, customers, loading, invalidate: invalidateSalesCache } = useSalesInventory();
+  const { data: packagingMap = {} } = usePackagingMap(medicines.map(m => m.medicine_id));
   const [filteredMedicines, setFilteredMedicines] = useState<Medicine[]>([]);
   const [paginatedMedicines, setPaginatedMedicines] = useState<Medicine[]>([]);
   const [cart, setCart] = useState<CartItem[]>([]);
