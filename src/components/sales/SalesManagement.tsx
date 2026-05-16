@@ -810,6 +810,10 @@ export default function SalesManagement() {
                   {formatStock(medicine.stock_quantity, pkg!)}
                 </Badge>
               </div>
+              <div className="flex justify-between text-xs text-muted-foreground">
+                <span>Total pieces:</span>
+                <span>{medicine.stock_quantity}</span>
+              </div>
             </>
           ) : (
             <>
