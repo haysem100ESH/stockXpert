@@ -160,6 +160,7 @@ export default function Dashboard() {
         setStats({ totalRevenue: 0, totalProducts: 0, todaySales: 0, lowStockItems: 0, outOfStockItems: 0, expiredItems: 0 });
         setOutOfStockItems([]); setLowStockItems([]); setExpiringItems([]); setExpiredItems([]);
         setCategorySales([]); setProductPerformance([]); setIncomeExpenseData([]); setPaymentMethodData([]);
+        setTotalGroups(0); setTopGroupSales([]);
         setLoading(false);
         return;
       }
