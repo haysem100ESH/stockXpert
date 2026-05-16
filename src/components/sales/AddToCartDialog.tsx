@@ -47,6 +47,7 @@ export default function AddToCartDialog({ open, onOpenChange, medicine, onAddToC
     [packaging],
   );
 
+  const [mode, setMode] = useState<'piece' | 'group'>('piece');
   const [level, setLevel] = useState<PackagingLevel>('unit');
   const [count, setCount] = useState<string>('1');
   const [measurableWhole, setMeasurableWhole] = useState<string>('1');
@@ -55,11 +56,16 @@ export default function AddToCartDialog({ open, onOpenChange, medicine, onAddToC
   // Default to selling per unit (piece). User can pick strip/pack if enabled.
   useEffect(() => {
     if (!open) return;
+    setMode('piece');
     setLevel('unit');
     setCount('1');
     setMeasurableWhole('1');
     setMeasurableDecimal('0');
   }, [open, levels]);
+
+  const hasStrip = !!packaging?.strip_enabled;
+  const hasPack = !!packaging?.pack_enabled;
+  const hasGroup = hasStrip || hasPack;
 
   if (!medicine) return null;
 
@@ -196,23 +202,54 @@ export default function AddToCartDialog({ open, onOpenChange, medicine, onAddToC
             </div>
           )}
 
-          {/* Level selector + count */}
+          {/* Mode selector: piece vs group */}
           {!isMeasurableItem && (
             <>
-              {levels.length > 1 && (
+              <div className="space-y-2">
+                <Label>Sell by</Label>
+                <ToggleGroup
+                  type="single"
+                  value={mode}
+                  onValueChange={(v) => {
+                    if (!v) return;
+                    const m = v as 'piece' | 'group';
+                    setMode(m);
+                    if (m === 'piece') setLevel('unit');
+                    else setLevel(hasStrip ? 'strip' : 'pack');
+                    setCount('1');
+                  }}
+                  className="justify-start"
+                >
+                  <ToggleGroupItem value="piece" variant="outline">
+                    Sell by {unitName}
+                  </ToggleGroupItem>
+                  {hasGroup && (
+                    <ToggleGroupItem value="group" variant="outline">
+                      Sell by group
+                    </ToggleGroupItem>
+                  )}
+                </ToggleGroup>
+              </div>
+
+              {mode === 'group' && hasGroup && (
                 <div className="space-y-2">
-                  <Label>Sell by</Label>
+                  <Label>Group type</Label>
                   <ToggleGroup
                     type="single"
                     value={level}
                     onValueChange={(v) => v && (setLevel(v as PackagingLevel), setCount('1'))}
                     className="justify-start"
                   >
-                    {levels.map((lv) => (
-                      <ToggleGroupItem key={lv} value={lv} variant="outline" className="capitalize">
-                        {lv === 'unit' ? unitName : lv === 'strip' ? stripName : packName}
+                    {hasStrip && (
+                      <ToggleGroupItem value="strip" variant="outline">
+                        {stripName} ({Math.floor(totalUnits / upStrip)} available)
                       </ToggleGroupItem>
-                    ))}
+                    )}
+                    {hasPack && (
+                      <ToggleGroupItem value="pack" variant="outline">
+                        {packName} ({Math.floor(totalUnits / upPack)} available)
+                      </ToggleGroupItem>
+                    )}
                   </ToggleGroup>
                 </div>
               )}
