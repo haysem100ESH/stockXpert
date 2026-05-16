@@ -280,6 +280,13 @@ export default function SalesManagement() {
   const updateCartQuantity = (id: string, saleType: 'full_pack' | 'by_stripe', delta: number) => {
     setCart(prev => prev.map(item => {
       if (item.id !== id || item.saleType !== saleType) return item;
+      // New multi-level flow: clamp by base-stock / unitsPerLevel.
+      if (item.sellLevel && item.unitsPerLevel) {
+        const maxAtLevel = Math.floor((item.stock_quantity || 0) / item.unitsPerLevel);
+        const integerDelta = Number.isInteger(delta) ? delta : Math.round(delta);
+        const newQty = Math.max(1, Math.min(maxAtLevel, item.quantity + integerDelta));
+        return { ...item, quantity: newQty, total: parseFloat((newQty * item.selling_price).toFixed(2)) };
+      }
       if (saleType === 'full_pack') {
         const newQty = Math.max(1, item.quantity + delta);
         if (newQty > item.stock_quantity) return item;
