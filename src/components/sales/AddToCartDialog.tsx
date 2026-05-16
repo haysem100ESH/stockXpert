@@ -47,6 +47,7 @@ export default function AddToCartDialog({ open, onOpenChange, medicine, onAddToC
     [packaging],
   );
 
+  const [mode, setMode] = useState<'piece' | 'group'>('piece');
   const [level, setLevel] = useState<PackagingLevel>('unit');
   const [count, setCount] = useState<string>('1');
   const [measurableWhole, setMeasurableWhole] = useState<string>('1');
@@ -55,11 +56,16 @@ export default function AddToCartDialog({ open, onOpenChange, medicine, onAddToC
   // Default to selling per unit (piece). User can pick strip/pack if enabled.
   useEffect(() => {
     if (!open) return;
+    setMode('piece');
     setLevel('unit');
     setCount('1');
     setMeasurableWhole('1');
     setMeasurableDecimal('0');
   }, [open, levels]);
+
+  const hasStrip = !!packaging?.strip_enabled;
+  const hasPack = !!packaging?.pack_enabled;
+  const hasGroup = hasStrip || hasPack;
 
   if (!medicine) return null;
 
