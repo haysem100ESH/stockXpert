@@ -48,6 +48,9 @@ export default function StockAdjustmentDialog({ open, onOpenChange, medicine, on
   const [batchExpiry, setBatchExpiry] = useState('');
   const [batchNumber, setBatchNumber] = useState('');
   const [batchRecordExpense, setBatchRecordExpense] = useState(true);
+  const [batchSupplierId, setBatchSupplierId] = useState<string>('none');
+  const [batchPaymentType, setBatchPaymentType] = useState<'paid' | 'credit'>('paid');
+  const [suppliers, setSuppliers] = useState<Array<{ id: string; name: string }>>([]);
 
   const [saving, setSaving] = useState(false);
   const { toast } = useToast();
