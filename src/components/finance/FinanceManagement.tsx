@@ -495,32 +495,32 @@ export default function FinanceManagement() {
 
   // Group sales by item name for income drill-down
   const itemSummaries = useMemo<ItemSummary[]>(() => {
-    const mapFixed = new Map<string, { totalQuantity: number; totalStripes: number; totalIncome: number; unitLabel?: string; unitsPerPack?: number }>();
+    const acc = new Map<string, ItemSummary>();
     for (const sale of sales) {
-      if (sale.sale_items) {
-        for (const item of sale.sale_items) {
-          const name = item.medicines?.name || 'Unknown';
-          const existing = mapFixed.get(name) || { totalQuantity: 0, totalStripes: 0, totalIncome: 0 };
-          // Capture unit info from first occurrence
-          if (!existing.unitLabel && item.medicines?.unit_label) {
-            existing.unitLabel = item.medicines.unit_label;
-            existing.unitsPerPack = item.medicines.units_per_pack;
-          }
-          if (item.sale_type === 'by_stripe') {
-            const rawStripes = item.stripes_sold || item.quantity || 0;
-            existing.totalStripes += rawStripes >= 100 ? rawStripes / 1000 : rawStripes;
-          } else {
-            existing.totalQuantity += item.quantity || 0;
-          }
-          existing.totalIncome += Number(item.total_price || 0);
-          mapFixed.set(name, existing);
+      if (!sale.sale_items) continue;
+      for (const item of sale.sale_items) {
+        const name = item.medicines?.name || 'Unknown';
+        const medId = (item as any).medicine_id || item.medicines?.id;
+        const pkg = medId ? packagingMap[medId] : undefined;
+        const existing: ItemSummary = acc.get(name) || {
+          name,
+          totalIncome: 0,
+          perLevel: { unit: 0, strip: 0, pack: 0 },
+        };
+        if (!existing.unitLabel) {
+          existing.unitLabel = pkg?.unit_name || item.medicines?.unit_label;
+          existing.unitsPerPack = item.medicines?.units_per_pack;
+          existing.stripName = pkg?.strip_name || undefined;
+          existing.packName = pkg?.pack_name || undefined;
         }
+        const f = formatSaleItem(item, pkg);
+        existing.perLevel[f.level] += f.qty;
+        existing.totalIncome += Number(item.total_price || 0);
+        acc.set(name, existing);
       }
     }
-    return Array.from(mapFixed.entries())
-      .map(([name, data]) => ({ name, ...data }))
-      .sort((a, b) => b.totalIncome - a.totalIncome);
-  }, [sales]);
+    return Array.from(acc.values()).sort((a, b) => b.totalIncome - a.totalIncome);
+  }, [sales, packagingMap]);
 
   // Get transactions for a specific item
   const selectedItemTransactions = useMemo(() => {
