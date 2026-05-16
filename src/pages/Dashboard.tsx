@@ -1014,7 +1014,7 @@ export default function Dashboard() {
                       cy="50%"
                       outerRadius={70}
                       dataKey="sales"
-                      nameKey="code"
+                      nameKey="name"
                       label={false}
                     >
                       {topGroupSales.map((_, index) => (
@@ -1028,7 +1028,10 @@ export default function Dashboard() {
                   {topGroupSales.map((entry, index) => (
                     <div key={entry.code || entry.name} className="flex items-center gap-1 text-xs">
                       <div className="w-3 h-3 rounded-full shrink-0" style={{ backgroundColor: COLORS[index % COLORS.length] }} />
-                      <span className="truncate max-w-[160px]">{entry.code} ({entry.sales})</span>
+                      <span className="truncate max-w-[200px]">
+                        {entry.name}
+                        {entry.code && entry.code !== entry.name ? ` (${entry.code})` : ''} — {entry.sales}
+                      </span>
                     </div>
                   ))}
                 </div>
