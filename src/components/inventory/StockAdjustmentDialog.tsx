@@ -251,6 +251,8 @@ export default function StockAdjustmentDialog({ open, onOpenChange, medicine, on
         throw new Error('Could not resolve medicine or branch context.');
       }
 
+      const supplierId = batchSupplierId !== 'none' ? batchSupplierId : null;
+
       const { error: batchErr } = await createBatch({
         branchId,
         medicineId,
@@ -260,9 +262,37 @@ export default function StockAdjustmentDialog({ open, onOpenChange, medicine, on
         sellingPrice: sp,
         expiryDate: batchExpiry || null,
         batchNumber: batchNumber.trim() || null,
+        supplierId,
         createdBy: profile?.id || null,
       });
       if (batchErr) throw batchErr;
+
+      // Record supplier purchase + debt if linked
+      if (supplierId) {
+        const totalAmount = qty * pp;
+        await supabase.from('supplier_purchases').insert({
+          supplier_id: supplierId,
+          item_name: medicine.name,
+          quantity: qty,
+          unit_cost: pp,
+          total_cost: totalAmount,
+          payment_type: batchPaymentType,
+          branch_id: branchId,
+          created_by: profile?.id || null,
+        });
+        if (batchPaymentType === 'credit') {
+          const { data: existingDebt } = await supabase
+            .from('supplier_debts')
+            .select('id, total_debt')
+            .eq('supplier_id', supplierId)
+            .maybeSingle();
+          if (existingDebt) {
+            await supabase.from('supplier_debts').update({ total_debt: Number(existingDebt.total_debt) + totalAmount }).eq('id', existingDebt.id);
+          } else {
+            await supabase.from('supplier_debts').insert({ supplier_id: supplierId, total_debt: totalAmount });
+          }
+        }
+      }
 
       // Log as an "increase" stock adjustment for audit
       const { error: logErr } = await supabase.from('inventory_stock_adjustments').insert({
