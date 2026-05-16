@@ -93,6 +93,8 @@ export default function OwnerDashboard() {
     topItems,
     paymentMethodData,
     creditOverview,
+    totalGroups,
+    topGroupSales,
   } = overview;
 
   const handleConnectTelegram = () => {
