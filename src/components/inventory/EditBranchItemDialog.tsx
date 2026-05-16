@@ -184,6 +184,33 @@ export default function EditBranchItemDialog({ open, onOpenChange, item, onItemU
       setReduceQuantity('');
       setReduceReason('');
       setReduceBatchId('auto');
+      // Load packaging row (new model) or build fallback from legacy fields
+      (async () => {
+        const { data: pack } = await (supabase as any)
+          .from('medicine_packaging')
+          .select('*')
+          .eq('medicine_id', item.medicine_id)
+          .maybeSingle();
+        let resolved: Packaging;
+        if (pack) {
+          resolved = pack as Packaging;
+        } else {
+          const fallback = defaultPackaging();
+          fallback.unit_name = item.unit_label || 'unit';
+          if (hasStrip) {
+            fallback.strip_enabled = true;
+            fallback.units_per_strip = item.units_per_strip!;
+            fallback.strip_name = 'strip';
+            if ((item.strips_per_pack ?? 0) > 1) {
+              fallback.pack_enabled = true;
+              fallback.strips_per_pack = item.strips_per_pack!;
+              fallback.pack_name = 'pack';
+            }
+          }
+          resolved = fallback;
+        }
+        setPackaging(resolved);
+      })();
       // Load batches for FIFO/specific selection
       getFIFOBatches(item.id).then(setAvailableBatches).catch(() => setAvailableBatches([]));
     }
