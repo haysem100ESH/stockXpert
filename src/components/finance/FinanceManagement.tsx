@@ -25,6 +25,64 @@ import { useReadOnly } from '@/hooks/useReadOnly';
 import DebtManagement from './DebtManagement';
 import SalaryHistory from '@/components/staff/SalaryHistory';
 import { BarChart, Bar, XAxis, YAxis, CartesianGrid, Tooltip, Legend, ResponsiveContainer } from 'recharts';
+import type { Packaging } from '@/lib/packaging';
+
+type SaleLevel = 'unit' | 'strip' | 'pack';
+
+const approxEq = (a: number, b: number) => Math.abs(a - b) < 0.01;
+
+function inferSaleLevel(si: any, pkg?: Packaging | null): SaleLevel {
+  if (si?.sale_type === 'by_stripe') return 'unit';
+  const price = Number(si?.unit_price || 0);
+  if (pkg) {
+    if (pkg.pack_enabled && pkg.pack_selling_price && approxEq(price, Number(pkg.pack_selling_price))) return 'pack';
+    if (pkg.strip_enabled && pkg.strip_selling_price && approxEq(price, Number(pkg.strip_selling_price))) return 'strip';
+    if (pkg.unit_selling_price && approxEq(price, Number(pkg.unit_selling_price))) return 'unit';
+    if (pkg.strip_enabled && pkg.units_per_strip && pkg.unit_selling_price &&
+        approxEq(price, Number(pkg.unit_selling_price) * Number(pkg.units_per_strip))) return 'strip';
+    if (pkg.pack_enabled && pkg.strips_per_pack && pkg.units_per_strip && pkg.unit_selling_price &&
+        approxEq(price, Number(pkg.unit_selling_price) * Number(pkg.units_per_strip) * Number(pkg.strips_per_pack))) return 'pack';
+  }
+  return 'pack';
+}
+
+interface SaleItemFormatted {
+  qty: number;
+  level: SaleLevel;
+  levelLabel: string;
+  baseUnits: number;
+  baseLabel: string;
+}
+
+function formatSaleItem(si: any, pkg?: Packaging | null): SaleItemFormatted {
+  const level = inferSaleLevel(si, pkg);
+  let qty: number;
+  if (si?.sale_type === 'by_stripe') {
+    const raw = Number(si?.stripes_sold || si?.quantity || 0);
+    qty = raw >= 100 ? raw / 1000 : raw;
+  } else {
+    qty = Number(si?.quantity || 0);
+  }
+  const unitName = pkg?.unit_name || si?.medicines?.unit_label || 'tablet';
+  const stripName = pkg?.strip_name || 'strip';
+  const packName = pkg?.pack_name || 'pack';
+  const ups = Number(pkg?.units_per_strip || 0);
+  const spp = Number(pkg?.strips_per_pack || 0);
+  const unitsPerPack = (ups && spp) ? ups * spp : Number(si?.medicines?.units_per_pack || 1);
+  const baseUnits =
+    level === 'unit' ? qty :
+    level === 'strip' ? qty * (ups || 1) :
+    qty * (unitsPerPack || 1);
+  const levelLabel = level === 'unit' ? unitName : level === 'strip' ? stripName : packName;
+  return { qty, level, levelLabel, baseUnits, baseLabel: unitName };
+}
+
+const pluralLabel = (label: string, n: number) => {
+  const safe = (label || 'unit').trim() || 'unit';
+  if (Math.abs(n - 1) < 1e-9) return safe;
+  if (/(s|x|z|ch|sh)$/i.test(safe)) return `${safe}es`;
+  return `${safe}s`;
+};
 
 interface FinanceStats {
   totalIncome: number;
