@@ -395,7 +395,7 @@ export default function OwnerDashboard() {
             </Card>
 
             {/* Top-Selling Groups (medicine codes) */}
-            {isPharmacy && topGroupSales.length > 0 && (
+            {topGroupSales.length > 0 && (
               <Card className="min-w-0">
                 <CardHeader>
                   <CardTitle>Top-Selling Groups</CardTitle>
