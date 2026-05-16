@@ -217,14 +217,17 @@ export default function CartSlider({
               {/* Cart items */}
               <div className="space-y-3">
                 {cart.map((item) => {
+                  const isNewFlow = !!item.sellLevel && !!item.unitsPerLevel;
                   const unitLabel = item.unit_label || 'unit';
                   const unitLabelCap = unitLabel.charAt(0).toUpperCase() + unitLabel.slice(1);
                   const pricePerStripe = item.units_per_pack
                     ? item.selling_price / item.units_per_pack
                     : item.selling_price;
+                  const levelLabel = item.sellLevelLabel || unitLabel;
+                  const levelLabelPlural = `${levelLabel}${item.quantity === 1 ? '' : 's'}`;
 
                   return (
-                    <div key={`${item.id}-${item.saleType}`} className="border rounded-lg p-3 space-y-3 bg-card">
+                    <div key={`${item.id}-${item.saleType}-${item.sellLevel || ''}`} className="border rounded-lg p-3 space-y-3 bg-card">
                       {/* Name + remove */}
                       <div className="flex items-start justify-between gap-2">
                         <p className="font-medium text-sm leading-tight">{item.name}</p>
@@ -233,8 +236,8 @@ export default function CartSlider({
                         </Button>
                       </div>
 
-                      {/* Sale type toggle (only if item supports strip selling) */}
-                      {item.units_per_pack && (
+                      {/* Sale type toggle — legacy only; new-flow items pick level on add */}
+                      {!isNewFlow && item.units_per_pack && (
                         <div className="flex gap-1">
                           <Button
                             size="sm"
@@ -253,6 +256,12 @@ export default function CartSlider({
                             Full Pack
                           </Button>
                         </div>
+                      )}
+
+                      {isNewFlow && (
+                        <Badge variant="outline" className="text-[10px] font-normal">
+                          Selling by {levelLabel}
+                        </Badge>
                       )}
 
                       {/* Quantity controls */}
@@ -279,7 +288,7 @@ export default function CartSlider({
                               >
                                 <Minus className="h-3 w-3" />
                               </Button>
-                              {item.saleType === 'by_stripe' ? (
+                              {!isNewFlow && item.saleType === 'by_stripe' ? (
                                 <input
                                   type="number"
                                   step="1"
@@ -309,7 +318,9 @@ export default function CartSlider({
                                 <Plus className="h-3 w-3" />
                               </Button>
                               <span className="text-xs text-muted-foreground">
-                                {item.saleType === 'by_stripe' ? `${unitLabel}s` : 'packs'}
+                                {isNewFlow
+                                  ? levelLabelPlural
+                                  : item.saleType === 'by_stripe' ? `${unitLabel}s` : 'packs'}
                               </span>
                             </>
                           )}
@@ -319,13 +330,15 @@ export default function CartSlider({
 
                       {/* Price breakdown */}
                       <p className="text-xs text-muted-foreground">
-                        {item.saleType === 'full_pack'
-                          ? `ETB ${item.selling_price} × ${item.quantity}`
-                          : `ETB ${pricePerStripe.toFixed(2)} × ${item.stripesCount} ${unitLabel}s`}
+                        {isNewFlow
+                          ? `ETB ${item.selling_price.toFixed(2)} × ${item.quantity} ${levelLabelPlural}`
+                          : item.saleType === 'full_pack'
+                            ? `ETB ${item.selling_price} × ${item.quantity}`
+                            : `ETB ${pricePerStripe.toFixed(2)} × ${item.stripesCount} ${unitLabel}s`}
                       </p>
 
-                      {/* Leftover strip info for by_stripe sales */}
-                      {item.saleType === 'by_stripe' && item.units_per_pack && (item.stripesCount !== undefined) && (() => {
+                      {/* Leftover strip info — legacy only */}
+                      {!isNewFlow && item.saleType === 'by_stripe' && item.units_per_pack && (item.stripesCount !== undefined) && (() => {
                         // open_pack_units is already in real decimal units (normalized in fetchMedicines)
                         const openPack = item.open_pack_units || 0;
                         const uPP = item.units_per_pack;
@@ -340,20 +353,14 @@ export default function CartSlider({
                         const packsToOpen = needFromNew > 0 ? Math.ceil(needFromNew / uPP) : 0;
 
                         // 3. Leftover units in the last newly opened pack
-                        // e.g. need 1 unit from a 3-unit pack → 2 units leftover
                         const usedFromLastPack = needFromNew > 0 ? needFromNew % uPP || (needFromNew > 0 ? uPP : 0) : 0;
                         const leftoverInNewPack = packsToOpen > 0
                           ? parseFloat((uPP * packsToOpen - needFromNew).toFixed(6))
                           : 0;
 
-                        // Total opened packs in this sale (opened because of unit selling)
                         const totalOpenedPacks = packsToOpen + (openPack > 0 ? 1 : 0);
-                        // Total original pack stock the item had
                         const totalPacks = item.stock_quantity;
 
-                        // Remaining units in open pack after sale — display as fraction A/B
-                        // After sale: if we still have remainingInOpen from the old open pack
-                        // OR leftoverInNewPack from a newly opened pack
                         const finalRemainingUnits = remainingInOpen > 0
                           ? remainingInOpen
                           : leftoverInNewPack > 0 ? leftoverInNewPack : 0;
