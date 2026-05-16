@@ -25,6 +25,7 @@ import CustomersPage from "./pages/CustomersPage";
 import StockMovementsPage from "./pages/StockMovementsPage";
 import TransferRequestsPage from "./pages/TransferRequestsPage";
 import SmartInventoryPage from "./pages/SmartInventoryPage";
+import MedicineCodesPage from "./pages/MedicineCodesPage";
 import Auth from "./pages/Auth";
 import NotFound from "./pages/NotFound";
 
@@ -81,6 +82,7 @@ const App = () => {
               <Route path="/stock-movements" element={<Layout><SubscriptionGuard><PermissionGuard page="global_inventory"><StockMovementsPage /></PermissionGuard></SubscriptionGuard></Layout>} />
               <Route path="/transfer-requests" element={<Layout><SubscriptionGuard><PermissionGuard page="transfers"><TransferRequestsPage /></PermissionGuard></SubscriptionGuard></Layout>} />
               <Route path="/smart-inventory" element={<Layout><SubscriptionGuard><PermissionGuard page="smart_inventory"><SmartInventoryPage /></PermissionGuard></SubscriptionGuard></Layout>} />
+              <Route path="/medicine-codes" element={<Layout><SubscriptionGuard><PermissionGuard page="inventory"><MedicineCodesPage /></PermissionGuard></SubscriptionGuard></Layout>} />
               <Route path="/developer" element={<Layout><DeveloperPage /></Layout>} />
               <Route path="/account" element={<Layout><AccountPage /></Layout>} />
               {/* ADD ALL CUSTOM ROUTES ABOVE THE CATCH-ALL "*" ROUTE */}

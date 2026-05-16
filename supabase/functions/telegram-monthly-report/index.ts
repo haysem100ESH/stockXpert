@@ -127,7 +127,7 @@ Deno.serve(async (req) => {
             const topLabel = isPharmacy ? 'Top 5 Medicines' : 'Top 5 Items';
 
             const { data: sales } = await supabase.from('sales')
-              .select('id, total_amount, created_at, sale_items(quantity, total_price, medicines(name))')
+              .select('id, total_amount, created_at, sale_items(medicine_id, quantity, unit_price, total_price, sale_type, stripes_sold, medicines(id, name, unit_label, units_per_pack))')
               .eq('branch_id', branch.id).gte('created_at', monthStartStr).lte('created_at', monthEndStr);
 
             const { data: expenses } = await supabase.from('expenses').select('amount, created_at')
@@ -136,20 +136,81 @@ Deno.serve(async (req) => {
             const totalIncome = sales?.reduce((s: number, sale: any) => s + (sale.total_amount || 0), 0) || 0;
             const totalExpense = expenses?.reduce((s: number, e: any) => s + (e.amount || 0), 0) || 0;
             const avgDailySales = totalIncome / daysInMonth;
-            
+
+            const medIds = Array.from(new Set(
+              (sales || []).flatMap((s: any) => s.sale_items || [])
+                .map((si: any) => si.medicine_id || si.medicines?.id).filter(Boolean)
+            )) as string[];
+            const pkgMap: Record<string, any> = {};
+            if (medIds.length > 0) {
+              const { data: pkgRows } = await supabase.from('medicine_packaging').select('*').in('medicine_id', medIds);
+              (pkgRows || []).forEach((p: any) => { pkgMap[p.medicine_id] = p; });
+            }
+            const approxEq = (a: number, b: number) => Math.abs(a - b) < 0.01;
+            const inferLevel = (si: any, pkg: any): 'unit'|'strip'|'pack' => {
+              if (si?.sale_type === 'by_stripe') return 'unit';
+              const price = Number(si?.unit_price || 0);
+              if (pkg) {
+                if (pkg.pack_enabled && pkg.pack_selling_price && approxEq(price, Number(pkg.pack_selling_price))) return 'pack';
+                if (pkg.strip_enabled && pkg.strip_selling_price && approxEq(price, Number(pkg.strip_selling_price))) return 'strip';
+                if (pkg.unit_selling_price && approxEq(price, Number(pkg.unit_selling_price))) return 'unit';
+              }
+              return 'pack';
+            };
+            const plural = (label: string, n: number) => {
+              const s = (label || 'unit').trim() || 'unit';
+              if (Math.abs(n - 1) < 1e-9) return s;
+              return /(s|x|z|ch|sh)$/i.test(s) ? `${s}es` : `${s}s`;
+            };
+
+            type Bucket = { qty: number; baseUnits: number; total: number; levelLabel: string; baseLabel: string };
+            const medicineSales: Record<string, { unit?: Bucket; strip?: Bucket; pack?: Bucket; total: number; baseUnits: number }> = {};
             let itemsSoldNumber = 0;
-            const medicineSales: Record<string, number> = {};
             for (const sale of sales || []) {
               for (const item of sale.sale_items || []) {
-                const qty = item.quantity || 0;
                 const med = item.medicines as any;
-                const name = (Array.isArray(med) ? med[0]?.name : med?.name) || 'Unknown';
-                itemsSoldNumber += qty;
-                medicineSales[name] = (medicineSales[name] || 0) + qty;
+                const medObj = Array.isArray(med) ? med[0] : med;
+                const name = medObj?.name || 'Unknown';
+                const medId = item.medicine_id || medObj?.id;
+                const pkg = medId ? pkgMap[medId] : null;
+                const level = inferLevel(item, pkg);
+                let qty: number;
+                if (item.sale_type === 'by_stripe') {
+                  const raw = Number(item.stripes_sold || item.quantity || 0);
+                  qty = raw >= 100 ? raw / 1000 : raw;
+                } else qty = Number(item.quantity || 0);
+                const ups = Number(pkg?.units_per_strip || 0);
+                const spp = Number(pkg?.strips_per_pack || 0);
+                const unitsPerPack = (ups && spp) ? ups * spp : Number(medObj?.units_per_pack || 1);
+                const baseUnits = level === 'unit' ? qty : level === 'strip' ? qty * (ups || 1) : qty * (unitsPerPack || 1);
+                const unitName = pkg?.unit_name || medObj?.unit_label || 'tablet';
+                const stripName = pkg?.strip_name || 'strip';
+                const packName = pkg?.pack_name || 'pack';
+                const levelLabel = level === 'unit' ? unitName : level === 'strip' ? stripName : packName;
+                if (!medicineSales[name]) medicineSales[name] = { total: 0, baseUnits: 0 };
+                const cur = medicineSales[name][level] || { qty: 0, baseUnits: 0, total: 0, levelLabel, baseLabel: unitName };
+                cur.qty += qty; cur.baseUnits += baseUnits; cur.total += Number(item.total_price || 0);
+                cur.levelLabel = levelLabel; cur.baseLabel = unitName;
+                medicineSales[name][level] = cur;
+                medicineSales[name].total += Number(item.total_price || 0);
+                medicineSales[name].baseUnits += baseUnits;
+                itemsSoldNumber += baseUnits;
               }
             }
 
-            const topMedicines = Object.entries(medicineSales).sort(([, a], [, b]) => b - a).slice(0, 5);
+            const topMedicines = Object.entries(medicineSales)
+              .sort(([, a]: any, [, b]: any) => b.baseUnits - a.baseUnits).slice(0, 5);
+
+            const formatLine = (lv: any) => {
+              const parts: string[] = [];
+              (['pack','strip','unit'] as const).forEach(l => {
+                const b = lv[l]; if (!b || !b.qty) return;
+                const qStr = b.qty % 1 === 0 ? `${b.qty}` : b.qty.toFixed(2);
+                const detail = l !== 'unit' && b.baseUnits > 0 ? ` (${b.baseUnits} ${plural(b.baseLabel, b.baseUnits)})` : '';
+                parts.push(`${qStr} ${plural(b.levelLabel, b.qty)}${detail}`);
+              });
+              return parts.join(' + ');
+            };
 
             const weeksInMonth = Math.ceil(daysInMonth / 7);
             const weeklyLabels = Array.from({ length: weeksInMonth }, (_, i) => `Week ${i + 1}`);
@@ -162,11 +223,13 @@ Deno.serve(async (req) => {
             const monthStr = monthStart.toLocaleDateString('en-US', { month: 'long', year: 'numeric' });
 
             let report = `${reportTitle}\n\n🏪 *Branch:* ${branch.name}\n📆 *Month:* ${monthStr}\n\n`;
-            report += `💊 *Total Items Sold:* ${itemsSoldNumber}\n💰 *Total Income:* ${formatNumber(totalIncome)} ETB\n💸 *Total Expense:* ${formatNumber(totalExpense)} ETB\n📊 *Average Daily Sales:* ${formatNumber(avgDailySales)} ETB/day\n`;
-            
+            report += `💊 *Total Units Sold:* ${itemsSoldNumber}\n💰 *Total Income:* ${formatNumber(totalIncome)} ETB\n💸 *Total Expense:* ${formatNumber(totalExpense)} ETB\n📊 *Average Daily Sales:* ${formatNumber(avgDailySales)} ETB/day\n`;
+
             if (topMedicines.length > 0) {
               report += `🔥 *${topLabel}:*\n`;
-              topMedicines.forEach(([name, qty], idx) => { report += `${idx + 1}️⃣ ${name} — ${qty} units\n`; });
+              topMedicines.forEach(([name, lv]: any, idx) => {
+                report += `${idx + 1}️⃣ ${name} — ${formatLine(lv)} — ${formatNumber(lv.total)} ETB\n`;
+              });
             }
 
             report += await getDebtorsSummary(supabase, branch.id);

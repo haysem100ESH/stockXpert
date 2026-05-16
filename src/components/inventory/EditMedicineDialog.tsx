@@ -12,6 +12,9 @@ import { useBranchContext } from '@/hooks/useBranchContext';
 import { useCustomCategories } from '@/hooks/useCustomCategories';
 import { useMedicineGroups } from '@/hooks/useMedicineGroups';
 import { MEASURABLE_UNIT_OPTIONS } from '@/lib/itemTypes';
+import MedicineCodeCombobox from './MedicineCodeCombobox';
+import PackagingEditor from './PackagingEditor';
+import { defaultPackaging, Packaging, autoStripPrice, autoPackPrice, formatStock, packagingSummary } from '@/lib/packaging';
 
 interface Medicine {
   id: string;
@@ -29,6 +32,7 @@ interface Medicine {
   expiry_alert_enabled?: boolean;
   medicine_group?: string | null;
   strength?: string | null;
+  medicine_code_id?: string | null;
 }
 
 interface EditMedicineDialogProps {
@@ -87,6 +91,8 @@ export default function EditMedicineDialog({
   const [branches, setBranches] = useState<Array<{ id: string; name: string }>>([]);
   const [userRole, setUserRole] = useState<'owner' | 'staff' | null>(null);
   const [loading, setLoading] = useState(false);
+  const [medicineCodeId, setMedicineCodeId] = useState<string | null>(null);
+  const [packaging, setPackaging] = useState<Packaging>(defaultPackaging());
   const { toast } = useToast();
 
   useEffect(() => {
@@ -152,6 +158,36 @@ export default function EditMedicineDialog({
         medicine_group: medicine.medicine_group || '',
       });
       setCustomGroup('');
+      setMedicineCodeId(medicine.medicine_code_id ?? null);
+
+      // Load packaging row (or build from legacy fields as fallback)
+      (async () => {
+        const { data: pack } = await (supabase as any)
+          .from('medicine_packaging')
+          .select('*')
+          .eq('medicine_id', medicine.id)
+          .maybeSingle();
+        let resolved: Packaging;
+        if (pack) {
+          resolved = pack as Packaging;
+        } else {
+          const fallback = defaultPackaging();
+          fallback.unit_name = unitLbl || 'unit';
+          if (hasStripBreakdown) {
+            fallback.strip_enabled = true;
+            fallback.units_per_strip = medicineWithBranch.units_per_strip!;
+            fallback.strip_name = 'strip';
+            if ((medicineWithBranch.strips_per_pack ?? 0) > 1) {
+              fallback.pack_enabled = true;
+              fallback.strips_per_pack = medicineWithBranch.strips_per_pack!;
+              fallback.pack_name = 'pack';
+            }
+          }
+          fallback.pack_selling_price = medicine.selling_price ?? null;
+          resolved = fallback;
+        }
+        setPackaging(resolved);
+      })();
 
       // Check if an expense exists for this item
       (async () => {
@@ -175,22 +211,25 @@ export default function EditMedicineDialog({
 
     try {
       const isMeas = medicineData.item_type === 'measurable';
-      const unitLabel = isMeas ? measurableUnit : (medicineData.unit_label || 'strip');
+      const unitLabel = isMeas ? measurableUnit : (packaging.unit_name || 'unit');
 
-      // Compute units_per_pack: strip mode → strips × units/strip
+      // Derive legacy packaging columns from the new packaging state
       let computedUnitsPerPack: number | null = null;
+      let stripsPerPackVal: number | null = null;
+      let unitsPerStripVal: number | null = null;
+      let packagingModeVal: string | null = null;
       if (!isMeas) {
-        if (packagingMode === 'with_strip') {
-          const sp = parseInt(stripsPerPack);
-          const ups = parseInt(unitsPerStrip);
-          if (!sp || !ups || sp < 1 || ups < 1) {
-            toast({ title: 'Error', description: 'Strips per item and total items are required for strip packaging', variant: 'destructive' });
-            setLoading(false);
-            return;
+        if (packaging.strip_enabled && packaging.units_per_strip) {
+          unitsPerStripVal = packaging.units_per_strip;
+          packagingModeVal = 'with_strip';
+          if (packaging.pack_enabled && packaging.strips_per_pack) {
+            stripsPerPackVal = packaging.strips_per_pack;
+            computedUnitsPerPack = packaging.strips_per_pack * packaging.units_per_strip;
+          } else {
+            computedUnitsPerPack = packaging.units_per_strip;
           }
-          computedUnitsPerPack = sp * ups;
-        } else if (medicineData.units_per_pack) {
-          computedUnitsPerPack = parseInt(medicineData.units_per_pack);
+        } else {
+          packagingModeVal = 'no_strip';
         }
       }
 
@@ -217,26 +256,47 @@ export default function EditMedicineDialog({
         country_name: medicineData.country_name || null,
         purchase_price: parseFloat(medicineData.purchase_price),
         selling_price: parseFloat(medicineData.selling_price),
-        
         minimum_stock_level: parseInt(medicineData.minimum_stock_level),
         units_per_pack: computedUnitsPerPack,
         unit_label: unitLabel,
+        packaging_mode: packagingModeVal,
         expiry_date: isPharmacy ? (medicineData.expiry_date || null) : null,
         expiry_alert_enabled: isPharmacy ? medicineData.expiry_alert_enabled : false,
         item_type: medicineData.item_type,
-        strips_per_pack: !isMeas && packagingMode === 'with_strip' ? parseInt(stripsPerPack) : null,
-        units_per_strip: !isMeas && packagingMode === 'with_strip' ? parseInt(unitsPerStrip) : null,
+        strips_per_pack: stripsPerPackVal,
+        units_per_strip: unitsPerStripVal,
         // Pharmacy-only fields
         strength: isPharmacy ? (medicineData.strength.trim() || null) : null,
         medicine_group: isPharmacy ? resolvedGroup : null,
+        medicine_code_id: medicineCodeId,
       };
-      
+
       if (userRole === 'owner' && medicineData.branch_id) {
         updateData.branch_id = medicineData.branch_id;
       }
 
       const { error } = await supabase.from('medicines').update(updateData).eq('id', medicine.id);
       if (error) throw error;
+
+      // Upsert packaging row (Full PCS items only)
+      if (!isMeas) {
+        const stripPrice = packaging.strip_selling_price ?? autoStripPrice(packaging);
+        const packPrice = packaging.pack_selling_price ?? autoPackPrice(packaging);
+        await (supabase as any).from('medicine_packaging').upsert({
+          medicine_id: medicine.id,
+          unit_name: packaging.unit_name || 'unit',
+          strip_enabled: packaging.strip_enabled,
+          units_per_strip: packaging.strip_enabled ? packaging.units_per_strip : null,
+          strip_name: packaging.strip_enabled ? (packaging.strip_name || 'strip') : null,
+          pack_enabled: packaging.pack_enabled,
+          strips_per_pack: packaging.pack_enabled ? packaging.strips_per_pack : null,
+          pack_name: packaging.pack_enabled ? (packaging.pack_name || 'pack') : null,
+          unit_selling_price: packaging.unit_selling_price ?? null,
+          strip_selling_price: stripPrice ?? null,
+          pack_selling_price: packPrice ?? updateData.selling_price ?? null,
+        }, { onConflict: 'medicine_id' });
+      }
+
 
       // Expense sync logic
       const { data: { user } } = await supabase.auth.getUser();
@@ -419,16 +479,9 @@ export default function EditMedicineDialog({
             </div>
           </div>
 
-          <div className="grid grid-cols-2 gap-4">
-            <div className="space-y-2">
-              <Label htmlFor="stock_quantity">Stock Quantity</Label>
-              <Input id="stock_quantity" type="number" value={medicineData.stock_quantity} disabled className="opacity-60 cursor-not-allowed" />
-              <p className="text-xs text-muted-foreground">Use "Adjust Stock" to change quantity</p>
-            </div>
-            <div className="space-y-2">
-              <Label htmlFor="minimum_stock_level">Minimum Stock Level(for alert!) *</Label>
-              <Input id="minimum_stock_level" type="number" value={medicineData.minimum_stock_level} onChange={(e) => setMedicineData({ ...medicineData, minimum_stock_level: e.target.value })} required />
-            </div>
+          <div className="space-y-2">
+            <Label htmlFor="minimum_stock_level">Minimum Stock Level (for alert!) *</Label>
+            <Input id="minimum_stock_level" type="number" value={medicineData.minimum_stock_level} onChange={(e) => setMedicineData({ ...medicineData, minimum_stock_level: e.target.value })} required />
           </div>
 
           {/* Measurable unit selector */}
@@ -446,51 +499,46 @@ export default function EditMedicineDialog({
             </div>
           )}
 
-          {/* Unit Label & Packaging — only for Full PCS */}
-          {medicineData.item_type === 'full_pcs' && (
-            <>
-              <div className="space-y-2">
-                <Label htmlFor="unit_label">Unit Label</Label>
-                <Input id="unit_label" value={medicineData.unit_label} onChange={(e) => setMedicineData({ ...medicineData, unit_label: e.target.value })} placeholder="e.g. strip, piece, bottle" />
-              </div>
-
-              <div className="space-y-2">
-                <Label>Packaging *</Label>
-                <Select value={packagingMode} onValueChange={(val) => setPackagingMode(val as 'with_strip' | 'no_strip')}>
-                  <SelectTrigger><SelectValue /></SelectTrigger>
-                  <SelectContent>
-                    <SelectItem value="no_strip">No strip (loose pieces)</SelectItem>
-                    <SelectItem value="with_strip">With strip (e.g. tablets in blister)</SelectItem>
-                  </SelectContent>
-                </Select>
-              </div>
-
-              {packagingMode === 'with_strip' ? (
-                <>
-                  <div className="grid grid-cols-2 gap-4">
-                    <div className="space-y-2">
-                      <Label>Strips per Item *</Label>
-                      <Input type="number" min="1" value={stripsPerPack} onChange={(e) => setStripsPerPack(e.target.value)} placeholder="e.g. 10" />
-                    </div>
-                    <div className="space-y-2">
-                      <Label>Total Items *</Label>
-                      <Input type="number" min="1" value={unitsPerStrip} onChange={(e) => setUnitsPerStrip(e.target.value)} placeholder="e.g. 10" />
-                    </div>
-                  </div>
-                  {stripsPerPack && unitsPerStrip && parseInt(stripsPerPack) > 0 && parseInt(unitsPerStrip) > 0 && (
-                    <div className="text-xs text-muted-foreground -mt-2">
-                      Total: {parseInt(stripsPerPack) * parseInt(unitsPerStrip)} units per pack
-                    </div>
-                  )}
-                </>
-              ) : (
-                <div className="space-y-2">
-                  <Label htmlFor="units_per_pack">Units Per Stock</Label>
-                  <Input id="units_per_pack" type="number" min="1" value={medicineData.units_per_pack} onChange={(e) => setMedicineData({ ...medicineData, units_per_pack: e.target.value })} placeholder="Leave empty if not sold by unit" />
-                </div>
-              )}
-            </>
+          {medicineData.item_type === 'measurable' && (
+            <div className="space-y-2">
+              <Label htmlFor="stock_quantity">Stock Quantity</Label>
+              <Input id="stock_quantity" type="number" value={medicineData.stock_quantity} disabled className="opacity-60 cursor-not-allowed" />
+              <p className="text-xs text-muted-foreground">Use "Adjust Stock" to change quantity</p>
+            </div>
           )}
+
+          {/* Unit / Strip / Pack — only for Full PCS */}
+          {medicineData.item_type === 'full_pcs' && (() => {
+            const totalUnits = Number(medicineData.stock_quantity || 0);
+            const unitName = packaging.unit_name || 'unit';
+            return (
+              <>
+                <PackagingEditor value={packaging} onChange={setPackaging} />
+
+                <div className="space-y-2 rounded-lg border bg-muted/20 p-4">
+                  <Label className="text-sm font-semibold">Stock on hand</Label>
+                  <div className="space-y-1">
+                    <Label className="text-xs">Total {unitName}{totalUnits === 1 ? '' : 's'}</Label>
+                    <Input
+                      type="number"
+                      value={medicineData.stock_quantity}
+                      disabled
+                      className="opacity-60 cursor-not-allowed"
+                    />
+                  </div>
+                  <p className="text-sm font-medium text-foreground">
+                    = {formatStock(totalUnits, packaging)}
+                  </p>
+                  <p className="text-xs text-muted-foreground">{packagingSummary(packaging)}</p>
+                  <p className="text-xs text-muted-foreground">
+                    Toggle Strip / Pack above and set sizes — the breakdown updates automatically.
+                    Use "Adjust Stock" to change the total quantity.
+                  </p>
+                </div>
+              </>
+            );
+          })()}
+
 
           {isPharmacy && (
             <>
@@ -516,6 +564,11 @@ export default function EditMedicineDialog({
               </div>
             </>
           )}
+
+          {/* Medicine Code (Optional grouping) */}
+          <div className="p-4 rounded-lg border bg-muted/30">
+            <MedicineCodeCombobox value={medicineCodeId} onChange={setMedicineCodeId} />
+          </div>
 
           {/* Record in Expense checkbox */}
           <div className="flex items-center space-x-2 rounded-md border p-3 bg-muted/30">

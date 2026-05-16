@@ -34,15 +34,13 @@ export default function CreateCustomItemDialog({ open, onOpenChange, onItemCreat
   const [stripsPerPack, setStripsPerPack] = useState('');
   const [unitsPerStrip, setUnitsPerStrip] = useState('');
   const [unitsPack, setUnitsPack] = useState('');
-  const [minStock, setMinStock] = useState('');
+  
   // Multi-level packaging
   const [containerType, setContainerType] = useState(''); // packaging_mode column: Pack, Bottle, Box, Carton...
   const [mainUnitName, setMainUnitName] = useState('');
   const [unitName, setUnitName] = useState(''); // strip-level label (informational; persisted via unit_label too)
   const [subUnitsPerUnit, setSubUnitsPerUnit] = useState('');
   const [subUnitName, setSubUnitName] = useState('');
-  const [unitPrice, setUnitPrice] = useState('');
-  const [subUnitPrice, setSubUnitPrice] = useState('');
   const [submitting, setSubmitting] = useState(false);
 
   const { toast } = useToast();
@@ -67,20 +65,18 @@ export default function CreateCustomItemDialog({ open, onOpenChange, onItemCreat
     setStripsPerPack('');
     setUnitsPerStrip('');
     setUnitsPack('');
-    setMinStock('');
+    
     setContainerType('');
     setMainUnitName('');
     setUnitName('');
     setSubUnitsPerUnit('');
     setSubUnitName('');
-    setUnitPrice('');
-    setSubUnitPrice('');
   };
 
   const handleCreate = async () => {
-    const finalCategory = category === '__custom__' ? customCategory.trim() : category;
-    if (!name.trim() || !finalCategory) {
-      toast({ title: 'Error', description: 'Name and category are required', variant: 'destructive' });
+    const finalCategory = (category === '__custom__' ? customCategory.trim() : category) || 'Uncategorized';
+    if (!name.trim()) {
+      toast({ title: 'Error', description: 'Item name is required', variant: 'destructive' });
       return;
     }
 
@@ -103,12 +99,9 @@ export default function CreateCustomItemDialog({ open, onOpenChange, onItemCreat
       if (itemType === 'full_pcs' && packagingMode === 'with_strip') {
         const sp = parseInt(stripsPerPack);
         const ups = parseInt(unitsPerStrip);
-        if (!sp || !ups || sp < 1 || ups < 1) {
-          toast({ title: 'Error', description: 'Strips per pack and units per strip are required', variant: 'destructive' });
-          setSubmitting(false);
-          return;
+        if (sp > 0 && ups > 0) {
+          computedUnitsPerPack = sp * ups;
         }
-        computedUnitsPerPack = sp * ups;
       } else if (unitsPack) {
         computedUnitsPerPack = parseInt(unitsPack);
       }
@@ -128,6 +121,8 @@ export default function CreateCustomItemDialog({ open, onOpenChange, onItemCreat
       }
 
       // Insert into medicines table
+      // Note: purchase_price / selling_price / stock_quantity are placeholders (0).
+      // Real pricing & stock are configured per-branch in Add Medicine → branch_items + inventory_batches.
       const insertPayload: any = {
         name: name.trim(),
         generic_name: genericName.trim() || null,
@@ -136,7 +131,10 @@ export default function CreateCustomItemDialog({ open, onOpenChange, onItemCreat
         item_type: itemType,
         unit_label: itemType === 'measurable' ? unitLabel : 'strip',
         units_per_pack: computedUnitsPerPack,
-        minimum_stock_level: minStock ? parseInt(minStock) : null,
+        minimum_stock_level: 0,
+        purchase_price: 0,
+        selling_price: 0,
+        stock_quantity: 0,
       };
 
       // Pharmacy-only fields
@@ -157,9 +155,7 @@ export default function CreateCustomItemDialog({ open, onOpenChange, onItemCreat
       if (subUnitsPerUnit && parseInt(subUnitsPerUnit) > 0) {
         insertPayload.sub_units_per_unit = parseInt(subUnitsPerUnit);
         if (subUnitName.trim()) insertPayload.sub_unit_name = subUnitName.trim();
-        if (subUnitPrice && !isNaN(parseFloat(subUnitPrice))) insertPayload.sub_unit_price = parseFloat(subUnitPrice);
       }
-      if (unitPrice && !isNaN(parseFloat(unitPrice))) insertPayload.unit_price = parseFloat(unitPrice);
 
       const { data: newMed, error } = await supabase.from('medicines').insert(insertPayload).select('id, name, generic_name, category, manufacturer, item_type, unit_label, units_per_pack, minimum_stock_level').single();
 
@@ -258,7 +254,7 @@ export default function CreateCustomItemDialog({ open, onOpenChange, onItemCreat
           )}
 
           <div className="space-y-2">
-            <Label>Category *</Label>
+            <Label>Category</Label>
             <Select value={category} onValueChange={setCategory}>
               <SelectTrigger><SelectValue placeholder="Select category" /></SelectTrigger>
               <SelectContent>
@@ -280,7 +276,7 @@ export default function CreateCustomItemDialog({ open, onOpenChange, onItemCreat
 
           <div className="grid grid-cols-2 gap-4">
             <div className="space-y-2">
-              <Label>Item Type *</Label>
+              <Label>Item Type</Label>
               <Select value={itemType} onValueChange={val => setItemType(val as 'full_pcs' | 'measurable')}>
                 <SelectTrigger><SelectValue /></SelectTrigger>
                 <SelectContent>
@@ -305,10 +301,15 @@ export default function CreateCustomItemDialog({ open, onOpenChange, onItemCreat
             )}
           </div>
 
+          <div className="pt-2 border-t">
+            <h3 className="text-sm font-semibold mb-1">Pricing & Stock</h3>
+            <p className="text-xs text-muted-foreground mb-3">Configure packaging here. Prices and stock quantities are set per-branch when adding the item.</p>
+          </div>
+
           {/* Strip packaging — only for countable items */}
           {itemType === 'full_pcs' && (
             <div className="space-y-2">
-              <Label>Packaging *</Label>
+              <Label>Packaging</Label>
               <Select value={packagingMode} onValueChange={val => setPackagingMode(val as 'with_strip' | 'no_strip')}>
                 <SelectTrigger><SelectValue /></SelectTrigger>
                 <SelectContent>
@@ -319,38 +320,31 @@ export default function CreateCustomItemDialog({ open, onOpenChange, onItemCreat
             </div>
           )}
 
-          {itemType === 'full_pcs' && packagingMode === 'with_strip' ? (
+          {itemType === 'full_pcs' && packagingMode === 'with_strip' && (
             <>
               <div className="grid grid-cols-2 gap-4">
                 <div className="space-y-2">
-                  <Label>Strips per Item *</Label>
+                  <Label>Strips per Item</Label>
                   <Input type="number" min="1" value={stripsPerPack} onChange={e => setStripsPerPack(e.target.value)} placeholder="e.g. 10" />
                 </div>
                 <div className="space-y-2">
-                  <Label>Total Items *</Label>
+                  <Label>Units per Strip</Label>
                   <Input type="number" min="1" value={unitsPerStrip} onChange={e => setUnitsPerStrip(e.target.value)} placeholder="e.g. 10" />
                 </div>
               </div>
               {stripsPerPack && unitsPerStrip && parseInt(stripsPerPack) > 0 && parseInt(unitsPerStrip) > 0 && (
-                <div className="text-xs text-muted-foreground -mt-2">
-                  Total: {parseInt(stripsPerPack) * parseInt(unitsPerStrip)} units per pack
+                <div className="rounded-md bg-primary/10 border border-primary/20 px-3 py-2 -mt-2">
+                  <p className="text-sm font-semibold">
+                    Total stock per item: {parseInt(stripsPerPack) * parseInt(unitsPerStrip)} units
+                  </p>
                 </div>
               )}
-              <div className="space-y-2">
-                <Label>Minimum Stock Level</Label>
-                <Input type="number" min="0" value={minStock} onChange={e => setMinStock(e.target.value)} placeholder="e.g. 5" />
-              </div>
             </>
-          ) : (
-            <div className="grid grid-cols-2 gap-4">
-              <div className="space-y-2">
-                <Label>Units per Pack</Label>
-                <Input type="number" min="1" value={unitsPack} onChange={e => setUnitsPack(e.target.value)} placeholder="e.g. 10" />
-              </div>
-              <div className="space-y-2">
-                <Label>Minimum Stock Level</Label>
-                <Input type="number" min="0" value={minStock} onChange={e => setMinStock(e.target.value)} placeholder="e.g. 5" />
-              </div>
+          )}
+          {itemType === 'measurable' && (
+            <div className="space-y-2">
+              <Label>Total stock per item</Label>
+              <Input type="number" min="1" value={unitsPack} onChange={e => setUnitsPack(e.target.value)} placeholder="e.g. 10" />
             </div>
           )}
 
@@ -371,7 +365,7 @@ export default function CreateCustomItemDialog({ open, onOpenChange, onItemCreat
           </div>
 
           {/* Sub-unit (3rd hierarchy level) — only meaningful for countable items */}
-          {itemType === 'full_pcs' && (
+          {itemType === 'full_pcs' && packagingMode === 'with_strip' && (
             <div className="space-y-3 rounded-lg border p-3 bg-muted/20">
               <div className="flex items-center justify-between">
                 <Label className="text-sm font-semibold">Sub-unit (optional)</Label>
@@ -387,16 +381,9 @@ export default function CreateCustomItemDialog({ open, onOpenChange, onItemCreat
                   <Input value={subUnitName} onChange={e => setSubUnitName(e.target.value)} placeholder="e.g. Tablet, Piece" />
                 </div>
               </div>
-              <div className="grid grid-cols-2 gap-3">
-                <div className="space-y-1">
-                  <Label className="text-xs">Unit / Strip Price</Label>
-                  <Input type="number" step="0.01" min="0" value={unitPrice} onChange={e => setUnitPrice(e.target.value)} placeholder="Optional" />
-                </div>
-                <div className="space-y-1">
-                  <Label className="text-xs">Sub-unit Price</Label>
-                  <Input type="number" step="0.01" min="0" value={subUnitPrice} onChange={e => setSubUnitPrice(e.target.value)} placeholder="Optional" />
-                </div>
-              </div>
+              <p className="text-xs text-muted-foreground">
+                Pricing will be configured when adding stock to a branch.
+              </p>
             </div>
           )}
 

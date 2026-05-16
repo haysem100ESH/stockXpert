@@ -24,6 +24,7 @@ import BatchBreakdownDialog from './BatchBreakdownDialog';
 import StockAdjustmentDialog from './StockAdjustmentDialog';
 import ImportCsvDialog from './ImportCsvDialog';
 import { formatMedicineName, formatPackaging } from '@/lib/medicineDisplay';
+import { formatStock } from '@/lib/packaging';
 
 const ITEMS_PER_PAGE = 24;
 
@@ -234,10 +235,16 @@ export default function StaffInventoryWithActions() {
           <div className="flex justify-between text-sm items-center">
             <span>Stock:</span>
             <div className="flex items-center space-x-2">
-              <span className={(isLowStock(item) || isOutOfStock(item)) ? 'text-warning font-medium' : ''}>{item.quantity}</span>
+              <span className={(isLowStock(item) || isOutOfStock(item)) ? 'text-warning font-medium' : ''}>
+                {(item as any).packaging ? formatStock(item.quantity, (item as any).packaging) : item.quantity}
+              </span>
               {isOutOfStock(item) && <Badge variant="destructive" className="text-xs">Out of Stock</Badge>}
               {isLowStock(item) && <Badge variant="destructive" className="text-xs">Low Stock</Badge>}
             </div>
+          </div>
+          <div className="flex justify-between text-xs text-muted-foreground">
+            <span>Total pieces:</span>
+            <span className="font-medium">{item.quantity}</span>
           </div>
           {item.branch_name && !selectedBranch && (
             <div className="flex justify-between text-sm"><span>Branch:</span><Badge variant="outline">{item.branch_name}</Badge></div>

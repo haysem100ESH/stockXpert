@@ -37,6 +37,7 @@ export interface DashboardStats {
 export interface CategorySalesData { category: string; sales: number; revenue: number; }
 export interface ProductPerformanceData { name: string; sales: number; revenue: number; }
 export interface PaymentMethodData { method: string; amount: number; }
+export interface GroupSalesData { name: string; code: string; sales: number; }
 
 export interface DashboardOverview {
   stats: DashboardStats;
@@ -48,6 +49,8 @@ export interface DashboardOverview {
   topItems: ProductPerformanceData[];
   paymentMethodData: PaymentMethodData[];
   creditOverview: { avgScore: number; atRisk: number; totalExposure: number; totalCustomers: number };
+  totalGroups: number;
+  topGroupSales: GroupSalesData[];
 }
 
 const MEDICINE_CATEGORIES = ['tablet', 'capsule', 'syrup', 'injection', 'cream', 'ointment', 'drops', 'inhaler'];
@@ -57,6 +60,7 @@ const EMPTY_OVERVIEW: DashboardOverview = {
   categorySales: [], medicinesCategorySales: [], itemsCategorySales: [],
   productPerformance: [], topMedicines: [], topItems: [], paymentMethodData: [],
   creditOverview: { avgScore: 0, atRisk: 0, totalExposure: 0, totalCustomers: 0 },
+  totalGroups: 0, topGroupSales: [],
 };
 
 function getStartDate(dateFilter: DateFilter): Date {
@@ -90,7 +94,7 @@ async function fetchDashboardOverview({ selectedBranch, ownerBranchIds, dateFilt
   // We also dropped the redundant `salesQuery` — `salesWithItemsQuery` returns the
   // same rows plus the joined sale_items, so one round-trip is enough.
   let salesWithItemsQuery = supabase.from('sales')
-    .select('id, total_amount, payment_method, discount_amount, branch_id, created_at, sale_items(quantity, medicines(name, category))')
+    .select('id, total_amount, payment_method, discount_amount, branch_id, created_at, sale_items(quantity, medicine_id, medicines(name, category, medicine_code_id))')
     .gte('created_at', startDate.toISOString())
     .lte('created_at', now.toISOString())
     .range(0, 49999);
@@ -117,15 +121,19 @@ async function fetchDashboardOverview({ selectedBranch, ownerBranchIds, dateFilt
     salesDebtQuery = salesDebtQuery.in('branch_id', ownerBranchIds);
   }
 
-  // Fire all 4 queries in parallel.
-  const [branchItemsRes, salesWithItemsRes, custRes, salesDebtRes] = await Promise.all([
-    branchItemsQuery, salesWithItemsQuery, custQuery, salesDebtQuery,
+  // Fire all queries in parallel.
+  const codesQuery = (supabase as any).from('medicine_codes')
+    .select('id, code, label')
+    .range(0, 9999);
+  const [branchItemsRes, salesWithItemsRes, custRes, salesDebtRes, codesRes] = await Promise.all([
+    branchItemsQuery, salesWithItemsQuery, custQuery, salesDebtQuery, codesQuery,
   ]);
 
   const branchItemsData = branchItemsRes.data || [];
   const salesWithItems = salesWithItemsRes.data || [];
   const custData = custRes.data || [];
   const salesDebt = salesDebtRes.data || [];
+  const codesData: Array<{ id: string; code: string; label: string }> = codesRes.data || [];
 
   // Derive flat sales list + sale items from the consolidated query.
   const salesData = salesWithItems;
@@ -211,12 +219,38 @@ async function fetchDashboardOverview({ selectedBranch, ownerBranchIds, dateFilt
     creditOverview = { avgScore, atRisk, totalExposure, totalCustomers: custData.length };
   }
 
+  // Group (medicine_code) aggregations — number of distinct sales transactions per group.
+  const codeMap = new Map<string, { code: string; label: string }>();
+  codesData.forEach((c) => codeMap.set(c.id, { code: c.code, label: c.label }));
+  const groupSalesIds = new Map<string, Set<string>>();
+  salesWithItems.forEach((sale: any) => {
+    const codeIdsInSale = new Set<string>();
+    (sale.sale_items || []).forEach((si: any) => {
+      const cid = si.medicines?.medicine_code_id;
+      if (cid && codeMap.has(cid)) codeIdsInSale.add(cid);
+    });
+    codeIdsInSale.forEach((cid) => {
+      if (!groupSalesIds.has(cid)) groupSalesIds.set(cid, new Set());
+      groupSalesIds.get(cid)!.add(sale.id);
+    });
+  });
+  const topGroupSales: GroupSalesData[] = Array.from(groupSalesIds.entries())
+    .map(([cid, ids]) => ({
+      name: codeMap.get(cid)?.label || codeMap.get(cid)?.code || 'Unknown',
+      code: codeMap.get(cid)?.code || '',
+      sales: ids.size,
+    }))
+    .sort((a, b) => b.sales - a.sales)
+    .slice(0, 8);
+
   return {
     stats: { totalRevenue, totalProducts, totalMedicines, totalItems, totalSoldItems, lowStockItems, outOfStockItems, expiredItems },
     categorySales: toArr(categoryMap),
     medicinesCategorySales: toArr(medicineCategoryMap),
     itemsCategorySales: toArr(itemCategoryMap),
     productPerformance, topMedicines, topItems, paymentMethodData, creditOverview,
+    totalGroups: codesData.length,
+    topGroupSales,
   };
 }
 

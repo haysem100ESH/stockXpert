@@ -20,6 +20,8 @@ import { updateCreditScore } from '@/hooks/useCreditScore';
 import { isMeasurable } from '@/lib/itemTypes';
 import { deductFIFO, recordSaleItemBatches } from '@/lib/batchInventory';
 import { useReadOnly } from '@/hooks/useReadOnly';
+import { usePackagingMap } from '@/hooks/usePackaging';
+import { formatStock, unitsPerStripSafe, unitsPerPackSafe, autoStripPrice, autoPackPrice } from '@/lib/packaging';
 
 interface Medicine {
   id: string; // branch_items.id
@@ -51,6 +53,17 @@ interface CartItem extends Medicine {
   total: number;
   saleType: 'full_pack' | 'by_stripe';
   stripesCount?: number;
+  // New multi-level packaging flow.
+  // When set, `quantity` is in `sellLevel` units and `selling_price`
+  // is the price per one `sellLevel`. `unitsPerLevel` is the number
+  // of base pieces contained in one `sellLevel`.
+  sellLevel?: 'unit' | 'strip' | 'pack';
+  unitsPerLevel?: number;
+  sellLevelLabel?: string;
+  availableLevels?: Array<'unit' | 'strip' | 'pack'>;
+  levelPrices?: { unit?: number; strip?: number; pack?: number };
+  levelLabels?: { unit?: string; strip?: string; pack?: string };
+  levelUnitsPer?: { unit: number; strip: number; pack: number };
 }
 
 type ChangeAction = 'keep_profit' | 'deduct_debt' | 'give_change' | null;
@@ -58,6 +71,7 @@ type ChangeAction = 'keep_profit' | 'deduct_debt' | 'give_change' | null;
 export default function SalesManagement() {
   // TanStack Query–cached product list + customers (instant hydration on revisit).
   const { medicines, customers, loading, invalidate: invalidateSalesCache } = useSalesInventory();
+  const { data: packagingMap = {} } = usePackagingMap(medicines.map(m => m.medicine_id));
   const [filteredMedicines, setFilteredMedicines] = useState<Medicine[]>([]);
   const [paginatedMedicines, setPaginatedMedicines] = useState<Medicine[]>([]);
   const [cart, setCart] = useState<CartItem[]>([]);
@@ -146,12 +160,28 @@ export default function SalesManagement() {
     return expiry <= thirtyDaysFromNow;
   };
 
-  // Instant add — no dialog for full_pcs, open dialog for measurable
+  // Instant add — measurable items still need the dialog for quantity entry.
+  // Everything else is added straight to the cart (defaults to selling by piece/unit);
+  // the user can switch unit / strip / pack from inside the cart.
   const addToCartInstant = (medicine: Medicine) => {
     if (medicine.item_type === 'measurable') {
-      // For measurable items, we need the dialog for structured input
-      // We'll use AddToCartDialog — set state to open it
       setSelectedMedicineForDialog(medicine);
+      return;
+    }
+    const pkg = packagingMap[medicine.medicine_id];
+    if (pkg && (pkg.strip_enabled || pkg.pack_enabled)) {
+      // Add directly at the unit level — user can change level in the cart.
+      const unitPrice = pkg.unit_selling_price
+        ?? (medicine.selling_price && unitsPerPackSafe(pkg)
+          ? medicine.selling_price / unitsPerPackSafe(pkg)
+          : medicine.selling_price);
+      addToCart(medicine, 'full_pack', 1, {
+        sellLevel: 'unit',
+        unitsPerLevel: 1,
+        levelPrice: unitPrice,
+        levelLabel: pkg.unit_name || medicine.unit_label || 'unit',
+      });
+      if (isSmallScreen) setCartOpen(true);
       return;
     }
     const defaultSaleType: 'full_pack' | 'by_stripe' = medicine.units_per_pack ? 'by_stripe' : 'full_pack';
@@ -159,7 +189,80 @@ export default function SalesManagement() {
     if (isSmallScreen) setCartOpen(true);
   };
 
-  const addToCart = (medicine: Medicine, saleType: 'full_pack' | 'by_stripe', count: number) => {
+  const addToCart = (
+    medicine: Medicine,
+    saleType: 'full_pack' | 'by_stripe',
+    count: number,
+    meta?: { sellLevel?: 'unit' | 'strip' | 'pack'; unitsPerLevel?: number; levelPrice?: number; levelLabel?: string },
+  ) => {
+    // ---- New multi-level packaging flow ----
+    if (meta?.sellLevel && meta.unitsPerLevel && meta.unitsPerLevel > 0) {
+      const upl = meta.unitsPerLevel;
+      const levelPrice = Number(meta.levelPrice ?? medicine.selling_price);
+      const totalBaseAvailable = medicine.stock_quantity || 0;
+      const maxAtLevel = Math.floor(totalBaseAvailable / upl);
+
+      // Count what's already in cart for this medicine across any sellLevel,
+      // converted to base pieces, to enforce real stock limits.
+      const baseInCart = cart
+        .filter(it => it.id === medicine.id && it.sellLevel)
+        .reduce((sum, it) => sum + (it.quantity * (it.unitsPerLevel || 1)), 0);
+      const remainingBase = Math.max(0, totalBaseAvailable - baseInCart);
+      const requestedBase = count * upl;
+      if (requestedBase > remainingBase) {
+        toast({ title: 'Error', description: 'Not enough stock available', variant: 'destructive' });
+        return;
+      }
+
+      const existing = cart.find(it => it.id === medicine.id && it.sellLevel === meta.sellLevel);
+      // Resolve cross-level info from packagingMap so user can switch later.
+      const pkg = packagingMap[medicine.medicine_id];
+      const availableLevels: Array<'unit' | 'strip' | 'pack'> = ['unit'];
+      let levelPrices: { unit?: number; strip?: number; pack?: number } = { unit: levelPrice };
+      let levelLabels: { unit?: string; strip?: string; pack?: string } = { unit: medicine.unit_label || 'unit' };
+      let levelUnitsPer = { unit: 1, strip: 1, pack: 1 };
+      if (pkg) {
+        const upStrip = unitsPerStripSafe(pkg);
+        const upPack = unitsPerPackSafe(pkg);
+        const uPrice = pkg.unit_selling_price ?? (medicine.selling_price && upPack ? medicine.selling_price / upPack : medicine.selling_price);
+        const sPrice = pkg.strip_selling_price ?? (autoStripPrice(pkg) ?? uPrice * upStrip);
+        const pPrice = pkg.pack_selling_price ?? (autoPackPrice(pkg) ?? uPrice * upPack);
+        levelPrices = { unit: uPrice, strip: sPrice, pack: pPrice };
+        levelLabels = { unit: pkg.unit_name || 'unit', strip: pkg.strip_name || 'strip', pack: pkg.pack_name || 'pack' };
+        levelUnitsPer = { unit: 1, strip: upStrip, pack: upPack };
+        if (pkg.strip_enabled) availableLevels.push('strip');
+        if (pkg.pack_enabled) availableLevels.push('pack');
+      }
+
+      if (existing) {
+        const newQty = existing.quantity + count;
+        setCart(prev => prev.map(it =>
+          it.id === medicine.id && it.sellLevel === meta.sellLevel
+            ? { ...it, quantity: newQty, total: parseFloat((newQty * levelPrice).toFixed(2)) }
+            : it,
+        ));
+      } else {
+        setCart(prev => [...prev, {
+          ...medicine,
+          quantity: count,
+          saleType: 'full_pack',
+          stripesCount: undefined,
+          sellLevel: meta.sellLevel,
+          unitsPerLevel: upl,
+          sellLevelLabel: meta.levelLabel || meta.sellLevel,
+          selling_price: levelPrice,
+          unit_label: meta.levelLabel || medicine.unit_label,
+          total: parseFloat((count * levelPrice).toFixed(2)),
+          availableLevels,
+          levelPrices,
+          levelLabels,
+          levelUnitsPer,
+        }]);
+      }
+      return;
+    }
+
+    // ---- Legacy flow (unchanged) ----
     if (saleType === 'by_stripe') {
       if (!medicine.units_per_pack) {
         toast({ title: 'Error', description: 'This item is not configured for unit sales', variant: 'destructive' });
@@ -179,7 +282,7 @@ export default function SalesManagement() {
       }
     }
 
-    const existingItem = cart.find(item => item.id === medicine.id && item.saleType === saleType);
+    const existingItem = cart.find(item => item.id === medicine.id && item.saleType === saleType && !item.sellLevel);
 
     if (existingItem && saleType === 'full_pack') {
       const newQty = existingItem.quantity + count;
@@ -188,7 +291,7 @@ export default function SalesManagement() {
         return;
       }
       setCart(prev => prev.map(item =>
-        item.id === medicine.id && item.saleType === saleType
+        item.id === medicine.id && item.saleType === saleType && !item.sellLevel
           ? { ...item, quantity: newQty, total: newQty * item.selling_price }
           : item
       ));
@@ -196,7 +299,7 @@ export default function SalesManagement() {
       const newCount = parseFloat(((existingItem.stripesCount || 0) + count).toFixed(4));
       const pricePerStripe = medicine.selling_price / (medicine.units_per_pack || 1);
       setCart(prev => prev.map(item =>
-        item.id === medicine.id && item.saleType === saleType
+        item.id === medicine.id && item.saleType === saleType && !item.sellLevel
           ? { ...item, stripesCount: newCount, total: parseFloat((newCount * pricePerStripe).toFixed(2)) }
           : item
       ));
@@ -223,6 +326,13 @@ export default function SalesManagement() {
   const updateCartQuantity = (id: string, saleType: 'full_pack' | 'by_stripe', delta: number) => {
     setCart(prev => prev.map(item => {
       if (item.id !== id || item.saleType !== saleType) return item;
+      // New multi-level flow: clamp by base-stock / unitsPerLevel.
+      if (item.sellLevel && item.unitsPerLevel) {
+        const maxAtLevel = Math.floor((item.stock_quantity || 0) / item.unitsPerLevel);
+        const integerDelta = Number.isInteger(delta) ? delta : Math.round(delta);
+        const newQty = Math.max(1, Math.min(maxAtLevel, item.quantity + integerDelta));
+        return { ...item, quantity: newQty, total: parseFloat((newQty * item.selling_price).toFixed(2)) };
+      }
       if (saleType === 'full_pack') {
         const newQty = Math.max(1, item.quantity + delta);
         if (newQty > item.stock_quantity) return item;
@@ -300,6 +410,44 @@ export default function SalesManagement() {
     const total = calculateTotal();
     const received = amountReceived ? parseFloat(amountReceived) : total;
     return received - total;
+  };
+
+  // Switch selling level (unit/strip/pack) for a cart item using its
+  // stored per-level metadata. Quantity resets to 1, clamped to stock.
+  const changeSellLevel = (id: string, newLevel: 'unit' | 'strip' | 'pack') => {
+    setCart(prev => prev.map(it => {
+      if (it.id !== id || !it.sellLevel) return it;
+      const upl = it.levelUnitsPer?.[newLevel] ?? (newLevel === 'unit' ? 1 : it.unitsPerLevel || 1);
+      const price = it.levelPrices?.[newLevel] ?? it.selling_price;
+      const label = it.levelLabels?.[newLevel] ?? newLevel;
+      // Detect merge target — same id + same target level already in cart
+      const dupe = prev.find(p => p.id === id && p.sellLevel === newLevel && p !== it);
+      if (dupe) return it; // skip; merge handled below
+      const maxAtLevel = Math.max(1, Math.floor((it.stock_quantity || 0) / upl));
+      const newQty = Math.min(Math.max(1, it.quantity), maxAtLevel);
+      return {
+        ...it,
+        sellLevel: newLevel,
+        unitsPerLevel: upl,
+        sellLevelLabel: label,
+        selling_price: price,
+        unit_label: label,
+        quantity: newQty,
+        total: parseFloat((newQty * price).toFixed(2)),
+      };
+    }).reduce<CartItem[]>((acc, cur) => {
+      // Merge if a same-level entry already exists
+      const existingIdx = acc.findIndex(a => a.id === cur.id && a.sellLevel === cur.sellLevel);
+      if (existingIdx >= 0 && acc[existingIdx] !== cur) {
+        const merged = { ...acc[existingIdx] };
+        merged.quantity = merged.quantity + cur.quantity;
+        merged.total = parseFloat((merged.quantity * merged.selling_price).toFixed(2));
+        acc[existingIdx] = merged;
+      } else {
+        acc.push(cur);
+      }
+      return acc;
+    }, []));
   };
 
   const selectedCustomer = customers.find(c => c.id === selectedCustomerId);
@@ -480,7 +628,10 @@ export default function SalesManagement() {
       // Stock deduction — FIFO batch deduction + branch_items sync
       for (const item of cart) {
         let totalQtyToDeduct = 0;
-        if (item.saleType === 'full_pack') {
+        if (item.sellLevel && item.unitsPerLevel) {
+          // New multi-level flow: quantity is in sellLevel units → convert to base pieces.
+          totalQtyToDeduct = item.quantity * item.unitsPerLevel;
+        } else if (item.saleType === 'full_pack') {
           totalQtyToDeduct = item.quantity;
         } else if (item.saleType === 'by_stripe' && item.stripesCount) {
           // Use the cart item's units_per_pack (which may be the expanded value
@@ -663,7 +814,24 @@ export default function SalesManagement() {
   const discount = calculateDiscount();
   const total = calculateTotal();
 
-  const renderSaleCard = (medicine: Medicine) => (
+  const renderSaleCard = (medicine: Medicine) => {
+    const pkg = packagingMap[medicine.medicine_id];
+    const hasNewPackaging = !!pkg && (pkg.strip_enabled || pkg.pack_enabled);
+    const unitName = pkg?.unit_name || medicine.unit_label || 'unit';
+    const stripName = pkg?.strip_name || 'strip';
+    const packName = pkg?.pack_name || 'pack';
+
+    // Resolve per-level prices when new packaging exists.
+    let unitPrice = 0, stripPrice = 0, packPrice = 0;
+    if (hasNewPackaging) {
+      const upStrip = unitsPerStripSafe(pkg!);
+      const upPack = unitsPerPackSafe(pkg!);
+      unitPrice = pkg!.unit_selling_price ?? (medicine.selling_price && upPack ? medicine.selling_price / upPack : medicine.selling_price);
+      stripPrice = pkg!.strip_selling_price ?? (autoStripPrice(pkg!) ?? unitPrice * upStrip);
+      packPrice = pkg!.pack_selling_price ?? (autoPackPrice(pkg!) ?? unitPrice * upPack);
+    }
+
+    return (
     <Card key={medicine.id} className="cursor-pointer hover:shadow-md transition-shadow">
       <CardHeader>
         <div className="flex items-start justify-between">
@@ -684,6 +852,8 @@ export default function SalesManagement() {
             {medicine.category && <Badge variant="outline" className="text-xs">{medicine.category}</Badge>}
             {isMeasurable(medicine.unit_label) ? (
               <Badge variant="secondary" className="text-xs">Measurable ({medicine.unit_label})</Badge>
+            ) : hasNewPackaging ? (
+              <Badge variant="secondary" className="text-xs">By {unitName}</Badge>
             ) : medicine.units_per_pack ? (
               <Badge variant="secondary" className="text-xs">By {medicine.unit_label || 'unit'}</Badge>
             ) : null}
@@ -692,31 +862,54 @@ export default function SalesManagement() {
       </CardHeader>
       <CardContent>
         <div className="space-y-2">
-          <div className="flex justify-between text-sm">
-            <span>Price:</span>
-            <span className="font-medium">ETB {medicine.selling_price}</span>
-          </div>
-          {medicine.units_per_pack && (
-            <div className="flex justify-between text-sm text-muted-foreground">
-              <span>Per {medicine.unit_label || 'unit'}:</span>
-              <span>ETB {(medicine.selling_price / medicine.units_per_pack).toFixed(2)}</span>
-            </div>
-          )}
-          <div className="flex justify-between text-sm">
-            <span>{isMeasurable(medicine.unit_label) ? 'Stock:' : medicine.units_per_pack ? 'Unopened Packs:' : 'Stock:'}</span>
-            <Badge variant={medicine.stock_quantity <= 10 ? 'destructive' : 'secondary'}>
-              {isMeasurable(medicine.unit_label)
-                ? `${medicine.stock_quantity + ((medicine.open_pack_units || 0) / 1000)} ${medicine.unit_label}`
-                : `${medicine.stock_quantity} ${medicine.stock_quantity === 1 ? 'pack' : 'packs'}`}
-            </Badge>
-          </div>
-          {!isMeasurable(medicine.unit_label) && medicine.units_per_pack && (
-            <div className="flex justify-between text-sm text-muted-foreground">
-              <span>Open pack:</span>
-              <Badge variant="outline" className="text-xs">
-                {medicine.open_pack_units || 0}/{medicine.units_per_pack} {medicine.unit_label || 'unit'}s remaining
-              </Badge>
-            </div>
+          {hasNewPackaging ? (
+            <>
+              <div className="flex justify-between text-sm">
+                <span>{unitName} price:</span>
+                <span className="font-medium">ETB {Number(unitPrice || 0).toFixed(2)}</span>
+              </div>
+              {pkg!.strip_enabled && (
+                <div className="flex justify-between text-sm text-muted-foreground">
+                  <span>{stripName} price:</span>
+                  <span>ETB {Number(stripPrice || 0).toFixed(2)}</span>
+                </div>
+              )}
+              {pkg!.pack_enabled && (
+                <div className="flex justify-between text-sm text-muted-foreground">
+                  <span>{packName} price:</span>
+                  <span>ETB {Number(packPrice || 0).toFixed(2)}</span>
+                </div>
+              )}
+              <div className="flex justify-between text-sm">
+                <span>Stock:</span>
+                <Badge variant={medicine.stock_quantity <= 10 ? 'destructive' : 'secondary'}>
+                  {formatStock(medicine.stock_quantity, pkg!)}
+                </Badge>
+              </div>
+              <div className="flex justify-between text-xs text-muted-foreground">
+                <span>Total pieces:</span>
+                <span>{medicine.stock_quantity}</span>
+              </div>
+            </>
+          ) : (
+            <>
+              <div className="flex justify-between text-sm">
+                <span>Price:</span>
+                <span className="font-medium">ETB {medicine.selling_price}</span>
+              </div>
+              <div className="flex justify-between text-sm">
+                <span>Stock:</span>
+                <Badge variant={medicine.stock_quantity <= 10 ? 'destructive' : 'secondary'}>
+                  {isMeasurable(medicine.unit_label)
+                    ? `${medicine.stock_quantity} ${medicine.unit_label}`
+                    : `${medicine.stock_quantity} ${unitName}${medicine.stock_quantity === 1 ? '' : 's'}`}
+                </Badge>
+              </div>
+              <div className="flex justify-between text-xs text-muted-foreground">
+                <span>Total pieces:</span>
+                <span>{medicine.stock_quantity}</span>
+              </div>
+            </>
           )}
           {isPharmacy && medicine.expiry_date && (
             <div className="flex justify-between text-sm">
@@ -747,7 +940,8 @@ export default function SalesManagement() {
         </div>
       </CardContent>
     </Card>
-  );
+    );
+  };
 
   if (loading) {
     return <div className="p-4 text-muted-foreground">Loading {isPharmacy ? 'medicines' : 'items'}...</div>;
@@ -877,6 +1071,7 @@ export default function SalesManagement() {
         onRemove={removeFromCart}
         onUpdateQuantity={updateCartQuantity}
         onChangeSaleType={changeSaleType}
+        onChangeSellLevel={changeSellLevel}
         customers={customers}
         selectedCustomerId={selectedCustomerId}
         onSelectCustomer={setSelectedCustomerId}

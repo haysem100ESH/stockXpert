@@ -1,4 +1,5 @@
 import { useState, useEffect } from 'react';
+import { useQuery, useQueryClient } from '@tanstack/react-query';
 import { Dialog, DialogContent, DialogDescription, DialogHeader, DialogTitle } from '@/components/ui/dialog';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
@@ -34,18 +35,15 @@ interface AddBranchItemDialogProps {
 }
 
 export default function AddBranchItemDialog({ open, onOpenChange, onItemAdded }: AddBranchItemDialogProps) {
-  const [catalogItems, setCatalogItems] = useState<CatalogItem[]>([]);
-  const [loading, setLoading] = useState(false);
   const [submitting, setSubmitting] = useState(false);
   const [searchTerm, setSearchTerm] = useState('');
   const [selectedItem, setSelectedItem] = useState<CatalogItem | null>(null);
   const [showCustomDialog, setShowCustomDialog] = useState(false);
-  const [branches, setBranches] = useState<Array<{ id: string; name: string }>>([]);
   const [selectedBranchId, setSelectedBranchId] = useState<string>('');
-  const [suppliers, setSuppliers] = useState<Array<{ id: string; name: string }>>([]);
   const [selectedSupplierId, setSelectedSupplierId] = useState<string>('');
   const [paymentType, setPaymentType] = useState<'paid' | 'credit'>('paid');
   const [recordInExpense, setRecordInExpense] = useState(true);
+  const [extraCatalogItems, setExtraCatalogItems] = useState<CatalogItem[]>([]);
 
   // Form fields for branch-specific values
   const [sellingPrice, setSellingPrice] = useState('');
@@ -53,20 +51,144 @@ export default function AddBranchItemDialog({ open, onOpenChange, onItemAdded }:
   const [quantity, setQuantity] = useState('');
   const [expiryDate, setExpiryDate] = useState('');
   const [batchNumber, setBatchNumber] = useState('');
+  const [minStockLevel, setMinStockLevel] = useState('');
 
   const { toast } = useToast();
   const { profile } = useAuth();
   const { selectedBranch, branchType } = useBranchContext();
   const isPharmacy = branchType === 'pharmacy';
 
+  // Resolve owner ID once (cached) — staff users have to look up via branch.
+  const { data: ownerId } = useQuery({
+    queryKey: ['resolved-owner-id', profile?.id, profile?.role, profile?.branch_id],
+    queryFn: async () => {
+      if (!profile) return null;
+      if (profile.role === 'owner' || profile.role === 'developer') return profile.id;
+      if (profile.role === 'staff' && profile.branch_id) {
+        const { data } = await supabase
+          .from('pharmacy_branches')
+          .select('pharmacy_owner_id')
+          .eq('id', profile.branch_id)
+          .single();
+        return data?.pharmacy_owner_id || null;
+      }
+      return null;
+    },
+    enabled: !!profile,
+    staleTime: 1000 * 60 * 30,
+  });
+
+  const queryClient = useQueryClient();
+  const catalogKey = ['add-item-catalog', ownerId];
+
+  // Catalog items — progressive load: first 24 immediately, then rest in background.
+  const { data: catalogItems = [], isLoading: catalogLoading, refetch: refetchCatalog } = useQuery({
+    queryKey: catalogKey,
+    queryFn: async (): Promise<CatalogItem[]> => {
+      if (!ownerId) return [];
+      const { data: ownerGroups } = await supabase
+        .from('owner_item_groups')
+        .select('group_id')
+        .eq('owner_id', ownerId);
+      if (!ownerGroups || ownerGroups.length === 0) return [];
+      const groupIds = ownerGroups.map((og: any) => og.group_id);
+
+      const { data: groupMembers } = await supabase
+        .from('grouped_item_members')
+        .select('medicine_id')
+        .in('group_id', groupIds);
+      if (!groupMembers || groupMembers.length === 0) return [];
+
+      const medicineIds = [...new Set(groupMembers.map((gm: any) => gm.medicine_id))];
+      const SELECT = 'id, name, generic_name, category, manufacturer, batch_number, item_type, unit_label, units_per_pack, minimum_stock_level';
+
+      // First page: 24 items, render immediately.
+      const firstIds = medicineIds.slice(0, 24);
+      const { data: firstMeds } = await supabase
+        .from('medicines')
+        .select(SELECT)
+        .in('id', firstIds)
+        .order('name');
+      const firstBatch = (firstMeds || []) as CatalogItem[];
+
+      // Seed cache so UI shows the first 24 right away.
+      queryClient.setQueryData(catalogKey, firstBatch);
+
+      // Background: fetch the rest in chunks and append progressively.
+      const restIds = medicineIds.slice(24);
+      if (restIds.length > 0) {
+        (async () => {
+          const CHUNK = 200;
+          const seen = new Set(firstBatch.map(m => m.id));
+          let acc = [...firstBatch];
+          for (let i = 0; i < restIds.length; i += CHUNK) {
+            const chunk = restIds.slice(i, i + CHUNK);
+            const { data: more } = await supabase
+              .from('medicines')
+              .select(SELECT)
+              .in('id', chunk)
+              .order('name');
+            const fresh = ((more || []) as CatalogItem[]).filter(m => !seen.has(m.id));
+            fresh.forEach(m => seen.add(m.id));
+            acc = [...acc, ...fresh].sort((a, b) => a.name.localeCompare(b.name));
+            queryClient.setQueryData(catalogKey, acc);
+          }
+        })();
+      }
+
+      return firstBatch;
+    },
+    enabled: !!ownerId && open,
+    staleTime: 1000 * 60 * 5,
+    placeholderData: (prev) => prev,
+  });
+
+  // Branches (owner only) — deferred until an item is selected so the catalog
+  // list renders first without competing for bandwidth. Cached for revisits.
+  const { data: branches = [] } = useQuery({
+    queryKey: ['owner-branches-list', profile?.id],
+    queryFn: async () => {
+      const { data } = await supabase
+        .from('pharmacy_branches')
+        .select('id, name')
+        .eq('pharmacy_owner_id', profile!.id)
+        .order('name');
+      return (data || []) as Array<{ id: string; name: string }>;
+    },
+    enabled: !!profile && profile.role === 'owner' && !!selectedItem,
+    staleTime: 1000 * 60 * 5,
+  });
+
+  // Suppliers — deferred until an item is selected. Cached for revisits.
+  const { data: suppliers = [] } = useQuery({
+    queryKey: ['suppliers-list'],
+    queryFn: async () => {
+      const { data } = await supabase.from('suppliers').select('id, name').order('name');
+      return (data || []) as Array<{ id: string; name: string }>;
+    },
+    enabled: open && !!selectedItem,
+    staleTime: 1000 * 60 * 5,
+  });
+
+  const loading = catalogLoading;
+  const allCatalogItems = [...extraCatalogItems, ...catalogItems];
+
   useEffect(() => {
-    if (open && profile) {
-      fetchCatalogItems();
-      fetchBranches();
-      fetchSuppliers();
-      resetForm();
-    }
+    if (open && profile) resetForm();
   }, [open, profile]);
+
+  // Set default branch when branches/selectedBranch resolve.
+  useEffect(() => {
+    if (selectedBranch) setSelectedBranchId(selectedBranch);
+    else if (branches.length > 0 && !selectedBranchId) setSelectedBranchId(branches[0].id);
+  }, [selectedBranch, branches]);
+
+  // Pre-fill min stock level from the selected item's existing value.
+  useEffect(() => {
+    if (selectedItem) {
+      setMinStockLevel(selectedItem.minimum_stock_level != null ? String(selectedItem.minimum_stock_level) : '');
+    }
+  }, [selectedItem]);
 
   const resetForm = () => {
     setSelectedItem(null);
@@ -76,100 +198,13 @@ export default function AddBranchItemDialog({ open, onOpenChange, onItemAdded }:
     setQuantity('');
     setExpiryDate('');
     setBatchNumber('');
+    setMinStockLevel('');
     setSelectedSupplierId('');
     setPaymentType('paid');
     setRecordInExpense(true);
   };
 
-  const fetchCatalogItems = async () => {
-    if (!profile) return;
-    setLoading(true);
-
-    try {
-      // Resolve owner ID (staff → look up via branch)
-      let ownerId: string | null = null;
-      if (profile.role === 'owner' || profile.role === 'developer') {
-        ownerId = profile.id;
-      } else if (profile.role === 'staff' && profile.branch_id) {
-        const { data: branch } = await supabase
-          .from('pharmacy_branches')
-          .select('pharmacy_owner_id')
-          .eq('id', profile.branch_id)
-          .single();
-        ownerId = branch?.pharmacy_owner_id || null;
-      }
-      
-      if (!ownerId) {
-        setCatalogItems([]);
-        setLoading(false);
-        return;
-      }
-
-      // Step 1: Get groups assigned to this owner
-      const { data: ownerGroups } = await supabase
-        .from('owner_item_groups')
-        .select('group_id')
-        .eq('owner_id', ownerId);
-
-      if (!ownerGroups || ownerGroups.length === 0) {
-        setCatalogItems([]);
-        setLoading(false);
-        return;
-      }
-
-      const groupIds = ownerGroups.map((og: any) => og.group_id);
-
-      // Step 2: Get medicine IDs from these groups
-      const { data: groupMembers } = await supabase
-        .from('grouped_item_members')
-        .select('medicine_id')
-        .in('group_id', groupIds);
-
-      if (!groupMembers || groupMembers.length === 0) {
-        setCatalogItems([]);
-        setLoading(false);
-        return;
-      }
-
-      const medicineIds = [...new Set(groupMembers.map((gm: any) => gm.medicine_id))];
-
-      // Step 3: Fetch medicines
-      const { data: meds } = await supabase
-        .from('medicines')
-        .select('id, name, generic_name, category, manufacturer, batch_number, item_type, unit_label, units_per_pack, minimum_stock_level')
-        .in('id', medicineIds)
-        .order('name');
-
-      setCatalogItems(meds || []);
-    } catch (error) {
-      console.error('Error fetching catalog:', error);
-      toast({ title: 'Error', description: 'Failed to load item catalog', variant: 'destructive' });
-    } finally {
-      setLoading(false);
-    }
-  };
-
-  const fetchBranches = async () => {
-    if (!profile || profile.role !== 'owner') return;
-    const { data } = await supabase
-      .from('pharmacy_branches')
-      .select('id, name')
-      .eq('pharmacy_owner_id', profile.id)
-      .order('name');
-    setBranches(data || []);
-    if (selectedBranch) {
-      setSelectedBranchId(selectedBranch);
-    } else if (data && data.length > 0) {
-      setSelectedBranchId(data[0].id);
-    }
-  };
-
-  const fetchSuppliers = async () => {
-    const { data } = await supabase.from('suppliers').select('id, name').order('name');
-    setSuppliers(data || []);
-  };
-
-  const filteredItems = catalogItems.filter(item =>
+  const filteredItems = allCatalogItems.filter(item =>
     item.name.toLowerCase().includes(searchTerm.toLowerCase()) ||
     (item.generic_name || '').toLowerCase().includes(searchTerm.toLowerCase()) ||
     item.category.toLowerCase().includes(searchTerm.toLowerCase())
@@ -283,6 +318,13 @@ export default function AddBranchItemDialog({ open, onOpenChange, onItemAdded }:
         });
       }
 
+      // Update master medicine's minimum stock level if provided/changed.
+      if (minStockLevel !== '') {
+        const newMin = parseInt(minStockLevel);
+        if (!isNaN(newMin) && newMin !== (selectedItem.minimum_stock_level ?? null)) {
+          await supabase.from('medicines').update({ minimum_stock_level: newMin }).eq('id', selectedItem.id);
+        }
+      }
       toast({ title: 'Success', description: `${selectedItem.name} added to branch inventory (Batch created)` });
       onItemAdded();
       onOpenChange(false);
@@ -427,6 +469,17 @@ export default function AddBranchItemDialog({ open, onOpenChange, onItemAdded }:
                   <Label>Expiry Date</Label>
                   <Input type="date" value={expiryDate} onChange={e => setExpiryDate(e.target.value)} />
                 </div>
+
+                <div className="space-y-2">
+                  <Label>Minimum Stock Level</Label>
+                  <Input
+                    type="number"
+                    min="0"
+                    value={minStockLevel}
+                    onChange={e => setMinStockLevel(e.target.value)}
+                    placeholder="e.g. 5"
+                  />
+                </div>
               </div>
 
               {/* Supplier (Optional) */}
@@ -481,8 +534,9 @@ export default function AddBranchItemDialog({ open, onOpenChange, onItemAdded }:
       open={showCustomDialog}
       onOpenChange={setShowCustomDialog}
       onItemCreated={(item) => {
-        setCatalogItems(prev => [item as CatalogItem, ...prev]);
+        setExtraCatalogItems(prev => [item as CatalogItem, ...prev]);
         setSelectedItem(item as CatalogItem);
+        refetchCatalog();
       }}
     />
     </>

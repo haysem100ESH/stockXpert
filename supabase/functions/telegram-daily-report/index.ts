@@ -208,7 +208,7 @@ Deno.serve(async (req) => {
 
             const { data: sales } = await supabase
               .from('sales')
-              .select('id, total_amount, created_at, sale_items(quantity, total_price, medicines(name))')
+              .select('id, total_amount, created_at, sale_items(medicine_id, quantity, unit_price, total_price, sale_type, stripes_sold, medicines(id, name, unit_label, units_per_pack))')
               .eq('branch_id', branch.id)
               .gte('created_at', todayStr)
               .lt('created_at', tomorrowStr);
@@ -222,31 +222,96 @@ Deno.serve(async (req) => {
 
             const totalIncome = sales?.reduce((sum: number, s: any) => sum + (s.total_amount || 0), 0) || 0;
             const totalExpense = expenses?.reduce((sum: number, e: any) => sum + (e.amount || 0), 0) || 0;
-            
+
+            // Build packaging map for medicines in these sales
+            const medIds = Array.from(new Set(
+              (sales || []).flatMap((s: any) => s.sale_items || [])
+                .map((si: any) => si.medicine_id || si.medicines?.id).filter(Boolean)
+            )) as string[];
+            const pkgMap: Record<string, any> = {};
+            if (medIds.length > 0) {
+              const { data: pkgRows } = await supabase
+                .from('medicine_packaging').select('*').in('medicine_id', medIds);
+              (pkgRows || []).forEach((p: any) => { pkgMap[p.medicine_id] = p; });
+            }
+
+            const approxEq = (a: number, b: number) => Math.abs(a - b) < 0.01;
+            const inferLevel = (si: any, pkg: any): 'unit' | 'strip' | 'pack' => {
+              if (si?.sale_type === 'by_stripe') return 'unit';
+              const price = Number(si?.unit_price || 0);
+              if (pkg) {
+                if (pkg.pack_enabled && pkg.pack_selling_price && approxEq(price, Number(pkg.pack_selling_price))) return 'pack';
+                if (pkg.strip_enabled && pkg.strip_selling_price && approxEq(price, Number(pkg.strip_selling_price))) return 'strip';
+                if (pkg.unit_selling_price && approxEq(price, Number(pkg.unit_selling_price))) return 'unit';
+              }
+              return 'pack';
+            };
+            const plural = (label: string, n: number) => {
+              const s = (label || 'unit').trim() || 'unit';
+              if (Math.abs(n - 1) < 1e-9) return s;
+              return /(s|x|z|ch|sh)$/i.test(s) ? `${s}es` : `${s}s`;
+            };
+
+            type Bucket = { qty: number; baseUnits: number; total: number; levelLabel: string; baseLabel: string };
+            const medicineSales: Record<string, { unit?: Bucket; strip?: Bucket; pack?: Bucket }> = {};
             let itemsSoldNumber = 0;
-            const medicineSales: Record<string, { quantity: number; total: number }> = {};
-            
+
             for (const sale of sales || []) {
               for (const item of sale.sale_items || []) {
-                const qty = item.quantity || 0;
-                const total = item.total_price || 0;
                 const med = item.medicines as any;
-                const name = (Array.isArray(med) ? med[0]?.name : med?.name) || 'Unknown';
-                itemsSoldNumber += qty;
-                if (!medicineSales[name]) medicineSales[name] = { quantity: 0, total: 0 };
-                medicineSales[name].quantity += qty;
-                medicineSales[name].total += total;
+                const medObj = Array.isArray(med) ? med[0] : med;
+                const name = medObj?.name || 'Unknown';
+                const medId = item.medicine_id || medObj?.id;
+                const pkg = medId ? pkgMap[medId] : null;
+                const level = inferLevel(item, pkg);
+                let qty: number;
+                if (item.sale_type === 'by_stripe') {
+                  const raw = Number(item.stripes_sold || item.quantity || 0);
+                  qty = raw >= 100 ? raw / 1000 : raw;
+                } else {
+                  qty = Number(item.quantity || 0);
+                }
+                const ups = Number(pkg?.units_per_strip || 0);
+                const spp = Number(pkg?.strips_per_pack || 0);
+                const unitsPerPack = (ups && spp) ? ups * spp : Number(medObj?.units_per_pack || 1);
+                const baseUnits = level === 'unit' ? qty : level === 'strip' ? qty * (ups || 1) : qty * (unitsPerPack || 1);
+                const unitName = pkg?.unit_name || medObj?.unit_label || 'tablet';
+                const stripName = pkg?.strip_name || 'strip';
+                const packName = pkg?.pack_name || 'pack';
+                const levelLabel = level === 'unit' ? unitName : level === 'strip' ? stripName : packName;
+
+                if (!medicineSales[name]) medicineSales[name] = {};
+                const bucket = medicineSales[name][level] || { qty: 0, baseUnits: 0, total: 0, levelLabel, baseLabel: unitName };
+                bucket.qty += qty;
+                bucket.baseUnits += baseUnits;
+                bucket.total += Number(item.total_price || 0);
+                bucket.levelLabel = levelLabel;
+                bucket.baseLabel = unitName;
+                medicineSales[name][level] = bucket;
+                itemsSoldNumber += baseUnits;
               }
             }
 
+            // Top medicine = highest base-unit volume
             let topMedicine = 'N/A';
-            let maxQty = 0;
-            for (const [name, data] of Object.entries(medicineSales)) {
-              if (data.quantity > maxQty) { maxQty = data.quantity; topMedicine = name; }
+            let maxUnits = 0;
+            for (const [name, lv] of Object.entries(medicineSales)) {
+              const total = (lv.unit?.baseUnits || 0) + (lv.strip?.baseUnits || 0) + (lv.pack?.baseUnits || 0);
+              if (total > maxUnits) { maxUnits = total; topMedicine = name; }
             }
 
-            const salesSummary = Object.entries(medicineSales)
-              .map(([name, data]) => `• ${name} — ${data.quantity} unit${data.quantity > 1 ? 's' : ''} — ${formatNumber(data.total)} ETB`);
+            const salesSummary = Object.entries(medicineSales).map(([name, lv]) => {
+              const parts: string[] = [];
+              let lineTotal = 0;
+              (['pack','strip','unit'] as const).forEach(level => {
+                const b = lv[level]; if (!b || !b.qty) return;
+                const qStr = b.qty % 1 === 0 ? `${b.qty}` : b.qty.toFixed(2);
+                const detail = level !== 'unit' && b.baseUnits > 0 ? ` (${b.baseUnits} ${plural(b.baseLabel, b.baseUnits)})` : '';
+                parts.push(`${qStr} ${plural(b.levelLabel, b.qty)}${detail}`);
+                lineTotal += b.total;
+              });
+              return `• ${name} — ${parts.join(' + ')} — ${formatNumber(lineTotal)} ETB`;
+            });
 
             const dateStr = today.toLocaleDateString('en-US', { year: 'numeric', month: 'long', day: 'numeric' });
             const topLabel = isPharmacy ? 'Top-Selling Medicine' : 'Top-Selling Item';
@@ -254,7 +319,7 @@ Deno.serve(async (req) => {
             let report = `${reportTitle}\n\n`;
             report += `🏪 *Branch:* ${branch.name}\n`;
             report += `📅 *Date:* ${dateStr}\n\n`;
-            report += `💊 *Items Sold:* ${itemsSoldNumber}\n`;
+            report += `💊 *Units Sold:* ${itemsSoldNumber}\n`;
             report += `💰 *Total Income:* ${formatNumber(totalIncome)} ETB\n`;
             report += `💸 *Total Expense:* ${formatNumber(totalExpense)} ETB\n`;
             report += `🔥 *${topLabel}:* ${topMedicine}\n\n`;
