@@ -225,8 +225,12 @@ export default function SalesManagement() {
         const upStrip = unitsPerStripSafe(pkg);
         const upPack = unitsPerPackSafe(pkg);
         const uPrice = pkg.unit_selling_price ?? (medicine.selling_price && upPack ? medicine.selling_price / upPack : medicine.selling_price);
-        const sPrice = pkg.strip_selling_price ?? (autoStripPrice(pkg) ?? uPrice * upStrip);
-        const pPrice = pkg.pack_selling_price ?? (autoPackPrice(pkg) ?? uPrice * upPack);
+        const sPrice = pkg.unit_selling_price != null
+          ? uPrice * upStrip
+          : (pkg.strip_selling_price ?? (autoStripPrice(pkg) ?? uPrice * upStrip));
+        const pPrice = pkg.unit_selling_price != null
+          ? uPrice * upPack
+          : (pkg.pack_selling_price ?? (autoPackPrice(pkg) ?? uPrice * upPack));
         levelPrices = { unit: uPrice, strip: sPrice, pack: pPrice };
         levelLabels = { unit: pkg.unit_name || 'unit', strip: pkg.strip_name || 'strip', pack: pkg.pack_name || 'pack' };
         levelUnitsPer = { unit: 1, strip: upStrip, pack: upPack };
