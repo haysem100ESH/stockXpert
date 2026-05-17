@@ -328,8 +328,9 @@ async function buildTemplateXlsx(mode: 'pharmacy' | 'general'): Promise<Blob> {
   ]);
   const TEXT_HEADERS = new Set([
     'NAME OF ITEMS', 'ITEM NAME', 'GENERIC NAME', 'STRENGTH', 'CATEGORY',
-    'BATCH NO', 'NAME OF UNIT', 'EXPIRY DATE',
+    'BATCH NO', 'NAME OF UNIT',
   ]);
+  const DATE_HEADERS = new Set(['EXPIRY DATE']);
 
   ws.addRow(headers);
   sample.forEach(r => {
