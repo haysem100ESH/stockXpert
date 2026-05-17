@@ -601,33 +601,50 @@ export default function ImportCsvDialog({ open, onOpenChange, onImported }: Impo
       if (!cells.some((c: any) => c != null && String(c).trim() !== '')) continue; // blank row
       const rowErrors: string[] = [];
 
-      const name = get(cells, 'name');
+      let name = get(cells, 'name');
       const generic_name_raw = get(cells, 'generic_name');
       const strengthRaw = getRaw(cells, 'strength');
       const groupCell = get(cells, 'medicine_group');
       if (groupCell) groupCarry = groupCell;
 
-      // Pharmacy hierarchy: in pharmacy mode, a row with empty NAME OF ITEMS is
-      // NEVER a standalone item. Either it's an ingredient continuation of the
-      // medicine above (when GENERIC NAME is present), or it's a separator /
-      // leftover row to silently skip. No missing-name, missing-price, or
-      // duplicate-row errors should be raised for these.
+      // Detect standalone-medicine signals: any inventory/pricing/batch data
+      // means this row is its own medicine, even if NAME OF ITEMS is empty.
+      const hasStandaloneSignal = (
+        get(cells, 'batch_number') !== '' ||
+        get(cells, 'lpi_buy') !== '' ||
+        get(cells, 'lpi_sell') !== '' ||
+        get(cells, 'lpi_stock') !== '' ||
+        get(cells, 'purchase_price') !== '' ||
+        get(cells, 'selling_price') !== '' ||
+        get(cells, 'pack_price') !== '' ||
+        get(cells, 'stock_quantity') !== '' ||
+        get(cells, 'minimum_stock_level') !== '' ||
+        get(cells, 'expiry_date') !== ''
+      );
+
+      // Pharmacy hierarchy: an empty-NAME row with ONLY generic/strength (no
+      // inventory data) is an ingredient continuation of the medicine above.
+      // If the row carries real inventory data, treat it as a standalone
+      // medicine and fall back to GENERIC NAME as the item name.
       if (isPharmacy && !name) {
-        if (generic_name_raw) {
+        if (generic_name_raw && !hasStandaloneSignal) {
           const parent = out[out.length - 1];
-          if (!parent) {
-            errs.push(`Row ${r + 1}: ingredient "${generic_name_raw}" has no parent medicine above it. Add a NAME OF ITEMS on the row above, or remove this row.`);
+          if (parent) {
+            parent.active_ingredients.push({
+              rowIndex: r + 1,
+              ingredient_name: generic_name_raw,
+              strength: normalizeStrength(strengthRaw),
+            });
             continue;
           }
-          parent.active_ingredients.push({
-            rowIndex: r + 1,
-            ingredient_name: generic_name_raw,
-            strength: normalizeStrength(strengthRaw),
-          });
+          // No parent above → fall through and treat as standalone item.
+        }
+        if (generic_name_raw) {
+          name = generic_name_raw;
+        } else {
+          // Nothing usable → skip silently.
           continue;
         }
-        // No NAME and no GENERIC NAME → skip silently regardless of stray cells.
-        continue;
       }
 
       if (!name) rowErrors.push('column "NAME OF ITEMS" is empty (required)');
