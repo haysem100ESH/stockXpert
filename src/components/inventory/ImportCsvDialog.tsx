@@ -1052,9 +1052,11 @@ export default function ImportCsvDialog({ open, onOpenChange, onImported }: Impo
               : (stripEnabled && packEnabled
                   ? (row.strips_per_pack! * row.units_per_strip!)
                   : (stripEnabled ? row.units_per_strip! : 1));
-            const unitSell = row.selling_price && upp > 0
-              ? +(row.selling_price / upp).toFixed(4)
-              : null;
+            const unitSell = row.lpi_price_mode
+              ? (row.selling_price || null)
+              : (row.selling_price && upp > 0
+                  ? +(row.selling_price / upp).toFixed(4)
+                  : null);
             const stripSell = stripEnabled && unitSell != null && row.units_per_strip
               ? +(unitSell * row.units_per_strip).toFixed(2)
               : null;
