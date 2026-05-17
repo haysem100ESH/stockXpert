@@ -92,10 +92,16 @@ export default function AddToCartDialog({ open, onOpenChange, medicine, onAddToC
   const levelLabel = level === 'unit' ? unitName : level === 'strip' ? stripName : packName;
   const unitsPerLevel = level === 'unit' ? 1 : level === 'strip' ? upStrip : upPack;
 
-  // Pricing per level — fall back smartly.
+  // Pricing per level — when LPI (unit_selling_price) is set, ALWAYS derive
+  // strip/pack from it (strip = upStrip × unit, pack = upPack × unit) so a
+  // stale stored strip_selling_price/pack_selling_price can never override.
   const unitPrice = packaging?.unit_selling_price ?? (medicine.selling_price && upPack ? medicine.selling_price / upPack : medicine.selling_price);
-  const stripPrice = packaging?.strip_selling_price ?? (autoStripPrice(packaging || ({} as any)) ?? unitPrice * upStrip);
-  const packPrice = packaging?.pack_selling_price ?? (autoPackPrice(packaging || ({} as any)) ?? medicine.selling_price ?? unitPrice * upPack);
+  const stripPrice = packaging?.unit_selling_price != null
+    ? unitPrice * upStrip
+    : (packaging?.strip_selling_price ?? (autoStripPrice(packaging || ({} as any)) ?? unitPrice * upStrip));
+  const packPrice = packaging?.unit_selling_price != null
+    ? unitPrice * upPack
+    : (packaging?.pack_selling_price ?? (autoPackPrice(packaging || ({} as any)) ?? medicine.selling_price ?? unitPrice * upPack));
   const levelPrice = level === 'unit' ? unitPrice : level === 'strip' ? stripPrice : packPrice;
 
   const maxAtLevel = Math.floor(totalUnits / unitsPerLevel);
