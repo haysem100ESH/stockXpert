@@ -732,8 +732,12 @@ export default function ImportCsvDialog({ open, onOpenChange, onImported }: Impo
       }
 
       const minRaw = get(cells, 'minimum_stock_level');
-      // accept "1 PK", "3 tubes" etc.
-      const minimum_stock_level = minRaw ? (parseLeadingInt(minRaw) ?? 0) : 0;
+      // accept "1 PK", "3 tubes" etc. Required field — must be a number ≥ 0.
+      const minParsed = minRaw ? parseLeadingInt(minRaw) : null;
+      const minimum_stock_level = minParsed ?? 0;
+      if (!minRaw || minParsed == null || minParsed < 0) {
+        rowErrors.push(`column "MIN STOCK (LPI)" = "${minRaw}" is missing or not a valid number ≥ 0`);
+      }
 
       const expRaw = getRaw(cells, 'expiry_date');
       const expParsed = parseExpiryDate(expRaw);
