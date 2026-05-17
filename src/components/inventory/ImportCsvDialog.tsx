@@ -230,6 +230,7 @@ interface ParsedRow {
   units_per_pack: number | null;
   purchase_price: number;
   selling_price: number;
+  lpi_price_mode: boolean;
   stock_quantity: number;
   minimum_stock_level: number;
   expiry_date: string | null;
