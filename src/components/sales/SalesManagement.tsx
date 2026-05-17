@@ -827,8 +827,12 @@ export default function SalesManagement() {
       const upStrip = unitsPerStripSafe(pkg!);
       const upPack = unitsPerPackSafe(pkg!);
       unitPrice = pkg!.unit_selling_price ?? (medicine.selling_price && upPack ? medicine.selling_price / upPack : medicine.selling_price);
-      stripPrice = pkg!.strip_selling_price ?? (autoStripPrice(pkg!) ?? unitPrice * upStrip);
-      packPrice = pkg!.pack_selling_price ?? (autoPackPrice(pkg!) ?? unitPrice * upPack);
+      stripPrice = pkg!.unit_selling_price != null
+        ? unitPrice * upStrip
+        : (pkg!.strip_selling_price ?? (autoStripPrice(pkg!) ?? unitPrice * upStrip));
+      packPrice = pkg!.unit_selling_price != null
+        ? unitPrice * upPack
+        : (pkg!.pack_selling_price ?? (autoPackPrice(pkg!) ?? unitPrice * upPack));
     }
 
     return (
