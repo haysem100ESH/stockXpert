@@ -1112,7 +1112,7 @@ export default function ImportCsvDialog({ open, onOpenChange, onImported }: Impo
               <AlertCircle className="h-4 w-4" />
               <AlertDescription className="text-xs space-y-1">
                 <p><strong>Accepted files:</strong> .csv, .xlsx, .xls.</p>
-                <p><strong>Required:</strong> <code>NAME OF ITEMS</code>, <code>NAME OF UNIT</code>, <code>LPI BUY</code>, <code>LPI SELL</code>, <code>LPI STOCK</code>.</p>
+                <p><strong>Required:</strong> <code>NAME OF ITEMS</code>, <code>NAME OF UNIT</code>, <code>LPI BUY</code>, <code>LPI SELL</code>, <code>LPI STOCK</code>, <code>MIN STOCK (LPI)</code>.</p>
                 <p><strong>LPI</strong> = <em>Least Possible Item</em> — the smallest indivisible unit (e.g. <code>tablet</code>, <code>capsule</code>, <code>pcs</code>, <code>ml</code>). <code>NAME OF UNIT</code> renames it.</p>
                 <p><strong>Packaging is auto-derived:</strong> filling both <code>STRIPS PER PACK</code> and <code>TABLETS PER STRIP</code> = stripped layout; otherwise no-strip.</p>
                 {isPharmacy && (
