@@ -252,13 +252,13 @@ const PHARMACY_HEADERS = [
   'NAME OF ITEMS', 'GENERIC NAME', 'STRENGTH', 'CATEGORY',
   'BATCH NO', 'NAME OF UNIT',
   'STRIPS PER PACK', 'TABLETS PER STRIP',
-  'LPI BUY', 'LPI SELL', 'LPI STOCK', 'EXPIRY DATE',
+  'LPI BUY', 'LPI SELL', 'LPI STOCK', 'MIN STOCK (LPI)', 'EXPIRY DATE',
 ];
 
 const GENERAL_HEADERS = [
   'ITEM NAME', 'CATEGORY', 'NAME OF UNIT',
   'UNITS PER ITEM',
-  'LPI BUY', 'LPI SELL', 'LPI STOCK', 'EXPIRY DATE',
+  'LPI BUY', 'LPI SELL', 'LPI STOCK', 'MIN STOCK (LPI)', 'EXPIRY DATE',
 ];
 
 // Optional canonical columns (may be missing — alias-matched only when present)
@@ -270,17 +270,17 @@ const OPTIONAL_HEADERS = new Set(['medicine_group', 'strength']);
 // filling both STRIPS PER PACK and TABLETS PER STRIP marks the item as stripped;
 // otherwise it's a no-strip item (bottle / sachet / single pcs).
 const SAMPLE_PHARMACY = [
-  // NAME, GENERIC, STRENGTH, CATEGORY, BATCH, NAME OF UNIT, STRIPS/PACK, TABLETS/STRIP, LPI BUY, LPI SELL, LPI STOCK, EXPIRY
-  ['Paracetamol 500mg', 'Paracetamol', '500mg',     'tablet', 'BN-PCM-01',   'tablet', '3', '10', '6',   '10',  '1500', '2027-06-30'],
-  ['Etricox 90mg',      'Etoricoxib',  '90mg',      'tablet', 'BN-ETR-09',   'tablet', '3', '10', '14',  '20',  '900',  '2026-12-31'],
-  ['Amoxicillin Syrup', 'Amoxicillin', '250mg/5ml', 'syrup',  'BN-AMX-2026', 'ml',     '',  '',   '0.6', '0.93','1875', '2026-08-15'],
+  // NAME, GENERIC, STRENGTH, CATEGORY, BATCH, NAME OF UNIT, STRIPS/PACK, TABLETS/STRIP, LPI BUY, LPI SELL, LPI STOCK, MIN STOCK, EXPIRY
+  ['Paracetamol 500mg', 'Paracetamol', '500mg',     'tablet', 'BN-PCM-01',   'tablet', '3', '10', '6',   '10',  '1500', '100', '2027-06-30'],
+  ['Etricox 90mg',      'Etoricoxib',  '90mg',      'tablet', 'BN-ETR-09',   'tablet', '3', '10', '14',  '20',  '900',  '60',  '2026-12-31'],
+  ['Amoxicillin Syrup', 'Amoxicillin', '250mg/5ml', 'syrup',  'BN-AMX-2026', 'ml',     '',  '',   '0.6', '0.93','1875', '200', '2026-08-15'],
 ];
 
 const SAMPLE_GENERAL = [
-  // ITEM NAME, CATEGORY, NAME OF UNIT, UNITS PER ITEM, LPI BUY, LPI SELL, LPI STOCK, EXPIRY
-  ['Carton Milk 1L',  'grocery',  'bottle', '24', '75',  '100', '480', ''],
-  ['Cooking Oil 1L',  'grocery',  'bottle', '1',  '120', '150', '60',  '2027-01-31'],
-  ['Soap Bar Pack',   'cleaning', 'pcs',    '6',  '15',  '20',  '240', ''],
+  // ITEM NAME, CATEGORY, NAME OF UNIT, UNITS PER ITEM, LPI BUY, LPI SELL, LPI STOCK, MIN STOCK, EXPIRY
+  ['Carton Milk 1L',  'grocery',  'bottle', '24', '75',  '100', '480', '50', ''],
+  ['Cooking Oil 1L',  'grocery',  'bottle', '1',  '120', '150', '60',  '10', '2027-01-31'],
+  ['Soap Bar Pack',   'cleaning', 'pcs',    '6',  '15',  '20',  '240', '30', ''],
 ];
 
 function escapeCsv(v: string): string {
