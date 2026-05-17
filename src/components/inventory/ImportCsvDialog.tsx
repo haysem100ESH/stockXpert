@@ -883,6 +883,7 @@ export default function ImportCsvDialog({ open, onOpenChange, onImported }: Impo
         units_per_pack,
         purchase_price: isNaN(purchase_price) ? 0 : purchase_price,
         selling_price: isNaN(selling_price) ? 0 : selling_price,
+        lpi_price_mode,
         stock_quantity: isNaN(stock_quantity) ? 0 : stock_quantity,
         minimum_stock_level: isNaN(minimum_stock_level) ? 0 : minimum_stock_level,
         expiry_date,
