@@ -531,9 +531,10 @@ export default function ImportCsvDialog({ open, onOpenChange, onImported }: Impo
     if (!hasLpiBuy   && keyIndex['purchase_price']  === undefined) missingReq.push('LPI BUY (or purchase price)');
     if (!hasLpiSell  && keyIndex['selling_price']   === undefined && keyIndex['pack_price'] === undefined) missingReq.push('LPI SELL (or selling/medicine/item price)');
     if (!hasLpiStock && keyIndex['stock_quantity']  === undefined) missingReq.push('LPI STOCK (or stock quantity)');
+    if (keyIndex['minimum_stock_level'] === undefined) missingReq.push('MIN STOCK (LPI)');
     if (missingReq.length > 0) {
       const recognizedList = Object.values(headerToKey).join(', ') || '(none)';
-      return { ok: [], errs: [`Missing required column(s): ${missingReq.join(', ')}. Header row detected at row ${headerRowIdx + 1}. Recognized headers: ${recognizedList}. Tip: make sure your header row is the first non-empty row and column names match (e.g. "NAME OF ITEMS", "NAME OF UNIT", "LPI BUY", "LPI SELL", "LPI STOCK").`] };
+      return { ok: [], errs: [`Missing required column(s): ${missingReq.join(', ')}. Header row detected at row ${headerRowIdx + 1}. Recognized headers: ${recognizedList}. Tip: make sure your header row is the first non-empty row and column names match (e.g. "NAME OF ITEMS", "NAME OF UNIT", "LPI BUY", "LPI SELL", "LPI STOCK", "MIN STOCK (LPI)").`] };
     }
     const get = (cells: any[], k: string): string => {
       const i = keyIndex[k];
