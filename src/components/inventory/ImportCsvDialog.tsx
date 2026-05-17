@@ -230,6 +230,7 @@ interface ParsedRow {
   units_per_pack: number | null;
   purchase_price: number;
   selling_price: number;
+  lpi_price_mode: boolean;
   stock_quantity: number;
   minimum_stock_level: number;
   expiry_date: string | null;
@@ -717,6 +718,9 @@ export default function ImportCsvDialog({ open, onOpenChange, onImported }: Impo
       let purchase_price: number;
       let selling_price: number;
       let usingPackLevelPrice = false; // tracks whether the SELL side is already pack-level
+      // When true, purchase_price/selling_price are stored as per-LPI (smallest-unit)
+      // values exactly as the user entered them — no pack multiplication.
+      let lpi_price_mode = false;
 
       // BUY price
       if (lpiBuyRaw !== '') {
@@ -725,7 +729,9 @@ export default function ImportCsvDialog({ open, onOpenChange, onImported }: Impo
           rowErrors.push(`column "LPI BUY" = "${lpiBuyRaw}" is not a valid number ≥ 0`);
           purchase_price = 0;
         } else {
-          purchase_price = +(lpiBuy * unitsPerPackForCalc).toFixed(2);
+          // Save the per-LPI buy price exactly as entered.
+          purchase_price = lpiBuy;
+          lpi_price_mode = true;
         }
       } else {
         purchase_price = parseFloat(purchaseRaw);
@@ -742,8 +748,9 @@ export default function ImportCsvDialog({ open, onOpenChange, onImported }: Impo
           rowErrors.push(`column "LPI SELL" = "${lpiSellRaw}" is not a valid number ≥ 0`);
           selling_price = 0;
         } else {
-          selling_price = +(lpiSell * unitsPerPackForCalc).toFixed(2);
-          usingPackLevelPrice = true; // already pack-level after the LPI multiply
+          // Save the per-LPI sell price exactly as entered.
+          selling_price = lpiSell;
+          lpi_price_mode = true;
         }
       } else {
         const pickedPackPrice = packPriceRaw ? parseFloat(packPriceRaw) : NaN;
@@ -757,7 +764,7 @@ export default function ImportCsvDialog({ open, onOpenChange, onImported }: Impo
       }
 
       // Legacy per-strip → per-pack conversion (only when neither LPI nor pack price was used)
-      if (!usingPackLevelPrice && lpiSellRaw === '' && packaging_mode === 'with_strip' && strips_per_pack && strips_per_pack > 1) {
+      if (!lpi_price_mode && !usingPackLevelPrice && packaging_mode === 'with_strip' && strips_per_pack && strips_per_pack > 1) {
         if (!isNaN(purchase_price)) purchase_price = +(purchase_price * strips_per_pack).toFixed(2);
         if (!isNaN(selling_price)) selling_price = +(selling_price * strips_per_pack).toFixed(2);
       }
@@ -819,11 +826,20 @@ export default function ImportCsvDialog({ open, onOpenChange, onImported }: Impo
       const subUnitPriceRaw = get(cells, 'sub_unit_price');
       let sub_unit_price: number | null = subUnitPriceRaw && !isNaN(parseFloat(subUnitPriceRaw)) ? parseFloat(subUnitPriceRaw) : null;
 
-      // Auto-derive missing prices from the pack price (final-template rule).
-      // Pharmacy: strip_price = pack/strips_per_pack; tablet_price = strip/tablets_per_strip.
-      // General : unit_price  = pack/units_per_pack.
+      // Derive missing tier prices from the saved sell price.
+      //   - In LPI price mode, `selling_price` IS the per-LPI (smallest unit) price,
+      //     so unit/sub-unit prices equal it directly (no division).
+      //   - In legacy/pack mode, `selling_price` is pack-level, so we divide.
       if (selling_price > 0) {
-        if (isPharmacy && packaging_mode === 'with_strip' && strips_per_pack && strips_per_pack > 0) {
+        if (lpi_price_mode) {
+          if (isPharmacy && packaging_mode === 'with_strip' && units_per_strip && units_per_strip > 0) {
+            // unit_price represents the STRIP price; sub_unit_price the TABLET price.
+            if (sub_unit_price == null) sub_unit_price = selling_price;
+            if (unit_price == null) unit_price = +(selling_price * units_per_strip).toFixed(4);
+          } else {
+            if (unit_price == null) unit_price = selling_price;
+          }
+        } else if (isPharmacy && packaging_mode === 'with_strip' && strips_per_pack && strips_per_pack > 0) {
           if (unit_price == null) unit_price = +(selling_price / strips_per_pack).toFixed(4);
           if (sub_unit_price == null && units_per_strip && units_per_strip > 0) {
             sub_unit_price = +(unit_price / units_per_strip).toFixed(4);
@@ -867,6 +883,7 @@ export default function ImportCsvDialog({ open, onOpenChange, onImported }: Impo
         units_per_pack,
         purchase_price: isNaN(purchase_price) ? 0 : purchase_price,
         selling_price: isNaN(selling_price) ? 0 : selling_price,
+        lpi_price_mode,
         stock_quantity: isNaN(stock_quantity) ? 0 : stock_quantity,
         minimum_stock_level: isNaN(minimum_stock_level) ? 0 : minimum_stock_level,
         expiry_date,
@@ -1035,9 +1052,11 @@ export default function ImportCsvDialog({ open, onOpenChange, onImported }: Impo
               : (stripEnabled && packEnabled
                   ? (row.strips_per_pack! * row.units_per_strip!)
                   : (stripEnabled ? row.units_per_strip! : 1));
-            const unitSell = row.selling_price && upp > 0
-              ? +(row.selling_price / upp).toFixed(4)
-              : null;
+            const unitSell = row.lpi_price_mode
+              ? (row.selling_price || null)
+              : (row.selling_price && upp > 0
+                  ? +(row.selling_price / upp).toFixed(4)
+                  : null);
             const stripSell = stripEnabled && unitSell != null && row.units_per_strip
               ? +(unitSell * row.units_per_strip).toFixed(2)
               : null;
