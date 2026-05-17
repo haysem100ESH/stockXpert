@@ -351,6 +351,8 @@ async function buildTemplateXlsx(mode: 'pharmacy' | 'general'): Promise<Blob> {
     const col = ws.getColumn(i + 1);
     if (NUMERIC_HEADERS.has(h)) {
       col.numFmt = '0';
+    } else if (DATE_HEADERS.has(h)) {
+      col.numFmt = 'dd/mm/yyyy';
     } else if (TEXT_HEADERS.has(h)) {
       col.numFmt = '@'; // text
     }
