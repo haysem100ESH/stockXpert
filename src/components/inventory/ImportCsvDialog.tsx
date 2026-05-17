@@ -56,6 +56,7 @@ const HEADER_ALIASES: Record<string, string> = {
   'quantity pk': 'stock_quantity', qty: 'stock_quantity', stock: 'stock_quantity',
   minimum_stock_level: 'minimum_stock_level', 'minimum stock level': 'minimum_stock_level',
   'min stock': 'minimum_stock_level', 'minimum stock': 'minimum_stock_level', 'reorder level': 'minimum_stock_level',
+  'min stock lpi': 'minimum_stock_level', 'minimum stock lpi': 'minimum_stock_level', 'min lpi stock': 'minimum_stock_level', 'minimum lpi stock': 'minimum_stock_level', 'lpi min stock': 'minimum_stock_level', 'lpi minimum stock': 'minimum_stock_level',
   expiry_date: 'expiry_date', 'expiry date': 'expiry_date', 'ex date': 'expiry_date', 'exp date': 'expiry_date',
   expiry: 'expiry_date', expiration: 'expiry_date',
   // Multi-level packaging (PR1)
