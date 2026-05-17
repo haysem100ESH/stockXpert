@@ -328,8 +328,9 @@ async function buildTemplateXlsx(mode: 'pharmacy' | 'general'): Promise<Blob> {
   ]);
   const TEXT_HEADERS = new Set([
     'NAME OF ITEMS', 'ITEM NAME', 'GENERIC NAME', 'STRENGTH', 'CATEGORY',
-    'BATCH NO', 'NAME OF UNIT', 'EXPIRY DATE',
+    'BATCH NO', 'NAME OF UNIT',
   ]);
+  const DATE_HEADERS = new Set(['EXPIRY DATE']);
 
   ws.addRow(headers);
   sample.forEach(r => {
@@ -350,6 +351,8 @@ async function buildTemplateXlsx(mode: 'pharmacy' | 'general'): Promise<Blob> {
     const col = ws.getColumn(i + 1);
     if (NUMERIC_HEADERS.has(h)) {
       col.numFmt = '0';
+    } else if (DATE_HEADERS.has(h)) {
+      col.numFmt = 'dd/mm/yyyy';
     } else if (TEXT_HEADERS.has(h)) {
       col.numFmt = '@'; // text
     }
