@@ -56,6 +56,7 @@ const HEADER_ALIASES: Record<string, string> = {
   'quantity pk': 'stock_quantity', qty: 'stock_quantity', stock: 'stock_quantity',
   minimum_stock_level: 'minimum_stock_level', 'minimum stock level': 'minimum_stock_level',
   'min stock': 'minimum_stock_level', 'minimum stock': 'minimum_stock_level', 'reorder level': 'minimum_stock_level',
+  'min stock lpi': 'minimum_stock_level', 'minimum stock lpi': 'minimum_stock_level', 'min lpi stock': 'minimum_stock_level', 'minimum lpi stock': 'minimum_stock_level', 'lpi min stock': 'minimum_stock_level', 'lpi minimum stock': 'minimum_stock_level',
   expiry_date: 'expiry_date', 'expiry date': 'expiry_date', 'ex date': 'expiry_date', 'exp date': 'expiry_date',
   expiry: 'expiry_date', expiration: 'expiry_date',
   // Multi-level packaging (PR1)
@@ -252,13 +253,13 @@ const PHARMACY_HEADERS = [
   'NAME OF ITEMS', 'GENERIC NAME', 'STRENGTH', 'CATEGORY',
   'BATCH NO', 'NAME OF UNIT',
   'STRIPS PER PACK', 'TABLETS PER STRIP',
-  'LPI BUY', 'LPI SELL', 'LPI STOCK', 'EXPIRY DATE',
+  'LPI BUY', 'LPI SELL', 'LPI STOCK', 'MIN STOCK (LPI)', 'EXPIRY DATE',
 ];
 
 const GENERAL_HEADERS = [
   'ITEM NAME', 'CATEGORY', 'NAME OF UNIT',
   'UNITS PER ITEM',
-  'LPI BUY', 'LPI SELL', 'LPI STOCK', 'EXPIRY DATE',
+  'LPI BUY', 'LPI SELL', 'LPI STOCK', 'MIN STOCK (LPI)', 'EXPIRY DATE',
 ];
 
 // Optional canonical columns (may be missing — alias-matched only when present)
@@ -270,17 +271,17 @@ const OPTIONAL_HEADERS = new Set(['medicine_group', 'strength']);
 // filling both STRIPS PER PACK and TABLETS PER STRIP marks the item as stripped;
 // otherwise it's a no-strip item (bottle / sachet / single pcs).
 const SAMPLE_PHARMACY = [
-  // NAME, GENERIC, STRENGTH, CATEGORY, BATCH, NAME OF UNIT, STRIPS/PACK, TABLETS/STRIP, LPI BUY, LPI SELL, LPI STOCK, EXPIRY
-  ['Paracetamol 500mg', 'Paracetamol', '500mg',     'tablet', 'BN-PCM-01',   'tablet', '3', '10', '6',   '10',  '1500', '2027-06-30'],
-  ['Etricox 90mg',      'Etoricoxib',  '90mg',      'tablet', 'BN-ETR-09',   'tablet', '3', '10', '14',  '20',  '900',  '2026-12-31'],
-  ['Amoxicillin Syrup', 'Amoxicillin', '250mg/5ml', 'syrup',  'BN-AMX-2026', 'ml',     '',  '',   '0.6', '0.93','1875', '2026-08-15'],
+  // NAME, GENERIC, STRENGTH, CATEGORY, BATCH, NAME OF UNIT, STRIPS/PACK, TABLETS/STRIP, LPI BUY, LPI SELL, LPI STOCK, MIN STOCK, EXPIRY
+  ['Paracetamol 500mg', 'Paracetamol', '500mg',     'tablet', 'BN-PCM-01',   'tablet', '3', '10', '6',   '10',  '1500', '100', '2027-06-30'],
+  ['Etricox 90mg',      'Etoricoxib',  '90mg',      'tablet', 'BN-ETR-09',   'tablet', '3', '10', '14',  '20',  '900',  '60',  '2026-12-31'],
+  ['Amoxicillin Syrup', 'Amoxicillin', '250mg/5ml', 'syrup',  'BN-AMX-2026', 'ml',     '',  '',   '0.6', '0.93','1875', '200', '2026-08-15'],
 ];
 
 const SAMPLE_GENERAL = [
-  // ITEM NAME, CATEGORY, NAME OF UNIT, UNITS PER ITEM, LPI BUY, LPI SELL, LPI STOCK, EXPIRY
-  ['Carton Milk 1L',  'grocery',  'bottle', '24', '75',  '100', '480', ''],
-  ['Cooking Oil 1L',  'grocery',  'bottle', '1',  '120', '150', '60',  '2027-01-31'],
-  ['Soap Bar Pack',   'cleaning', 'pcs',    '6',  '15',  '20',  '240', ''],
+  // ITEM NAME, CATEGORY, NAME OF UNIT, UNITS PER ITEM, LPI BUY, LPI SELL, LPI STOCK, MIN STOCK, EXPIRY
+  ['Carton Milk 1L',  'grocery',  'bottle', '24', '75',  '100', '480', '50', ''],
+  ['Cooking Oil 1L',  'grocery',  'bottle', '1',  '120', '150', '60',  '10', '2027-01-31'],
+  ['Soap Bar Pack',   'cleaning', 'pcs',    '6',  '15',  '20',  '240', '30', ''],
 ];
 
 function escapeCsv(v: string): string {
@@ -302,10 +303,10 @@ function buildTemplate(mode: 'pharmacy' | 'general'): string {
 
 // Required columns by template mode (highlighted red + frozen in xlsx export)
 const REQUIRED_PHARMACY = new Set([
-  'NAME OF ITEMS', 'NAME OF UNIT', 'LPI BUY', 'LPI SELL', 'LPI STOCK',
+  'NAME OF ITEMS', 'NAME OF UNIT', 'LPI BUY', 'LPI SELL', 'LPI STOCK', 'MIN STOCK (LPI)',
 ]);
 const REQUIRED_GENERAL = new Set([
-  'ITEM NAME', 'NAME OF UNIT', 'LPI BUY', 'LPI SELL', 'LPI STOCK',
+  'ITEM NAME', 'NAME OF UNIT', 'LPI BUY', 'LPI SELL', 'LPI STOCK', 'MIN STOCK (LPI)',
 ]);
 
 async function buildTemplateXlsx(mode: 'pharmacy' | 'general'): Promise<Blob> {
@@ -530,9 +531,10 @@ export default function ImportCsvDialog({ open, onOpenChange, onImported }: Impo
     if (!hasLpiBuy   && keyIndex['purchase_price']  === undefined) missingReq.push('LPI BUY (or purchase price)');
     if (!hasLpiSell  && keyIndex['selling_price']   === undefined && keyIndex['pack_price'] === undefined) missingReq.push('LPI SELL (or selling/medicine/item price)');
     if (!hasLpiStock && keyIndex['stock_quantity']  === undefined) missingReq.push('LPI STOCK (or stock quantity)');
+    if (keyIndex['minimum_stock_level'] === undefined) missingReq.push('MIN STOCK (LPI)');
     if (missingReq.length > 0) {
       const recognizedList = Object.values(headerToKey).join(', ') || '(none)';
-      return { ok: [], errs: [`Missing required column(s): ${missingReq.join(', ')}. Header row detected at row ${headerRowIdx + 1}. Recognized headers: ${recognizedList}. Tip: make sure your header row is the first non-empty row and column names match (e.g. "NAME OF ITEMS", "NAME OF UNIT", "LPI BUY", "LPI SELL", "LPI STOCK").`] };
+      return { ok: [], errs: [`Missing required column(s): ${missingReq.join(', ')}. Header row detected at row ${headerRowIdx + 1}. Recognized headers: ${recognizedList}. Tip: make sure your header row is the first non-empty row and column names match (e.g. "NAME OF ITEMS", "NAME OF UNIT", "LPI BUY", "LPI SELL", "LPI STOCK", "MIN STOCK (LPI)").`] };
     }
     const get = (cells: any[], k: string): string => {
       const i = keyIndex[k];
@@ -730,8 +732,12 @@ export default function ImportCsvDialog({ open, onOpenChange, onImported }: Impo
       }
 
       const minRaw = get(cells, 'minimum_stock_level');
-      // accept "1 PK", "3 tubes" etc.
-      const minimum_stock_level = minRaw ? (parseLeadingInt(minRaw) ?? 0) : 0;
+      // accept "1 PK", "3 tubes" etc. Required field — must be a number ≥ 0.
+      const minParsed = minRaw ? parseLeadingInt(minRaw) : null;
+      const minimum_stock_level = minParsed ?? 0;
+      if (!minRaw || minParsed == null || minParsed < 0) {
+        rowErrors.push(`column "MIN STOCK (LPI)" = "${minRaw}" is missing or not a valid number ≥ 0`);
+      }
 
       const expRaw = getRaw(cells, 'expiry_date');
       const expParsed = parseExpiryDate(expRaw);
@@ -1106,7 +1112,7 @@ export default function ImportCsvDialog({ open, onOpenChange, onImported }: Impo
               <AlertCircle className="h-4 w-4" />
               <AlertDescription className="text-xs space-y-1">
                 <p><strong>Accepted files:</strong> .csv, .xlsx, .xls.</p>
-                <p><strong>Required:</strong> <code>NAME OF ITEMS</code>, <code>NAME OF UNIT</code>, <code>LPI BUY</code>, <code>LPI SELL</code>, <code>LPI STOCK</code>.</p>
+                <p><strong>Required:</strong> <code>NAME OF ITEMS</code>, <code>NAME OF UNIT</code>, <code>LPI BUY</code>, <code>LPI SELL</code>, <code>LPI STOCK</code>, <code>MIN STOCK (LPI)</code>.</p>
                 <p><strong>LPI</strong> = <em>Least Possible Item</em> — the smallest indivisible unit (e.g. <code>tablet</code>, <code>capsule</code>, <code>pcs</code>, <code>ml</code>). <code>NAME OF UNIT</code> renames it.</p>
                 <p><strong>Packaging is auto-derived:</strong> filling both <code>STRIPS PER PACK</code> and <code>TABLETS PER STRIP</code> = stripped layout; otherwise no-strip.</p>
                 {isPharmacy && (
