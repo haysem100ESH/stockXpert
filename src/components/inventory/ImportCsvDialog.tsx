@@ -320,8 +320,43 @@ async function buildTemplateXlsx(mode: 'pharmacy' | 'general'): Promise<Blob> {
     views: [{ state: 'frozen', ySplit: 1 }], // freeze header row
   });
 
+  // Numeric columns must be stored as numbers with an explicit number format,
+  // otherwise Excel may auto-detect values like "10" or "2/3" as dates.
+  const NUMERIC_HEADERS = new Set([
+    'STRIPS PER PACK', 'TABLETS PER STRIP', 'UNITS PER ITEM',
+    'LPI BUY', 'LPI SELL', 'LPI STOCK', 'MIN STOCK (LPI)',
+  ]);
+  const TEXT_HEADERS = new Set([
+    'NAME OF ITEMS', 'ITEM NAME', 'GENERIC NAME', 'STRENGTH', 'CATEGORY',
+    'BATCH NO', 'NAME OF UNIT',
+  ]);
+  const DATE_HEADERS = new Set(['EXPIRY DATE']);
+
   ws.addRow(headers);
-  sample.forEach(r => ws.addRow(r));
+  sample.forEach(r => {
+    const coerced = r.map((v, i) => {
+      const h = headers[i];
+      if (NUMERIC_HEADERS.has(h)) {
+        if (v === '' || v == null) return null;
+        const n = Number(v);
+        return Number.isFinite(n) ? n : v;
+      }
+      return v;
+    });
+    ws.addRow(coerced);
+  });
+
+  // Apply per-column number format so Excel never coerces values to dates
+  headers.forEach((h, i) => {
+    const col = ws.getColumn(i + 1);
+    if (NUMERIC_HEADERS.has(h)) {
+      col.numFmt = '0';
+    } else if (DATE_HEADERS.has(h)) {
+      col.numFmt = 'dd/mm/yyyy';
+    } else if (TEXT_HEADERS.has(h)) {
+      col.numFmt = '@'; // text
+    }
+  });
 
   // Style header row
   const headerRow = ws.getRow(1);
