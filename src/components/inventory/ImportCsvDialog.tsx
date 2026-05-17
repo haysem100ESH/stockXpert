@@ -826,11 +826,20 @@ export default function ImportCsvDialog({ open, onOpenChange, onImported }: Impo
       const subUnitPriceRaw = get(cells, 'sub_unit_price');
       let sub_unit_price: number | null = subUnitPriceRaw && !isNaN(parseFloat(subUnitPriceRaw)) ? parseFloat(subUnitPriceRaw) : null;
 
-      // Auto-derive missing prices from the pack price (final-template rule).
-      // Pharmacy: strip_price = pack/strips_per_pack; tablet_price = strip/tablets_per_strip.
-      // General : unit_price  = pack/units_per_pack.
+      // Derive missing tier prices from the saved sell price.
+      //   - In LPI price mode, `selling_price` IS the per-LPI (smallest unit) price,
+      //     so unit/sub-unit prices equal it directly (no division).
+      //   - In legacy/pack mode, `selling_price` is pack-level, so we divide.
       if (selling_price > 0) {
-        if (isPharmacy && packaging_mode === 'with_strip' && strips_per_pack && strips_per_pack > 0) {
+        if (lpi_price_mode) {
+          if (isPharmacy && packaging_mode === 'with_strip' && units_per_strip && units_per_strip > 0) {
+            // unit_price represents the STRIP price; sub_unit_price the TABLET price.
+            if (sub_unit_price == null) sub_unit_price = selling_price;
+            if (unit_price == null) unit_price = +(selling_price * units_per_strip).toFixed(4);
+          } else {
+            if (unit_price == null) unit_price = selling_price;
+          }
+        } else if (isPharmacy && packaging_mode === 'with_strip' && strips_per_pack && strips_per_pack > 0) {
           if (unit_price == null) unit_price = +(selling_price / strips_per_pack).toFixed(4);
           if (sub_unit_price == null && units_per_strip && units_per_strip > 0) {
             sub_unit_price = +(unit_price / units_per_strip).toFixed(4);
