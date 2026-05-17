@@ -302,10 +302,10 @@ function buildTemplate(mode: 'pharmacy' | 'general'): string {
 
 // Required columns by template mode (highlighted red + frozen in xlsx export)
 const REQUIRED_PHARMACY = new Set([
-  'NAME OF ITEMS', 'NAME OF UNIT', 'LPI BUY', 'LPI SELL', 'LPI STOCK',
+  'NAME OF ITEMS', 'NAME OF UNIT', 'LPI BUY', 'LPI SELL', 'LPI STOCK', 'MIN STOCK (LPI)',
 ]);
 const REQUIRED_GENERAL = new Set([
-  'ITEM NAME', 'NAME OF UNIT', 'LPI BUY', 'LPI SELL', 'LPI STOCK',
+  'ITEM NAME', 'NAME OF UNIT', 'LPI BUY', 'LPI SELL', 'LPI STOCK', 'MIN STOCK (LPI)',
 ]);
 
 async function buildTemplateXlsx(mode: 'pharmacy' | 'general'): Promise<Blob> {
