@@ -769,11 +769,9 @@ export default function ImportCsvDialog({ open, onOpenChange, onImported }: Impo
         if (isNaN(lpiStock) || lpiStock < 0) {
           rowErrors.push(`column "LPI STOCK" = "${lpiStockRaw}" is not a valid number ≥ 0`);
           stock_quantity = 0;
-        } else if (item_type === 'measurable') {
-          stock_quantity = lpiStock;
         } else {
-          // Convert LPI count → pack count. Fractional remainder is rounded to nearest pack.
-          stock_quantity = Math.round(lpiStock / unitsPerPackForCalc);
+          // Stock is stored as total smallest units (LPI). No pack conversion.
+          stock_quantity = item_type === 'measurable' ? lpiStock : Math.round(lpiStock);
         }
       } else {
         stock_quantity = item_type === 'measurable' ? parseFloat(stockRaw) : parseInt(stockRaw);
