@@ -718,6 +718,9 @@ export default function ImportCsvDialog({ open, onOpenChange, onImported }: Impo
       let purchase_price: number;
       let selling_price: number;
       let usingPackLevelPrice = false; // tracks whether the SELL side is already pack-level
+      // When true, purchase_price/selling_price are stored as per-LPI (smallest-unit)
+      // values exactly as the user entered them — no pack multiplication.
+      let lpi_price_mode = false;
 
       // BUY price
       if (lpiBuyRaw !== '') {
@@ -726,7 +729,9 @@ export default function ImportCsvDialog({ open, onOpenChange, onImported }: Impo
           rowErrors.push(`column "LPI BUY" = "${lpiBuyRaw}" is not a valid number ≥ 0`);
           purchase_price = 0;
         } else {
-          purchase_price = +(lpiBuy * unitsPerPackForCalc).toFixed(2);
+          // Save the per-LPI buy price exactly as entered.
+          purchase_price = lpiBuy;
+          lpi_price_mode = true;
         }
       } else {
         purchase_price = parseFloat(purchaseRaw);
@@ -743,8 +748,9 @@ export default function ImportCsvDialog({ open, onOpenChange, onImported }: Impo
           rowErrors.push(`column "LPI SELL" = "${lpiSellRaw}" is not a valid number ≥ 0`);
           selling_price = 0;
         } else {
-          selling_price = +(lpiSell * unitsPerPackForCalc).toFixed(2);
-          usingPackLevelPrice = true; // already pack-level after the LPI multiply
+          // Save the per-LPI sell price exactly as entered.
+          selling_price = lpiSell;
+          lpi_price_mode = true;
         }
       } else {
         const pickedPackPrice = packPriceRaw ? parseFloat(packPriceRaw) : NaN;
@@ -758,7 +764,7 @@ export default function ImportCsvDialog({ open, onOpenChange, onImported }: Impo
       }
 
       // Legacy per-strip → per-pack conversion (only when neither LPI nor pack price was used)
-      if (!usingPackLevelPrice && lpiSellRaw === '' && packaging_mode === 'with_strip' && strips_per_pack && strips_per_pack > 1) {
+      if (!lpi_price_mode && !usingPackLevelPrice && packaging_mode === 'with_strip' && strips_per_pack && strips_per_pack > 1) {
         if (!isNaN(purchase_price)) purchase_price = +(purchase_price * strips_per_pack).toFixed(2);
         if (!isNaN(selling_price)) selling_price = +(selling_price * strips_per_pack).toFixed(2);
       }
