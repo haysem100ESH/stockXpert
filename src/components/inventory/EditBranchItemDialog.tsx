@@ -467,9 +467,16 @@ export default function EditBranchItemDialog({ open, onOpenChange, item, onItemU
           .eq('id', item.id)
           .single();
         const targetMedId = (bi as any)?.medicine_id || item.medicine_id;
-        const pkgForCalc: Packaging = { ...packaging, unit_selling_price: lpiSell };
-        const stripPrice = pkgForCalc.strip_selling_price ?? autoStripPrice(pkgForCalc);
-        const packPrice = pkgForCalc.pack_selling_price ?? autoPackPrice(pkgForCalc);
+        // Always recompute strip/pack from the just-entered LPI so stale prices
+        // (e.g. from CSV import or previous edits) can never linger.
+        const pkgForCalc: Packaging = {
+          ...packaging,
+          unit_selling_price: lpiSell,
+          strip_selling_price: null,
+          pack_selling_price: null,
+        };
+        const stripPrice = autoStripPrice(pkgForCalc);
+        const packPrice = autoPackPrice({ ...pkgForCalc, strip_selling_price: stripPrice ?? null });
         await (supabase as any).from('medicine_packaging').upsert({
           medicine_id: targetMedId,
           unit_name: packaging.unit_name || 'unit',
