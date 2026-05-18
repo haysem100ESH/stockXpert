@@ -360,23 +360,16 @@ export default function Dashboard() {
         return expensesQuery;
       })();
 
-      // Fetch inventory expenses (purchase costs of medicines added in period)
-      const { data: inventoryExpData } = await (function(){
-        let invQuery = supabase
-          .from('medicines')
-          .select('purchase_price, stock_quantity, created_at')
+      // Inventory expenses come from `inventory_batches` (per-branch source of
+      // truth for purchases), NOT from the global `medicines` table.
+      const { data: inventoryExpData } = await applyBranchFilter(
+        supabase
+          .from('inventory_batches')
+          .select('purchase_price, quantity_received, created_at')
           .gte('created_at', start.toISOString())
-          .lte('created_at', end.toISOString());
-        
-        if (profile?.role === 'staff') {
-          invQuery = invQuery.eq('branch_id', userBranch || profile?.branch_id);
-        } else if (effectiveBranchId) {
-          invQuery = invQuery.eq('branch_id', effectiveBranchId);
-        } else if (ownerBranchIds.length > 0) {
-          invQuery = invQuery.in('branch_id', ownerBranchIds);
-        }
-        return invQuery;
-      })();
+          .lte('created_at', end.toISOString())
+          .range(0, 49999)
+      );
 
       // Process income vs expense data by day
       const dateMap = new Map<string, { income: number; expenses: number }>();
