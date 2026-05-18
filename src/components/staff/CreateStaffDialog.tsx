@@ -135,9 +135,21 @@ export default function CreateStaffDialog({ open, onOpenChange, onStaffCreated }
         }
       });
 
-      if (error) throw error;
+      if (error) {
+        // supabase.functions.invoke swallows the response body on non-2xx.
+        // Extract the real server message from error.context (a Response).
+        let serverMsg = error.message;
+        try {
+          const ctx: any = (error as any).context;
+          if (ctx && typeof ctx.json === 'function') {
+            const body = await ctx.json();
+            if (body?.error) serverMsg = body.error;
+          }
+        } catch { /* ignore */ }
+        throw new Error(serverMsg);
+      }
 
-      if (data.error) {
+      if (data?.error) {
         throw new Error(data.error);
       }
 
