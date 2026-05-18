@@ -11,7 +11,7 @@ import { supabase } from '@/lib/db';
 import { useToast } from '@/hooks/use-toast';
 import { useAuth } from '@/hooks/useAuth';
 import { useBranchContext } from '@/hooks/useBranchContext';
-import { createBatch, deductFIFO } from '@/lib/batchInventory';
+import { createBatch, deductFIFO, getBatchesForItem, syncBranchItemQuantity, type InventoryBatch } from '@/lib/batchInventory';
 
 interface Medicine {
   id: string;                // branch_items.id
