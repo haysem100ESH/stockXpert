@@ -70,10 +70,20 @@ const handler = async (req: Request): Promise<Response> => {
       email_confirm: true // Auto-confirm email for admin-created accounts
     });
 
-    if (authError) {
+    if (authError || !authData?.user) {
       console.error('Auth error:', authError);
+      const raw = authError?.message || 'Failed to create user';
+      const lower = raw.toLowerCase();
+      let friendly = raw;
+      if (lower.includes('already') || lower.includes('registered') || lower.includes('exists') || lower.includes('duplicate')) {
+        friendly = `An account with email "${email}" already exists.`;
+      } else if (lower.includes('password')) {
+        friendly = raw;
+      } else if (lower.includes('email') && lower.includes('invalid')) {
+        friendly = 'The email address is invalid.';
+      }
       return new Response(
-        JSON.stringify({ error: authError.message }),
+        JSON.stringify({ error: friendly }),
         { status: 400, headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
       );
     }
