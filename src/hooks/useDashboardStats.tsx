@@ -84,6 +84,11 @@ async function fetchDashboardOverview({ selectedBranch, ownerBranchIds, dateFilt
   if (!selectedBranch && isOwner && ownerBranchIds.length === 0) {
     return EMPTY_OVERVIEW;
   }
+  // Staff MUST have a branch — if not yet resolved, return empty (prevents
+  // unfiltered queries that would leak cross-branch counts via RLS).
+  if (!selectedBranch && !isOwner) {
+    return EMPTY_OVERVIEW;
+  }
 
   const now = new Date();
   const startDate = getStartDate(dateFilter);
