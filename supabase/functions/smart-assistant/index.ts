@@ -412,10 +412,10 @@ async function executeTool(db: any, name: string, args: any, ctx: ToolContext) {
       const since = new Date(Date.now() - (args?.days_back || 90) * 86400000).toISOString();
       let q = db.from("supplier_payments").select("id, supplier_id, amount, payment_method, branch_id, created_at").gte("created_at", since).order("created_at", { ascending: false }).limit(100);
       if (args?.supplier_id) q = q.eq("supplier_id", args.supplier_id);
-      if (args?.branch_id) q = q.eq("branch_id", args.branch_id);
+      q = applyBranch(q, args?.branch_id);
       const { data } = await q;
       const sMap = await buildNameMap(db, "suppliers", branchIds);
-      const payments = (data || []).map((p: any) => ({ ...p, supplier_name: sMap[p.supplier_id] || p.supplier_id, branch_name: branchMap[p.branch_id] }));
+      const payments = (data || []).map((p: any) => ({ ...p, supplier_name: sMap[p.supplier_id] || "Unknown", branch_name: branchMap[p.branch_id] }));
       return { payments, total: payments.length, total_amount: payments.reduce((s: number, p: any) => s + Number(p.amount), 0).toFixed(2) };
     }
 
