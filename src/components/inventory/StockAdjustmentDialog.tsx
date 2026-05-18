@@ -96,6 +96,8 @@ export default function StockAdjustmentDialog({ open, onOpenChange, medicine, on
     setBatchRecordExpense(true);
     setBatchSupplierId('none');
     setBatchPaymentType('paid');
+    setExistingBatches([]);
+    setSelectedBatchId('');
   };
 
   // Resolve real medicine_id (FK target). Falls back to lookup if not provided.
