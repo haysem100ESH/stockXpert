@@ -11,7 +11,7 @@ import { supabase } from '@/lib/db';
 import { useToast } from '@/hooks/use-toast';
 import { useAuth } from '@/hooks/useAuth';
 import { useBranchContext } from '@/hooks/useBranchContext';
-import { createBatch, deductFIFO } from '@/lib/batchInventory';
+import { createBatch, deductFIFO, getBatchesForItem, syncBranchItemQuantity, type InventoryBatch } from '@/lib/batchInventory';
 
 interface Medicine {
   id: string;                // branch_items.id
@@ -52,6 +52,9 @@ export default function StockAdjustmentDialog({ open, onOpenChange, medicine, on
   const [batchPaymentType, setBatchPaymentType] = useState<'paid' | 'credit'>('paid');
   const [suppliers, setSuppliers] = useState<Array<{ id: string; name: string }>>([]);
 
+  const [existingBatches, setExistingBatches] = useState<InventoryBatch[]>([]);
+  const [selectedBatchId, setSelectedBatchId] = useState<string>('');
+
   const [saving, setSaving] = useState(false);
   const { toast } = useToast();
   const { profile } = useAuth();
@@ -62,6 +65,12 @@ export default function StockAdjustmentDialog({ open, onOpenChange, medicine, on
       // Prefill new-batch defaults from current item
       setBatchPurchasePrice(String(medicine.purchase_price ?? ''));
       setBatchSellingPrice(String(medicine.selling_price ?? medicine.purchase_price ?? ''));
+      // Load existing batches (active only) for the "Increase" target selector
+      getBatchesForItem(medicine.id).then((all) => {
+        const active = (all || []).filter(b => Number(b.remaining_quantity) > 0);
+        setExistingBatches(active);
+        setSelectedBatchId(active.length >= 1 ? active[0].id : '');
+      });
     }
   }, [open, medicine]);
 
@@ -87,6 +96,8 @@ export default function StockAdjustmentDialog({ open, onOpenChange, medicine, on
     setBatchRecordExpense(true);
     setBatchSupplierId('none');
     setBatchPaymentType('paid');
+    setExistingBatches([]);
+    setSelectedBatchId('');
   };
 
   // Resolve real medicine_id (FK target). Falls back to lookup if not provided.
@@ -123,8 +134,24 @@ export default function StockAdjustmentDialog({ open, onOpenChange, medicine, on
       const medicineId = await resolveMedicineId();
 
       if (adjustmentType === 'increase') {
-        // Create a batch (preferred path so FIFO sees it). syncBranchItemQuantity inside createBatch updates branch_items.quantity.
-        if (medicineId && branchId) {
+        // Add stock to an EXISTING batch (do NOT create a new batch here — use "Add New Batch" tab for that).
+        if (existingBatches.length > 0) {
+          const target =
+            existingBatches.find(b => b.id === selectedBatchId) || existingBatches[0];
+          const newRemaining = Number(target.remaining_quantity) + qty;
+          const newOriginal = Number(target.quantity) + qty;
+          const { error: updErr } = await supabase
+            .from('inventory_batches')
+            .update({
+              remaining_quantity: newRemaining,
+              quantity: newOriginal,
+              updated_at: new Date().toISOString(),
+            })
+            .eq('id', target.id);
+          if (updErr) throw updErr;
+          await syncBranchItemQuantity(medicine.id);
+        } else if (medicineId && branchId) {
+          // No batches exist yet — create the first one so FIFO has something to consume.
           const { error: batchErr } = await createBatch({
             branchId,
             medicineId,
@@ -135,7 +162,6 @@ export default function StockAdjustmentDialog({ open, onOpenChange, medicine, on
             createdBy: profile?.id || null,
           });
           if (batchErr) {
-            // Fallback: direct quantity update
             const newStock = medicine.stock_quantity + qty;
             await supabase.from('branch_items').update({ quantity: newStock, updated_at: new Date().toISOString() }).eq('id', medicine.id);
           }
@@ -390,6 +416,26 @@ export default function StockAdjustmentDialog({ open, onOpenChange, medicine, on
               <Input type="number" min="0.01" step="any" value={quantity} onChange={(e) => setQuantity(e.target.value)} placeholder="Enter quantity" />
             </div>
 
+            {adjustmentType === 'increase' && existingBatches.length > 1 && (
+              <div>
+                <Label>Add to batch</Label>
+                <Select value={selectedBatchId} onValueChange={setSelectedBatchId}>
+                  <SelectTrigger><SelectValue placeholder="Select batch to receive stock" /></SelectTrigger>
+                  <SelectContent>
+                    {existingBatches.map(b => (
+                      <SelectItem key={b.id} value={b.id}>
+                        {(b.batch_number || 'No batch #')} · remaining {Number(b.remaining_quantity)}
+                        {b.expiry_date ? ` · exp ${b.expiry_date}` : ''}
+                      </SelectItem>
+                    ))}
+                  </SelectContent>
+                </Select>
+                <p className="text-xs text-muted-foreground mt-1">
+                  This item has multiple batches. Choose which one should receive the new stock.
+                </p>
+              </div>
+            )}
+
             <div>
               <Label>Reason (required)</Label>
               <Textarea value={reason} onChange={(e) => setReason(e.target.value)} placeholder="Enter reason for adjustment" />
@@ -406,7 +452,11 @@ export default function StockAdjustmentDialog({ open, onOpenChange, medicine, on
 
             <p className="text-xs text-muted-foreground">
               {adjustmentType === 'increase'
-                ? 'Increases will be added to a batch using the current purchase/selling price.'
+                ? (existingBatches.length === 0
+                    ? 'No batches yet — the first batch will be created automatically.'
+                    : existingBatches.length === 1
+                      ? 'Stock will be added to the existing batch (no new batch is created).'
+                      : 'Stock will be added to the batch you selected above.')
                 : 'Decreases consume oldest batches first (FIFO).'}
             </p>
           </TabsContent>

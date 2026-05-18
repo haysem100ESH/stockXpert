@@ -30,6 +30,11 @@ export default function SmartAssistant() {
   const [input, setInput] = useState('');
   const [isLoading, setIsLoading] = useState(false);
   const [branchIds, setBranchIds] = useState<string[]>([]);
+  // Position: side ('left' | 'right') + vertical offset from bottom in px
+  const [side, setSide] = useState<'left' | 'right'>(() => (localStorage.getItem('chatSide') as 'left' | 'right') || 'right');
+  const [bottomOffset, setBottomOffset] = useState<number>(() => Number(localStorage.getItem('chatBottom') || 24));
+  const [dragging, setDragging] = useState(false);
+  const dragState = useRef<{ startY: number; startX: number; startBottom: number; moved: boolean } | null>(null);
   const scrollRef = useRef<HTMLDivElement>(null);
   const inputRef = useRef<HTMLInputElement>(null);
   const { user, profile } = useAuth();
@@ -168,22 +173,79 @@ export default function SmartAssistant() {
 
   if (!user) return null;
 
+  // ── Drag handlers (vertical movement + horizontal snap to nearest edge) ──
+  const positionStyle: React.CSSProperties = {
+    bottom: `${bottomOffset}px`,
+    [side]: '24px',
+    transition: dragging ? 'none' : 'left 0.25s ease, right 0.25s ease',
+  };
+
+  const justDraggedRef = useRef(false);
+
+  const makeDragHandlers = (opts: { headerOnly?: boolean } = {}) => ({
+    onPointerDown: (e: React.PointerEvent) => {
+      // For the panel header, ignore drags initiated on inner buttons (close/clear).
+      if (opts.headerOnly && (e.target as HTMLElement).closest('button')) return;
+      const el = e.currentTarget as HTMLElement;
+      el.setPointerCapture(e.pointerId);
+      const rect = el.getBoundingClientRect();
+      dragState.current = {
+        startY: e.clientY,
+        startX: e.clientX,
+        startBottom: bottomOffset,
+        moved: false,
+        height: rect.height,
+      } as any;
+      setDragging(true);
+    },
+    onPointerMove: (e: React.PointerEvent) => {
+      if (!dragState.current) return;
+      const dy = e.clientY - dragState.current.startY;
+      const dx = e.clientX - dragState.current.startX;
+      if (Math.abs(dy) > 3 || Math.abs(dx) > 3) dragState.current.moved = true;
+      const h = (dragState.current as any).height || 60;
+      const maxBottom = Math.max(8, window.innerHeight - h - 8);
+      const newBottom = Math.max(8, Math.min(maxBottom, dragState.current.startBottom - dy));
+      setBottomOffset(newBottom);
+    },
+    onPointerUp: (e: React.PointerEvent) => {
+      if (!dragState.current) return;
+      const wasMoved = dragState.current.moved;
+      const newSide: 'left' | 'right' = e.clientX < window.innerWidth / 2 ? 'left' : 'right';
+      setSide(newSide);
+      localStorage.setItem('chatSide', newSide);
+      localStorage.setItem('chatBottom', String(bottomOffset));
+      dragState.current = null;
+      setDragging(false);
+      if (wasMoved) {
+        justDraggedRef.current = true;
+        setTimeout(() => { justDraggedRef.current = false; }, 50);
+      }
+    },
+  });
+
+  const buttonDrag = makeDragHandlers();
+  const headerDrag = makeDragHandlers({ headerOnly: true });
+
   return (
     <>
       {/* Floating button */}
       {!open && (
         <button
-          onClick={() => {
+          {...buttonDrag}
+          onClick={(e) => {
+            if (justDraggedRef.current) { e.preventDefault(); return; }
             if (subscriptionExpired) {
               toast({ title: 'Subscription Expired', description: 'AI Assistant is disabled. Please renew your subscription.', variant: 'destructive' });
               return;
             }
             setOpen(true);
           }}
-          className={`fixed bottom-6 right-6 z-50 h-14 w-14 rounded-full shadow-lg flex items-center justify-center transition-transform hover:scale-105 ${
+          style={positionStyle}
+          className={`fixed z-50 h-14 w-14 rounded-full shadow-lg flex items-center justify-center hover:scale-105 touch-none select-none ${
             subscriptionExpired
               ? 'bg-muted text-muted-foreground cursor-not-allowed'
-              : 'bg-primary text-primary-foreground hover:bg-primary/90'
+              : 'bg-primary text-primary-foreground hover:bg-primary/90 cursor-grab active:cursor-grabbing'
           }`}
           aria-label="Open AI Assistant"
         >
@@ -193,9 +255,15 @@ export default function SmartAssistant() {
 
       {/* Chat panel */}
       {open && (
-        <div className="fixed bottom-6 right-6 z-50 w-[380px] max-w-[calc(100vw-2rem)] h-[560px] max-h-[calc(100vh-4rem)] bg-card border rounded-2xl shadow-2xl flex flex-col overflow-hidden">
-          {/* Header */}
-          <div className="flex items-center justify-between px-4 py-3 border-b bg-primary text-primary-foreground rounded-t-2xl">
+        <div
+          style={positionStyle}
+          className="fixed z-50 w-[380px] max-w-[calc(100vw-2rem)] h-[560px] max-h-[calc(100vh-4rem)] bg-card border rounded-2xl shadow-2xl flex flex-col overflow-hidden"
+        >
+          {/* Header (drag handle) */}
+          <div
+            {...headerDrag}
+            className="flex items-center justify-between px-4 py-3 border-b bg-primary text-primary-foreground rounded-t-2xl cursor-grab active:cursor-grabbing touch-none select-none"
+          >
             <div className="flex items-center gap-2">
               <Sparkles className="h-5 w-5" />
               <div>
