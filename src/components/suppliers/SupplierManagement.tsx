@@ -10,6 +10,7 @@ import { Plus, Search, Edit, Trash2, Truck, Phone, Mail, MapPin, User, MoreVerti
 import { supabase } from '@/lib/db';
 import { useToast } from '@/hooks/use-toast';
 import { useAuth } from '@/hooks/useAuth';
+import { useOwnerBranchIds } from '@/hooks/useOwnerBranchIds';
 import { useBranchContext } from '@/hooks/useBranchContext';
 import AddSupplierDialog from './AddSupplierDialog';
 import EditSupplierDialog from './EditSupplierDialog';
