@@ -2,12 +2,15 @@ import { useState, useEffect } from 'react';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
 import { Badge } from '@/components/ui/badge';
 import { Button } from '@/components/ui/button';
-import { AlertTriangle, Package, CalendarDays } from 'lucide-react';
+import { Input } from '@/components/ui/input';
+import { Label } from '@/components/ui/label';
+import { AlertTriangle, Package, CalendarDays, Settings2 } from 'lucide-react';
 import { supabase } from '@/lib/db';
 import { useToast } from '@/hooks/use-toast';
 import { ConfirmationDialog } from '@/components/ui/confirmation-dialog';
 import { useBranchContext } from '@/hooks/useBranchContext';
 import { useAuth } from '@/hooks/useAuth';
+import { useExpiryThreshold } from '@/hooks/useExpiryThreshold';
 
 interface AlertItem {
   id: string;
@@ -32,11 +35,15 @@ export default function InventoryDashboard() {
   const { toast } = useToast();
   const { selectedBranch, branchType } = useBranchContext();
   const { profile } = useAuth();
+  const { days: thresholdDays, setDays: setThresholdDays, defaultDays } = useExpiryThreshold();
+  const [thresholdInput, setThresholdInput] = useState<string>(String(thresholdDays));
   const isPharmacy = branchType === 'pharmacy';
+
+  useEffect(() => { setThresholdInput(String(thresholdDays)); }, [thresholdDays]);
 
   useEffect(() => {
     fetchInventoryData();
-  }, [selectedBranch]);
+  }, [selectedBranch, thresholdDays]);
 
   useEffect(() => {
     const channel = supabase
@@ -95,14 +102,14 @@ export default function InventoryDashboard() {
       const lowStock = items.filter(i => i.quantity > 0 && i.minimum_stock_level && i.quantity <= i.minimum_stock_level);
 
       const today = new Date().toISOString().split('T')[0];
-      const thirtyDaysFromNow = new Date();
-      thirtyDaysFromNow.setDate(thirtyDaysFromNow.getDate() + 30);
+      const thresholdDate = new Date();
+      thresholdDate.setDate(thresholdDate.getDate() + thresholdDays);
       const tomorrow = new Date();
       tomorrow.setDate(tomorrow.getDate() + 1);
       const tomorrowStr = tomorrow.toISOString().split('T')[0];
-      const thirtyStr = thirtyDaysFromNow.toISOString().split('T')[0];
+      const thresholdStr = thresholdDate.toISOString().split('T')[0];
 
-      const expiring = items.filter(i => i.expiry_date && i.quantity > 0 && i.expiry_date >= tomorrowStr && i.expiry_date <= thirtyStr);
+      const expiring = items.filter(i => i.expiry_date && i.quantity > 0 && i.expiry_date >= tomorrowStr && i.expiry_date <= thresholdStr);
       const expired = items.filter(i => i.expiry_date && i.quantity > 0 && i.expiry_date <= today);
 
       setOutOfStockItems(outOfStock);
@@ -145,6 +152,49 @@ export default function InventoryDashboard() {
 
   return (
     <div className="space-y-6">
+      <Card>
+        <CardContent className="p-4">
+          <div className="flex flex-col sm:flex-row sm:items-end gap-3">
+            <div className="flex-1">
+              <Label htmlFor="expiry-threshold" className="flex items-center gap-2 mb-1">
+                <Settings2 className="h-4 w-4" />
+                Expiry alert threshold
+              </Label>
+              <p className="text-xs text-muted-foreground">
+                Items expiring within this many days will appear in alerts. Default: {defaultDays} days (≈ 2 months).
+              </p>
+            </div>
+            <div className="flex items-center gap-2">
+              <Input
+                id="expiry-threshold"
+                type="number"
+                min={1}
+                max={365}
+                value={thresholdInput}
+                onChange={(e) => setThresholdInput(e.target.value)}
+                className="w-24"
+              />
+              <span className="text-sm text-muted-foreground">days</span>
+              <Button
+                size="sm"
+                onClick={() => {
+                  const n = parseInt(thresholdInput, 10);
+                  if (Number.isFinite(n) && n > 0) setThresholdDays(n);
+                  else setThresholdInput(String(thresholdDays));
+                }}
+              >
+                Save
+              </Button>
+              {thresholdDays !== defaultDays && (
+                <Button size="sm" variant="ghost" onClick={() => setThresholdDays(defaultDays)}>
+                  Reset
+                </Button>
+              )}
+            </div>
+          </div>
+        </CardContent>
+      </Card>
+
       {outOfStockItems.length > 0 && (
         <Card>
           <CardHeader>
@@ -205,7 +255,7 @@ export default function InventoryDashboard() {
               <CalendarDays className="h-5 w-5 text-warning" />
               <span>Items Expiring Soon</span>
             </CardTitle>
-            <CardDescription>{expiringItems.length} items will expire within 30 days</CardDescription>
+            <CardDescription>{expiringItems.length} items will expire within {thresholdDays} days</CardDescription>
           </CardHeader>
           <CardContent>
             <div className="grid gap-2">
