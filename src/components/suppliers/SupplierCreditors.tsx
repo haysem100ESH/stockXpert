@@ -7,6 +7,8 @@ import { ScrollArea } from '@/components/ui/scroll-area';
 import { supabase } from '@/lib/db';
 import { useToast } from '@/hooks/use-toast';
 import { useBranchContext } from '@/hooks/useBranchContext';
+import { useAuth } from '@/hooks/useAuth';
+import { useOwnerBranchIds } from '@/hooks/useOwnerBranchIds';
 import { DollarSign, FileText, CreditCard, Truck } from 'lucide-react';
 import RecordSupplierPaymentDialog from './RecordSupplierPaymentDialog';
 import SupplierLedgerDialog from './SupplierLedgerDialog';
