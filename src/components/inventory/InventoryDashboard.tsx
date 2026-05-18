@@ -102,14 +102,14 @@ export default function InventoryDashboard() {
       const lowStock = items.filter(i => i.quantity > 0 && i.minimum_stock_level && i.quantity <= i.minimum_stock_level);
 
       const today = new Date().toISOString().split('T')[0];
-      const thirtyDaysFromNow = new Date();
-      thirtyDaysFromNow.setDate(thirtyDaysFromNow.getDate() + 30);
+      const thresholdDate = new Date();
+      thresholdDate.setDate(thresholdDate.getDate() + thresholdDays);
       const tomorrow = new Date();
       tomorrow.setDate(tomorrow.getDate() + 1);
       const tomorrowStr = tomorrow.toISOString().split('T')[0];
-      const thirtyStr = thirtyDaysFromNow.toISOString().split('T')[0];
+      const thresholdStr = thresholdDate.toISOString().split('T')[0];
 
-      const expiring = items.filter(i => i.expiry_date && i.quantity > 0 && i.expiry_date >= tomorrowStr && i.expiry_date <= thirtyStr);
+      const expiring = items.filter(i => i.expiry_date && i.quantity > 0 && i.expiry_date >= tomorrowStr && i.expiry_date <= thresholdStr);
       const expired = items.filter(i => i.expiry_date && i.quantity > 0 && i.expiry_date <= today);
 
       setOutOfStockItems(outOfStock);
