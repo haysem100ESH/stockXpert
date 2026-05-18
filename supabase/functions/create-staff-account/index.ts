@@ -107,7 +107,7 @@ const handler = async (req: Request): Promise<Response> => {
       // Try to delete the created user if profile update fails
       await supabaseAdmin.auth.admin.deleteUser(authData.user.id);
       return new Response(
-        JSON.stringify({ error: 'Failed to update profile information' }),
+        JSON.stringify({ error: `Failed to update profile information: ${profileError.message}` }),
         { status: 500, headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
       );
     }
