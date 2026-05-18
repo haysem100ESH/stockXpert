@@ -452,7 +452,11 @@ export default function StockAdjustmentDialog({ open, onOpenChange, medicine, on
 
             <p className="text-xs text-muted-foreground">
               {adjustmentType === 'increase'
-                ? 'Increases will be added to a batch using the current purchase/selling price.'
+                ? (existingBatches.length === 0
+                    ? 'No batches yet — the first batch will be created automatically.'
+                    : existingBatches.length === 1
+                      ? 'Stock will be added to the existing batch (no new batch is created).'
+                      : 'Stock will be added to the batch you selected above.')
                 : 'Decreases consume oldest batches first (FIFO).'}
             </p>
           </TabsContent>
