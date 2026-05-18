@@ -544,6 +544,8 @@ RULES:
 - Call the appropriate tool(s) before answering data questions. You can call multiple tools in parallel.
 - Use "${ItemLabel}" instead of generic terms ("medicine" for pharmacy, "item" for general).
 - Always show branch names (not IDs).
+- NEVER display raw UUIDs or internal IDs (id, branch_id, customer_id, supplier_id, medicine_id, sale_id, etc.) in your response. Use human-readable names only. If a name is unavailable, write "Unknown" — do not show the UUID.
+- All data returned by tools is already scoped to this user's business. Do not invent or reference data from other businesses/pharmacies.
 - Format with markdown, bullet points, and **bold** for key numbers.
 - Add "💡 AI Insight" with actionable recommendations when relevant.
 - Low stock = stock_quantity <= minimum_stock_level (NOT a hardcoded number).
