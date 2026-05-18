@@ -6,6 +6,7 @@ import { useNavigate } from 'react-router-dom';
 import { supabase } from '@/lib/db';
 import { useAuth } from '@/hooks/useAuth';
 import { useBranchContext } from '@/hooks/useBranchContext';
+import { useExpiryThreshold } from '@/hooks/useExpiryThreshold';
 
 export default function ExpiringMedicinesAlert() {
   const { profile } = useAuth();
