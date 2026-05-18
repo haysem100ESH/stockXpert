@@ -278,21 +278,25 @@ export function useDashboardStats(dateFilter: DateFilter) {
   const queryClient = useQueryClient();
 
   const isOwner = profile?.role === 'owner';
-  const enabled = !!profile && (!isOwner || !ownerBranchesLoading);
+  // For staff, the branch context's selectedBranch hydrates asynchronously;
+  // fall back to profile.branch_id immediately so the dashboard never queries
+  // without a branch filter (which would expose cross-branch totals via RLS).
+  const effectiveBranch = isOwner ? selectedBranch : (selectedBranch || profile?.branch_id || null);
+  const enabled = !!profile && (isOwner ? !ownerBranchesLoading : !!effectiveBranch);
 
   const queryKey = useMemo(
     () => DASHBOARD_STATS_KEY({
       ownerId: isOwner ? profile?.id : undefined,
-      selectedBranch,
+      selectedBranch: effectiveBranch,
       dateFilter,
     }),
-    [isOwner, profile?.id, selectedBranch, dateFilter]
+    [isOwner, profile?.id, effectiveBranch, dateFilter]
   );
 
   const query = useQuery({
     queryKey,
     queryFn: () => fetchDashboardOverview({
-      selectedBranch,
+      selectedBranch: effectiveBranch,
       ownerBranchIds: cachedOwnerBranchIds,
       dateFilter,
       isOwner,
