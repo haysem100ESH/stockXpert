@@ -180,45 +180,61 @@ export default function SmartAssistant() {
     transition: dragging ? 'none' : 'left 0.25s ease, right 0.25s ease',
   };
 
-  const onDragPointerDown = (e: React.PointerEvent) => {
-    if ((e.target as HTMLElement).closest('button')) return; // ignore button clicks
-    (e.currentTarget as HTMLElement).setPointerCapture(e.pointerId);
-    dragState.current = { startY: e.clientY, startX: e.clientX, startBottom: bottomOffset, moved: false };
-    setDragging(true);
-  };
-  const onDragPointerMove = (e: React.PointerEvent) => {
-    if (!dragState.current) return;
-    const dy = e.clientY - dragState.current.startY;
-    const dx = e.clientX - dragState.current.startX;
-    if (Math.abs(dy) > 3 || Math.abs(dx) > 3) dragState.current.moved = true;
-    const maxBottom = window.innerHeight - 100;
-    const newBottom = Math.max(8, Math.min(maxBottom, dragState.current.startBottom - dy));
-    setBottomOffset(newBottom);
-  };
-  const onDragPointerUp = (e: React.PointerEvent) => {
-    if (!dragState.current) return;
-    const wasMoved = dragState.current.moved;
-    // Snap horizontally to the nearest edge based on drop X
-    const newSide: 'left' | 'right' = e.clientX < window.innerWidth / 2 ? 'left' : 'right';
-    setSide(newSide);
-    localStorage.setItem('chatSide', newSide);
-    localStorage.setItem('chatBottom', String(bottomOffset));
-    dragState.current = null;
-    setDragging(false);
-    // Prevent click after drag
-    if (wasMoved) e.preventDefault();
-  };
+  const justDraggedRef = useRef(false);
+
+  const makeDragHandlers = (opts: { headerOnly?: boolean } = {}) => ({
+    onPointerDown: (e: React.PointerEvent) => {
+      // For the panel header, ignore drags initiated on inner buttons (close/clear).
+      if (opts.headerOnly && (e.target as HTMLElement).closest('button')) return;
+      const el = e.currentTarget as HTMLElement;
+      el.setPointerCapture(e.pointerId);
+      const rect = el.getBoundingClientRect();
+      dragState.current = {
+        startY: e.clientY,
+        startX: e.clientX,
+        startBottom: bottomOffset,
+        moved: false,
+        height: rect.height,
+      } as any;
+      setDragging(true);
+    },
+    onPointerMove: (e: React.PointerEvent) => {
+      if (!dragState.current) return;
+      const dy = e.clientY - dragState.current.startY;
+      const dx = e.clientX - dragState.current.startX;
+      if (Math.abs(dy) > 3 || Math.abs(dx) > 3) dragState.current.moved = true;
+      const h = (dragState.current as any).height || 60;
+      const maxBottom = Math.max(8, window.innerHeight - h - 8);
+      const newBottom = Math.max(8, Math.min(maxBottom, dragState.current.startBottom - dy));
+      setBottomOffset(newBottom);
+    },
+    onPointerUp: (e: React.PointerEvent) => {
+      if (!dragState.current) return;
+      const wasMoved = dragState.current.moved;
+      const newSide: 'left' | 'right' = e.clientX < window.innerWidth / 2 ? 'left' : 'right';
+      setSide(newSide);
+      localStorage.setItem('chatSide', newSide);
+      localStorage.setItem('chatBottom', String(bottomOffset));
+      dragState.current = null;
+      setDragging(false);
+      if (wasMoved) {
+        justDraggedRef.current = true;
+        setTimeout(() => { justDraggedRef.current = false; }, 50);
+      }
+    },
+  });
+
+  const buttonDrag = makeDragHandlers();
+  const headerDrag = makeDragHandlers({ headerOnly: true });
 
   return (
     <>
       {/* Floating button */}
       {!open && (
         <button
-          onPointerDown={onDragPointerDown}
-          onPointerMove={onDragPointerMove}
-          onPointerUp={onDragPointerUp}
+          {...buttonDrag}
           onClick={(e) => {
-            if (dragState.current?.moved) { e.preventDefault(); return; }
+            if (justDraggedRef.current) { e.preventDefault(); return; }
             if (subscriptionExpired) {
               toast({ title: 'Subscription Expired', description: 'AI Assistant is disabled. Please renew your subscription.', variant: 'destructive' });
               return;
