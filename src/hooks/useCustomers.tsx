@@ -114,12 +114,20 @@ export const CUSTOMERS_KEY = (selectedBranch: string | null) =>
 
 export function useCustomers() {
   const { selectedBranch } = useBranchContext();
+  const { profile } = useAuth();
+  const { branchIds: ownerBranchIds, isLoading: ownerBranchesLoading } = useOwnerBranchIds();
   const queryClient = useQueryClient();
-  const queryKey = CUSTOMERS_KEY(selectedBranch);
+  const isOwner = profile?.role === 'owner';
+  const staffBranchId = profile?.branch_id ?? null;
+  const queryKey = [
+    'customers',
+    selectedBranch ?? (isOwner ? `owner:${(ownerBranchIds || []).join(',')}` : `staff:${staffBranchId ?? ''}`),
+  ] as const;
 
   const query = useQuery({
     queryKey,
-    queryFn: () => fetchCustomers(selectedBranch),
+    queryFn: () => fetchCustomers(selectedBranch, ownerBranchIds, isOwner, staffBranchId),
+    enabled: !!profile && (isOwner ? !ownerBranchesLoading : true),
     staleTime: 60 * 1000,
     gcTime: 5 * 60 * 1000,
     placeholderData: (prev) => prev,
