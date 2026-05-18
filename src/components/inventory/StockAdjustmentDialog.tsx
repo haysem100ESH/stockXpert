@@ -52,6 +52,9 @@ export default function StockAdjustmentDialog({ open, onOpenChange, medicine, on
   const [batchPaymentType, setBatchPaymentType] = useState<'paid' | 'credit'>('paid');
   const [suppliers, setSuppliers] = useState<Array<{ id: string; name: string }>>([]);
 
+  const [existingBatches, setExistingBatches] = useState<InventoryBatch[]>([]);
+  const [selectedBatchId, setSelectedBatchId] = useState<string>('');
+
   const [saving, setSaving] = useState(false);
   const { toast } = useToast();
   const { profile } = useAuth();
