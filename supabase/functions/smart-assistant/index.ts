@@ -314,23 +314,27 @@ async function executeTool(db: any, name: string, args: any, ctx: ToolContext) {
       const days = args?.days_back || 30;
       const limit = args?.limit || 10;
       const since = new Date(Date.now() - days * 86400000).toISOString();
-      const { data } = await db.from("sale_items").select("medicine_id, quantity, total_price").gte("created_at", since).limit(2000);
+      let siQ = db.from("sale_items").select("medicine_id, quantity, total_price, branch_id").gte("created_at", since).limit(5000);
+      siQ = applyBranch(siQ);
+      const { data } = await siQ;
 
-      // Collect unique medicine IDs and fetch names directly (not filtered by branch)
+      // Restrict medicine name lookup to owner's branches
       const uniqueMedIds = [...new Set((data || []).map((si: any) => si.medicine_id).filter(Boolean))];
       const mMap: Record<string, string> = {};
       if (uniqueMedIds.length > 0) {
-        // Fetch in batches of 200 to avoid query limits
         for (let i = 0; i < uniqueMedIds.length; i += 200) {
           const batch = uniqueMedIds.slice(i, i + 200);
-          const { data: meds } = await db.from("medicines").select("id, name").in("id", batch);
+          let mq = db.from("medicines").select("id, name, branch_id").in("id", batch);
+          if (branchIds?.length) mq = mq.in("branch_id", branchIds);
+          const { data: meds } = await mq;
           for (const m of meds || []) mMap[m.id] = m.name;
         }
       }
 
       const stats: Record<string, { name: string; qty: number; revenue: number }> = {};
       for (const si of data || []) {
-        const n = mMap[si.medicine_id] || si.medicine_id;
+        if (!mMap[si.medicine_id]) continue; // skip items outside owner's branches
+        const n = mMap[si.medicine_id];
         if (!stats[si.medicine_id]) stats[si.medicine_id] = { name: n, qty: 0, revenue: 0 };
         stats[si.medicine_id].qty += Number(si.quantity);
         stats[si.medicine_id].revenue += Number(si.total_price);
@@ -348,7 +352,9 @@ async function executeTool(db: any, name: string, args: any, ctx: ToolContext) {
       const { data: customers } = await q;
 
       if (args?.filter === "with_debt") {
-        const { data: credits } = await db.from("customer_credits").select("customer_id, total_debt, branch_id").gt("total_debt", 0).order("total_debt", { ascending: false });
+        let cq = db.from("customer_credits").select("customer_id, total_debt, branch_id").gt("total_debt", 0).order("total_debt", { ascending: false });
+        cq = applyBranch(cq, args?.branch_id);
+        const { data: credits } = await cq;
         const debtMap: Record<string, number> = {};
         for (const c of credits || []) debtMap[c.customer_id] = Number(c.total_debt);
         const withDebt = (customers || []).filter((c: any) => debtMap[c.id]).map((c: any) => ({ ...c, total_debt: debtMap[c.id], branch_name: branchMap[c.branch_id] }));
@@ -362,10 +368,10 @@ async function executeTool(db: any, name: string, args: any, ctx: ToolContext) {
       const since = new Date(Date.now() - (args?.days_back || 30) * 86400000).toISOString();
       let q = db.from("customer_payments").select("id, customer_id, amount, payment_method, branch_id, created_at").gte("created_at", since).order("created_at", { ascending: false }).limit(100);
       if (args?.customer_id) q = q.eq("customer_id", args.customer_id);
-      if (args?.branch_id) q = q.eq("branch_id", args.branch_id);
+      q = applyBranch(q, args?.branch_id);
       const { data } = await q;
       const cMap = await buildNameMap(db, "customers", branchIds);
-      const payments = (data || []).map((p: any) => ({ ...p, customer_name: cMap[p.customer_id] || p.customer_id, branch_name: branchMap[p.branch_id] }));
+      const payments = (data || []).map((p: any) => ({ ...p, customer_name: cMap[p.customer_id] || "Unknown", branch_name: branchMap[p.branch_id] }));
       return { payments, total: payments.length, total_amount: payments.reduce((s: number, p: any) => s + Number(p.amount), 0).toFixed(2) };
     }
 
@@ -378,7 +384,9 @@ async function executeTool(db: any, name: string, args: any, ctx: ToolContext) {
       const { data: suppliers } = await q;
 
       if (args?.filter === "with_debt") {
-        const { data: debts } = await db.from("supplier_debts").select("supplier_id, total_debt, branch_id").gt("total_debt", 0);
+        let dq = db.from("supplier_debts").select("supplier_id, total_debt, branch_id").gt("total_debt", 0);
+        dq = applyBranch(dq, args?.branch_id);
+        const { data: debts } = await dq;
         const debtMap: Record<string, number> = {};
         for (const d of debts || []) debtMap[d.supplier_id] = Number(d.total_debt);
         const withDebt = (suppliers || []).filter((s: any) => debtMap[s.id]).map((s: any) => ({ ...s, total_debt: debtMap[s.id], branch_name: branchMap[s.branch_id] }));
@@ -404,10 +412,10 @@ async function executeTool(db: any, name: string, args: any, ctx: ToolContext) {
       const since = new Date(Date.now() - (args?.days_back || 90) * 86400000).toISOString();
       let q = db.from("supplier_payments").select("id, supplier_id, amount, payment_method, branch_id, created_at").gte("created_at", since).order("created_at", { ascending: false }).limit(100);
       if (args?.supplier_id) q = q.eq("supplier_id", args.supplier_id);
-      if (args?.branch_id) q = q.eq("branch_id", args.branch_id);
+      q = applyBranch(q, args?.branch_id);
       const { data } = await q;
       const sMap = await buildNameMap(db, "suppliers", branchIds);
-      const payments = (data || []).map((p: any) => ({ ...p, supplier_name: sMap[p.supplier_id] || p.supplier_id, branch_name: branchMap[p.branch_id] }));
+      const payments = (data || []).map((p: any) => ({ ...p, supplier_name: sMap[p.supplier_id] || "Unknown", branch_name: branchMap[p.branch_id] }));
       return { payments, total: payments.length, total_amount: payments.reduce((s: number, p: any) => s + Number(p.amount), 0).toFixed(2) };
     }
 
@@ -436,19 +444,22 @@ async function executeTool(db: any, name: string, args: any, ctx: ToolContext) {
     // ── Transfers ──
     case "get_transfers": {
       const since = new Date(Date.now() - (args?.days_back || 30) * 86400000).toISOString();
-      const { data } = await db.from("medicine_transfers").select("id, medicine_id, from_branch_id, to_branch_id, quantity, created_at, notes").gte("created_at", since).order("created_at", { ascending: false }).limit(50);
+      let q = db.from("medicine_transfers").select("id, medicine_id, from_branch_id, to_branch_id, quantity, created_at, notes").gte("created_at", since).order("created_at", { ascending: false }).limit(50);
+      if (branchIds?.length) q = q.or(`from_branch_id.in.(${branchIds.join(",")}),to_branch_id.in.(${branchIds.join(",")})`);
+      const { data } = await q;
       const mMap = await buildNameMap(db, "medicines", branchIds);
-      const transfers = (data || []).map((t: any) => ({ ...t, item_name: mMap[t.medicine_id] || t.medicine_id, from_branch_name: branchMap[t.from_branch_id], to_branch_name: branchMap[t.to_branch_id] }));
+      const transfers = (data || []).map((t: any) => ({ ...t, item_name: mMap[t.medicine_id] || "Unknown", from_branch_name: branchMap[t.from_branch_id], to_branch_name: branchMap[t.to_branch_id] }));
       return { transfers, total: transfers.length };
     }
 
     // ── Locations ──
     case "get_locations": {
       let q = db.from("locations").select("id, name, type, address, branch_id").limit(50);
-      if (args?.branch_id) q = q.eq("branch_id", args.branch_id);
+      q = applyBranch(q, args?.branch_id);
       const { data } = await q;
       return { locations: resolveBranch(data || [], branchMap), total: (data || []).length };
     }
+
 
     default:
       return { error: `Unknown tool: ${name}` };
@@ -533,6 +544,8 @@ RULES:
 - Call the appropriate tool(s) before answering data questions. You can call multiple tools in parallel.
 - Use "${ItemLabel}" instead of generic terms ("medicine" for pharmacy, "item" for general).
 - Always show branch names (not IDs).
+- NEVER display raw UUIDs or internal IDs (id, branch_id, customer_id, supplier_id, medicine_id, sale_id, etc.) in your response. Use human-readable names only. If a name is unavailable, write "Unknown" — do not show the UUID.
+- All data returned by tools is already scoped to this user's business. Do not invent or reference data from other businesses/pharmacies.
 - Format with markdown, bullet points, and **bold** for key numbers.
 - Add "💡 AI Insight" with actionable recommendations when relevant.
 - Low stock = stock_quantity <= minimum_stock_level (NOT a hardcoded number).
