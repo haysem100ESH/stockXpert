@@ -314,23 +314,27 @@ async function executeTool(db: any, name: string, args: any, ctx: ToolContext) {
       const days = args?.days_back || 30;
       const limit = args?.limit || 10;
       const since = new Date(Date.now() - days * 86400000).toISOString();
-      const { data } = await db.from("sale_items").select("medicine_id, quantity, total_price").gte("created_at", since).limit(2000);
+      let siQ = db.from("sale_items").select("medicine_id, quantity, total_price, branch_id").gte("created_at", since).limit(5000);
+      siQ = applyBranch(siQ);
+      const { data } = await siQ;
 
-      // Collect unique medicine IDs and fetch names directly (not filtered by branch)
+      // Restrict medicine name lookup to owner's branches
       const uniqueMedIds = [...new Set((data || []).map((si: any) => si.medicine_id).filter(Boolean))];
       const mMap: Record<string, string> = {};
       if (uniqueMedIds.length > 0) {
-        // Fetch in batches of 200 to avoid query limits
         for (let i = 0; i < uniqueMedIds.length; i += 200) {
           const batch = uniqueMedIds.slice(i, i + 200);
-          const { data: meds } = await db.from("medicines").select("id, name").in("id", batch);
+          let mq = db.from("medicines").select("id, name, branch_id").in("id", batch);
+          if (branchIds?.length) mq = mq.in("branch_id", branchIds);
+          const { data: meds } = await mq;
           for (const m of meds || []) mMap[m.id] = m.name;
         }
       }
 
       const stats: Record<string, { name: string; qty: number; revenue: number }> = {};
       for (const si of data || []) {
-        const n = mMap[si.medicine_id] || si.medicine_id;
+        if (!mMap[si.medicine_id]) continue; // skip items outside owner's branches
+        const n = mMap[si.medicine_id];
         if (!stats[si.medicine_id]) stats[si.medicine_id] = { name: n, qty: 0, revenue: 0 };
         stats[si.medicine_id].qty += Number(si.quantity);
         stats[si.medicine_id].revenue += Number(si.total_price);
