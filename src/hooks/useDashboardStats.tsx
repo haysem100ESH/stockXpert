@@ -84,6 +84,11 @@ async function fetchDashboardOverview({ selectedBranch, ownerBranchIds, dateFilt
   if (!selectedBranch && isOwner && ownerBranchIds.length === 0) {
     return EMPTY_OVERVIEW;
   }
+  // Staff MUST have a branch — if not yet resolved, return empty (prevents
+  // unfiltered queries that would leak cross-branch counts via RLS).
+  if (!selectedBranch && !isOwner) {
+    return EMPTY_OVERVIEW;
+  }
 
   const now = new Date();
   const startDate = getStartDate(dateFilter);
@@ -99,7 +104,7 @@ async function fetchDashboardOverview({ selectedBranch, ownerBranchIds, dateFilt
     .lte('created_at', now.toISOString())
     .range(0, 49999);
   let branchItemsQuery = supabase.from('branch_items')
-    .select('id, quantity, expiry_date, medicines!inner(category, minimum_stock_level)')
+    .select('id, quantity, expiry_date, medicines!inner(category, minimum_stock_level, medicine_code_id)')
     .range(0, 49999);
   let custQuery = supabase.from('customers')
     .select('id, credit_score, max_credit_limit, branch_id')
@@ -243,13 +248,22 @@ async function fetchDashboardOverview({ selectedBranch, ownerBranchIds, dateFilt
     .sort((a, b) => b.sales - a.sales)
     .slice(0, 8);
 
+  // Branch-scoped group count: only count medicine codes that actually have
+  // items in the current branch context (not the owner-wide master catalog).
+  const branchCodeIds = new Set<string>();
+  branchItemsData.forEach((bi: any) => {
+    const cid = bi.medicines?.medicine_code_id;
+    if (cid) branchCodeIds.add(cid);
+  });
+  const totalGroups = branchCodeIds.size;
+
   return {
     stats: { totalRevenue, totalProducts, totalMedicines, totalItems, totalSoldItems, lowStockItems, outOfStockItems, expiredItems },
     categorySales: toArr(categoryMap),
     medicinesCategorySales: toArr(medicineCategoryMap),
     itemsCategorySales: toArr(itemCategoryMap),
     productPerformance, topMedicines, topItems, paymentMethodData, creditOverview,
-    totalGroups: codesData.length,
+    totalGroups,
     topGroupSales,
   };
 }
@@ -264,21 +278,25 @@ export function useDashboardStats(dateFilter: DateFilter) {
   const queryClient = useQueryClient();
 
   const isOwner = profile?.role === 'owner';
-  const enabled = !!profile && (!isOwner || !ownerBranchesLoading);
+  // For staff, the branch context's selectedBranch hydrates asynchronously;
+  // fall back to profile.branch_id immediately so the dashboard never queries
+  // without a branch filter (which would expose cross-branch totals via RLS).
+  const effectiveBranch = isOwner ? selectedBranch : (selectedBranch || profile?.branch_id || null);
+  const enabled = !!profile && (isOwner ? !ownerBranchesLoading : !!effectiveBranch);
 
   const queryKey = useMemo(
     () => DASHBOARD_STATS_KEY({
       ownerId: isOwner ? profile?.id : undefined,
-      selectedBranch,
+      selectedBranch: effectiveBranch,
       dateFilter,
     }),
-    [isOwner, profile?.id, selectedBranch, dateFilter]
+    [isOwner, profile?.id, effectiveBranch, dateFilter]
   );
 
   const query = useQuery({
     queryKey,
     queryFn: () => fetchDashboardOverview({
-      selectedBranch,
+      selectedBranch: effectiveBranch,
       ownerBranchIds: cachedOwnerBranchIds,
       dateFilter,
       isOwner,

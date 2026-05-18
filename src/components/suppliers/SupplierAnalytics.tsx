@@ -2,6 +2,8 @@ import { useState, useEffect } from 'react';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { supabase } from '@/lib/db';
 import { useBranchContext } from '@/hooks/useBranchContext';
+import { useAuth } from '@/hooks/useAuth';
+import { useOwnerBranchIds } from '@/hooks/useOwnerBranchIds';
 import { useToast } from '@/hooks/use-toast';
 import { DollarSign, TrendingUp, Truck, ShoppingCart } from 'lucide-react';
 import { BarChart, Bar, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer, PieChart, Pie, Cell, Legend } from 'recharts';
@@ -14,19 +16,31 @@ export default function SupplierAnalytics() {
   const [monthlyTrend, setMonthlyTrend] = useState<{ month: string; total: number }[]>([]);
   const [loading, setLoading] = useState(true);
   const { selectedBranch } = useBranchContext();
+  const { profile } = useAuth();
+  const { branchIds: ownerBranchIds } = useOwnerBranchIds();
   const { toast } = useToast();
 
-  useEffect(() => { fetchAnalytics(); }, [selectedBranch]);
+  useEffect(() => { fetchAnalytics(); }, [selectedBranch, profile?.id, ownerBranchIds.join(',')]);
+
+  const applyBranchFilter = (q: any) => {
+    if (selectedBranch) return q.eq('branch_id', selectedBranch);
+    if (profile?.role === 'owner') {
+      if (ownerBranchIds.length === 0) return q.eq('branch_id', '__none__');
+      return q.in('branch_id', ownerBranchIds);
+    }
+    if (profile?.branch_id) return q.eq('branch_id', profile.branch_id);
+    return q;
+  };
 
   const fetchAnalytics = async () => {
     setLoading(true);
     try {
       let purchaseQuery = supabase.from('supplier_purchases').select('supplier_id, total_cost, created_at');
-      if (selectedBranch) purchaseQuery = purchaseQuery.eq('branch_id', selectedBranch);
+      purchaseQuery = applyBranchFilter(purchaseQuery);
       const { data: purchases } = await purchaseQuery;
 
       let debtQuery = supabase.from('supplier_debts').select('total_debt');
-      if (selectedBranch) debtQuery = debtQuery.eq('branch_id', selectedBranch);
+      debtQuery = applyBranchFilter(debtQuery);
       const { data: debts } = await debtQuery;
 
       // Fetch supplier names

@@ -183,119 +183,87 @@ export default function Dashboard() {
       
       const totalRevenue = salesData?.reduce((sum, sale) => sum + Number(sale.total_amount), 0) || 0;
 
-      // Fetch total products and stock info - RLS handles ownership filtering
-      let medicinesQuery = supabase
-        .from('medicines')
-        .select('stock_quantity, minimum_stock_level');
-      
-      if (profile?.role === 'staff') {
-        medicinesQuery = medicinesQuery.eq('branch_id', userBranch || profile?.branch_id);
-      } else if (effectiveBranchId) {
-        medicinesQuery = medicinesQuery.eq('branch_id', effectiveBranchId);
-      } else if (ownerBranchIds.length > 0) {
-        medicinesQuery = medicinesQuery.in('branch_id', ownerBranchIds);
-      }
-      const { data: medicinesData } = await medicinesQuery;
+      // CRITICAL: Inventory metrics MUST come from `branch_items` (per-branch stock),
+      // never from `medicines` (the global master catalog). `medicines` rows can
+      // outlive their `branch_items` (e.g. after a branch removal) and have no
+      // meaningful `branch_id` column, so any filter applied to it is silently
+      // ignored — that was the source of the "26 products" leak.
+      const applyBranchFilter = (q: any) => {
+        if (profile?.role === 'staff') return q.eq('branch_id', userBranch || profile?.branch_id);
+        if (effectiveBranchId) return q.eq('branch_id', effectiveBranchId);
+        if (ownerBranchIds.length > 0) return q.in('branch_id', ownerBranchIds);
+        return q;
+      };
 
-      const totalProducts = medicinesData?.length || 0;
-      const lowStockItems = medicinesData?.filter(med => 
-        med.stock_quantity <= med.minimum_stock_level && med.stock_quantity > 0
-      ).length || 0;
-      const outOfStockItems = medicinesData?.filter(med => med.stock_quantity === 0).length || 0;
+      // Single branch_items fetch powers totals + low/out-of-stock + expiry cards.
+      const branchItemsQuery = applyBranchFilter(
+        supabase
+          .from('branch_items')
+          .select('id, quantity, expiry_date, medicines!inner(name, category, minimum_stock_level)')
+          .range(0, 49999)
+      );
+      const { data: branchItemsData } = await branchItemsQuery;
+      const biRows: any[] = branchItemsData || [];
 
-      // Fetch sales for the selected period - RLS handles ownership filtering
-      let periodSalesQuery = supabase
-        .from('sales')
-        .select('id')
-        .gte('created_at', start.toISOString())
-        .lte('created_at', end.toISOString());
-      
-      if (profile?.role === 'staff') {
-        periodSalesQuery = periodSalesQuery.eq('branch_id', userBranch || profile?.branch_id);
-      } else if (effectiveBranchId) {
-        periodSalesQuery = periodSalesQuery.eq('branch_id', effectiveBranchId);
-      } else if (ownerBranchIds.length > 0) {
-        periodSalesQuery = periodSalesQuery.in('branch_id', ownerBranchIds);
-      }
+      const totalProducts = biRows.length;
+      const lowStockItems = biRows.filter((bi) =>
+        bi.quantity > 0 && bi.quantity <= (bi.medicines?.minimum_stock_level ?? 0)
+      ).length;
+      const outOfStockItems = biRows.filter((bi) => bi.quantity === 0).length;
+
+      // Fetch sales count for the selected period
+      const periodSalesQuery = applyBranchFilter(
+        supabase
+          .from('sales')
+          .select('id')
+          .gte('created_at', start.toISOString())
+          .lte('created_at', end.toISOString())
+      );
       const { data: periodSalesData } = await periodSalesQuery;
-
       const todaySales = periodSalesData?.length || 0;
 
-      // Fetch out of stock items details - RLS handles ownership filtering
-      let outOfStockQuery = supabase
-        .from('medicines')
-        .select('id, name, category, stock_quantity')
-        .eq('stock_quantity', 0);
-      
-      if (profile?.role === 'staff') {
-        outOfStockQuery = outOfStockQuery.eq('branch_id', userBranch || profile?.branch_id);
-      } else if (effectiveBranchId) {
-        outOfStockQuery = outOfStockQuery.eq('branch_id', effectiveBranchId);
-      } else if (ownerBranchIds.length > 0) {
-        outOfStockQuery = outOfStockQuery.in('branch_id', ownerBranchIds);
-      }
-      const { data: outOfStockDetails } = await outOfStockQuery;
+      // Derive inventory alert lists from the same branch_items snapshot.
+      const outOfStockDetails = biRows
+        .filter((bi) => bi.quantity === 0)
+        .map((bi) => ({
+          id: bi.id,
+          name: bi.medicines?.name || 'Unknown',
+          category: bi.medicines?.category || '',
+          stock_quantity: 0,
+        }));
 
-      // Fetch low stock items details - RLS handles ownership filtering
-      let lowStockQuery = supabase
-        .from('medicines')
-        .select('id, name, category, stock_quantity, minimum_stock_level')
-        .gt('stock_quantity', 0);
-      
-      if (profile?.role === 'staff') {
-        lowStockQuery = lowStockQuery.eq('branch_id', userBranch || profile?.branch_id);
-      } else if (effectiveBranchId) {
-        lowStockQuery = lowStockQuery.eq('branch_id', effectiveBranchId);
-      } else if (ownerBranchIds.length > 0) {
-        lowStockQuery = lowStockQuery.in('branch_id', ownerBranchIds);
-      }
-      const { data: lowStockSource } = await lowStockQuery;
-      const lowStockDetails = (lowStockSource || []).filter((m: any) => m.stock_quantity <= m.minimum_stock_level);
+      const lowStockDetails = biRows
+        .filter((bi) => bi.quantity > 0 && bi.quantity <= (bi.medicines?.minimum_stock_level ?? 0))
+        .map((bi) => ({
+          id: bi.id,
+          name: bi.medicines?.name || 'Unknown',
+          category: bi.medicines?.category || '',
+          stock_quantity: bi.quantity,
+          minimum_stock_level: bi.medicines?.minimum_stock_level ?? 0,
+        }));
 
-      // Fetch expiring items (within 30 days)
+      const todayStr = new Date().toISOString().split('T')[0];
       const thirtyDaysFromNow = new Date();
       thirtyDaysFromNow.setDate(thirtyDaysFromNow.getDate() + 30);
-      const { data: expiringDetails } = await (function(){
-        let expiringQuery = supabase
-          .from('medicines')
-          .select('id, name, category, expiry_date')
-          .not('expiry_date', 'is', null)
-          .lte('expiry_date', thirtyDaysFromNow.toISOString().split('T')[0])
-          .gte('expiry_date', new Date().toISOString().split('T')[0]);
-        
-        if (profile?.role === 'staff') {
-          expiringQuery = expiringQuery.eq('branch_id', userBranch || profile?.branch_id);
-        } else if (effectiveBranchId) {
-          expiringQuery = expiringQuery.eq('branch_id', effectiveBranchId);
-        } else if (ownerBranchIds.length > 0) {
-          expiringQuery = expiringQuery.in('branch_id', ownerBranchIds);
-        }
-        return expiringQuery;
-      })();
+      const thirtyStr = thirtyDaysFromNow.toISOString().split('T')[0];
 
-      // Fetch expired items
-      const { data: expiredDetails, error: expiredError } = await (function(){
-        let expiredQuery = supabase
-          .from('medicines')
-          .select('id, name, category, expiry_date')
-          .not('expiry_date', 'is', null)
-          .lte('expiry_date', new Date().toISOString().split('T')[0]);
-        
-        if (profile?.role === 'staff') {
-          expiredQuery = expiredQuery.eq('branch_id', userBranch || profile?.branch_id);
-        } else if (effectiveBranchId) {
-          expiredQuery = expiredQuery.eq('branch_id', effectiveBranchId);
-        } else if (ownerBranchIds.length > 0) {
-          expiredQuery = expiredQuery.in('branch_id', ownerBranchIds);
-        }
-        return expiredQuery;
-      })();
+      const expiringDetails = biRows
+        .filter((bi) => bi.expiry_date && bi.quantity > 0 && bi.expiry_date > todayStr && bi.expiry_date <= thirtyStr)
+        .map((bi) => ({
+          id: bi.id,
+          name: bi.medicines?.name || 'Unknown',
+          category: bi.medicines?.category || '',
+          expiry_date: bi.expiry_date,
+        }));
 
-      if (expiredError) {
-        console.error('Error fetching expired medicines:', expiredError);
-      } else {
-        console.log('Expired medicines found:', expiredDetails?.length || 0);
-      }
+      const expiredDetails = biRows
+        .filter((bi) => bi.expiry_date && bi.quantity > 0 && bi.expiry_date <= todayStr)
+        .map((bi) => ({
+          id: bi.id,
+          name: bi.medicines?.name || 'Unknown',
+          category: bi.medicines?.category || '',
+          expiry_date: bi.expiry_date,
+        }));
 
       // Fetch sales data with medicine details for charts (include strip sales)
       const { data: salesWithItems } = await (function(){
@@ -392,23 +360,16 @@ export default function Dashboard() {
         return expensesQuery;
       })();
 
-      // Fetch inventory expenses (purchase costs of medicines added in period)
-      const { data: inventoryExpData } = await (function(){
-        let invQuery = supabase
-          .from('medicines')
-          .select('purchase_price, stock_quantity, created_at')
+      // Inventory expenses come from `inventory_batches` (per-branch source of
+      // truth for purchases), NOT from the global `medicines` table.
+      const { data: inventoryExpData } = await applyBranchFilter(
+        supabase
+          .from('inventory_batches')
+          .select('purchase_price, quantity_received, created_at')
           .gte('created_at', start.toISOString())
-          .lte('created_at', end.toISOString());
-        
-        if (profile?.role === 'staff') {
-          invQuery = invQuery.eq('branch_id', userBranch || profile?.branch_id);
-        } else if (effectiveBranchId) {
-          invQuery = invQuery.eq('branch_id', effectiveBranchId);
-        } else if (ownerBranchIds.length > 0) {
-          invQuery = invQuery.in('branch_id', ownerBranchIds);
-        }
-        return invQuery;
-      })();
+          .lte('created_at', end.toISOString())
+          .range(0, 49999)
+      );
 
       // Process income vs expense data by day
       const dateMap = new Map<string, { income: number; expenses: number }>();
@@ -431,13 +392,13 @@ export default function Dashboard() {
         });
       });
 
-      // Add inventory purchase costs as expenses
-      inventoryExpData?.forEach((med: any) => {
-        const date = format(new Date(med.created_at), 'yyyy-MM-dd');
+      // Add inventory purchase costs as expenses (batches use quantity_received)
+      inventoryExpData?.forEach((b: any) => {
+        const date = format(new Date(b.created_at), 'yyyy-MM-dd');
         const existing = dateMap.get(date) || { income: 0, expenses: 0 };
         dateMap.set(date, {
           ...existing,
-          expenses: existing.expenses + (Number(med.purchase_price) * Number(med.stock_quantity))
+          expenses: existing.expenses + (Number(b.purchase_price) * Number(b.quantity_received || 0))
         });
       });
 
@@ -518,23 +479,17 @@ export default function Dashboard() {
 
   const handleRemoveExpiredItem = async (itemId: string) => {
     try {
-      // Instead of deleting, set stock to 0 for expired medicines
-      // This preserves sales history while removing from active inventory
+      // itemId is now a `branch_items.id` (per-branch stock row). Zero out the
+      // per-branch quantity instead of touching the global `medicines` master.
       const { error } = await supabase
-        .from('medicines')
-        .update({ stock_quantity: 0 })
+        .from('branch_items')
+        .update({ quantity: 0 })
         .eq('id', itemId);
 
       if (error) throw error;
 
-      // Remove from local state
       setExpiredItems(expiredItems.filter(item => item.id !== itemId));
-      
-      // Refresh dashboard data to update counts
       fetchDashboardData();
-      
-      // Show success message
-      console.log('Expired medicine stock set to 0 successfully');
     } catch (error) {
       console.error('Error updating expired item:', error);
     }
