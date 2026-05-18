@@ -11,6 +11,7 @@ import { useExpiryThreshold } from '@/hooks/useExpiryThreshold';
 export default function ExpiringMedicinesAlert() {
   const { profile } = useAuth();
   const { userBranch, selectedBranch, branchType } = useBranchContext();
+  const { days: thresholdDays } = useExpiryThreshold();
   const navigate = useNavigate();
   const [expiringCount, setExpiringCount] = useState(0);
   const [expiredCount, setExpiredCount] = useState(0);
@@ -19,7 +20,7 @@ export default function ExpiringMedicinesAlert() {
 
   useEffect(() => {
     fetchAlerts();
-  }, [profile, userBranch, selectedBranch, branchType]);
+  }, [profile, userBranch, selectedBranch, branchType, thresholdDays]);
 
   const getEffectiveBranchId = () => {
     if (profile?.role === 'staff') return userBranch || profile?.branch_id;
