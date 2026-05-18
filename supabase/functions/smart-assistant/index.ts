@@ -384,7 +384,9 @@ async function executeTool(db: any, name: string, args: any, ctx: ToolContext) {
       const { data: suppliers } = await q;
 
       if (args?.filter === "with_debt") {
-        const { data: debts } = await db.from("supplier_debts").select("supplier_id, total_debt, branch_id").gt("total_debt", 0);
+        let dq = db.from("supplier_debts").select("supplier_id, total_debt, branch_id").gt("total_debt", 0);
+        dq = applyBranch(dq, args?.branch_id);
+        const { data: debts } = await dq;
         const debtMap: Record<string, number> = {};
         for (const d of debts || []) debtMap[d.supplier_id] = Number(d.total_debt);
         const withDebt = (suppliers || []).filter((s: any) => debtMap[s.id]).map((s: any) => ({ ...s, total_debt: debtMap[s.id], branch_name: branchMap[s.branch_id] }));
