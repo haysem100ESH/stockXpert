@@ -99,7 +99,7 @@ async function fetchDashboardOverview({ selectedBranch, ownerBranchIds, dateFilt
     .lte('created_at', now.toISOString())
     .range(0, 49999);
   let branchItemsQuery = supabase.from('branch_items')
-    .select('id, quantity, expiry_date, medicines!inner(category, minimum_stock_level)')
+    .select('id, quantity, expiry_date, medicines!inner(category, minimum_stock_level, medicine_code_id)')
     .range(0, 49999);
   let custQuery = supabase.from('customers')
     .select('id, credit_score, max_credit_limit, branch_id')
@@ -243,13 +243,22 @@ async function fetchDashboardOverview({ selectedBranch, ownerBranchIds, dateFilt
     .sort((a, b) => b.sales - a.sales)
     .slice(0, 8);
 
+  // Branch-scoped group count: only count medicine codes that actually have
+  // items in the current branch context (not the owner-wide master catalog).
+  const branchCodeIds = new Set<string>();
+  branchItemsData.forEach((bi: any) => {
+    const cid = bi.medicines?.medicine_code_id;
+    if (cid) branchCodeIds.add(cid);
+  });
+  const totalGroups = branchCodeIds.size;
+
   return {
     stats: { totalRevenue, totalProducts, totalMedicines, totalItems, totalSoldItems, lowStockItems, outOfStockItems, expiredItems },
     categorySales: toArr(categoryMap),
     medicinesCategorySales: toArr(medicineCategoryMap),
     itemsCategorySales: toArr(itemCategoryMap),
     productPerformance, topMedicines, topItems, paymentMethodData, creditOverview,
-    totalGroups: codesData.length,
+    totalGroups,
     topGroupSales,
   };
 }
