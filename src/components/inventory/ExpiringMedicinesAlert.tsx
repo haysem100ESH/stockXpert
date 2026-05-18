@@ -31,9 +31,9 @@ export default function ExpiringMedicinesAlert() {
     try {
       const effectiveBranchId = getEffectiveBranchId();
       const today = new Date().toISOString().split('T')[0];
-      const thirtyDaysFromNow = new Date();
-      thirtyDaysFromNow.setDate(thirtyDaysFromNow.getDate() + 30);
-      const thirtyDaysStr = thirtyDaysFromNow.toISOString().split('T')[0];
+      const thresholdDate = new Date();
+      thresholdDate.setDate(thresholdDate.getDate() + thresholdDays);
+      const thresholdStr = thresholdDate.toISOString().split('T')[0];
 
       // Get owner's branch IDs when viewing "All Branches"
       let ownerBranchIds: string[] = [];
