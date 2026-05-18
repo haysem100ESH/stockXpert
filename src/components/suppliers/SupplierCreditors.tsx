@@ -27,17 +27,26 @@ export default function SupplierCreditors() {
   const [loading, setLoading] = useState(true);
   const { toast } = useToast();
   const { selectedBranch } = useBranchContext();
+  const { profile } = useAuth();
+  const { branchIds: ownerBranchIds } = useOwnerBranchIds();
 
   const [paymentDialog, setPaymentDialog] = useState<{ open: boolean; supplierId: string; supplierName: string; debt: number }>({ open: false, supplierId: '', supplierName: '', debt: 0 });
   const [ledgerDialog, setLedgerDialog] = useState<{ open: boolean; supplierId: string; supplierName: string }>({ open: false, supplierId: '', supplierName: '' });
 
-  useEffect(() => { fetchCreditors(); }, [selectedBranch]);
+  useEffect(() => { fetchCreditors(); }, [selectedBranch, profile?.id, ownerBranchIds.join(',')]);
 
   const fetchCreditors = async () => {
     setLoading(true);
     try {
       let query = supabase.from('supplier_debts').select('*').gt('total_debt', 0);
-      if (selectedBranch) query = query.eq('branch_id', selectedBranch);
+      if (selectedBranch) {
+        query = query.eq('branch_id', selectedBranch);
+      } else if (profile?.role === 'owner') {
+        if (ownerBranchIds.length === 0) { setCreditors([]); setLoading(false); return; }
+        query = query.in('branch_id', ownerBranchIds);
+      } else if (profile?.branch_id) {
+        query = query.eq('branch_id', profile.branch_id);
+      }
       const { data, error } = await query;
       if (error) throw error;
 
