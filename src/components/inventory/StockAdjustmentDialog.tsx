@@ -134,8 +134,24 @@ export default function StockAdjustmentDialog({ open, onOpenChange, medicine, on
       const medicineId = await resolveMedicineId();
 
       if (adjustmentType === 'increase') {
-        // Create a batch (preferred path so FIFO sees it). syncBranchItemQuantity inside createBatch updates branch_items.quantity.
-        if (medicineId && branchId) {
+        // Add stock to an EXISTING batch (do NOT create a new batch here — use "Add New Batch" tab for that).
+        if (existingBatches.length > 0) {
+          const target =
+            existingBatches.find(b => b.id === selectedBatchId) || existingBatches[0];
+          const newRemaining = Number(target.remaining_quantity) + qty;
+          const newOriginal = Number(target.quantity) + qty;
+          const { error: updErr } = await supabase
+            .from('inventory_batches')
+            .update({
+              remaining_quantity: newRemaining,
+              quantity: newOriginal,
+              updated_at: new Date().toISOString(),
+            })
+            .eq('id', target.id);
+          if (updErr) throw updErr;
+          await syncBranchItemQuantity(medicine.id);
+        } else if (medicineId && branchId) {
+          // No batches exist yet — create the first one so FIFO has something to consume.
           const { error: batchErr } = await createBatch({
             branchId,
             medicineId,
@@ -146,7 +162,6 @@ export default function StockAdjustmentDialog({ open, onOpenChange, medicine, on
             createdBy: profile?.id || null,
           });
           if (batchErr) {
-            // Fallback: direct quantity update
             const newStock = medicine.stock_quantity + qty;
             await supabase.from('branch_items').update({ quantity: newStock, updated_at: new Date().toISOString() }).eq('id', medicine.id);
           }
