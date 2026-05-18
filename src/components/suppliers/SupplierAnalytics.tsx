@@ -2,6 +2,8 @@ import { useState, useEffect } from 'react';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { supabase } from '@/lib/db';
 import { useBranchContext } from '@/hooks/useBranchContext';
+import { useAuth } from '@/hooks/useAuth';
+import { useOwnerBranchIds } from '@/hooks/useOwnerBranchIds';
 import { useToast } from '@/hooks/use-toast';
 import { DollarSign, TrendingUp, Truck, ShoppingCart } from 'lucide-react';
 import { BarChart, Bar, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer, PieChart, Pie, Cell, Legend } from 'recharts';
