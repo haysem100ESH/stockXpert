@@ -30,6 +30,11 @@ export default function SmartAssistant() {
   const [input, setInput] = useState('');
   const [isLoading, setIsLoading] = useState(false);
   const [branchIds, setBranchIds] = useState<string[]>([]);
+  // Position: side ('left' | 'right') + vertical offset from bottom in px
+  const [side, setSide] = useState<'left' | 'right'>(() => (localStorage.getItem('chatSide') as 'left' | 'right') || 'right');
+  const [bottomOffset, setBottomOffset] = useState<number>(() => Number(localStorage.getItem('chatBottom') || 24));
+  const [dragging, setDragging] = useState(false);
+  const dragState = useRef<{ startY: number; startX: number; startBottom: number; moved: boolean } | null>(null);
   const scrollRef = useRef<HTMLDivElement>(null);
   const inputRef = useRef<HTMLInputElement>(null);
   const { user, profile } = useAuth();
