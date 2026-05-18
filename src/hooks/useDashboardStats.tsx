@@ -99,7 +99,7 @@ async function fetchDashboardOverview({ selectedBranch, ownerBranchIds, dateFilt
     .lte('created_at', now.toISOString())
     .range(0, 49999);
   let branchItemsQuery = supabase.from('branch_items')
-    .select('id, quantity, expiry_date, medicines!inner(category, minimum_stock_level)')
+    .select('id, quantity, expiry_date, medicines!inner(category, minimum_stock_level, medicine_code_id)')
     .range(0, 49999);
   let custQuery = supabase.from('customers')
     .select('id, credit_score, max_credit_limit, branch_id')
