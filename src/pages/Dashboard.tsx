@@ -392,13 +392,13 @@ export default function Dashboard() {
         });
       });
 
-      // Add inventory purchase costs as expenses
-      inventoryExpData?.forEach((med: any) => {
-        const date = format(new Date(med.created_at), 'yyyy-MM-dd');
+      // Add inventory purchase costs as expenses (batches use quantity_received)
+      inventoryExpData?.forEach((b: any) => {
+        const date = format(new Date(b.created_at), 'yyyy-MM-dd');
         const existing = dateMap.get(date) || { income: 0, expenses: 0 };
         dateMap.set(date, {
           ...existing,
-          expenses: existing.expenses + (Number(med.purchase_price) * Number(med.stock_quantity))
+          expenses: existing.expenses + (Number(b.purchase_price) * Number(b.quantity_received || 0))
         });
       });
 
