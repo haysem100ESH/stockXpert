@@ -65,6 +65,12 @@ export default function StockAdjustmentDialog({ open, onOpenChange, medicine, on
       // Prefill new-batch defaults from current item
       setBatchPurchasePrice(String(medicine.purchase_price ?? ''));
       setBatchSellingPrice(String(medicine.selling_price ?? medicine.purchase_price ?? ''));
+      // Load existing batches (active only) for the "Increase" target selector
+      getBatchesForItem(medicine.id).then((all) => {
+        const active = (all || []).filter(b => Number(b.remaining_quantity) > 0);
+        setExistingBatches(active);
+        setSelectedBatchId(active.length >= 1 ? active[0].id : '');
+      });
     }
   }, [open, medicine]);
 
