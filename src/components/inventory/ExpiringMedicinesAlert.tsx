@@ -6,10 +6,12 @@ import { useNavigate } from 'react-router-dom';
 import { supabase } from '@/lib/db';
 import { useAuth } from '@/hooks/useAuth';
 import { useBranchContext } from '@/hooks/useBranchContext';
+import { useExpiryThreshold } from '@/hooks/useExpiryThreshold';
 
 export default function ExpiringMedicinesAlert() {
   const { profile } = useAuth();
   const { userBranch, selectedBranch, branchType } = useBranchContext();
+  const { days: thresholdDays } = useExpiryThreshold();
   const navigate = useNavigate();
   const [expiringCount, setExpiringCount] = useState(0);
   const [expiredCount, setExpiredCount] = useState(0);
@@ -18,7 +20,7 @@ export default function ExpiringMedicinesAlert() {
 
   useEffect(() => {
     fetchAlerts();
-  }, [profile, userBranch, selectedBranch, branchType]);
+  }, [profile, userBranch, selectedBranch, branchType, thresholdDays]);
 
   const getEffectiveBranchId = () => {
     if (profile?.role === 'staff') return userBranch || profile?.branch_id;
@@ -29,9 +31,9 @@ export default function ExpiringMedicinesAlert() {
     try {
       const effectiveBranchId = getEffectiveBranchId();
       const today = new Date().toISOString().split('T')[0];
-      const thirtyDaysFromNow = new Date();
-      thirtyDaysFromNow.setDate(thirtyDaysFromNow.getDate() + 30);
-      const thirtyDaysStr = thirtyDaysFromNow.toISOString().split('T')[0];
+      const thresholdDate = new Date();
+      thresholdDate.setDate(thresholdDate.getDate() + thresholdDays);
+      const thresholdStr = thresholdDate.toISOString().split('T')[0];
 
       // Get owner's branch IDs when viewing "All Branches"
       let ownerBranchIds: string[] = [];
@@ -97,7 +99,7 @@ export default function ExpiringMedicinesAlert() {
         if (item.expiry_date && item.quantity > 0) {
           if (item.expiry_date <= today) {
             expired++;
-          } else if (item.expiry_date <= thirtyDaysStr) {
+          } else if (item.expiry_date <= thresholdStr) {
             expiring++;
           }
         }
