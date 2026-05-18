@@ -444,19 +444,22 @@ async function executeTool(db: any, name: string, args: any, ctx: ToolContext) {
     // ── Transfers ──
     case "get_transfers": {
       const since = new Date(Date.now() - (args?.days_back || 30) * 86400000).toISOString();
-      const { data } = await db.from("medicine_transfers").select("id, medicine_id, from_branch_id, to_branch_id, quantity, created_at, notes").gte("created_at", since).order("created_at", { ascending: false }).limit(50);
+      let q = db.from("medicine_transfers").select("id, medicine_id, from_branch_id, to_branch_id, quantity, created_at, notes").gte("created_at", since).order("created_at", { ascending: false }).limit(50);
+      if (branchIds?.length) q = q.or(`from_branch_id.in.(${branchIds.join(",")}),to_branch_id.in.(${branchIds.join(",")})`);
+      const { data } = await q;
       const mMap = await buildNameMap(db, "medicines", branchIds);
-      const transfers = (data || []).map((t: any) => ({ ...t, item_name: mMap[t.medicine_id] || t.medicine_id, from_branch_name: branchMap[t.from_branch_id], to_branch_name: branchMap[t.to_branch_id] }));
+      const transfers = (data || []).map((t: any) => ({ ...t, item_name: mMap[t.medicine_id] || "Unknown", from_branch_name: branchMap[t.from_branch_id], to_branch_name: branchMap[t.to_branch_id] }));
       return { transfers, total: transfers.length };
     }
 
     // ── Locations ──
     case "get_locations": {
       let q = db.from("locations").select("id, name, type, address, branch_id").limit(50);
-      if (args?.branch_id) q = q.eq("branch_id", args.branch_id);
+      q = applyBranch(q, args?.branch_id);
       const { data } = await q;
       return { locations: resolveBranch(data || [], branchMap), total: (data || []).length };
     }
+
 
     default:
       return { error: `Unknown tool: ${name}` };
