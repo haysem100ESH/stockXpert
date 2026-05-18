@@ -152,6 +152,49 @@ export default function InventoryDashboard() {
 
   return (
     <div className="space-y-6">
+      <Card>
+        <CardContent className="p-4">
+          <div className="flex flex-col sm:flex-row sm:items-end gap-3">
+            <div className="flex-1">
+              <Label htmlFor="expiry-threshold" className="flex items-center gap-2 mb-1">
+                <Settings2 className="h-4 w-4" />
+                Expiry alert threshold
+              </Label>
+              <p className="text-xs text-muted-foreground">
+                Items expiring within this many days will appear in alerts. Default: {defaultDays} days (≈ 2 months).
+              </p>
+            </div>
+            <div className="flex items-center gap-2">
+              <Input
+                id="expiry-threshold"
+                type="number"
+                min={1}
+                max={365}
+                value={thresholdInput}
+                onChange={(e) => setThresholdInput(e.target.value)}
+                className="w-24"
+              />
+              <span className="text-sm text-muted-foreground">days</span>
+              <Button
+                size="sm"
+                onClick={() => {
+                  const n = parseInt(thresholdInput, 10);
+                  if (Number.isFinite(n) && n > 0) setThresholdDays(n);
+                  else setThresholdInput(String(thresholdDays));
+                }}
+              >
+                Save
+              </Button>
+              {thresholdDays !== defaultDays && (
+                <Button size="sm" variant="ghost" onClick={() => setThresholdDays(defaultDays)}>
+                  Reset
+                </Button>
+              )}
+            </div>
+          </div>
+        </CardContent>
+      </Card>
+
       {outOfStockItems.length > 0 && (
         <Card>
           <CardHeader>
