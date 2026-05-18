@@ -261,9 +261,7 @@ export default function SmartAssistant() {
         >
           {/* Header (drag handle) */}
           <div
-            onPointerDown={onDragPointerDown}
-            onPointerMove={onDragPointerMove}
-            onPointerUp={onDragPointerUp}
+            {...headerDrag}
             className="flex items-center justify-between px-4 py-3 border-b bg-primary text-primary-foreground rounded-t-2xl cursor-grab active:cursor-grabbing touch-none select-none"
           >
             <div className="flex items-center gap-2">
