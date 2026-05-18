@@ -479,23 +479,17 @@ export default function Dashboard() {
 
   const handleRemoveExpiredItem = async (itemId: string) => {
     try {
-      // Instead of deleting, set stock to 0 for expired medicines
-      // This preserves sales history while removing from active inventory
+      // itemId is now a `branch_items.id` (per-branch stock row). Zero out the
+      // per-branch quantity instead of touching the global `medicines` master.
       const { error } = await supabase
-        .from('medicines')
-        .update({ stock_quantity: 0 })
+        .from('branch_items')
+        .update({ quantity: 0 })
         .eq('id', itemId);
 
       if (error) throw error;
 
-      // Remove from local state
       setExpiredItems(expiredItems.filter(item => item.id !== itemId));
-      
-      // Refresh dashboard data to update counts
       fetchDashboardData();
-      
-      // Show success message
-      console.log('Expired medicine stock set to 0 successfully');
     } catch (error) {
       console.error('Error updating expired item:', error);
     }
