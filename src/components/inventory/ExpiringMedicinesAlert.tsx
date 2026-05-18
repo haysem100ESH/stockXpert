@@ -99,7 +99,7 @@ export default function ExpiringMedicinesAlert() {
         if (item.expiry_date && item.quantity > 0) {
           if (item.expiry_date <= today) {
             expired++;
-          } else if (item.expiry_date <= thirtyDaysStr) {
+          } else if (item.expiry_date <= thresholdStr) {
             expiring++;
           }
         }
