@@ -35,11 +35,15 @@ export default function InventoryDashboard() {
   const { toast } = useToast();
   const { selectedBranch, branchType } = useBranchContext();
   const { profile } = useAuth();
+  const { days: thresholdDays, setDays: setThresholdDays, defaultDays } = useExpiryThreshold();
+  const [thresholdInput, setThresholdInput] = useState<string>(String(thresholdDays));
   const isPharmacy = branchType === 'pharmacy';
+
+  useEffect(() => { setThresholdInput(String(thresholdDays)); }, [thresholdDays]);
 
   useEffect(() => {
     fetchInventoryData();
-  }, [selectedBranch]);
+  }, [selectedBranch, thresholdDays]);
 
   useEffect(() => {
     const channel = supabase
