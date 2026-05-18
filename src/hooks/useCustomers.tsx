@@ -14,6 +14,8 @@ import { useQuery, useQueryClient } from '@tanstack/react-query';
 import { supabase } from '@/lib/db';
 import { useBranchContext } from './useBranchContext';
 import { getCreditLimit } from './useCreditScore';
+import { useAuth } from './useAuth';
+import { useOwnerBranchIds } from './useOwnerBranchIds';
 
 export interface CustomerRow {
   id: string;
@@ -29,9 +31,21 @@ export interface CustomerRow {
   max_credit_limit: number;
 }
 
-async function fetchCustomers(selectedBranch: string | null): Promise<CustomerRow[]> {
+async function fetchCustomers(
+  selectedBranch: string | null,
+  ownerBranchIds: string[],
+  isOwner: boolean,
+  staffBranchId: string | null,
+): Promise<CustomerRow[]> {
   let query = (supabase as any).from('customers').select('*').order('name');
-  if (selectedBranch) query = query.eq('branch_id', selectedBranch);
+  if (selectedBranch) {
+    query = query.eq('branch_id', selectedBranch);
+  } else if (isOwner) {
+    if (ownerBranchIds.length === 0) return [];
+    query = query.in('branch_id', ownerBranchIds);
+  } else if (staffBranchId) {
+    query = query.eq('branch_id', staffBranchId);
+  }
   const { data: customersData, error } = await query;
   if (error) throw error;
 
