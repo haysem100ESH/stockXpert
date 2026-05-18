@@ -52,17 +52,29 @@ export default function ExpiringMedicinesAlert() {
       }
 
       const addBranchFilter = (q: any) => {
-        if (profile?.role === 'staff') return q.eq('branch_id', userBranch || profile?.branch_id);
+        if (profile?.role === 'staff') {
+          const sid = userBranch || profile?.branch_id;
+          if (!sid) return null;
+          return q.eq('branch_id', sid);
+        }
         if (effectiveBranchId) return q.eq('branch_id', effectiveBranchId);
-        if (ownerBranchIds.length > 0) return q.in('branch_id', ownerBranchIds);
-        return q;
+        if (profile?.role === 'owner' && ownerBranchIds.length > 0) return q.in('branch_id', ownerBranchIds);
+        // Owner with no branches OR unknown role: do not leak cross-owner data
+        return null;
       };
 
       // Fetch all branch_items with medicine details in one query
-      let query = supabase
+      let query: any = supabase
         .from('branch_items')
         .select('id, quantity, expiry_date, medicines!inner(minimum_stock_level)');
       query = addBranchFilter(query);
+      if (!query) {
+        setExpiringCount(0);
+        setExpiredCount(0);
+        setOutOfStockCount(0);
+        setLowStockCount(0);
+        return;
+      }
       const { data: items } = await query;
 
       if (!items || items.length === 0) {

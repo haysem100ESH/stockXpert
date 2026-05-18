@@ -6,6 +6,8 @@ import { Phone, AlertTriangle, Users, DollarSign } from 'lucide-react';
 import { supabase } from '@/lib/db';
 import { useToast } from '@/hooks/use-toast';
 import { useBranchContext } from '@/hooks/useBranchContext';
+import { useAuth } from '@/hooks/useAuth';
+import { useOwnerBranchIds } from '@/hooks/useOwnerBranchIds';
 import RecordPaymentDialog from '@/components/customers/RecordPaymentDialog';
 
 interface CustomerDebt {
@@ -42,15 +44,27 @@ export default function DebtManagement() {
   const [paymentCustomer, setPaymentCustomer] = useState<{ id: string; name: string; debt: number } | null>(null);
   const { toast } = useToast();
   const { selectedBranch } = useBranchContext();
+  const { profile } = useAuth();
+  const { branchIds: ownerBranchIds } = useOwnerBranchIds();
 
   useEffect(() => {
     fetchDebtData();
-  }, [selectedBranch]);
+  }, [selectedBranch, profile?.id, ownerBranchIds.join(',')]);
+
+  const applyBranchFilter = (q: any) => {
+    if (selectedBranch) return q.eq('branch_id', selectedBranch);
+    if (profile?.role === 'owner') {
+      if (ownerBranchIds.length === 0) return q.eq('branch_id', '__none__');
+      return q.in('branch_id', ownerBranchIds);
+    }
+    if (profile?.branch_id) return q.eq('branch_id', profile.branch_id);
+    return q;
+  };
 
   const fetchDebtData = async () => {
     try {
       let customersQuery = supabase.from('customers').select('id, name, phone, branch_id');
-      if (selectedBranch) customersQuery = customersQuery.eq('branch_id', selectedBranch);
+      customersQuery = applyBranchFilter(customersQuery);
       const { data: customersData, error: custErr } = await customersQuery;
       if (custErr) throw custErr;
 
@@ -75,12 +89,12 @@ export default function DebtManagement() {
         .from('sales')
         .select('customer_id, total_amount, created_at')
         .not('customer_id', 'is', null);
-      if (selectedBranch) salesQuery = salesQuery.eq('branch_id', selectedBranch);
+      salesQuery = applyBranchFilter(salesQuery);
       const { data: salesData } = await salesQuery;
 
       // Fetch payment count
       let paymentsQuery = supabase.from('customer_payments').select('customer_id');
-      if (selectedBranch) paymentsQuery = paymentsQuery.eq('branch_id', selectedBranch);
+      paymentsQuery = applyBranchFilter(paymentsQuery);
       const { data: paymentsData } = await paymentsQuery;
 
       const customerDebts: CustomerDebt[] = (customersData || []).map(customer => {

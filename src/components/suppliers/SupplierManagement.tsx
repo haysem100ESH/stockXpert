@@ -10,6 +10,7 @@ import { Plus, Search, Edit, Trash2, Truck, Phone, Mail, MapPin, User, MoreVerti
 import { supabase } from '@/lib/db';
 import { useToast } from '@/hooks/use-toast';
 import { useAuth } from '@/hooks/useAuth';
+import { useOwnerBranchIds } from '@/hooks/useOwnerBranchIds';
 import { useBranchContext } from '@/hooks/useBranchContext';
 import AddSupplierDialog from './AddSupplierDialog';
 import EditSupplierDialog from './EditSupplierDialog';
@@ -51,10 +52,11 @@ export default function SupplierManagement() {
   const { profile } = useAuth();
   const readOnly = useReadOnly();
   const { selectedBranch } = useBranchContext();
+  const { branchIds: ownerBranchIds } = useOwnerBranchIds();
   
   const itemsPerPage = 15;
 
-  useEffect(() => { fetchSuppliers(); }, [selectedBranch]);
+  useEffect(() => { fetchSuppliers(); }, [selectedBranch, profile?.id, ownerBranchIds.join(',')]);
 
   useEffect(() => {
     const filtered = suppliers.filter(supplier =>
@@ -74,7 +76,14 @@ export default function SupplierManagement() {
   const fetchSuppliers = async () => {
     try {
       let query = supabase.from('suppliers').select('*').order('name');
-      if (selectedBranch) query = query.eq('branch_id', selectedBranch);
+      if (selectedBranch) {
+        query = query.eq('branch_id', selectedBranch);
+      } else if (profile?.role === 'owner') {
+        if (ownerBranchIds.length === 0) { setSuppliers([]); setLoading(false); return; }
+        query = query.in('branch_id', ownerBranchIds);
+      } else if (profile?.branch_id) {
+        query = query.eq('branch_id', profile.branch_id);
+      }
       const { data, error } = await query;
       if (error) throw error;
       setSuppliers(data || []);
