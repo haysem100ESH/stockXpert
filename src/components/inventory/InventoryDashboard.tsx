@@ -255,7 +255,7 @@ export default function InventoryDashboard() {
               <CalendarDays className="h-5 w-5 text-warning" />
               <span>Items Expiring Soon</span>
             </CardTitle>
-            <CardDescription>{expiringItems.length} items will expire within 30 days</CardDescription>
+            <CardDescription>{expiringItems.length} items will expire within {thresholdDays} days</CardDescription>
           </CardHeader>
           <CardContent>
             <div className="grid gap-2">
