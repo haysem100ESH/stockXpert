@@ -416,6 +416,26 @@ export default function StockAdjustmentDialog({ open, onOpenChange, medicine, on
               <Input type="number" min="0.01" step="any" value={quantity} onChange={(e) => setQuantity(e.target.value)} placeholder="Enter quantity" />
             </div>
 
+            {adjustmentType === 'increase' && existingBatches.length > 1 && (
+              <div>
+                <Label>Add to batch</Label>
+                <Select value={selectedBatchId} onValueChange={setSelectedBatchId}>
+                  <SelectTrigger><SelectValue placeholder="Select batch to receive stock" /></SelectTrigger>
+                  <SelectContent>
+                    {existingBatches.map(b => (
+                      <SelectItem key={b.id} value={b.id}>
+                        {(b.batch_number || 'No batch #')} · remaining {Number(b.remaining_quantity)}
+                        {b.expiry_date ? ` · exp ${b.expiry_date}` : ''}
+                      </SelectItem>
+                    ))}
+                  </SelectContent>
+                </Select>
+                <p className="text-xs text-muted-foreground mt-1">
+                  This item has multiple batches. Choose which one should receive the new stock.
+                </p>
+              </div>
+            )}
+
             <div>
               <Label>Reason (required)</Label>
               <Textarea value={reason} onChange={(e) => setReason(e.target.value)} placeholder="Enter reason for adjustment" />
