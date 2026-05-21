@@ -33,6 +33,7 @@ interface SourceMed {
   unit_label: string | null;
   stock_quantity: number;
   stock_display: string;
+  packaging: Packaging;
 }
 
 interface TargetMatch {
