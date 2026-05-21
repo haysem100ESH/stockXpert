@@ -8,7 +8,7 @@ import { ArrowLeft, ArrowRight, Check, PackagePlus } from 'lucide-react';
 import { format } from 'date-fns';
 import { supabase } from '@/lib/db';
 import { useToast } from '@/hooks/use-toast';
-import { formatStock, defaultPackaging, type Packaging } from '@/lib/packaging';
+import { formatStock, defaultPackaging, convertToUnits, availableLevels, type Packaging, type PackagingLevel } from '@/lib/packaging';
 
 export interface WizardResult {
   medicine_id: string;            // source medicine
