@@ -207,27 +207,44 @@ serve(async (req: Request): Promise<Response> => {
           .single();
         if (!sourceMed) continue;
 
-        // --- FIFO deduct from source batches
-        const { data: batches } = await admin
+        // --- FIFO deduct from source batches (look up by branch_item_id OR by branch+medicine for legacy rows)
+        const { data: batchesByItem } = await admin
           .from('inventory_batches')
-          .select('id, remaining_quantity, purchase_price, selling_price, expiry_date, batch_number')
+          .select('id, remaining_quantity, purchase_price, selling_price, expiry_date, batch_number, branch_item_id')
           .eq('branch_item_id', sourceBI.id)
           .gt('remaining_quantity', 0)
           .order('expiry_date', { ascending: true, nullsFirst: false })
           .order('created_at', { ascending: true });
 
+        let batches = batchesByItem || [];
+        if (batches.length === 0) {
+          // Fallback: legacy batches with null branch_item_id
+          const { data: legacyBatches } = await admin
+            .from('inventory_batches')
+            .select('id, remaining_quantity, purchase_price, selling_price, expiry_date, batch_number, branch_item_id')
+            .eq('branch_id', sourceBranchId)
+            .eq('medicine_id', item.medicine_id)
+            .gt('remaining_quantity', 0)
+            .order('expiry_date', { ascending: true, nullsFirst: false })
+            .order('created_at', { ascending: true });
+          batches = legacyBatches || [];
+        }
+
         let remaining = qty;
         let totalCost = 0;
         const consumed: Array<{ qty: number; pp: number; sp: number; expiry: string | null; batch_number: string | null }> = [];
 
-        for (const b of (batches || [])) {
+        for (const b of batches) {
           if (remaining <= 0) break;
           const br = Number(b.remaining_quantity);
           const take = Math.min(remaining, br);
           const newRem = Math.max(0, br - take);
+          const patch: any = { remaining_quantity: newRem, updated_at: new Date().toISOString() };
+          // Backfill branch_item_id link so future syncs work
+          if (!b.branch_item_id) patch.branch_item_id = sourceBI.id;
           await admin
             .from('inventory_batches')
-            .update({ remaining_quantity: newRem, updated_at: new Date().toISOString() })
+            .update(patch)
             .eq('id', b.id);
           consumed.push({
             qty: take,
@@ -240,7 +257,20 @@ serve(async (req: Request): Promise<Response> => {
           remaining -= take;
         }
 
-        await syncBranchItemQty(sourceBI.id);
+        const hadSourceBatches = batches.length > 0 && remaining < qty;
+
+        if (hadSourceBatches) {
+          // Sync from batches (source of truth when batches exist)
+          await syncBranchItemQty(sourceBI.id);
+        } else {
+          // No batches existed at source — directly decrement branch_items.quantity
+          const newQty = Math.max(0, Number(sourceBI.quantity || 0) - qty);
+          await admin
+            .from('branch_items')
+            .update({ quantity: newQty, updated_at: new Date().toISOString() })
+            .eq('id', sourceBI.id);
+          totalCost = qty * Number(sourceBI.purchase_price || 0);
+        }
 
         const avgPurchasePrice = qty > 0 ? totalCost / qty : Number(sourceBI.purchase_price || 0);
 
@@ -249,14 +279,16 @@ serve(async (req: Request): Promise<Response> => {
 
         const { data: existingDestBI } = await admin
           .from('branch_items')
-          .select('id, selling_price, purchase_price')
+          .select('id, quantity, selling_price, purchase_price')
           .eq('branch_id', destBranchId)
           .eq('medicine_id', targetMedicineId)
           .maybeSingle();
 
         let destBranchItemId: string;
+        let destCurrentQty = 0;
         if (existingDestBI) {
           destBranchItemId = existingDestBI.id;
+          destCurrentQty = Number(existingDestBI.quantity || 0);
         } else {
           const { data: newBI, error: biErr } = await admin
             .from('branch_items')
@@ -278,6 +310,7 @@ serve(async (req: Request): Promise<Response> => {
         // --- Destination batching: per requester's selection
         const targetBatchId: string | null = (item as any).target_batch_id || null;
         const createNewBatch: boolean = !!(item as any).create_new_batch;
+        let destBatchInserted = false;
 
         if (!createNewBatch && targetBatchId) {
           // Add ALL consumed quantity to the chosen existing batch
@@ -293,8 +326,8 @@ serve(async (req: Request): Promise<Response> => {
               remaining_quantity: Number(tb.remaining_quantity || 0) + qty,
               updated_at: new Date().toISOString(),
             }).eq('id', tb.id);
+            destBatchInserted = true;
           } else {
-            // Fallback: target batch missing/invalid — create a single new batch
             await admin.from('inventory_batches').insert({
               branch_id: destBranchId,
               medicine_id: targetMedicineId,
@@ -307,9 +340,9 @@ serve(async (req: Request): Promise<Response> => {
               expiry_date: consumed[0]?.expiry || null,
               created_by: user.id,
             });
+            destBatchInserted = true;
           }
         } else if (createNewBatch) {
-          // Create a single new batch with user-specified metadata
           const newBatchNumber = (item as any).new_batch_number || consumed[0]?.batch_number || null;
           const newExpiry = (item as any).new_batch_expiry || consumed[0]?.expiry || null;
           const newPP = (item as any).new_batch_purchase_price != null
@@ -327,8 +360,9 @@ serve(async (req: Request): Promise<Response> => {
             expiry_date: newExpiry,
             created_by: user.id,
           });
-        } else {
-          // Legacy fallback (older requests with no mapping): preserve source batches
+          destBatchInserted = true;
+        } else if (consumed.length > 0) {
+          // Legacy fallback: preserve source batches
           for (const c of consumed) {
             await admin.from('inventory_batches').insert({
               branch_id: destBranchId,
@@ -343,8 +377,29 @@ serve(async (req: Request): Promise<Response> => {
               created_by: user.id,
             });
           }
+          destBatchInserted = true;
         }
-        await syncBranchItemQty(destBranchItemId);
+
+        // Check whether destination has any batches at all (to decide sync vs direct increment)
+        const { data: anyDestBatch } = await admin
+          .from('inventory_batches')
+          .select('id')
+          .eq('branch_item_id', destBranchItemId)
+          .gt('remaining_quantity', 0)
+          .limit(1);
+
+        if ((anyDestBatch || []).length > 0) {
+          await syncBranchItemQty(destBranchItemId);
+        } else {
+          // No batches at destination — directly increment quantity
+          await admin
+            .from('branch_items')
+            .update({
+              quantity: destCurrentQty + qty,
+              updated_at: new Date().toISOString(),
+            })
+            .eq('id', destBranchItemId);
+        }
 
         // --- Expenses (paired transfer-out / transfer-in)
         if (totalCost > 0) {
