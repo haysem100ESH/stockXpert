@@ -224,10 +224,17 @@ serve(async (req: Request): Promise<Response> => {
     }
 
     const { error: itemsError } = await admin.from('transfer_request_items').insert(
-      items.map((item) => ({
+      items.map((item: any) => ({
         request_id: requestRow.id,
         medicine_id: item.medicine_id,
         requested_quantity: item.requested_quantity,
+        target_medicine_id: item.target_medicine_id ?? item.medicine_id,
+        target_batch_id: item.target_batch_id ?? null,
+        create_new_batch: !!item.create_new_batch,
+        new_batch_number: item.new_batch_number ?? null,
+        new_batch_expiry: item.new_batch_expiry ?? null,
+        new_batch_purchase_price:
+          item.new_batch_purchase_price != null ? Number(item.new_batch_purchase_price) : null,
       }))
     );
 
