@@ -94,14 +94,42 @@ export default function TransferRequestForm({ open, onOpenChange, onSuccess }: P
   const fetchMedicines = async (branchId?: string) => {
     if (!branchId) { setMedicines([]); return; }
 
-    const { data } = await supabase
-      .from('medicines')
-      .select('id, name, stock_quantity')
+    // Query branch_items (per-branch stock) — NOT medicines (catalog).
+    const { data: items } = await supabase
+      .from('branch_items')
+      .select('medicine_id, quantity')
       .eq('branch_id', branchId)
-      .gt('stock_quantity', 0)
-      .order('name');
+      .gt('quantity', 0);
 
-    setMedicines(data || []);
+    if (!items || items.length === 0) { setMedicines([]); return; }
+
+    // Aggregate by medicine_id (defensive — should be unique per branch).
+    const agg = new Map<string, number>();
+    for (const it of items) {
+      agg.set(it.medicine_id, (agg.get(it.medicine_id) || 0) + Number(it.quantity || 0));
+    }
+    const medIds = [...agg.keys()];
+
+    const [{ data: meds }, { data: packs }] = await Promise.all([
+      supabase.from('medicines').select('id, name, unit_label').in('id', medIds),
+      (supabase as any).from('medicine_packaging').select('*').in('medicine_id', medIds),
+    ]);
+
+    const packMap: Record<string, Packaging> = {};
+    (packs || []).forEach((p: any) => { packMap[p.medicine_id] = p as Packaging; });
+
+    const out = (meds || []).map((m: any) => {
+      const qty = agg.get(m.id) || 0;
+      const pkg = packMap[m.id] || { ...defaultPackaging(), unit_name: m.unit_label || 'unit' };
+      return {
+        id: m.id,
+        name: m.name,
+        stock_quantity: qty,
+        stock_display: formatStock(qty, pkg),
+      };
+    }).sort((a, b) => a.name.localeCompare(b.name));
+
+    setMedicines(out);
   };
 
   useEffect(() => {
