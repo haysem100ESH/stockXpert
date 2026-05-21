@@ -248,7 +248,7 @@ export default function TransferRequestForm({ open, onOpenChange, onSuccess }: P
                   <Select value={item.medicine_id || undefined} onValueChange={v => updateItem(idx, 'medicine_id', v)}>
                     <SelectTrigger><SelectValue placeholder="Select" /></SelectTrigger>
                     <SelectContent>
-                      {medicines.map(m => <SelectItem key={m.id} value={m.id}>{m.name} (Stock: {m.stock_quantity})</SelectItem>)}
+                      {medicines.map(m => <SelectItem key={m.id} value={m.id}>{m.name} (Stock: {m.stock_display})</SelectItem>)}
                     </SelectContent>
                   </Select>
                 </div>
