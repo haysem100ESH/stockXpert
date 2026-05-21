@@ -334,10 +334,40 @@ export default function TransferRequestItemWizard({
                 </SelectContent>
               </Select>
             </div>
-            <div>
-              <Label>Quantity *</Label>
-              <Input type="number" min="1" value={qty} onChange={e => setQty(Number(e.target.value))} />
-            </div>
+            {sourceMed && (() => {
+              const levels = availableLevels(sourceMed.packaging);
+              const pkg = sourceMed.packaging;
+              const levelLabel = (lv: PackagingLevel) =>
+                lv === 'unit' ? (pkg.unit_name || 'unit')
+                : lv === 'strip' ? (pkg.strip_name || 'strip')
+                : (pkg.pack_name || 'pack');
+              return (
+                <>
+                  <div className="grid grid-cols-2 gap-3">
+                    <div>
+                      <Label>Quantity *</Label>
+                      <Input type="number" min="0" step="0.01" value={qty} onChange={e => setQty(Number(e.target.value))} />
+                    </div>
+                    <div>
+                      <Label>Unit</Label>
+                      <Select value={qtyLevel} onValueChange={(v) => setQtyLevel(v as PackagingLevel)}>
+                        <SelectTrigger><SelectValue /></SelectTrigger>
+                        <SelectContent>
+                          {levels.map(lv => (
+                            <SelectItem key={lv} value={lv}>{levelLabel(lv)}</SelectItem>
+                          ))}
+                        </SelectContent>
+                      </Select>
+                    </div>
+                  </div>
+                  {qty > 0 && qtyLevel !== 'unit' && (
+                    <p className="text-xs text-muted-foreground">
+                      {qty} {levelLabel(qtyLevel)}{qty === 1 ? '' : 's'} = {qtyInUnits} {pkg.unit_name || 'unit'}{qtyInUnits === 1 ? '' : 's'} will be transferred.
+                    </p>
+                  )}
+                </>
+              );
+            })()}
           </div>
         )}
 
