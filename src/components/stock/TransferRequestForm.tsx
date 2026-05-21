@@ -9,6 +9,7 @@ import { Plus, Trash2 } from 'lucide-react';
 import { supabase } from '@/lib/db';
 import { useToast } from '@/hooks/use-toast';
 import { useAuth } from '@/hooks/useAuth';
+import { formatStock, defaultPackaging, type Packaging } from '@/lib/packaging';
 
 interface RequestItem {
   medicine_id: string;
