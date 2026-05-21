@@ -1,99 +1,140 @@
-import { useState, useEffect } from 'react';
-import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
+import { useState, useEffect, useMemo } from 'react';
+import { Card, CardContent } from '@/components/ui/card';
 import { Input } from '@/components/ui/input';
 import { Badge } from '@/components/ui/badge';
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@/components/ui/table';
+import { Switch } from '@/components/ui/switch';
+import { Label } from '@/components/ui/label';
 import { Search, Globe, AlertTriangle } from 'lucide-react';
 import { supabase } from '@/lib/db';
 import { useToast } from '@/hooks/use-toast';
 import { useAuth } from '@/hooks/useAuth';
+import { formatStock, defaultPackaging, type Packaging } from '@/lib/packaging';
 
 interface BranchStock {
   branch_id: string;
   branch_name: string;
   branch_type: string;
-  quantity: number;
+  quantity: number; // lowest-unit quantity (from branch_items)
 }
 
 interface GlobalItem {
+  medicine_id: string;
   name: string;
   category: string;
   minimum_stock_level: number;
+  packaging: Packaging;
   branches: BranchStock[];
-  total: number;
+  total: number; // lowest units
 }
 
 export default function GlobalInventoryView() {
   const [items, setItems] = useState<GlobalItem[]>([]);
   const [searchTerm, setSearchTerm] = useState('');
   const [loading, setLoading] = useState(true);
+  const [showLowestUnit, setShowLowestUnit] = useState(false);
   const { toast } = useToast();
   const { profile } = useAuth();
 
-  useEffect(() => { fetchData(); }, []);
+  useEffect(() => { fetchData(); /* eslint-disable-next-line */ }, [profile?.id]);
 
   const fetchData = async () => {
     if (!profile?.id) return;
     try {
-      // Fetch all branches for this owner
-      const { data: branches } = await supabase.from('pharmacy_branches').select('id, name, branch_type').eq('pharmacy_owner_id', profile.id).order('name');
+      // Scope to current owner only
+      let ownerId = profile.id;
+      if (profile.role === 'staff' && profile.branch_id) {
+        const { data: b } = await supabase
+          .from('pharmacy_branches')
+          .select('pharmacy_owner_id')
+          .eq('id', profile.branch_id)
+          .maybeSingle();
+        if (b?.pharmacy_owner_id) ownerId = b.pharmacy_owner_id;
+      }
+
+      const { data: branches } = await supabase
+        .from('pharmacy_branches')
+        .select('id, name, branch_type')
+        .eq('pharmacy_owner_id', ownerId)
+        .order('name');
+
       const branchIds = (branches || []).map((b: any) => b.id);
-      if (branchIds.length === 0) { setLoading(false); return; }
+      if (branchIds.length === 0) { setItems([]); setLoading(false); return; }
 
       const branchMap: Record<string, { name: string; type: string }> = {};
       (branches || []).forEach((b: any) => { branchMap[b.id] = { name: b.name, type: b.branch_type }; });
 
-      const { data: medicines } = await supabase.from('medicines')
-        .select('name, category, stock_quantity, minimum_stock_level, branch_id')
-        .in('branch_id', branchIds)
-        .order('name');
+      // Source of truth: branch_items per branch
+      const { data: bItems } = await supabase
+        .from('branch_items')
+        .select('id, medicine_id, branch_id, quantity')
+        .in('branch_id', branchIds);
 
-      // Group medicines by name
+      const medIds = [...new Set((bItems || []).map((i: any) => i.medicine_id))];
+      if (medIds.length === 0) { setItems([]); setLoading(false); return; }
+
+      const [{ data: meds }, { data: packs }] = await Promise.all([
+        supabase
+          .from('medicines')
+          .select('id, name, category, minimum_stock_level, unit_label')
+          .in('id', medIds),
+        (supabase as any)
+          .from('medicine_packaging')
+          .select('*')
+          .in('medicine_id', medIds),
+      ]);
+
+      const packMap: Record<string, Packaging> = {};
+      (packs || []).forEach((p: any) => { packMap[p.medicine_id] = p; });
+
+      // Group by medicine_id, aggregate by branch
       const grouped = new Map<string, GlobalItem>();
-      (medicines || []).forEach((med: any) => {
-        const key = med.name;
-        if (!grouped.has(key)) {
-          grouped.set(key, {
-            name: med.name,
-            category: med.category,
-            minimum_stock_level: med.minimum_stock_level,
-            branches: [],
-            total: 0,
-          });
-        }
-        const item = grouped.get(key)!;
-        const branchInfo = branchMap[med.branch_id];
-        if (branchInfo) {
-          const existing = item.branches.find(b => b.branch_id === med.branch_id);
-          if (existing) {
-            existing.quantity += med.stock_quantity;
-          } else {
-            item.branches.push({
-              branch_id: med.branch_id,
-              branch_name: branchInfo.name,
-              branch_type: branchInfo.type,
-              quantity: med.stock_quantity,
-            });
-          }
-        }
-        item.total += med.stock_quantity;
+      (meds || []).forEach((m: any) => {
+        grouped.set(m.id, {
+          medicine_id: m.id,
+          name: m.name,
+          category: m.category || 'General',
+          minimum_stock_level: Number(m.minimum_stock_level || 0),
+          packaging: packMap[m.id] || { ...defaultPackaging(), unit_name: m.unit_label || 'unit' },
+          branches: [],
+          total: 0,
+        });
+      });
+
+      (bItems || []).forEach((bi: any) => {
+        const item = grouped.get(bi.medicine_id);
+        const binfo = branchMap[bi.branch_id];
+        if (!item || !binfo) return;
+        const qty = Number(bi.quantity || 0);
+        const existing = item.branches.find(b => b.branch_id === bi.branch_id);
+        if (existing) existing.quantity += qty;
+        else item.branches.push({
+          branch_id: bi.branch_id,
+          branch_name: binfo.name,
+          branch_type: binfo.type,
+          quantity: qty,
+        });
+        item.total += qty;
       });
 
       setItems(Array.from(grouped.values()).sort((a, b) => a.name.localeCompare(b.name)));
-    } catch {
+    } catch (e) {
       toast({ title: 'Error', description: 'Failed to fetch global inventory', variant: 'destructive' });
     } finally {
       setLoading(false);
     }
   };
 
-  const allBranchIds = [...new Set(items.flatMap(i => i.branches.map(b => b.branch_id)))];
-  const branchColumns = allBranchIds.map(id => {
-    const branch = items.flatMap(i => i.branches).find(b => b.branch_id === id);
-    return { id, name: branch?.branch_name || 'Unknown' };
-  });
+  const branchColumns = useMemo(() => {
+    const map = new Map<string, string>();
+    items.forEach(i => i.branches.forEach(b => map.set(b.branch_id, b.branch_name)));
+    return Array.from(map.entries()).map(([id, name]) => ({ id, name }));
+  }, [items]);
 
   const filtered = items.filter(i => i.name.toLowerCase().includes(searchTerm.toLowerCase()));
+
+  const renderQty = (qty: number, pkg: Packaging) =>
+    showLowestUnit ? `${qty} ${pkg.unit_name || 'unit'}${qty === 1 ? '' : 's'}` : formatStock(qty, pkg);
 
   if (loading) return <div>Loading global inventory...</div>;
 
@@ -104,9 +145,15 @@ export default function GlobalInventoryView() {
           <Globe className="h-6 w-6 text-primary" />
           <h2 className="text-2xl font-bold">Global Inventory</h2>
         </div>
-        <div className="relative w-72">
-          <Search className="absolute left-2 top-2.5 h-4 w-4 text-muted-foreground" />
-          <Input placeholder="Search items..." value={searchTerm} onChange={e => setSearchTerm(e.target.value)} className="pl-8" />
+        <div className="flex items-center gap-4 flex-wrap">
+          <div className="flex items-center gap-2">
+            <Switch id="lowest-unit" checked={showLowestUnit} onCheckedChange={setShowLowestUnit} />
+            <Label htmlFor="lowest-unit" className="text-sm cursor-pointer">View in lowest unit</Label>
+          </div>
+          <div className="relative w-72">
+            <Search className="absolute left-2 top-2.5 h-4 w-4 text-muted-foreground" />
+            <Input placeholder="Search items..." value={searchTerm} onChange={e => setSearchTerm(e.target.value)} className="pl-8" />
+          </div>
         </div>
       </div>
 
@@ -139,18 +186,20 @@ export default function GlobalInventoryView() {
                     const isLow = item.total > 0 && item.total <= item.minimum_stock_level;
                     const isOut = item.total === 0;
                     return (
-                      <TableRow key={item.name}>
+                      <TableRow key={item.medicine_id}>
                         <TableCell className="sticky left-0 bg-background z-10 font-medium">{item.name}</TableCell>
                         <TableCell><Badge variant="outline">{item.category}</Badge></TableCell>
                         {branchColumns.map(col => {
-                          const branchStock = item.branches.find(b => b.branch_id === col.id);
+                          const bs = item.branches.find(b => b.branch_id === col.id);
                           return (
-                            <TableCell key={col.id} className="text-center">
-                              {branchStock ? branchStock.quantity : 0}
+                            <TableCell key={col.id} className="text-center text-xs">
+                              {bs ? renderQty(bs.quantity, item.packaging) : '—'}
                             </TableCell>
                           );
                         })}
-                        <TableCell className="text-center font-bold">{item.total}</TableCell>
+                        <TableCell className="text-center font-bold text-xs">
+                          {renderQty(item.total, item.packaging)}
+                        </TableCell>
                         <TableCell>
                           {isOut && <Badge variant="destructive" className="text-xs">Out</Badge>}
                           {isLow && (
