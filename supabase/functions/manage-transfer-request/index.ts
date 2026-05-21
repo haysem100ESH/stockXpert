@@ -160,65 +160,154 @@ serve(async (req: Request): Promise<Response> => {
         });
       }
 
+      // Helper: sync branch_items.quantity = SUM(remaining_quantity) of its batches
+      const syncBranchItemQty = async (branchItemId: string) => {
+        const { data: bs } = await admin
+          .from('inventory_batches')
+          .select('remaining_quantity')
+          .eq('branch_item_id', branchItemId)
+          .gt('remaining_quantity', 0);
+        const total = (bs || []).reduce((s: number, b: any) => s + Number(b.remaining_quantity), 0);
+        const rounded = Math.round(total);
+        const qty = Math.abs(total - rounded) < 0.001 ? rounded : Number(total.toFixed(4));
+        await admin
+          .from('branch_items')
+          .update({ quantity: qty, updated_at: new Date().toISOString() })
+          .eq('id', branchItemId);
+      };
+
       // Process each item
       for (const item of items) {
         const qty = Number(item.approved_quantity || item.requested_quantity);
         if (qty <= 0) continue;
 
-        // Get source medicine
+        // --- Source: locate branch_item for (sourceBranchId, medicine_id)
+        const { data: sourceBI } = await admin
+          .from('branch_items')
+          .select('id, quantity, selling_price, purchase_price')
+          .eq('branch_id', sourceBranchId)
+          .eq('medicine_id', item.medicine_id)
+          .maybeSingle();
+
+        if (!sourceBI) {
+          return new Response(JSON.stringify({ error: `Source branch does not stock this item` }), {
+            status: 400, headers: { ...corsHeaders, 'Content-Type': 'application/json' },
+          });
+        }
+        if (Number(sourceBI.quantity || 0) < qty) {
+          return new Response(JSON.stringify({ error: `Insufficient stock in source branch` }), {
+            status: 400, headers: { ...corsHeaders, 'Content-Type': 'application/json' },
+          });
+        }
+
+        // Get master medicine for name/unit_label
         const { data: sourceMed } = await admin
           .from('medicines')
-          .select('*')
+          .select('id, name, unit_label')
           .eq('id', item.medicine_id)
           .single();
         if (!sourceMed) continue;
 
-        // Deduct from source
-        await admin.from('medicines').update({
-          stock_quantity: Math.max(0, sourceMed.stock_quantity - qty),
-        }).eq('id', sourceMed.id);
+        // --- FIFO deduct from source batches
+        const { data: batches } = await admin
+          .from('inventory_batches')
+          .select('id, remaining_quantity, purchase_price, selling_price, expiry_date, batch_number')
+          .eq('branch_item_id', sourceBI.id)
+          .gt('remaining_quantity', 0)
+          .order('expiry_date', { ascending: true, nullsFirst: false })
+          .order('created_at', { ascending: true });
 
-        // Add to destination - find existing or clone
-        const { data: destMed } = await admin
-          .from('medicines')
-          .select('*')
+        let remaining = qty;
+        let totalCost = 0;
+        const consumed: Array<{ qty: number; pp: number; sp: number; expiry: string | null; batch_number: string | null }> = [];
+
+        for (const b of (batches || [])) {
+          if (remaining <= 0) break;
+          const br = Number(b.remaining_quantity);
+          const take = Math.min(remaining, br);
+          const newRem = Math.max(0, br - take);
+          await admin
+            .from('inventory_batches')
+            .update({ remaining_quantity: newRem, updated_at: new Date().toISOString() })
+            .eq('id', b.id);
+          consumed.push({
+            qty: take,
+            pp: Number(b.purchase_price || 0),
+            sp: Number(b.selling_price || sourceBI.selling_price || 0),
+            expiry: b.expiry_date,
+            batch_number: b.batch_number,
+          });
+          totalCost += take * Number(b.purchase_price || 0);
+          remaining -= take;
+        }
+
+        await syncBranchItemQty(sourceBI.id);
+
+        const avgPurchasePrice = qty > 0 ? totalCost / qty : Number(sourceBI.purchase_price || 0);
+
+        // --- Destination: find or create branch_item
+        const { data: existingDestBI } = await admin
+          .from('branch_items')
+          .select('id, selling_price, purchase_price')
           .eq('branch_id', destBranchId)
-          .eq('name', sourceMed.name)
+          .eq('medicine_id', item.medicine_id)
           .maybeSingle();
 
-        if (destMed) {
-          await admin.from('medicines').update({
-            stock_quantity: destMed.stock_quantity + qty,
-          }).eq('id', destMed.id);
+        let destBranchItemId: string;
+        if (existingDestBI) {
+          destBranchItemId = existingDestBI.id;
         } else {
-          // Clone medicine to destination branch
-          const { id, stock_quantity, location_id, branch_id, created_at, updated_at, ...rest } = sourceMed as any;
-          await admin.from('medicines').insert({
-            ...rest,
-            stock_quantity: qty,
+          const { data: newBI, error: biErr } = await admin
+            .from('branch_items')
+            .insert({
+              owner_id: ownerId,
+              branch_id: destBranchId,
+              medicine_id: item.medicine_id,
+              selling_price: consumed[0]?.sp || Number(sourceBI.selling_price || 0),
+              purchase_price: avgPurchasePrice,
+              quantity: 0,
+              expiry_date: consumed[0]?.expiry || null,
+            })
+            .select('id')
+            .single();
+          if (biErr || !newBI) throw new Error(biErr?.message || 'Failed to create destination branch_item');
+          destBranchItemId = newBI.id;
+        }
+
+        // Create one batch on destination per consumed source batch (preserves expiry / pricing)
+        for (const c of consumed) {
+          await admin.from('inventory_batches').insert({
             branch_id: destBranchId,
+            medicine_id: item.medicine_id,
+            branch_item_id: destBranchItemId,
+            batch_number: c.batch_number,
+            quantity: c.qty,
+            remaining_quantity: c.qty,
+            purchase_price: c.pp,
+            selling_price: c.sp,
+            expiry_date: c.expiry,
             created_by: user.id,
           });
         }
+        await syncBranchItemQty(destBranchItemId);
 
-        // Transfer expenses
-        const expenseAmount = qty * (sourceMed.purchase_price || 0);
-        if (expenseAmount > 0) {
+        // --- Expenses (no pharmacy_owner_id column on expenses)
+        if (totalCost > 0) {
           const unitLabel = (sourceMed.unit_label || 'unit').toUpperCase();
           await admin.from('expenses').insert([
             {
               description: `Transfer Out: ${sourceMed.name} (${qty} ${unitLabel}) to ${destName}`,
-              amount: -expenseAmount,
+              amount: -totalCost,
               branch_id: sourceBranchId,
               category: 'Stock Transfer',
-              pharmacy_owner_id: ownerId,
+              created_by: user.id,
             },
             {
               description: `Transfer In: ${sourceMed.name} (${qty} ${unitLabel}) from ${sourceName}`,
-              amount: expenseAmount,
+              amount: totalCost,
               branch_id: destBranchId,
               category: 'Stock Transfer',
-              pharmacy_owner_id: ownerId,
+              created_by: user.id,
             },
           ]);
         }
