@@ -33,7 +33,7 @@ interface Props {
 
 export default function TransferRequestForm({ open, onOpenChange, onSuccess }: Props) {
   const [locations, setLocations] = useState<LocationOption[]>([]);
-  const [medicines, setMedicines] = useState<{ id: string; name: string; stock_quantity: number }[]>([]);
+  const [medicines, setMedicines] = useState<{ id: string; name: string; stock_quantity: number; stock_display: string }[]>([]);
   const [requestingLocationId, setRequestingLocationId] = useState('');
   const [sourceLocationId, setSourceLocationId] = useState('');
   const [notes, setNotes] = useState('');
