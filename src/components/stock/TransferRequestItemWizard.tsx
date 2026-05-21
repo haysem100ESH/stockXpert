@@ -292,7 +292,7 @@ export default function TransferRequestItemWizard({
     onConfirm({
       medicine_id: sourceMed.id,
       medicine_name: sourceMed.name,
-      requested_quantity: qty,
+      requested_quantity: qtyInUnits,
       target_medicine_id,
       target_medicine_name,
       target_branch_item_id,
