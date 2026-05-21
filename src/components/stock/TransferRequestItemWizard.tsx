@@ -149,6 +149,8 @@ export default function TransferRequestItemWizard({
 
   const sourceMed = useMemo(() => sourceMeds.find(m => m.id === sourceId), [sourceMeds, sourceId]);
 
+  useEffect(() => { setQtyLevel('unit'); }, [sourceId]);
+
   const loadTargets = async (src: SourceMed) => {
     setLoading(true);
     try {
