@@ -240,9 +240,17 @@ export default function TransferRequestItemWizard({
     } finally { setLoading(false); }
   };
 
+  const qtyInUnits = useMemo(() => {
+    if (!sourceMed) return 0;
+    return convertToUnits(qty, qtyLevel, sourceMed.packaging);
+  }, [qty, qtyLevel, sourceMed]);
+
   const handleNextFromSource = () => {
     if (!sourceMed) { toast({ title: 'Pick a source item', variant: 'destructive' }); return; }
     if (!qty || qty <= 0) { toast({ title: 'Enter a valid quantity', variant: 'destructive' }); return; }
+    if (qtyInUnits > sourceMed.stock_quantity) {
+      toast({ title: 'Not enough stock at source', description: `Only ${sourceMed.stock_display} available.`, variant: 'destructive' }); return;
+    }
     setStep('target');
     loadTargets(sourceMed);
   };
