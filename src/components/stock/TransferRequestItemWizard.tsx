@@ -140,6 +140,7 @@ export default function TransferRequestItemWizard({
           generic_name: m.generic_name, medicine_group: m.medicine_group,
           medicine_code_id: m.medicine_code_id, unit_label: m.unit_label,
           stock_quantity: q, stock_display: formatStock(q, pkg),
+          packaging: pkg,
         };
       }).sort((a, b) => a.name.localeCompare(b.name));
       setSourceMeds(out);
