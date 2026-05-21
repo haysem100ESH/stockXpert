@@ -8,7 +8,7 @@ import { ArrowLeft, ArrowRight, Check, PackagePlus } from 'lucide-react';
 import { format } from 'date-fns';
 import { supabase } from '@/lib/db';
 import { useToast } from '@/hooks/use-toast';
-import { formatStock, defaultPackaging, type Packaging } from '@/lib/packaging';
+import { formatStock, defaultPackaging, convertToUnits, availableLevels, type Packaging, type PackagingLevel } from '@/lib/packaging';
 
 export interface WizardResult {
   medicine_id: string;            // source medicine
@@ -33,6 +33,7 @@ interface SourceMed {
   unit_label: string | null;
   stock_quantity: number;
   stock_display: string;
+  packaging: Packaging;
 }
 
 interface TargetMatch {
@@ -80,6 +81,7 @@ export default function TransferRequestItemWizard({
   const [sourceMeds, setSourceMeds] = useState<SourceMed[]>([]);
   const [sourceId, setSourceId] = useState('');
   const [qty, setQty] = useState<number>(1);
+  const [qtyLevel, setQtyLevel] = useState<PackagingLevel>('unit');
 
   // Target
   const [targets, setTargets] = useState<TargetMatch[]>([]);
@@ -97,7 +99,7 @@ export default function TransferRequestItemWizard({
   useEffect(() => {
     if (open) {
       setStep('source');
-      setSourceId(''); setQty(1);
+      setSourceId(''); setQty(1); setQtyLevel('unit');
       setTargets([]); setTargetId(''); setCreateNewItem(false);
       setBatches([]); setBatchChoice('');
       setNewBatchNumber(''); setNewBatchExpiry(''); setNewBatchPrice('');
@@ -138,6 +140,7 @@ export default function TransferRequestItemWizard({
           generic_name: m.generic_name, medicine_group: m.medicine_group,
           medicine_code_id: m.medicine_code_id, unit_label: m.unit_label,
           stock_quantity: q, stock_display: formatStock(q, pkg),
+          packaging: pkg,
         };
       }).sort((a, b) => a.name.localeCompare(b.name));
       setSourceMeds(out);
@@ -145,6 +148,8 @@ export default function TransferRequestItemWizard({
   };
 
   const sourceMed = useMemo(() => sourceMeds.find(m => m.id === sourceId), [sourceMeds, sourceId]);
+
+  useEffect(() => { setQtyLevel('unit'); }, [sourceId]);
 
   const loadTargets = async (src: SourceMed) => {
     setLoading(true);
@@ -237,9 +242,17 @@ export default function TransferRequestItemWizard({
     } finally { setLoading(false); }
   };
 
+  const qtyInUnits = useMemo(() => {
+    if (!sourceMed) return 0;
+    return convertToUnits(qty, qtyLevel, sourceMed.packaging);
+  }, [qty, qtyLevel, sourceMed]);
+
   const handleNextFromSource = () => {
     if (!sourceMed) { toast({ title: 'Pick a source item', variant: 'destructive' }); return; }
     if (!qty || qty <= 0) { toast({ title: 'Enter a valid quantity', variant: 'destructive' }); return; }
+    if (qtyInUnits > sourceMed.stock_quantity) {
+      toast({ title: 'Not enough stock at source', description: `Only ${sourceMed.stock_display} available.`, variant: 'destructive' }); return;
+    }
     setStep('target');
     loadTargets(sourceMed);
   };
@@ -281,7 +294,7 @@ export default function TransferRequestItemWizard({
     onConfirm({
       medicine_id: sourceMed.id,
       medicine_name: sourceMed.name,
-      requested_quantity: qty,
+      requested_quantity: qtyInUnits,
       target_medicine_id,
       target_medicine_name,
       target_branch_item_id,
@@ -323,10 +336,40 @@ export default function TransferRequestItemWizard({
                 </SelectContent>
               </Select>
             </div>
-            <div>
-              <Label>Quantity *</Label>
-              <Input type="number" min="1" value={qty} onChange={e => setQty(Number(e.target.value))} />
-            </div>
+            {sourceMed && (() => {
+              const levels = availableLevels(sourceMed.packaging);
+              const pkg = sourceMed.packaging;
+              const levelLabel = (lv: PackagingLevel) =>
+                lv === 'unit' ? (pkg.unit_name || 'unit')
+                : lv === 'strip' ? (pkg.strip_name || 'strip')
+                : (pkg.pack_name || 'pack');
+              return (
+                <>
+                  <div className="grid grid-cols-2 gap-3">
+                    <div>
+                      <Label>Quantity *</Label>
+                      <Input type="number" min="0" step="0.01" value={qty} onChange={e => setQty(Number(e.target.value))} />
+                    </div>
+                    <div>
+                      <Label>Unit</Label>
+                      <Select value={qtyLevel} onValueChange={(v) => setQtyLevel(v as PackagingLevel)}>
+                        <SelectTrigger><SelectValue /></SelectTrigger>
+                        <SelectContent>
+                          {levels.map(lv => (
+                            <SelectItem key={lv} value={lv}>{levelLabel(lv)}</SelectItem>
+                          ))}
+                        </SelectContent>
+                      </Select>
+                    </div>
+                  </div>
+                  {qty > 0 && qtyLevel !== 'unit' && (
+                    <p className="text-xs text-muted-foreground">
+                      {qty} {levelLabel(qtyLevel)}{qty === 1 ? '' : 's'} = {qtyInUnits} {pkg.unit_name || 'unit'}{qtyInUnits === 1 ? '' : 's'} will be transferred.
+                    </p>
+                  )}
+                </>
+              );
+            })()}
           </div>
         )}
 
