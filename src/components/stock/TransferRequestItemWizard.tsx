@@ -81,6 +81,7 @@ export default function TransferRequestItemWizard({
   const [sourceMeds, setSourceMeds] = useState<SourceMed[]>([]);
   const [sourceId, setSourceId] = useState('');
   const [qty, setQty] = useState<number>(1);
+  const [qtyLevel, setQtyLevel] = useState<PackagingLevel>('unit');
 
   // Target
   const [targets, setTargets] = useState<TargetMatch[]>([]);
