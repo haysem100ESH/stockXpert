@@ -53,6 +53,8 @@ export default function BatchesEditor({
       purchase_price: String(b.purchase_price ?? 0),
       selling_price: String(b.selling_price ?? 0),
       expiry_date: b.expiry_date || '',
+      min_stock_level: (b as any).min_stock_level != null ? String((b as any).min_stock_level) : '',
+      expiry_alert_days: (b as any).expiry_alert_days != null ? String((b as any).expiry_alert_days) : '',
       _original: b,
     })));
     setDeletedIds([]);
