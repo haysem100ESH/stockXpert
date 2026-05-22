@@ -1,41 +1,42 @@
-# Batch Management System — Implementation Plan
+## Issue 1 — AI chat panel overflows the top of the screen
 
-## 1. Data migration (existing stock → default batches)
-- New SQL migration: for every `branch_items` row with `quantity > 0` and no existing `inventory_batches`, insert one default batch using current `quantity`, `purchase_price`, `selling_price`, `expiry_date` (and `batch_number = 'DEFAULT'`). Run via migration tool.
-- After migration, `branch_items.quantity` continues to be kept in sync via `syncBranchItemQuantity` (already exists in `src/lib/batchInventory.ts`).
+**File:** `src/components/chat/SmartAssistant.tsx`
 
-## 2. Edit Item dialog — add "Batches" tab
-File: `src/components/inventory/EditBranchItemDialog.tsx`
-- Wrap content in `<Tabs>` with two triggers: **Item Info** (current form, expiry already hidden) and **Batches**.
-- Batches tab: editable table of `inventory_batches` for this `branch_item_id`:
-  - columns: Batch #, Stock Qty, Buy Price, Sell Price, Expiry, Delete
-  - "+ Add Batch" button (pre-fills buy/sell from item defaults)
-  - On save, upsert/delete batches, then call `syncBranchItemQuantity`
-  - Shows read-only "Total stock = Σ batches" badge
-- Disable direct `quantity` field on Item Info tab (read-only, shows computed total).
+The floating button and the chat panel both use the same `positionStyle` (`bottom: ${bottomOffset}px`). The button is small (56px), so it's allowed to live anywhere from `bottom: 8` up to `bottom: viewportHeight - 64`. But the panel is 560px tall — when the user drags the button near the top, the panel anchored at that same large `bottom` value grows upward and pokes off the top of the screen (the `max-h-[calc(100vh-4rem)]` clamp limits height, not position).
 
-## 3. Per-batch expiry dialog
-- New `src/components/inventory/SelectBatchForExpiryDialog.tsx`: lists batches with current expiry, allows picking one and updating its `expiry_date`.
-- Wire into any UI that currently exposes "edit expiry" on an item (search `expiry_date` edit callers in inventory list/staff view).
+**Fix:** compute a separate `panelBottom` for the panel that keeps it inside the viewport.
 
-## 4. Excel upload — multi-batch rows
-File: `src/components/inventory/ImportCsvDialog.tsx`
-- Parser change: when a row's item-name/identifier column is empty, treat it as a continuation batch for the most recent parent row. Capture per-batch fields: batch number, buy price, sell price, stock qty, min stock, expiry.
-- On import: for the parent row → create/find medicine + `branch_item` (qty starts 0); for each batch row (parent + continuations) → call `createBatch(...)` which auto-syncs total.
-- Template download: update header comments/legend to explain continuation-row format and highlight batch-only columns.
+```ts
+const PANEL_HEIGHT = 560;
+const panelBottom = Math.max(
+  16,
+  Math.min(bottomOffset, window.innerHeight - PANEL_HEIGHT - 16)
+);
+```
 
-## 5. Inventory list — batch count badge
-Files: `src/components/inventory/InventoryManagement.tsx`, `StaffInventoryView.tsx`, `StaffInventoryWithActions.tsx`
-- Fetch batch counts per `branch_item_id` (single grouped query) and show a small "{n} batches" badge next to item name. Clicking opens existing `BatchBreakdownDialog`.
+Apply `panelBottom` only to the panel's inline style (keep button using `bottomOffset` so its drag position is preserved). Recompute on window resize so the clamp adapts to viewport changes.
 
-## 6. Sales / FEFO
-- Already implemented: `getFIFOBatches` orders by `expiry_date ASC NULLS LAST, created_at ASC` and `deductFIFO` uses it. No change needed; verify after migration.
+---
 
-## Out of scope
-- No schema changes (table already supports everything).
-- No change to POS/sales business logic beyond confirming FEFO still works.
+## Issue 2 — "X / undefined staff used" in Staff Management header
 
-## Technical notes
-- Keep `branch_items.purchase_price/selling_price/expiry_date` as display defaults (don't drop columns).
-- All batch mutations go through `src/lib/batchInventory.ts` so `quantity` stays consistent.
-- Migration uses `INSERT ... SELECT ... WHERE NOT EXISTS` so re-runs are safe.
+**Files:** `src/components/staff/StaffManagement.tsx` (line 252) and `src/hooks/usePlanLimits.tsx`
+
+The header uses `planLimits.staffLimit === null` to detect "unlimited". But in `usePlanLimits.tsx` we set `staffLimit: plan?.staff_limit` — if `plan` exists but `staff_limit` is missing, the value is `undefined`, not `null`, so the strict check fails and the fallback string renders `"X / undefined staff used on … plan"`.
+
+**Fix (pick the cleaner one — normalize at the source):**
+
+In `usePlanLimits.tsx`, coalesce undefined → null:
+```ts
+staffLimit: plan?.staff_limit ?? null,
+branchesLimit: plan?.branches_limit ?? null,
+```
+
+Also harden the JSX check defensively:
+```tsx
+planLimits.staffLimit == null
+  ? `Unlimited staff on ${planLimits.planName} plan`
+  : `${planLimits.currentStaff} / ${planLimits.staffLimit} staff used on ${planLimits.planName} plan`
+```
+
+Scope: two small, isolated edits. No business logic changes.
