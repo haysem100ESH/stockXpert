@@ -203,7 +203,7 @@ export default function StockMovementForm({ open, onOpenChange, onSuccess }: Pro
 
       if (toBranchId && (movementType === 'TRANSFER' || movementType === 'SUPPLY')) {
         const destMed = medicines.find(m =>
-          m.name === selectedMedicine?.name && m.id !== selectedMedicine?.id && m.branch_id === toBranchId
+          m.id === selectedMedicine?.id && m.branch_id === toBranchId
         );
 
         if (destMed) {
