@@ -26,6 +26,8 @@ type DraftBatch = {
   purchase_price: string;
   selling_price: string;
   expiry_date: string;
+  min_stock_level: string;     // per-batch low-stock override ('' = none)
+  expiry_alert_days: string;   // per-batch expiry alert window ('' = use global)
   _original?: InventoryBatch;
 };
 
