@@ -383,10 +383,7 @@ export default function RecordPurchaseDialog({ open, onOpenChange, supplierId, s
               </>
             )}
 
-            <div className="space-y-2">
-              <Label htmlFor="expiry_date">Expiry Date</Label>
-              <Input id="expiry_date" name="expiry_date" type="date" />
-            </div>
+            {/* Expiry date is captured per-batch — see the Batches view for this item */}
 
             <div className="space-y-2">
               <Label>Payment Type *</Label>

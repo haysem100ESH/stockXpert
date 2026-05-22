@@ -432,10 +432,7 @@ export default function AddMedicineDialog({ open, onOpenChange, onMedicineAdded,
               </div>
             )}
 
-            <div className="space-y-2">
-              <Label htmlFor="expiry_date">Expiry Date</Label>
-              <Input id="expiry_date" name="expiry_date" type="date" defaultValue={replicateData?.expiry_date} />
-            </div>
+            {/* Expiry date is captured per-batch (Batches view), not at item level */}
           </div>
 
           {/* Unit / Strip / Pack — only for Full PCS */}

@@ -542,10 +542,8 @@ export default function EditMedicineDialog({
 
           {isPharmacy && (
             <>
-              <div className="space-y-2">
-                <Label htmlFor="expiry_date">Expiry Date</Label>
-                <Input id="expiry_date" type="date" value={medicineData.expiry_date} onChange={(e) => setMedicineData({ ...medicineData, expiry_date: e.target.value })} />
-              </div>
+              {/* Expiry date is captured per-batch (Batches view), not at item level */}
+
 
               <div className="space-y-2">
                 <Label htmlFor="expiry_alert_enabled">Alert me before expiry</Label>
