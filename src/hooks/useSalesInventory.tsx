@@ -22,6 +22,7 @@ import { useAuth } from './useAuth';
 import { useBranchContext } from './useBranchContext';
 import { useOwnerBranchIds } from './useOwnerBranchIds';
 import { getCreditLimit } from './useCreditScore';
+import { resolveCreditLimit } from '@/lib/creditLimit';
 
 export interface SalesMedicine {
   id: string; // branch_items.id
