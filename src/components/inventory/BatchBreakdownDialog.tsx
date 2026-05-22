@@ -38,8 +38,15 @@ export default function BatchBreakdownDialog({ open, onOpenChange, branchItemId,
     return new Date(date) <= thirtyDays;
   };
 
-  const totalRemaining = batches.reduce((sum, b) => sum + Number(b.remaining_quantity), 0);
-  const totalOriginal = batches.reduce((sum, b) => sum + Number(b.quantity), 0);
+  const rawTotalRemaining = batches.reduce((sum, b) => sum + Number(b.remaining_quantity), 0);
+  const rawTotalOriginal = batches.reduce((sum, b) => sum + Number(b.quantity), 0);
+  const fmtQty = (n: number) => {
+    const rounded = Math.round(n);
+    if (Math.abs(n - rounded) < 0.001) return String(rounded);
+    return Number(n).toFixed(2);
+  };
+  const totalRemaining = fmtQty(rawTotalRemaining);
+  const totalOriginal = fmtQty(rawTotalOriginal);
 
   return (
     <Dialog open={open} onOpenChange={onOpenChange}>
