@@ -249,7 +249,7 @@ export default function StaffManagement() {
           <h2 className="text-2xl font-bold">Staff Management</h2>
           {planLimits && (
             <p className="text-sm text-muted-foreground mt-1">
-              {planLimits.staffLimit === null 
+              {planLimits.staffLimit == null 
                 ? `Unlimited staff on ${planLimits.planName} plan`
                 : `${planLimits.currentStaff} / ${planLimits.staffLimit} staff used on ${planLimits.planName} plan`
               }
