@@ -1,5 +1,5 @@
-import StockMovementHistory from '@/components/stock/StockMovementHistory';
+import GlobalInventoryView from '@/components/inventory/GlobalInventoryView';
 
 export default function StockMovementsPage() {
-  return <StockMovementHistory />;
+  return <GlobalInventoryView />;
 }
