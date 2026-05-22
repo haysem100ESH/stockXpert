@@ -25,6 +25,23 @@ export default function PermissionGuard({ page, children }: PermissionGuardProps
   }
 
   if (level === 'read') {
+    const blockEvent = (e: React.SyntheticEvent) => {
+      const target = e.target as HTMLElement;
+      if (target.closest('[data-readonly-allow]')) return;
+      const btn = target.closest('button, [role="menuitem"]') as HTMLElement | null;
+      if (!btn) return;
+      // Allow tabs, dialog/popover close, sidebar/nav, search
+      const role = btn.getAttribute('role');
+      if (role === 'tab') return;
+      const aria = (btn.getAttribute('aria-label') || '').toLowerCase();
+      if (aria.includes('close') || aria.includes('toggle') || aria.includes('menu')) return;
+      const type = btn.getAttribute('type');
+      // Block submit, add, edit, delete, save buttons
+      e.preventDefault();
+      e.stopPropagation();
+      toastReadOnly();
+    };
+
     return (
       <>
         <Alert className="mb-4 border-warning/50 bg-warning/10">
@@ -33,39 +50,27 @@ export default function PermissionGuard({ page, children }: PermissionGuardProps
             Read Only Mode — You can view this page but cannot make changes.
           </AlertDescription>
         </Alert>
-        <fieldset
-          disabled
-          className="contents [&_button:not([data-readonly-allow])]:pointer-events-none [&_button:not([data-readonly-allow])]:opacity-60 [&_a[role=button]]:pointer-events-none"
-          onClickCapture={(e) => {
-            const target = e.target as HTMLElement;
-            // Allow navigation links, tabs, dialog close buttons
-            if (target.closest('[data-readonly-allow]')) return;
-            const interactive = target.closest('button, [role="menuitem"], [role="tab"], input, textarea, select, [contenteditable="true"]');
-            if (interactive && !interactive.closest('[data-readonly-allow]')) {
-              // Allow tabs and dialog-close (they have specific roles or aria-labels)
-              const role = interactive.getAttribute('role');
-              const ariaLabel = interactive.getAttribute('aria-label') || '';
-              if (role === 'tab' || ariaLabel.toLowerCase().includes('close') || ariaLabel.toLowerCase().includes('search')) return;
-              e.preventDefault();
-              e.stopPropagation();
-            }
-          }}
-          onKeyDownCapture={(e) => {
-            const target = e.target as HTMLElement;
-            if (target.matches('input, textarea, [contenteditable="true"]') && !target.closest('[data-readonly-allow]')) {
-              // Allow navigation/search keys
-              if (['Tab', 'Escape', 'ArrowLeft', 'ArrowRight', 'ArrowUp', 'ArrowDown', 'Home', 'End'].includes(e.key)) return;
-              if ((e.ctrlKey || e.metaKey) && ['a', 'c'].includes(e.key.toLowerCase())) return;
-              e.preventDefault();
-              e.stopPropagation();
-            }
-          }}
-        >
-          <div className="contents">{children}</div>
-        </fieldset>
+        <div onClickCapture={blockEvent} onSubmitCapture={blockEvent}>
+          {children}
+        </div>
       </>
     );
   }
 
   return <>{children}</>;
+}
+
+let lastToastAt = 0;
+function toastReadOnly() {
+  const now = Date.now();
+  if (now - lastToastAt < 2000) return;
+  lastToastAt = now;
+  // Lightweight inline toast via window event (avoid extra imports)
+  import('@/hooks/use-toast').then(({ toast }) => {
+    toast({
+      title: 'Read Only',
+      description: 'You do not have permission to make changes on this page.',
+      variant: 'destructive',
+    });
+  });
 }
