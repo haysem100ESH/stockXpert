@@ -18,19 +18,31 @@ import {
   Collapsible, CollapsibleContent, CollapsibleTrigger,
 } from '@/components/ui/collapsible';
 import { ConfirmationDialog } from '@/components/ui/confirmation-dialog';
-import { Plus, Edit, Trash2, ChevronDown, Tag, Search, Link2 } from 'lucide-react';
+import { Plus, Edit, Trash2, ChevronDown, Tag, Search, Link2, Layers, AlertTriangle, CircleAlert, PackageX, ChevronRight } from 'lucide-react';
 import { cn } from '@/lib/utils';
 import { supabase } from '@/lib/db';
 import { useToast } from '@/hooks/use-toast';
 import { useMedicineCodes, type MedicineCode } from '@/hooks/useMedicineCodes';
 import { useBranchInventory } from '@/hooks/useBranchInventory';
 import { formatStock, defaultPackaging, type Packaging } from '@/lib/packaging';
+import {
+  useMedicineCodeBatches,
+  classifyExpiry,
+  type ExpiryStatus,
+} from '@/hooks/useMedicineCodeAnalytics';
+import MedicineCodeBatchesDialog from './MedicineCodeBatchesDialog';
+import MedicineCodeAnalytics from './MedicineCodeAnalytics';
 
 interface LinkedMedicine {
   id: string;
   name: string;
+  generic_name?: string | null;
+  strength?: string | null;
+  manufacturer?: string | null;
   total_units: number;
+  minimum_stock_level: number;
   packaging: Packaging;
+  worstStatus: ExpiryStatus;
 }
 
 export default function MedicineCodes() {
@@ -68,6 +80,9 @@ export default function MedicineCodes() {
     })();
   }, [items]);
 
+  // Batches scoped to current branch context (for expiry status + dashboard cards).
+  const { batchesByMedicine, globalAlertDays } = useMedicineCodeBatches();
+
   // Build per-code aggregates.
   const aggregates = useMemo(() => {
     const byCode = new Map<string, LinkedMedicine[]>();
@@ -75,17 +90,69 @@ export default function MedicineCodes() {
       const codeId = it.medicine_code_id;
       if (!codeId) continue;
       const pk = packagings[it.medicine_id] || defaultPackaging();
+      const batches = batchesByMedicine.get(it.medicine_id) || [];
+      // Worst expiry status across all batches with stock.
+      let worst: ExpiryStatus = 'normal';
+      for (const b of batches) {
+        if (Number(b.remaining_quantity) <= 0) continue;
+        const days = b.expiry_alert_days ?? globalAlertDays;
+        const s = classifyExpiry(b.expiry_date, days);
+        if (s === 'expired') { worst = 'expired'; break; }
+        if (s === 'expiring' && (worst as ExpiryStatus) !== 'expired') worst = 'expiring';
+      }
       const link: LinkedMedicine = {
         id: it.medicine_id,
         name: it.name,
+        generic_name: it.generic_name,
+        strength: it.strength,
+        manufacturer: it.manufacturer,
         total_units: it.quantity || 0,
+        minimum_stock_level: it.minimum_stock_level || 0,
         packaging: pk,
+        worstStatus: worst,
       };
       if (!byCode.has(codeId)) byCode.set(codeId, []);
       byCode.get(codeId)!.push(link);
     }
     return byCode;
-  }, [items, packagings]);
+  }, [items, packagings, batchesByMedicine, globalAlertDays]);
+
+  // Dashboard card aggregates (across all groups in scope).
+  const dashboardStats = useMemo(() => {
+    const totalGroups = codes.length;
+    let lowStock = 0;
+    let expiring = 0;
+    let expired = 0;
+
+    for (const it of items as any[]) {
+      const min = Number(it.minimum_stock_level) || 0;
+      const qty = Number(it.quantity) || 0;
+      if (min > 0 && qty <= min) lowStock += 1;
+    }
+    for (const list of batchesByMedicine.values()) {
+      for (const b of list) {
+        if (Number(b.remaining_quantity) <= 0) continue;
+        const days = b.expiry_alert_days ?? globalAlertDays;
+        const s = classifyExpiry(b.expiry_date, days);
+        if (s === 'expired') expired += 1;
+        else if (s === 'expiring') expiring += 1;
+      }
+    }
+    return { totalGroups, lowStock, expiring, expired };
+  }, [codes, items, batchesByMedicine, globalAlertDays]);
+
+  // medicine_id -> medicine_code_id (used by analytics hook)
+  const medicineIdToCodeId = useMemo(() => {
+    const m = new Map<string, string | null>();
+    for (const it of items as any[]) {
+      m.set(it.medicine_id, it.medicine_code_id ?? null);
+    }
+    return m;
+  }, [items]);
+
+  // Level-3 dialog state
+  const [batchesFor, setBatchesFor] = useState<{ name: string; batches: any[] } | null>(null);
+
 
   const filtered = useMemo(() => {
     const q = search.trim().toLowerCase();
@@ -226,6 +293,49 @@ export default function MedicineCodes() {
         <Button onClick={openCreate}><Plus className="h-4 w-4 mr-2" />New Code</Button>
       </div>
 
+      {/* Dashboard cards */}
+      <div className="grid grid-cols-2 lg:grid-cols-4 gap-3">
+        <Card>
+          <CardContent className="p-4 flex items-center gap-3">
+            <div className="p-2 rounded-md bg-primary/10 text-primary"><Layers className="h-5 w-5" /></div>
+            <div>
+              <div className="text-xs text-muted-foreground">Code Groups</div>
+              <div className="text-2xl font-semibold">{dashboardStats.totalGroups}</div>
+            </div>
+          </CardContent>
+        </Card>
+        <Card>
+          <CardContent className="p-4 flex items-center gap-3">
+            <div className="p-2 rounded-md bg-amber-500/10 text-amber-600"><PackageX className="h-5 w-5" /></div>
+            <div>
+              <div className="text-xs text-muted-foreground">Low Stock Items</div>
+              <div className="text-2xl font-semibold">{dashboardStats.lowStock}</div>
+            </div>
+          </CardContent>
+        </Card>
+        <Card>
+          <CardContent className="p-4 flex items-center gap-3">
+            <div className="p-2 rounded-md bg-orange-500/10 text-orange-600"><AlertTriangle className="h-5 w-5" /></div>
+            <div>
+              <div className="text-xs text-muted-foreground">Expiring Batches</div>
+              <div className="text-2xl font-semibold">{dashboardStats.expiring}</div>
+            </div>
+          </CardContent>
+        </Card>
+        <Card>
+          <CardContent className="p-4 flex items-center gap-3">
+            <div className="p-2 rounded-md bg-destructive/10 text-destructive"><CircleAlert className="h-5 w-5" /></div>
+            <div>
+              <div className="text-xs text-muted-foreground">Expired Batches</div>
+              <div className="text-2xl font-semibold">{dashboardStats.expired}</div>
+            </div>
+          </CardContent>
+        </Card>
+      </div>
+
+      {/* Analytics */}
+      <MedicineCodeAnalytics codes={codes} medicineIdToCodeId={medicineIdToCodeId} />
+
       <div className="relative max-w-md">
         <Search className="absolute left-2 top-2.5 h-4 w-4 text-muted-foreground" />
         <Input placeholder="Search codes…" value={search} onChange={(e) => setSearch(e.target.value)} className="pl-8" />
@@ -286,12 +396,40 @@ export default function MedicineCodes() {
                         <p className="text-sm text-muted-foreground">No medicines linked to this code yet.</p>
                       ) : (
                         <div className="divide-y">
-                          {linked.map((l) => (
-                            <div key={l.id} className="flex items-center justify-between py-2 text-sm">
-                              <span className="truncate">{l.name}</span>
-                              <Badge variant="outline">{formatStock(l.total_units, l.packaging)}</Badge>
-                            </div>
-                          ))}
+                          {linked.map((l) => {
+                            const batches = batchesByMedicine.get(l.id) || [];
+                            const isLow = l.minimum_stock_level > 0 && l.total_units <= l.minimum_stock_level;
+                            const statusBadge =
+                              l.worstStatus === 'expired'
+                                ? <Badge variant="destructive" className="gap-1"><CircleAlert className="h-3 w-3" />Expired</Badge>
+                                : l.worstStatus === 'expiring'
+                                  ? <Badge className="gap-1 bg-orange-500 hover:bg-orange-500/90 text-white"><AlertTriangle className="h-3 w-3" />Expiring</Badge>
+                                  : null;
+                            return (
+                              <button
+                                key={l.id}
+                                type="button"
+                                onClick={() => setBatchesFor({ name: l.name, batches })}
+                                className="w-full flex items-center justify-between py-2 text-sm gap-2 hover:bg-accent/40 transition-colors px-2 -mx-2 rounded text-left"
+                              >
+                                <div className="min-w-0 flex-1">
+                                  <div className="flex items-center gap-2 truncate">
+                                    <span className="truncate font-medium">{l.name}</span>
+                                    {l.strength && <span className="text-xs text-muted-foreground">{l.strength}</span>}
+                                  </div>
+                                  <div className="text-xs text-muted-foreground truncate">
+                                    {[l.generic_name, l.manufacturer].filter(Boolean).join(' · ') || '—'}
+                                  </div>
+                                </div>
+                                <div className="flex items-center gap-1.5 shrink-0">
+                                  {isLow && <Badge variant="outline" className="gap-1 border-amber-500 text-amber-600"><PackageX className="h-3 w-3" />Low</Badge>}
+                                  {statusBadge}
+                                  <Badge variant="outline">{formatStock(l.total_units, l.packaging)}</Badge>
+                                  <ChevronRight className="h-4 w-4 text-muted-foreground" />
+                                </div>
+                              </button>
+                            );
+                          })}
                         </div>
                       )}
                     </CardContent>
@@ -414,6 +552,15 @@ export default function MedicineCodes() {
           </DialogFooter>
         </DialogContent>
       </Dialog>
+
+      {/* Level-3 batches dialog */}
+      <MedicineCodeBatchesDialog
+        open={!!batchesFor}
+        onOpenChange={(v) => { if (!v) setBatchesFor(null); }}
+        medicineName={batchesFor?.name || ''}
+        batches={batchesFor?.batches || []}
+        globalAlertDays={globalAlertDays}
+      />
     </div>
   );
 }
