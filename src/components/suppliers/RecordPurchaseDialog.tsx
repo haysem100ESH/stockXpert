@@ -321,30 +321,80 @@ export default function RecordPurchaseDialog({ open, onOpenChange, supplierId, s
         </DialogHeader>
 
         <form onSubmit={handleSubmit} className="space-y-4">
-          {/* Item Type Selection */}
-          <div className="space-y-3 p-4 rounded-lg border bg-muted/30">
-            <Label className="text-sm font-semibold">Item Type *</Label>
-            <RadioGroup
-              value={itemType}
-              onValueChange={(val) => setItemType(val as 'full_pcs' | 'measurable')}
-              className="flex gap-6"
-            >
-              <div className="flex items-center space-x-2">
-                <RadioGroupItem value="full_pcs" id="type_full_pcs" />
-                <Label htmlFor="type_full_pcs" className="cursor-pointer">
-                  <span className="font-medium">Full PCS</span>
-                  <span className="block text-xs text-muted-foreground">Countable items (pieces, packs, strips)</span>
-                </Label>
+          {/* Existing item picker */}
+          <div className="space-y-2 p-3 rounded-lg border bg-muted/30">
+            <Label className="text-sm font-semibold">Pick an existing {label.item.toLowerCase()} (optional)</Label>
+            {selectedExisting ? (
+              <div className="flex items-center justify-between gap-2 rounded-md border bg-background p-2">
+                <div className="min-w-0">
+                  <p className="text-sm font-medium truncate">{selectedExisting.name}</p>
+                  <div className="flex gap-1 mt-1">
+                    <Badge variant="outline" className="text-xs">{selectedExisting.category}</Badge>
+                    {selectedExisting.manufacturer && <Badge variant="secondary" className="text-xs">{selectedExisting.manufacturer}</Badge>}
+                  </div>
+                </div>
+                <Button type="button" size="sm" variant="ghost" onClick={() => setSelectedExisting(null)}>
+                  <X className="h-4 w-4" />
+                </Button>
               </div>
-              <div className="flex items-center space-x-2">
-                <RadioGroupItem value="measurable" id="type_measurable" />
-                <Label htmlFor="type_measurable" className="cursor-pointer">
-                  <span className="font-medium">Measurable</span>
-                  <span className="block text-xs text-muted-foreground">Kg, Liter, Gram, Meter, etc.</span>
-                </Label>
-              </div>
-            </RadioGroup>
+            ) : (
+              <>
+                <div className="relative">
+                  <Search className="absolute left-2 top-1/2 -translate-y-1/2 h-4 w-4 text-muted-foreground" />
+                  <Input
+                    value={pickerSearch}
+                    onChange={e => setPickerSearch(e.target.value)}
+                    placeholder={`Search inventory catalog...`}
+                    className="pl-8 h-9"
+                  />
+                </div>
+                {pickerSearch && (
+                  <div className="max-h-40 overflow-y-auto border rounded-md divide-y bg-background">
+                    {filteredExisting.length === 0 ? (
+                      <div className="p-2 text-xs text-muted-foreground">No matches — fill the form below to create a new one.</div>
+                    ) : filteredExisting.map(it => (
+                      <button
+                        type="button" key={it.id}
+                        onClick={() => setSelectedExisting(it)}
+                        className="w-full text-left px-2 py-1.5 hover:bg-muted/50 text-sm"
+                      >
+                        <div className="font-medium">{it.name}</div>
+                        {it.generic_name && <div className="text-xs text-muted-foreground">{it.generic_name}</div>}
+                      </button>
+                    ))}
+                  </div>
+                )}
+                <p className="text-xs text-muted-foreground">Or leave blank and fill the form below to add a brand-new item.</p>
+              </>
+            )}
           </div>
+
+          {/* Item Type Selection — only shown when creating a new item */}
+          {!selectedExisting && (
+            <div className="space-y-3 p-4 rounded-lg border bg-muted/30">
+              <Label className="text-sm font-semibold">Item Type *</Label>
+              <RadioGroup
+                value={itemType}
+                onValueChange={(val) => setItemType(val as 'full_pcs' | 'measurable')}
+                className="flex gap-6"
+              >
+                <div className="flex items-center space-x-2">
+                  <RadioGroupItem value="full_pcs" id="type_full_pcs" />
+                  <Label htmlFor="type_full_pcs" className="cursor-pointer">
+                    <span className="font-medium">Full PCS</span>
+                    <span className="block text-xs text-muted-foreground">Countable items (pieces, packs, strips)</span>
+                  </Label>
+                </div>
+                <div className="flex items-center space-x-2">
+                  <RadioGroupItem value="measurable" id="type_measurable" />
+                  <Label htmlFor="type_measurable" className="cursor-pointer">
+                    <span className="font-medium">Measurable</span>
+                    <span className="block text-xs text-muted-foreground">Kg, Liter, Gram, Meter, etc.</span>
+                  </Label>
+                </div>
+              </RadioGroup>
+            </div>
+          )}
 
           <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
             <div className="space-y-2">
