@@ -346,3 +346,109 @@ export default function PerformanceDashboard() {
     </div>
   );
 }
+
+function HowItWorksDialog() {
+  return (
+    <Dialog>
+      <DialogTrigger asChild>
+        <Button variant="outline" size="sm" className="gap-2">
+          <Info className="h-4 w-4" />
+          How it works
+        </Button>
+      </DialogTrigger>
+      <DialogContent className="max-w-2xl max-h-[85vh] overflow-y-auto">
+        <DialogHeader>
+          <DialogTitle className="flex items-center gap-2">
+            <Trophy className="h-5 w-5 text-yellow-500" />
+            How Staff Performance is Scored
+          </DialogTitle>
+          <DialogDescription>
+            Each staff member gets an <strong>Overall Score (0–100%)</strong> based on two equally weighted pillars.
+          </DialogDescription>
+        </DialogHeader>
+
+        <div className="space-y-4 mt-2">
+          {/* Attendance */}
+          <div className="rounded-lg border p-4 bg-muted/30">
+            <div className="flex items-center gap-2 mb-2">
+              <CalendarCheck className="h-5 w-5 text-primary" />
+              <h3 className="font-semibold">1. Attendance Score · 50%</h3>
+            </div>
+            <p className="text-sm text-muted-foreground mb-3">
+              Measured from check-ins recorded in the Attendance system for the selected month
+              (Sundays are excluded from working days).
+            </p>
+            <div className="grid grid-cols-3 gap-2 text-center text-xs">
+              <div className="rounded-md bg-green-500/10 p-2">
+                <div className="font-bold text-green-600">Present</div>
+                <div className="text-muted-foreground">100 pts/day</div>
+              </div>
+              <div className="rounded-md bg-yellow-500/10 p-2">
+                <div className="font-bold text-yellow-600">Late</div>
+                <div className="text-muted-foreground">50 pts/day</div>
+              </div>
+              <div className="rounded-md bg-destructive/10 p-2">
+                <div className="font-bold text-destructive">Absent</div>
+                <div className="text-muted-foreground">0 pts/day</div>
+              </div>
+            </div>
+            <div className="mt-3 rounded-md bg-background border p-2 text-xs font-mono">
+              Attendance % = (Present×100 + Late×50) ÷ (WorkingDays×100) × 100
+            </div>
+          </div>
+
+          {/* Sales */}
+          <div className="rounded-lg border p-4 bg-muted/30">
+            <div className="flex items-center gap-2 mb-2">
+              <DollarSign className="h-5 w-5 text-primary" />
+              <h3 className="font-semibold">2. Sales Score · 50%</h3>
+            </div>
+            <p className="text-sm text-muted-foreground mb-3">
+              Total sales amount attributed to the staff (<code>sold_by</code>) within the selected month and branch,
+              normalized against the top performer for that period.
+            </p>
+            <div className="rounded-md bg-background border p-2 text-xs font-mono">
+              Sales % = (Staff Total Sales ÷ Top Performer's Sales) × 100
+            </div>
+            <p className="text-xs text-muted-foreground mt-2">
+              The top seller always scores <strong>100%</strong>; others are scored relative to them.
+            </p>
+          </div>
+
+          {/* Overall */}
+          <div className="rounded-lg border-2 border-primary/40 p-4 bg-primary/5">
+            <div className="flex items-center gap-2 mb-2">
+              <Calculator className="h-5 w-5 text-primary" />
+              <h3 className="font-semibold">Overall Score</h3>
+            </div>
+            <div className="rounded-md bg-background border p-2 text-xs font-mono">
+              Overall = (Attendance % × 0.5) + (Sales % × 0.5)
+            </div>
+            <div className="mt-3 flex flex-wrap gap-2 text-xs">
+              <Badge className="bg-green-500/15 text-green-600 hover:bg-green-500/15">≥ 80% Excellent</Badge>
+              <Badge className="bg-yellow-500/15 text-yellow-600 hover:bg-yellow-500/15">60–79% Good</Badge>
+              <Badge variant="destructive">&lt; 60% Needs Improvement</Badge>
+            </div>
+          </div>
+
+          {/* Example */}
+          <div className="rounded-lg border p-4">
+            <div className="flex items-center gap-2 mb-2">
+              <Star className="h-4 w-4 text-yellow-500" />
+              <h4 className="font-semibold text-sm">Quick Example</h4>
+            </div>
+            <p className="text-xs text-muted-foreground">
+              Staff with 20 Present, 2 Late, 4 Absent out of 26 working days, and KES 50,000 sales while
+              the top seller did KES 100,000:
+            </p>
+            <ul className="text-xs mt-2 space-y-1 list-disc pl-5">
+              <li>Attendance = (20×100 + 2×50) ÷ (26×100) × 100 = <strong>80.8%</strong></li>
+              <li>Sales = 50,000 ÷ 100,000 × 100 = <strong>50%</strong></li>
+              <li>Overall = (80.8 × 0.5) + (50 × 0.5) = <strong>65%</strong></li>
+            </ul>
+          </div>
+        </div>
+      </DialogContent>
+    </Dialog>
+  );
+}
