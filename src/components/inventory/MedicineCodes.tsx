@@ -293,6 +293,49 @@ export default function MedicineCodes() {
         <Button onClick={openCreate}><Plus className="h-4 w-4 mr-2" />New Code</Button>
       </div>
 
+      {/* Dashboard cards */}
+      <div className="grid grid-cols-2 lg:grid-cols-4 gap-3">
+        <Card>
+          <CardContent className="p-4 flex items-center gap-3">
+            <div className="p-2 rounded-md bg-primary/10 text-primary"><Layers className="h-5 w-5" /></div>
+            <div>
+              <div className="text-xs text-muted-foreground">Code Groups</div>
+              <div className="text-2xl font-semibold">{dashboardStats.totalGroups}</div>
+            </div>
+          </CardContent>
+        </Card>
+        <Card>
+          <CardContent className="p-4 flex items-center gap-3">
+            <div className="p-2 rounded-md bg-amber-500/10 text-amber-600"><PackageX className="h-5 w-5" /></div>
+            <div>
+              <div className="text-xs text-muted-foreground">Low Stock Items</div>
+              <div className="text-2xl font-semibold">{dashboardStats.lowStock}</div>
+            </div>
+          </CardContent>
+        </Card>
+        <Card>
+          <CardContent className="p-4 flex items-center gap-3">
+            <div className="p-2 rounded-md bg-orange-500/10 text-orange-600"><AlertTriangle className="h-5 w-5" /></div>
+            <div>
+              <div className="text-xs text-muted-foreground">Expiring Batches</div>
+              <div className="text-2xl font-semibold">{dashboardStats.expiring}</div>
+            </div>
+          </CardContent>
+        </Card>
+        <Card>
+          <CardContent className="p-4 flex items-center gap-3">
+            <div className="p-2 rounded-md bg-destructive/10 text-destructive"><CircleAlert className="h-5 w-5" /></div>
+            <div>
+              <div className="text-xs text-muted-foreground">Expired Batches</div>
+              <div className="text-2xl font-semibold">{dashboardStats.expired}</div>
+            </div>
+          </CardContent>
+        </Card>
+      </div>
+
+      {/* Analytics */}
+      <MedicineCodeAnalytics codes={codes} medicineIdToCodeId={medicineIdToCodeId} />
+
       <div className="relative max-w-md">
         <Search className="absolute left-2 top-2.5 h-4 w-4 text-muted-foreground" />
         <Input placeholder="Search codes…" value={search} onChange={(e) => setSearch(e.target.value)} className="pl-8" />
