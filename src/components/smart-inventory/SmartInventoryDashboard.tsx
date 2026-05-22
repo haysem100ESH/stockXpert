@@ -18,6 +18,8 @@ import {
   Sun,
   Bell,
   Layers,
+  HeartPulse,
+
 } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { Alert, AlertDescription } from '@/components/ui/alert';
@@ -33,6 +35,7 @@ import SeasonalTrendsWidget from './SeasonalTrendsWidget';
 import InventoryDashboard from '@/components/inventory/InventoryDashboard';
 import BatchAnalytics from '@/components/inventory/BatchAnalytics';
 import HealthScoreInfoDialog from './HealthScoreInfoDialog';
+import ItemsHealthList from './ItemsHealthList';
 
 export default function SmartInventoryDashboard() {
   const { items, summary, loading, error, isPharmacy, refetch } = useSmartInventory();
