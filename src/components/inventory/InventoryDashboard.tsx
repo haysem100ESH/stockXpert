@@ -47,6 +47,7 @@ interface BatchLowStockItem {
 export default function InventoryDashboard() {
   const [outOfStockItems, setOutOfStockItems] = useState<AlertItem[]>([]);
   const [lowStockItems, setLowStockItems] = useState<AlertItem[]>([]);
+  const [batchLowStock, setBatchLowStock] = useState<BatchLowStockItem[]>([]);
   const [expiringBatches, setExpiringBatches] = useState<BatchAlertItem[]>([]);
   const [expiredBatches, setExpiredBatches] = useState<BatchAlertItem[]>([]);
   const [loading, setLoading] = useState(true);
