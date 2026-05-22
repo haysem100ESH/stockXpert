@@ -232,7 +232,7 @@ export default function BatchesEditor({
         Sales auto-deduct from the earliest-expiring batch first (FEFO). Deleting a batch removes it permanently.
       </p>
 
-      <Button type="button" className="w-full" onClick={save} disabled={saving}>
+      <Button type="button" className="w-full" onClick={save} disabled={saving || hasMissingBatchNumber || drafts.length === 0}>
         {saving ? <Loader2 className="h-4 w-4 animate-spin mr-2" /> : <Save className="h-4 w-4 mr-2" />}
         Save Batch Changes
       </Button>
