@@ -375,7 +375,7 @@ export default function InventoryDashboard() {
         open={deleteConfirm.open}
         onOpenChange={(open) => setDeleteConfirm(prev => ({ ...prev, open }))}
         title="Set Stock to Zero"
-        description={`Are you sure you want to set the stock of "${deleteConfirm.itemName}" to 0?`}
+        description={`Are you sure you want to set batch "${deleteConfirm.batchNumber || '—'}" of "${deleteConfirm.itemName}" to 0?`}
         onConfirm={confirmRemoveExpiredItem}
         confirmText="Set to 0"
         cancelText="Cancel"
