@@ -87,19 +87,28 @@ const handler = async (req: Request): Promise<Response> => {
 
     // Nullify common FK references that would block deletion (best-effort)
     const nullifyTargets: Array<{ table: string; column: string }> = [
+      { table: 'sales', column: 'sold_by' },
       { table: 'sales', column: 'staff_id' },
       { table: 'sales', column: 'created_by' },
+      { table: 'medicines', column: 'created_by' },
+      { table: 'customers', column: 'created_by' },
+      { table: 'customer_payments', column: 'created_by' },
       { table: 'stock_movements', column: 'created_by' },
       { table: 'inventory_batches', column: 'created_by' },
       { table: 'expenses', column: 'created_by' },
       { table: 'credit_logs', column: 'created_by' },
       { table: 'transfer_requests', column: 'requested_by' },
       { table: 'transfer_requests', column: 'fulfilled_by' },
+      { table: 'transfer_requests', column: 'created_by' },
+      { table: 'transfer_requests', column: 'approved_by' },
       { table: 'branch_items', column: 'created_by' },
+      { table: 'pharmacy_branches', column: 'manager_staff_id' },
+      { table: 'payment_requests', column: 'approved_by' },
     ];
     for (const t of nullifyTargets) {
       try {
-        await supabaseAdmin.from(t.table).update({ [t.column]: null }).eq(t.column, staffId);
+        const { error } = await supabaseAdmin.from(t.table).update({ [t.column]: null }).eq(t.column, staffId);
+        if (error) console.warn(`Could not clear ${t.table}.${t.column}:`, error.message);
       } catch (_) { /* ignore - column/table may not exist */ }
     }
 
