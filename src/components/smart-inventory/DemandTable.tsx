@@ -2,7 +2,8 @@ import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/com
 import { Badge } from '@/components/ui/badge';
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@/components/ui/table';
 import { SmartItem } from '@/hooks/useSmartInventory';
-import { TrendingUp, TrendingDown, Minus } from 'lucide-react';
+import { TrendIndicator } from './TrendIndicator';
+
 
 interface DemandTableProps {
   items: SmartItem[];
@@ -31,8 +32,9 @@ export default function DemandTable({ items, allItems, isPharmacy }: DemandTable
                 <TableRow>
                   <TableHead>Name</TableHead>
                   <TableHead>Category</TableHead>
-                  <TableHead className="text-right">ADC</TableHead>
-                  <TableHead className="text-right">14-Day Demand</TableHead>
+                  <TableHead className="text-right">ADC (WMA)</TableHead>
+                  <TableHead>Trend</TableHead>
+                  <TableHead className="text-right">Forecast Demand</TableHead>
                   <TableHead className="text-right">Current Stock</TableHead>
                   <TableHead className="text-right">Days Left</TableHead>
                   <TableHead>Score</TableHead>
@@ -46,7 +48,11 @@ export default function DemandTable({ items, allItems, isPharmacy }: DemandTable
                       <Badge variant="outline" className="text-xs">{item.category}</Badge>
                     </TableCell>
                     <TableCell className="text-right">{item.adc.toFixed(2)}</TableCell>
-                    <TableCell className="text-right">{Math.ceil(item.predictedDemand14)}</TableCell>
+                    <TableCell><TrendIndicator item={item} /></TableCell>
+                    <TableCell className="text-right">
+                      {Math.ceil(item.forecastDemand)}
+                      <span className="text-[10px] text-muted-foreground ml-1">/{item.forecastDays}d</span>
+                    </TableCell>
                     <TableCell className="text-right">{item.currentStock}</TableCell>
                     <TableCell className="text-right">
                       {item.daysRemaining !== null ? (

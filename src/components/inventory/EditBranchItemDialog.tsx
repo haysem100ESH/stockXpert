@@ -97,7 +97,9 @@ export default function EditBranchItemDialog({ open, onOpenChange, item, onItemU
 
   // New: branch-level controls
   const [minStockLevel, setMinStockLevel] = useState('');
+  const [leadTimeDays, setLeadTimeDays] = useState('');
   const [branchId, setBranchId] = useState('');
+
   const [addQuantity, setAddQuantity] = useState('');
   const [selectedSupplierId, setSelectedSupplierId] = useState('');
   const [paymentType, setPaymentType] = useState<'paid' | 'credit'>('paid');
@@ -181,7 +183,9 @@ export default function EditBranchItemDialog({ open, onOpenChange, item, onItemU
       setSubUnitPrice(item.sub_unit_price != null ? String(item.sub_unit_price) : '');
 
       setMinStockLevel((item as any).minimum_stock_level != null ? String((item as any).minimum_stock_level) : '');
+      setLeadTimeDays((item as any).lead_time_days != null ? String((item as any).lead_time_days) : '3');
       setBranchId(item.branch_id || '');
+
       setAddQuantity('');
       setSelectedSupplierId('');
       setPaymentType('paid');
@@ -504,6 +508,15 @@ export default function EditBranchItemDialog({ open, onOpenChange, item, onItemU
         }
       }
 
+      // Update master medicine's lead_time_days if changed
+      if (leadTimeDays !== '') {
+        const newLT = parseInt(leadTimeDays);
+        if (!isNaN(newLT) && newLT >= 0 && newLT !== ((item as any).lead_time_days ?? 3)) {
+          await (supabase as any).from('medicines').update({ lead_time_days: newLT }).eq('id', item.medicine_id);
+        }
+      }
+
+
       // If user entered an "add stock" quantity, create a new batch (+ optional supplier purchase)
       const addQty = addQuantity ? parseFloat(addQuantity) : 0;
       if (addQty > 0) {
@@ -747,17 +760,32 @@ export default function EditBranchItemDialog({ open, onOpenChange, item, onItemU
               })()}
               {/* Expiry date is captured per-batch (Batches view), not at item level */}
 
-              <div className="space-y-2">
-                <Label>Minimum Stock Level (alert!)</Label>
-                <Input
-                  type="number"
-                  min="0"
-                  value={minStockLevel}
-                  onChange={e => setMinStockLevel(e.target.value)}
-                  placeholder="e.g. 10"
-                />
-                <p className="text-xs text-muted-foreground">Triggers low-stock alerts when quantity drops below this.</p>
+              <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+                <div className="space-y-2">
+                  <Label>Minimum Stock Level (alert!)</Label>
+                  <Input
+                    type="number"
+                    min="0"
+                    value={minStockLevel}
+                    onChange={e => setMinStockLevel(e.target.value)}
+                    placeholder="e.g. 10"
+                  />
+                  <p className="text-xs text-muted-foreground">Triggers low-stock alerts when quantity drops below this.</p>
+                </div>
+                <div className="space-y-2">
+                  <Label>Lead Time (days)</Label>
+                  <Input
+                    type="number"
+                    min="0"
+                    value={leadTimeDays}
+                    onChange={e => setLeadTimeDays(e.target.value)}
+                    placeholder="3"
+                    title="How many days does it typically take for this item to arrive after ordering?"
+                  />
+                  <p className="text-xs text-muted-foreground">How many days does this item typically take to arrive after ordering? Used to compute the reorder point.</p>
+                </div>
               </div>
+
 
               {isOwner && branches.length > 0 && (
                 <div className="space-y-2">
