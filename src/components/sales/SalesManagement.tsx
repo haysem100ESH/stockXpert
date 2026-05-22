@@ -168,24 +168,21 @@ export default function SalesManagement() {
       setSelectedMedicineForDialog(medicine);
       return;
     }
+    // Always route through the new packaging-aware flow so the cart strictly
+    // respects medicine packaging config (strip/pack enabled flags). Unit
+    // (LPI) is ALWAYS available, even when no packaging row exists.
     const pkg = packagingMap[medicine.medicine_id];
-    if (pkg && (pkg.strip_enabled || pkg.pack_enabled)) {
-      // Add directly at the unit level — user can change level in the cart.
-      const unitPrice = pkg.unit_selling_price
-        ?? (medicine.selling_price && unitsPerPackSafe(pkg)
-          ? medicine.selling_price / unitsPerPackSafe(pkg)
-          : medicine.selling_price);
-      addToCart(medicine, 'full_pack', 1, {
-        sellLevel: 'unit',
-        unitsPerLevel: 1,
-        levelPrice: unitPrice,
-        levelLabel: pkg.unit_name || medicine.unit_label || 'unit',
-      });
-      if (isSmallScreen) setCartOpen(true);
-      return;
-    }
-    const defaultSaleType: 'full_pack' | 'by_stripe' = medicine.units_per_pack ? 'by_stripe' : 'full_pack';
-    addToCart(medicine, defaultSaleType, 1);
+    const upPack = pkg ? unitsPerPackSafe(pkg) : (medicine.units_per_pack || 1);
+    const unitPrice = pkg?.unit_selling_price
+      ?? (medicine.selling_price && upPack > 1
+        ? medicine.selling_price / upPack
+        : medicine.selling_price);
+    addToCart(medicine, 'full_pack', 1, {
+      sellLevel: 'unit',
+      unitsPerLevel: 1,
+      levelPrice: unitPrice,
+      levelLabel: pkg?.unit_name || medicine.unit_label || 'unit',
+    });
     if (isSmallScreen) setCartOpen(true);
   };
 
