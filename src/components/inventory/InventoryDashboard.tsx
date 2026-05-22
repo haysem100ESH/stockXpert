@@ -11,6 +11,7 @@ import { ConfirmationDialog } from '@/components/ui/confirmation-dialog';
 import { useBranchContext } from '@/hooks/useBranchContext';
 import { useAuth } from '@/hooks/useAuth';
 import { useExpiryThreshold } from '@/hooks/useExpiryThreshold';
+import { syncBranchItemQuantity } from '@/lib/batchInventory';
 
 interface AlertItem {
   id: string;
@@ -21,17 +22,29 @@ interface AlertItem {
   expiry_date?: string;
 }
 
+interface BatchAlertItem {
+  batch_id: string;
+  branch_item_id: string;
+  name: string;
+  category: string;
+  batch_number: string | null;
+  quantity: number;
+  expiry_date: string;
+}
+
 export default function InventoryDashboard() {
   const [outOfStockItems, setOutOfStockItems] = useState<AlertItem[]>([]);
   const [lowStockItems, setLowStockItems] = useState<AlertItem[]>([]);
-  const [expiringItems, setExpiringItems] = useState<AlertItem[]>([]);
-  const [expiredItems, setExpiredItems] = useState<AlertItem[]>([]);
+  const [expiringBatches, setExpiringBatches] = useState<BatchAlertItem[]>([]);
+  const [expiredBatches, setExpiredBatches] = useState<BatchAlertItem[]>([]);
   const [loading, setLoading] = useState(true);
   const [deleteConfirm, setDeleteConfirm] = useState<{
     open: boolean;
-    itemId: string;
+    batchId: string;
+    branchItemId: string;
     itemName: string;
-  }>({ open: false, itemId: '', itemName: '' });
+    batchNumber: string | null;
+  }>({ open: false, batchId: '', branchItemId: '', itemName: '', batchNumber: null });
   const { toast } = useToast();
   const { selectedBranch, branchType } = useBranchContext();
   const { profile } = useAuth();
@@ -70,21 +83,18 @@ export default function InventoryDashboard() {
       }
 
       if (!selectedBranch && ownerBranchIds.length === 0 && profile?.role === 'owner') {
-        setOutOfStockItems([]); setLowStockItems([]); setExpiringItems([]); setExpiredItems([]);
+        setOutOfStockItems([]); setLowStockItems([]); setExpiringBatches([]); setExpiredBatches([]);
         setLoading(false);
         return;
       }
 
-      // Fetch all branch_items with medicine details
+      // Parent-level stock for out-of-stock/low-stock
       let query = supabase
         .from('branch_items')
-        .select('id, quantity, expiry_date, medicines!inner(name, category, minimum_stock_level)');
+        .select('id, quantity, medicines!inner(name, category, minimum_stock_level)');
 
-      if (selectedBranch) {
-        query = query.eq('branch_id', selectedBranch);
-      } else if (ownerBranchIds.length > 0) {
-        query = query.in('branch_id', ownerBranchIds);
-      }
+      if (selectedBranch) query = query.eq('branch_id', selectedBranch);
+      else if (ownerBranchIds.length > 0) query = query.in('branch_id', ownerBranchIds);
 
       const { data, error } = await query;
       if (error) throw error;
@@ -93,29 +103,45 @@ export default function InventoryDashboard() {
         id: bi.id,
         name: bi.medicines?.name || 'Unknown',
         category: bi.medicines?.category || 'Uncategorized',
-        quantity: bi.quantity,
+        quantity: Number(bi.quantity) || 0,
         minimum_stock_level: bi.medicines?.minimum_stock_level || 0,
-        expiry_date: bi.expiry_date,
       }));
 
-      const outOfStock = items.filter(i => i.quantity === 0);
-      const lowStock = items.filter(i => i.quantity > 0 && i.minimum_stock_level && i.quantity <= i.minimum_stock_level);
+      setOutOfStockItems(items.filter(i => i.quantity === 0));
+      setLowStockItems(items.filter(i => i.quantity > 0 && i.minimum_stock_level && i.quantity <= i.minimum_stock_level));
+
+      // Batch-level expiry
+      let batchQuery = supabase
+        .from('inventory_batches')
+        .select('id, branch_item_id, batch_number, remaining_quantity, expiry_date, medicines!inner(name, category)')
+        .not('expiry_date', 'is', null)
+        .gt('remaining_quantity', 0);
+
+      if (selectedBranch) batchQuery = batchQuery.eq('branch_id', selectedBranch);
+      else if (ownerBranchIds.length > 0) batchQuery = batchQuery.in('branch_id', ownerBranchIds);
+
+      const { data: batchRows } = await batchQuery;
 
       const today = new Date().toISOString().split('T')[0];
       const thresholdDate = new Date();
       thresholdDate.setDate(thresholdDate.getDate() + thresholdDays);
-      const tomorrow = new Date();
-      tomorrow.setDate(tomorrow.getDate() + 1);
-      const tomorrowStr = tomorrow.toISOString().split('T')[0];
       const thresholdStr = thresholdDate.toISOString().split('T')[0];
 
-      const expiring = items.filter(i => i.expiry_date && i.quantity > 0 && i.expiry_date >= tomorrowStr && i.expiry_date <= thresholdStr);
-      const expired = items.filter(i => i.expiry_date && i.quantity > 0 && i.expiry_date <= today);
+      const mappedBatches: BatchAlertItem[] = ((batchRows || []) as any[])
+        .filter(b => b.branch_item_id)
+        .map(b => ({
+          batch_id: b.id,
+          branch_item_id: b.branch_item_id,
+          name: b.medicines?.name || 'Unknown',
+          category: b.medicines?.category || 'Uncategorized',
+          batch_number: b.batch_number,
+          quantity: Number(b.remaining_quantity) || 0,
+          expiry_date: b.expiry_date,
+        }))
+        .sort((a, b) => a.expiry_date.localeCompare(b.expiry_date));
 
-      setOutOfStockItems(outOfStock);
-      setLowStockItems(lowStock);
-      setExpiringItems(expiring);
-      setExpiredItems(expired);
+      setExpiringBatches(mappedBatches.filter(b => b.expiry_date > today && b.expiry_date <= thresholdStr));
+      setExpiredBatches(mappedBatches.filter(b => b.expiry_date <= today));
     } catch (error) {
       console.error('Error fetching inventory data:', error);
       toast({ title: "Error", description: "Failed to fetch inventory data", variant: "destructive" });
@@ -124,25 +150,34 @@ export default function InventoryDashboard() {
     }
   };
 
-  const handleRemoveExpiredItem = (itemId: string, itemName: string) => {
-    setDeleteConfirm({ open: true, itemId, itemName });
+  const handleRemoveExpiredBatch = (batch: BatchAlertItem) => {
+    setDeleteConfirm({
+      open: true,
+      batchId: batch.batch_id,
+      branchItemId: batch.branch_item_id,
+      itemName: batch.name,
+      batchNumber: batch.batch_number,
+    });
   };
 
   const confirmRemoveExpiredItem = async () => {
     try {
       const { error } = await supabase
-        .from('branch_items')
-        .update({ quantity: 0 })
-        .eq('id', deleteConfirm.itemId);
-
+        .from('inventory_batches')
+        .update({ remaining_quantity: 0 })
+        .eq('id', deleteConfirm.batchId);
       if (error) throw error;
 
-      setExpiredItems(expiredItems.filter(item => item.id !== deleteConfirm.itemId));
-      toast({ title: "Success", description: "Expired item stock set to 0" });
-      setDeleteConfirm({ open: false, itemId: '', itemName: '' });
+      if (deleteConfirm.branchItemId) {
+        await syncBranchItemQuantity(deleteConfirm.branchItemId);
+      }
+
+      setExpiredBatches(expiredBatches.filter(b => b.batch_id !== deleteConfirm.batchId));
+      toast({ title: "Success", description: "Expired batch stock set to 0" });
+      setDeleteConfirm({ open: false, batchId: '', branchItemId: '', itemName: '', batchNumber: null });
     } catch (error) {
-      console.error('Error updating expired item:', error);
-      toast({ title: "Error", description: "Failed to update expired item", variant: "destructive" });
+      console.error('Error updating expired batch:', error);
+      toast({ title: "Error", description: "Failed to update expired batch", variant: "destructive" });
     }
   };
 
@@ -248,62 +283,69 @@ export default function InventoryDashboard() {
         </Card>
       )}
 
-      {expiringItems.length > 0 && (
+      {expiringBatches.length > 0 && (
         <Card>
           <CardHeader>
             <CardTitle className="flex items-center space-x-2">
               <CalendarDays className="h-5 w-5 text-warning" />
               <span>Items Expiring Soon</span>
             </CardTitle>
-            <CardDescription>{expiringItems.length} items will expire within {thresholdDays} days</CardDescription>
+            <CardDescription>{expiringBatches.length} batch{expiringBatches.length !== 1 ? 'es' : ''} will expire within {thresholdDays} days</CardDescription>
           </CardHeader>
           <CardContent>
             <div className="grid gap-2">
-              {expiringItems.map((item) => (
-                <div key={item.id} className="flex items-center justify-between p-2 border rounded-lg">
-                  <div>
-                    <p className="font-medium">{item.name}</p>
-                    <p className="text-sm text-muted-foreground">{item.category}</p>
+              {expiringBatches.map((b) => {
+                const daysLeft = Math.ceil((new Date(b.expiry_date).getTime() - Date.now()) / 86_400_000);
+                return (
+                  <div key={b.batch_id} className="flex items-center justify-between p-2 border rounded-lg">
+                    <div className="min-w-0">
+                      <p className="font-medium truncate">{b.name}</p>
+                      <p className="text-sm text-muted-foreground">
+                        {b.category} · Batch: <span className="font-mono">{b.batch_number || '—'}</span>
+                      </p>
+                    </div>
+                    <div className="text-right shrink-0">
+                      <Badge variant="secondary">{b.quantity} in stock</Badge>
+                      <p className="text-xs text-warning">
+                        Expires: {new Date(b.expiry_date).toLocaleDateString()} ({daysLeft}d left)
+                      </p>
+                    </div>
                   </div>
-                  <div className="text-right">
-                    <Badge variant="secondary">{item.quantity} in stock</Badge>
-                    <p className="text-xs text-warning">
-                      Expires: {new Date(item.expiry_date!).toLocaleDateString()}
-                    </p>
-                  </div>
-                </div>
-              ))}
+                );
+              })}
             </div>
           </CardContent>
         </Card>
       )}
 
-      {expiredItems.length > 0 && (
+      {expiredBatches.length > 0 && (
         <Card>
           <CardHeader>
             <CardTitle className="flex items-center space-x-2">
               <AlertTriangle className="h-5 w-5 text-destructive" />
               <span>Expired Items</span>
             </CardTitle>
-            <CardDescription>{expiredItems.length} items have expired and should be removed</CardDescription>
+            <CardDescription>{expiredBatches.length} batch{expiredBatches.length !== 1 ? 'es' : ''} have expired and should be removed</CardDescription>
           </CardHeader>
           <CardContent>
             <div className="grid gap-2">
-              {expiredItems.map((item) => (
-                <div key={item.id} className="flex items-center justify-between p-2 border rounded-lg bg-destructive/5">
-                  <div>
-                    <p className="font-medium">{item.name}</p>
-                    <p className="text-sm text-muted-foreground">{item.category}</p>
+              {expiredBatches.map((b) => (
+                <div key={b.batch_id} className="flex items-center justify-between p-2 border rounded-lg bg-destructive/5">
+                  <div className="min-w-0">
+                    <p className="font-medium truncate">{b.name}</p>
+                    <p className="text-sm text-muted-foreground">
+                      {b.category} · Batch: <span className="font-mono">{b.batch_number || '—'}</span>
+                    </p>
                     <p className="text-xs text-destructive">
-                      Expired: {new Date(item.expiry_date!).toLocaleDateString()}
+                      Expired: {new Date(b.expiry_date).toLocaleDateString()} · Stock: {b.quantity}
                     </p>
                   </div>
-                  <div className="flex items-center space-x-2">
+                  <div className="flex items-center space-x-2 shrink-0">
                     <Badge variant="destructive">Expired</Badge>
                     <Button
                       size="sm"
                       variant="outline"
-                      onClick={() => handleRemoveExpiredItem(item.id, item.name)}
+                      onClick={() => handleRemoveExpiredBatch(b)}
                       className="text-destructive hover:text-destructive"
                     >
                       Set Stock to 0
@@ -317,7 +359,7 @@ export default function InventoryDashboard() {
       )}
 
       {outOfStockItems.length === 0 && lowStockItems.length === 0 && 
-       expiringItems.length === 0 && expiredItems.length === 0 && (
+       expiringBatches.length === 0 && expiredBatches.length === 0 && (
         <Card>
           <CardContent className="text-center py-8">
             <Package className="h-12 w-12 text-muted-foreground mx-auto mb-4" />
@@ -333,7 +375,7 @@ export default function InventoryDashboard() {
         open={deleteConfirm.open}
         onOpenChange={(open) => setDeleteConfirm(prev => ({ ...prev, open }))}
         title="Set Stock to Zero"
-        description={`Are you sure you want to set the stock of "${deleteConfirm.itemName}" to 0?`}
+        description={`Are you sure you want to set batch "${deleteConfirm.batchNumber || '—'}" of "${deleteConfirm.itemName}" to 0?`}
         onConfirm={confirmRemoveExpiredItem}
         confirmText="Set to 0"
         cancelText="Cancel"
