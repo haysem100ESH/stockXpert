@@ -85,16 +85,41 @@ const handler = async (req: Request): Promise<Response> => {
       }
     }
 
+    // Nullify common FK references that would block deletion (best-effort)
+    const nullifyTargets: Array<{ table: string; column: string }> = [
+      { table: 'sales', column: 'staff_id' },
+      { table: 'sales', column: 'created_by' },
+      { table: 'stock_movements', column: 'created_by' },
+      { table: 'inventory_batches', column: 'created_by' },
+      { table: 'expenses', column: 'created_by' },
+      { table: 'credit_logs', column: 'created_by' },
+      { table: 'transfer_requests', column: 'requested_by' },
+      { table: 'transfer_requests', column: 'fulfilled_by' },
+      { table: 'branch_items', column: 'created_by' },
+    ];
+    for (const t of nullifyTargets) {
+      try {
+        await supabaseAdmin.from(t.table).update({ [t.column]: null }).eq(t.column, staffId);
+      } catch (_) { /* ignore - column/table may not exist */ }
+    }
+
     // Delete auth user (cascades to profiles via trigger)
     const { error: deleteError } = await supabaseAdmin.auth.admin.deleteUser(staffId);
     if (deleteError) {
-      console.error('Delete user error:', deleteError);
-      // Fallback: try to delete profile directly
+      console.error('Delete auth user error:', deleteError);
+      // Fallback: delete profile row directly
       const { error: profileDeleteError } = await supabaseAdmin
         .from('profiles')
         .delete()
         .eq('id', staffId);
-      if (profileDeleteError) throw profileDeleteError;
+      if (profileDeleteError) {
+        console.error('Delete profile error:', profileDeleteError);
+        return new Response(JSON.stringify({
+          error: `Failed to delete staff: ${profileDeleteError.message}. Auth: ${deleteError.message}`,
+        }), {
+          status: 500, headers: { ...corsHeaders, 'Content-Type': 'application/json' },
+        });
+      }
     }
 
     return new Response(JSON.stringify({ success: true }), {
