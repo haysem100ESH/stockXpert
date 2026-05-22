@@ -80,8 +80,8 @@ export default function PerformanceDashboard() {
           .lte('date', endDate),
         supabase
           .from('sales')
-          .select('created_by, total_amount')
-          .in('created_by', staffIds)
+          .select('sold_by, created_by, total_amount')
+          .or(`sold_by.in.(${staffIds.join(',')}),created_by.in.(${staffIds.join(',')})`)
           .gte('created_at', `${startDate}T00:00:00`)
           .lte('created_at', `${endDate}T23:59:59`),
       ]);
@@ -97,7 +97,10 @@ export default function PerformanceDashboard() {
 
       const salesMap: Record<string, number> = {};
       (salesRes.data || []).forEach((s: any) => {
-        salesMap[s.created_by] = (salesMap[s.created_by] || 0) + Number(s.total_amount || 0);
+        const sellerId = s.sold_by || s.created_by;
+        if (sellerId && staffIds.includes(sellerId)) {
+          salesMap[sellerId] = (salesMap[sellerId] || 0) + Number(s.total_amount || 0);
+        }
       });
 
       const maxSales = Math.max(...Object.values(salesMap), 1);
