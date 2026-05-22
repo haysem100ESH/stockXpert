@@ -112,7 +112,7 @@ export default function ItemsHealthList({ items, isPharmacy }: ItemsHealthListPr
                     </TableCell>
                     <TableCell className="text-right">
                       <Badge variant="outline" className={levelTone[it.scoreLevel]}>
-                        {it.inventoryScore}
+                        {Number(it.inventoryScore).toFixed(2)}
                       </Badge>
                     </TableCell>
                   </TableRow>
