@@ -64,13 +64,36 @@ export default function GlobalInventoryView() {
       const branchMap: Record<string, { name: string; type: string }> = {};
       (branches || []).forEach((b: any) => { branchMap[b.id] = { name: b.name, type: b.branch_type }; });
 
-      // Source of truth: branch_items per branch
-      const { data: bItems } = await supabase
-        .from('branch_items')
-        .select('id, medicine_id, branch_id, quantity')
-        .in('branch_id', branchIds);
+      // Source of truth: inventory_batches.remaining_quantity (FIFO live values),
+      // aggregated per (branch, medicine). Falls back to branch_items for items
+      // that have no batches yet (legacy rows).
+      const [{ data: batches }, { data: bItems }] = await Promise.all([
+        supabase
+          .from('inventory_batches')
+          .select('branch_id, medicine_id, remaining_quantity')
+          .in('branch_id', branchIds)
+          .gt('remaining_quantity', 0),
+        supabase
+          .from('branch_items')
+          .select('id, medicine_id, branch_id, quantity')
+          .in('branch_id', branchIds),
+      ]);
 
-      const medIds = [...new Set((bItems || []).map((i: any) => i.medicine_id))];
+      // Aggregate batches per (branch, medicine)
+      const batchAgg = new Map<string, number>(); // key = branch_id|medicine_id
+      (batches || []).forEach((b: any) => {
+        const k = `${b.branch_id}|${b.medicine_id}`;
+        batchAgg.set(k, (batchAgg.get(k) || 0) + Number(b.remaining_quantity || 0));
+      });
+
+      // Build effective rows: prefer batch sum, fallback to branch_items.quantity
+      const effective = (bItems || []).map((i: any) => {
+        const k = `${i.branch_id}|${i.medicine_id}`;
+        const qty = batchAgg.has(k) ? batchAgg.get(k)! : Number(i.quantity || 0);
+        return { branch_id: i.branch_id, medicine_id: i.medicine_id, quantity: qty };
+      });
+
+      const medIds = [...new Set(effective.map((i: any) => i.medicine_id))];
       if (medIds.length === 0) { setItems([]); setLoading(false); return; }
 
       const [{ data: meds }, { data: packs }] = await Promise.all([
