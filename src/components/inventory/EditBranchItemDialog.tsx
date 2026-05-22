@@ -97,7 +97,9 @@ export default function EditBranchItemDialog({ open, onOpenChange, item, onItemU
 
   // New: branch-level controls
   const [minStockLevel, setMinStockLevel] = useState('');
+  const [leadTimeDays, setLeadTimeDays] = useState('');
   const [branchId, setBranchId] = useState('');
+
   const [addQuantity, setAddQuantity] = useState('');
   const [selectedSupplierId, setSelectedSupplierId] = useState('');
   const [paymentType, setPaymentType] = useState<'paid' | 'credit'>('paid');
@@ -181,7 +183,9 @@ export default function EditBranchItemDialog({ open, onOpenChange, item, onItemU
       setSubUnitPrice(item.sub_unit_price != null ? String(item.sub_unit_price) : '');
 
       setMinStockLevel((item as any).minimum_stock_level != null ? String((item as any).minimum_stock_level) : '');
+      setLeadTimeDays((item as any).lead_time_days != null ? String((item as any).lead_time_days) : '3');
       setBranchId(item.branch_id || '');
+
       setAddQuantity('');
       setSelectedSupplierId('');
       setPaymentType('paid');
@@ -503,6 +507,15 @@ export default function EditBranchItemDialog({ open, onOpenChange, item, onItemU
           await supabase.from('medicines').update({ minimum_stock_level: newMin }).eq('id', item.medicine_id);
         }
       }
+
+      // Update master medicine's lead_time_days if changed
+      if (leadTimeDays !== '') {
+        const newLT = parseInt(leadTimeDays);
+        if (!isNaN(newLT) && newLT >= 0 && newLT !== ((item as any).lead_time_days ?? 3)) {
+          await (supabase as any).from('medicines').update({ lead_time_days: newLT }).eq('id', item.medicine_id);
+        }
+      }
+
 
       // If user entered an "add stock" quantity, create a new batch (+ optional supplier purchase)
       const addQty = addQuantity ? parseFloat(addQuantity) : 0;
