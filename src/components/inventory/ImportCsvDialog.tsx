@@ -1423,42 +1423,82 @@ export default function ImportCsvDialog({ open, onOpenChange, onImported }: Impo
             )}
 
             {parsedRows.length > 0 && (
-              <div className="border rounded-lg overflow-x-auto max-h-64">
+              <div className="border rounded-lg overflow-x-auto max-h-72">
                 <table className="w-full text-xs">
-                  <thead className="bg-muted sticky top-0">
+                  <thead className="bg-muted sticky top-0 z-10">
                     <tr>
                       <th className="text-left p-2">Row</th>
-                      <th className="text-left p-2">Name</th>
-                      <th className="text-left p-2">Type</th>
+                      <th className="text-left p-2">Item / Batch</th>
                       <th className="text-left p-2">Stock</th>
-                      <th className="text-left p-2">Cost / Sell</th>
+                      <th className="text-left p-2">Buy / Sell</th>
+                      <th className="text-left p-2">Expiry</th>
                       <th className="text-left p-2">Status</th>
                     </tr>
                   </thead>
                   <tbody>
-                    {parsedRows.slice(0, 50).map(r => (
-                      <tr key={r.rowIndex} className="border-t">
-                        <td className="p-2">{r.rowIndex}</td>
-                        <td className="p-2">
-                          {r.name || <span className="text-destructive">—</span>}
-                          {isPharmacy && r.active_ingredients.length > 0 && (
-                            <div className="text-[10px] text-muted-foreground mt-0.5">
-                              Contains: {r.active_ingredients.map(i => i.ingredient_name + (i.strength ? ` ${i.strength}` : '')).join(' + ')}
-                            </div>
+                    {parsedRows.slice(0, 50).map(r => {
+                      const batchCount = 1 + r.extra_batches.length;
+                      return (
+                        <>
+                          <tr key={`p-${r.rowIndex}`} className="border-t bg-muted/40">
+                            <td className="p-2 font-medium">{r.rowIndex}</td>
+                            <td className="p-2">
+                              <div className="font-semibold">
+                                {r.name || <span className="text-destructive">—</span>}
+                                {batchCount > 1 && (
+                                  <Badge variant="secondary" className="ml-2 text-[10px]">{batchCount} batches</Badge>
+                                )}
+                              </div>
+                              <div className="text-[10px] text-muted-foreground mt-0.5">
+                                {[r.category, r.manufacturer, r.item_type + (r.packaging_mode === 'with_strip' ? ' (strip)' : '')]
+                                  .filter(Boolean).join(' • ')}
+                                {r.minimum_stock_level > 0 && ` • min ${r.minimum_stock_level}`}
+                              </div>
+                              {isPharmacy && r.active_ingredients.length > 0 && (
+                                <div className="text-[10px] text-muted-foreground mt-0.5">
+                                  Contains: {r.active_ingredients.map(i => i.ingredient_name + (i.strength ? ` ${i.strength}` : '')).join(' + ')}
+                                </div>
+                              )}
+                            </td>
+                            <td className="p-2 font-medium">{r.stock_quantity} {r.unit_label}</td>
+                            <td className="p-2">{r.purchase_price} / {r.selling_price}</td>
+                            <td className="p-2">{r.expiry_date || '—'}</td>
+                            <td className="p-2">
+                              {r.errors.length > 0
+                                ? <Badge variant="destructive" className="text-[10px]">Invalid</Badge>
+                                : r.isDuplicate
+                                  ? <Badge variant="outline" className="text-[10px] border-warning text-warning">Duplicate</Badge>
+                                  : <Badge variant="outline" className="text-[10px] border-green-600 text-green-600">OK</Badge>}
+                            </td>
+                          </tr>
+                          {/* Primary batch (from parent row) shown as nested when there are extras */}
+                          {batchCount > 1 && (
+                            <tr key={`b0-${r.rowIndex}`} className="border-t border-l-4 border-l-primary/60">
+                              <td className="p-2 pl-6 text-muted-foreground">└─</td>
+                              <td className="p-2 pl-2">
+                                <span className="font-mono text-[11px]">{r.batch_number || <span className="italic text-muted-foreground">no batch #</span>}</span>
+                              </td>
+                              <td className="p-2">{r.stock_quantity} {r.unit_label}</td>
+                              <td className="p-2">{r.purchase_price} / {r.selling_price}</td>
+                              <td className="p-2">{r.expiry_date || '—'}</td>
+                              <td className="p-2"><Badge variant="outline" className="text-[10px]">batch 1</Badge></td>
+                            </tr>
                           )}
-                        </td>
-                        <td className="p-2">{r.item_type}{r.packaging_mode === 'with_strip' && ' (strip)'}</td>
-                        <td className="p-2">{r.stock_quantity} {r.unit_label}</td>
-                        <td className="p-2">{r.purchase_price} / {r.selling_price}</td>
-                        <td className="p-2">
-                          {r.errors.length > 0
-                            ? <Badge variant="destructive" className="text-[10px]">Invalid</Badge>
-                            : r.isDuplicate
-                              ? <Badge variant="outline" className="text-[10px] border-warning text-warning">Duplicate</Badge>
-                              : <Badge variant="outline" className="text-[10px] border-green-600 text-green-600">OK</Badge>}
-                        </td>
-                      </tr>
-                    ))}
+                          {r.extra_batches.map((eb, i) => (
+                            <tr key={`b-${r.rowIndex}-${i}`} className="border-t border-l-4 border-l-primary/60">
+                              <td className="p-2 pl-6 text-muted-foreground">└─ {eb.rowIndex}</td>
+                              <td className="p-2 pl-2">
+                                <span className="font-mono text-[11px]">{eb.batch_number || <span className="italic text-muted-foreground">no batch #</span>}</span>
+                              </td>
+                              <td className="p-2">{eb.stock_quantity} {r.unit_label}</td>
+                              <td className="p-2">{eb.purchase_price} / {eb.selling_price}</td>
+                              <td className="p-2">{eb.expiry_date || '—'}</td>
+                              <td className="p-2"><Badge variant="outline" className="text-[10px]">batch {i + 2}</Badge></td>
+                            </tr>
+                          ))}
+                        </>
+                      );
+                    })}
                   </tbody>
                 </table>
                 {parsedRows.length > 50 && (
