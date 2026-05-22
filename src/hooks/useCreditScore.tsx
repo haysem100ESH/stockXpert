@@ -114,13 +114,16 @@ export function calculateScoreChange(params: {
   return { change: 0, reason: 'No score change' };
 }
 
-export function canExtendCredit(creditScore: number, currentDebt: number, newOrderAmount: number): {
+export function canExtendCredit(creditScore: number, currentDebt: number, newOrderAmount: number, overrideLimit?: number): {
   allowed: boolean;
   maxLimit: number;
   availableCredit: number;
   reason?: string;
 } {
-  const maxLimit = getCreditLimit(creditScore);
+  const maxLimit = overrideLimit !== undefined ? overrideLimit : getCreditLimit(creditScore);
+  if (!isFinite(maxLimit)) {
+    return { allowed: true, maxLimit, availableCredit: Number.POSITIVE_INFINITY };
+  }
   if (maxLimit === 0) {
     return { allowed: false, maxLimit: 0, availableCredit: 0, reason: 'Credit score too low — Cash Only' };
   }
