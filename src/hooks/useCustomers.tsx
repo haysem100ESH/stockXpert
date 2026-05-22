@@ -100,7 +100,8 @@ async function fetchCustomers(
     const totalDebt = debtMap[c.id] || 0;
     const totalPaid = Math.max(0, totalPurchases - totalDebt);
     const creditScore = latestScoreMap[c.id] ?? c.credit_score ?? 50;
-    const maxCreditLimit = c.max_credit_limit ?? getCreditLimit(creditScore);
+    const rawLimit: number | null = c.max_credit_limit ?? null;
+    const maxCreditLimit = resolveCreditLimit(rawLimit, creditScore);
     return {
       ...c,
       totalPurchases,
@@ -108,6 +109,7 @@ async function fetchCustomers(
       totalDebt,
       lastPurchaseDate,
       credit_score: creditScore,
+      max_credit_limit_raw: rawLimit,
       max_credit_limit: maxCreditLimit,
     } as CustomerRow;
   });
