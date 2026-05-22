@@ -124,7 +124,7 @@ export default function GlobalInventoryView() {
         });
       });
 
-      (bItems || []).forEach((bi: any) => {
+      (effective).forEach((bi: any) => {
         const item = grouped.get(bi.medicine_id);
         const binfo = branchMap[bi.branch_id];
         if (!item || !binfo) return;
