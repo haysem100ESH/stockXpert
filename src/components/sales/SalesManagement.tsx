@@ -466,6 +466,7 @@ export default function SalesManagement() {
     const currentDebt = selectedCustomer.computed_debt || 0;
     const maxLimit = selectedCustomer.max_credit_limit ?? 5000;
     const score = selectedCustomer.credit_score ?? 50;
+    if (!isFinite(maxLimit)) return { allowed: true, score };
     if (maxLimit === 0) return { allowed: false, reason: 'Credit score too low — Cash Only', score };
     const available = Math.max(0, maxLimit - currentDebt);
     if (shortfall > available) return { allowed: false, reason: `Debt (ETB ${(currentDebt + shortfall).toFixed(2)}) would exceed credit limit (ETB ${maxLimit.toFixed(2)})`, score };

@@ -22,6 +22,7 @@ import { useAuth } from './useAuth';
 import { useBranchContext } from './useBranchContext';
 import { useOwnerBranchIds } from './useOwnerBranchIds';
 import { getCreditLimit } from './useCreditScore';
+import { resolveCreditLimit } from '@/lib/creditLimit';
 
 export interface SalesMedicine {
   id: string; // branch_items.id
@@ -143,12 +144,16 @@ async function fetchSalesCustomers(selectedBranch: string | null, ownerBranchIds
     if (!latestScoreMap[log.customer_id]) latestScoreMap[log.customer_id] = log.new_score;
   }
 
-  return data.map((c: any) => ({
-    ...c,
-    computed_debt: Math.max(0, debtMap[c.id] || 0),
-    credit_score: latestScoreMap[c.id] ?? c.credit_score ?? 50,
-    max_credit_limit: getCreditLimit(latestScoreMap[c.id] ?? c.credit_score ?? 50),
-  }));
+  return data.map((c: any) => {
+    const score = latestScoreMap[c.id] ?? c.credit_score ?? 50;
+    return {
+      ...c,
+      computed_debt: Math.max(0, debtMap[c.id] || 0),
+      credit_score: score,
+      max_credit_limit: resolveCreditLimit(c.max_credit_limit ?? null, score),
+      max_credit_limit_raw: c.max_credit_limit ?? null,
+    };
+  });
 }
 
 export const SALES_INVENTORY_KEY = (scope: { ownerId?: string; selectedBranch: string | null; staffBranchId?: string | null }) =>

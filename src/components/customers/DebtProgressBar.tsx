@@ -1,4 +1,5 @@
 import { Progress } from '@/components/ui/progress';
+import { Infinity as InfinityIcon } from 'lucide-react';
 
 interface DebtProgressBarProps {
   currentDebt: number;
@@ -6,6 +7,20 @@ interface DebtProgressBarProps {
 }
 
 export default function DebtProgressBar({ currentDebt, maxCreditLimit }: DebtProgressBarProps) {
+  if (!isFinite(maxCreditLimit)) {
+    return (
+      <div className="space-y-1">
+        <div className="flex justify-between text-xs text-muted-foreground">
+          <span>Debt ETB {currentDebt.toFixed(0)}</span>
+          <span className="font-medium text-primary flex items-center gap-1">
+            <InfinityIcon className="h-3 w-3" /> Unlimited
+          </span>
+        </div>
+        <Progress value={0} className="h-2" />
+      </div>
+    );
+  }
+
   if (maxCreditLimit <= 0) {
     return (
       <div className="space-y-1">

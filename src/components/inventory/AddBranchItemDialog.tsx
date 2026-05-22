@@ -466,10 +466,7 @@ export default function AddBranchItemDialog({ open, onOpenChange, onItemAdded }:
                   <Input value={batchNumber} onChange={e => setBatchNumber(e.target.value)} placeholder="e.g. BN-2026-001" />
                 </div>
 
-                <div className="space-y-2">
-                  <Label>Expiry Date</Label>
-                  <Input type="date" value={expiryDate} onChange={e => setExpiryDate(e.target.value)} />
-                </div>
+                {/* Expiry date is captured per-batch (Batches view), not at item level */}
 
                 <div className="space-y-2">
                   <Label>Minimum Stock Level</Label>
