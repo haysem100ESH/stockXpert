@@ -208,8 +208,19 @@ export default function BranchManagement() {
     if (!deletingBranch) return;
     setSaving(true);
     try {
-      // Delete linked location first
+      // Unassign staff from this branch first (avoid FK constraint blocking delete)
+      await (supabase as any).from('profiles')
+        .update({ branch_id: null })
+        .eq('branch_id', deletingBranch.id);
+
+      // Clear manager reference on the branch itself
+      await (supabase as any).from('pharmacy_branches')
+        .update({ manager_staff_id: null })
+        .eq('id', deletingBranch.id);
+
+      // Delete linked location
       await (supabase as any).from('locations').delete().eq('branch_id', deletingBranch.id);
+
       const { error } = await (supabase as any).from('pharmacy_branches').delete().eq('id', deletingBranch.id);
       if (error) throw error;
       toast({ title: 'Success', description: 'Branch deleted successfully' });
