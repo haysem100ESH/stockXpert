@@ -95,7 +95,7 @@ export default function PerformanceDashboard() {
           if (sellerId && s.branch_id) sellerBranchMap.set(sellerId, s.branch_id);
           return sellerId;
         })
-        .filter(Boolean)));
+        .filter((id: unknown): id is string => typeof id === 'string' && id.length > 0)));
 
       const missingSellerIds = sellerIds.filter((id) => !staffById.has(id));
       if (missingSellerIds.length > 0) {
@@ -163,7 +163,7 @@ export default function PerformanceDashboard() {
         return {
           id: s.id,
           name: s.full_name,
-          branch_name: branchMap[s.branch_id] || 'Unknown',
+          branch_name: branchMap[s.branch_id || sellerBranchMap.get(s.id)] || 'Unknown',
           attendanceScore: Math.min(attendanceScore, 100),
           salesScore: Math.min(salesScore, 100),
           overallScore: Math.min(overallScore, 100),
