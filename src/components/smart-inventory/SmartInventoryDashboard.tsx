@@ -142,10 +142,14 @@ export default function SmartInventoryDashboard() {
 
       {/* Tabbed Content */}
       <Tabs defaultValue="alerts" className="space-y-4">
-        <TabsList className="grid w-full grid-cols-4 md:grid-cols-8 h-auto">
+        <TabsList className="grid w-full grid-cols-4 md:grid-cols-9 h-auto">
           <TabsTrigger value="alerts" className="gap-1">
             <Bell className="h-4 w-4" />
             <span className="hidden sm:inline">Alerts</span>
+          </TabsTrigger>
+          <TabsTrigger value="health" className="gap-1">
+            <HeartPulse className="h-4 w-4" />
+            <span className="hidden sm:inline">Health</span>
           </TabsTrigger>
           <TabsTrigger value="demand" className="gap-1">
             <ShoppingCart className="h-4 w-4" />
@@ -191,6 +195,9 @@ export default function SmartInventoryDashboard() {
 
         <TabsContent value="alerts">
           <InventoryDashboard />
+        </TabsContent>
+        <TabsContent value="health">
+          <ItemsHealthList items={items} isPharmacy={isPharmacy} />
         </TabsContent>
         <TabsContent value="demand">
           <DemandTable items={summary.topDemand} allItems={items} isPharmacy={isPharmacy} />
