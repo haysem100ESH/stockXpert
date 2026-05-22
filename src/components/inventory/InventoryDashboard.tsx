@@ -96,7 +96,7 @@ export default function InventoryDashboard() {
       }
 
       if (!selectedBranch && ownerBranchIds.length === 0 && profile?.role === 'owner') {
-        setOutOfStockItems([]); setLowStockItems([]); setExpiringBatches([]); setExpiredBatches([]);
+        setOutOfStockItems([]); setLowStockItems([]); setBatchLowStock([]); setExpiringBatches([]); setExpiredBatches([]);
         setLoading(false);
         return;
       }
@@ -123,11 +123,10 @@ export default function InventoryDashboard() {
       setOutOfStockItems(items.filter(i => i.quantity === 0));
       setLowStockItems(items.filter(i => i.quantity > 0 && i.minimum_stock_level && i.quantity <= i.minimum_stock_level));
 
-      // Batch-level expiry
+      // Batch-level expiry + per-batch overrides
       let batchQuery = supabase
         .from('inventory_batches')
-        .select('id, branch_item_id, batch_number, remaining_quantity, expiry_date, medicines!inner(name, category)')
-        .not('expiry_date', 'is', null)
+        .select('id, branch_item_id, batch_number, remaining_quantity, expiry_date, min_stock_level, expiry_alert_days, medicines!inner(name, category)')
         .gt('remaining_quantity', 0);
 
       if (selectedBranch) batchQuery = batchQuery.eq('branch_id', selectedBranch);
@@ -136,12 +135,13 @@ export default function InventoryDashboard() {
       const { data: batchRows } = await batchQuery;
 
       const today = new Date().toISOString().split('T')[0];
-      const thresholdDate = new Date();
-      thresholdDate.setDate(thresholdDate.getDate() + thresholdDays);
-      const thresholdStr = thresholdDate.toISOString().split('T')[0];
+      const now = Date.now();
 
-      const mappedBatches: BatchAlertItem[] = ((batchRows || []) as any[])
-        .filter(b => b.branch_item_id)
+      const allBatches = ((batchRows || []) as any[]).filter(b => b.branch_item_id);
+
+      // Per-batch low-stock alerts (only batches with min_stock_level configured)
+      const lowStockBatches: BatchLowStockItem[] = allBatches
+        .filter(b => b.min_stock_level != null && Number(b.remaining_quantity) <= Number(b.min_stock_level))
         .map(b => ({
           batch_id: b.id,
           branch_item_id: b.branch_item_id,
@@ -149,11 +149,37 @@ export default function InventoryDashboard() {
           category: b.medicines?.category || 'Uncategorized',
           batch_number: b.batch_number,
           quantity: Number(b.remaining_quantity) || 0,
-          expiry_date: b.expiry_date,
+          min_stock_level: Number(b.min_stock_level) || 0,
         }))
+        .sort((a, b) => a.quantity - b.quantity);
+      setBatchLowStock(lowStockBatches);
+
+      // Expiry alerts — per-batch override of alert window when set
+      const mappedBatches: BatchAlertItem[] = allBatches
+        .filter(b => b.expiry_date)
+        .map(b => {
+          const perBatch = b.expiry_alert_days != null ? Number(b.expiry_alert_days) : null;
+          const alertDays = perBatch != null ? perBatch : thresholdDays;
+          return {
+            batch_id: b.id,
+            branch_item_id: b.branch_item_id,
+            name: b.medicines?.name || 'Unknown',
+            category: b.medicines?.category || 'Uncategorized',
+            batch_number: b.batch_number,
+            quantity: Number(b.remaining_quantity) || 0,
+            expiry_date: b.expiry_date,
+            alert_days: alertDays,
+            per_batch_alert: perBatch != null,
+          };
+        })
         .sort((a, b) => a.expiry_date.localeCompare(b.expiry_date));
 
-      setExpiringBatches(mappedBatches.filter(b => b.expiry_date > today && b.expiry_date <= thresholdStr));
+      const expiring = mappedBatches.filter(b => {
+        if (b.expiry_date <= today) return false;
+        const days = Math.ceil((new Date(b.expiry_date).getTime() - now) / 86_400_000);
+        return days <= b.alert_days;
+      });
+      setExpiringBatches(expiring);
       setExpiredBatches(mappedBatches.filter(b => b.expiry_date <= today));
     } catch (error) {
       console.error('Error fetching inventory data:', error);
