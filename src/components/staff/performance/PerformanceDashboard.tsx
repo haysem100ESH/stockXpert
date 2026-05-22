@@ -81,21 +81,33 @@ export default function PerformanceDashboard() {
 
       const workingDays = getWorkingDays(year, month);
 
-      const { data: branches } = await supabase
+      const { data: branches, error: branchesErr } = await supabase
         .from('pharmacy_branches')
-        .select('id, name, work_start_time, late_start_time, absent_start_time')
+        .select('id, name')
         .eq('pharmacy_owner_id', profile!.id);
+      if (branchesErr) throw branchesErr;
 
       const branchIds = (branches || []).map((b: any) => b.id);
       const branchMap: Record<string, string> = {};
       const branchSettings: Record<string, { work_start_time?: string }> = {};
       (branches || []).forEach((b: any) => {
         branchMap[b.id] = b.name;
-        branchSettings[b.id] = { work_start_time: b.work_start_time || '08:00' };
+        branchSettings[b.id] = { work_start_time: '08:00' };
       });
 
       if (!branchIds.length) { setPerformances([]); setLoading(false); return; }
       const scopedBranchIds = selectedBranch && branchIds.includes(selectedBranch) ? [selectedBranch] : branchIds;
+
+      const { data: attendanceSettings } = await supabase
+        .from('branch_attendance_settings')
+        .select('branch_id, work_start_time')
+        .in('branch_id', scopedBranchIds);
+
+      (attendanceSettings || []).forEach((setting: any) => {
+        if (setting.branch_id) {
+          branchSettings[setting.branch_id] = { work_start_time: setting.work_start_time || '08:00' };
+        }
+      });
 
       const [staffRes, salesRes, prevSalesRes] = await Promise.all([
         supabase
