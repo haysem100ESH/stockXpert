@@ -458,7 +458,7 @@ export default function FinanceManagement() {
           return {
             branchId: branch.id,
             branchName: branch.name,
-            income: branchSales.reduce((sum, sale) => sum + Number(sale.total_amount), 0),
+            income: branchSales.reduce((sum, sale: any) => sum + Number(sale.total_amount) + Number(sale.extra_profit || 0), 0),
             expenses: branchCustomExpenses.reduce((sum, expense) => sum + Number(expense.amount), 0)
               + branchInvExpenses.reduce((sum, inv) => sum + inv.total_cost, 0)
           };
