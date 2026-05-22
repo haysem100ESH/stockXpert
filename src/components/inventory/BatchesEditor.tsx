@@ -197,13 +197,15 @@ export default function BatchesEditor({
               <TableHead className="min-w-[110px]">Buy Price</TableHead>
               <TableHead className="min-w-[110px]">Sell Price</TableHead>
               <TableHead className="min-w-[150px]">Expiry</TableHead>
+              <TableHead className="min-w-[110px]" title="Alert when this batch's remaining stock falls to or below this number. Leave empty to disable.">Low Stock Alert</TableHead>
+              <TableHead className="min-w-[120px]" title="Alert this many days before this batch's expiry date. Leave empty to use the global setting from the Alerts page.">Alert Before (days)</TableHead>
               <TableHead className="w-10" />
             </TableRow>
           </TableHeader>
           <TableBody>
             {drafts.length === 0 ? (
               <TableRow>
-                <TableCell colSpan={6} className="text-center text-sm text-muted-foreground py-6">
+                <TableCell colSpan={8} className="text-center text-sm text-muted-foreground py-6">
                   No batches yet. Click <strong>Add Batch</strong> to create one.
                 </TableCell>
               </TableRow>
@@ -236,6 +238,12 @@ export default function BatchesEditor({
                   <Input type="date" value={d.expiry_date} onChange={e => updateField(d.id, 'expiry_date', e.target.value)} />
                 </TableCell>
                 <TableCell className="align-top">
+                  <Input type="number" step="0.01" min="0" placeholder="—" value={d.min_stock_level} onChange={e => updateField(d.id, 'min_stock_level', e.target.value)} />
+                </TableCell>
+                <TableCell className="align-top">
+                  <Input type="number" step="1" min="0" placeholder="global" value={d.expiry_alert_days} onChange={e => updateField(d.id, 'expiry_alert_days', e.target.value)} />
+                </TableCell>
+                <TableCell className="align-top">
                   <Button type="button" size="sm" variant="ghost" onClick={() => removeBatch(d.id)} title="Delete batch">
                     <Trash2 className="h-4 w-4 text-destructive" />
                   </Button>
@@ -248,7 +256,7 @@ export default function BatchesEditor({
       </div>
 
       <p className="text-xs text-muted-foreground">
-        Sales auto-deduct from the earliest-expiring batch first (FEFO). Deleting a batch removes it permanently.
+        Sales auto-deduct from the earliest-expiring batch first (FEFO). <strong>Low Stock Alert</strong> and <strong>Alert Before (days)</strong> are optional per-batch overrides — leave empty to fall back to the item / global defaults configured on the Alerts page.
       </p>
 
       <Button type="button" className="w-full" onClick={save} disabled={saving || hasMissingBatchNumber || drafts.length === 0}>
