@@ -113,25 +113,33 @@ async function fetchDashboardOverview({ selectedBranch, ownerBranchIds, dateFilt
     .select('total_amount, amount_paid, customer_id, branch_id')
     .not('customer_id', 'is', null)
     .range(0, 49999);
+  // Batch-level expiry data — items have multiple batches with different expiries.
+  let batchesQuery: any = supabase.from('inventory_batches')
+    .select('branch_item_id, expiry_date, remaining_quantity, branch_id')
+    .gt('remaining_quantity', 0)
+    .not('expiry_date', 'is', null)
+    .range(0, 49999);
 
   if (selectedBranch) {
     branchItemsQuery = branchItemsQuery.eq('branch_id', selectedBranch);
     salesWithItemsQuery = salesWithItemsQuery.eq('branch_id', selectedBranch);
     custQuery = custQuery.eq('branch_id', selectedBranch);
     salesDebtQuery = salesDebtQuery.eq('branch_id', selectedBranch);
+    batchesQuery = batchesQuery.eq('branch_id', selectedBranch);
   } else if (ownerBranchIds.length > 0) {
     branchItemsQuery = branchItemsQuery.in('branch_id', ownerBranchIds);
     salesWithItemsQuery = salesWithItemsQuery.in('branch_id', ownerBranchIds);
     custQuery = custQuery.in('branch_id', ownerBranchIds);
     salesDebtQuery = salesDebtQuery.in('branch_id', ownerBranchIds);
+    batchesQuery = batchesQuery.in('branch_id', ownerBranchIds);
   }
 
   // Fire all queries in parallel.
   const codesQuery = (supabase as any).from('medicine_codes')
     .select('id, code, label')
     .range(0, 9999);
-  const [branchItemsRes, salesWithItemsRes, custRes, salesDebtRes, codesRes] = await Promise.all([
-    branchItemsQuery, salesWithItemsQuery, custQuery, salesDebtQuery, codesQuery,
+  const [branchItemsRes, salesWithItemsRes, custRes, salesDebtRes, codesRes, batchesRes] = await Promise.all([
+    branchItemsQuery, salesWithItemsQuery, custQuery, salesDebtQuery, codesQuery, batchesQuery,
   ]);
 
   const branchItemsData = branchItemsRes.data || [];
@@ -155,7 +163,20 @@ async function fetchDashboardOverview({ selectedBranch, ownerBranchIds, dateFilt
   const outOfStockItems = branchItemsData.filter((bi: any) => bi.quantity === 0).length;
   const totalSoldItems = saleItemsData.reduce((sum, item: any) => sum + item.quantity, 0);
   const today = new Date().toISOString().split('T')[0];
-  const expiredItems = branchItemsData.filter((bi: any) => bi.expiry_date && bi.quantity > 0 && bi.expiry_date <= today).length;
+  // Expired items: distinct branch_items that have at least one batch with an
+  // expired date (batches are the source of truth). Fall back to branch_items
+  // legacy expiry for items without batches.
+  const batchesData: any[] = batchesRes.data || [];
+  const expiredFromBatches = new Set<string>();
+  batchesData.forEach((b: any) => {
+    if (b.expiry_date && b.expiry_date <= today) expiredFromBatches.add(b.branch_item_id);
+  });
+  const batchedItemIds = new Set(batchesData.map((b: any) => b.branch_item_id));
+  const expiredLegacy = branchItemsData
+    .filter((bi: any) => !batchedItemIds.has(bi.id) && bi.expiry_date && bi.quantity > 0 && bi.expiry_date <= today)
+    .map((bi: any) => bi.id);
+  expiredLegacy.forEach((id: string) => expiredFromBatches.add(id));
+  const expiredItems = expiredFromBatches.size;
 
   // Category aggregations
   const categoryMap = new Map<string, { sales: number; revenue: number }>();

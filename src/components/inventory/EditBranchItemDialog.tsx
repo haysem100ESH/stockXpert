@@ -649,6 +649,7 @@ export default function EditBranchItemDialog({ open, onOpenChange, item, onItemU
       }
 
       toast({ title: 'Success', description: 'Item updated successfully' });
+      window.dispatchEvent(new Event('app:refresh'));
       onItemUpdated();
       onOpenChange(false);
     } catch (error: any) {

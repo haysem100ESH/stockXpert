@@ -247,23 +247,54 @@ export default function Dashboard() {
       thirtyDaysFromNow.setDate(thirtyDaysFromNow.getDate() + 30);
       const thirtyStr = thirtyDaysFromNow.toISOString().split('T')[0];
 
-      const expiringDetails = biRows
-        .filter((bi) => bi.expiry_date && bi.quantity > 0 && bi.expiry_date > todayStr && bi.expiry_date <= thirtyStr)
-        .map((bi) => ({
-          id: bi.id,
-          name: bi.medicines?.name || 'Unknown',
-          category: bi.medicines?.category || '',
-          expiry_date: bi.expiry_date,
-        }));
+      // Pull batch-level expiry data (the real source of truth — items can have
+      // multiple batches with different expiry dates).
+      let batchesQuery = supabase
+        .from('inventory_batches')
+        .select('branch_item_id, expiry_date, remaining_quantity, branch_id, medicines!inner(name, category)')
+        .gt('remaining_quantity', 0)
+        .not('expiry_date', 'is', null)
+        .range(0, 49999);
+      batchesQuery = applyBranchFilter(batchesQuery);
+      const { data: batchesData } = await batchesQuery;
+      const batchRows: any[] = batchesData || [];
 
-      const expiredDetails = biRows
-        .filter((bi) => bi.expiry_date && bi.quantity > 0 && bi.expiry_date <= todayStr)
-        .map((bi) => ({
+      // Build maps keyed by branch_item_id to dedupe (count one entry per item,
+      // using its earliest at-risk batch).
+      const expiringMap = new Map<string, any>();
+      const expiredMap = new Map<string, any>();
+      batchRows.forEach((b) => {
+        const ed = b.expiry_date;
+        const target = ed <= todayStr ? expiredMap : (ed <= thirtyStr ? expiringMap : null);
+        if (!target) return;
+        const existing = target.get(b.branch_item_id);
+        if (!existing || ed < existing.expiry_date) {
+          target.set(b.branch_item_id, {
+            id: b.branch_item_id,
+            name: b.medicines?.name || 'Unknown',
+            category: b.medicines?.category || '',
+            expiry_date: ed,
+          });
+        }
+      });
+
+      // Also include legacy branch_items rows that have an expiry but no batch
+      // entry (older data created before batches existed).
+      biRows.forEach((bi) => {
+        if (!bi.expiry_date || bi.quantity <= 0) return;
+        if (expiringMap.has(bi.id) || expiredMap.has(bi.id)) return;
+        const entry = {
           id: bi.id,
           name: bi.medicines?.name || 'Unknown',
           category: bi.medicines?.category || '',
           expiry_date: bi.expiry_date,
-        }));
+        };
+        if (bi.expiry_date <= todayStr) expiredMap.set(bi.id, entry);
+        else if (bi.expiry_date <= thirtyStr) expiringMap.set(bi.id, entry);
+      });
+
+      const expiringDetails = Array.from(expiringMap.values());
+      const expiredDetails = Array.from(expiredMap.values());
 
       // Fetch sales data with medicine details for charts (include strip sales)
       const { data: salesWithItems } = await (function(){

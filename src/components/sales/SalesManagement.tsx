@@ -799,6 +799,8 @@ export default function SalesManagement() {
       setCartOpen(false);
       // Revalidate cached product list + customers (debt may have changed).
       invalidateSalesCache();
+      // Broadcast to all pages (Inventory, Dashboard, etc.) so stock cards refresh live.
+      window.dispatchEvent(new Event('app:refresh'));
     } catch (error: any) {
       console.error('[Checkout Error]', error);
       toast({
