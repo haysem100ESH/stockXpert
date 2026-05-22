@@ -240,6 +240,7 @@ export default function StockAdjustmentDialog({ open, onOpenChange, medicine, on
       }
 
       toast({ title: 'Success', description: `Stock ${adjustmentType}d successfully.` });
+      window.dispatchEvent(new Event('app:refresh'));
       resetForm();
       onOpenChange(false);
       onAdjusted();
