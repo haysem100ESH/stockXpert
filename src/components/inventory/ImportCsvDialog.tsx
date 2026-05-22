@@ -633,6 +633,32 @@ export default function ImportCsvDialog({ open, onOpenChange, onImported }: Impo
         get(cells, 'expiry_date') !== ''
       );
 
+      // Multi-batch upload: empty NAME + has batch/inventory data → attach as
+      // an extra batch on the most recent parent row.
+      if (!name && hasStandaloneSignal && out.length > 0) {
+        const parent = out[out.length - 1];
+        const stockRawC = get(cells, 'lpi_stock') || get(cells, 'stock_quantity');
+        const buyRawC = get(cells, 'lpi_buy') || get(cells, 'purchase_price');
+        const sellRawC = get(cells, 'lpi_sell') || get(cells, 'selling_price') || get(cells, 'pack_price');
+        const minRawC = get(cells, 'minimum_stock_level');
+        const expRawC = getRaw(cells, 'expiry_date');
+        const expParsedC = parseExpiryDate(expRawC);
+        const stockN = stockRawC ? parseFloat(stockRawC) : 0;
+        const buyN = buyRawC ? parseFloat(buyRawC) : parent.purchase_price;
+        const sellN = sellRawC ? parseFloat(sellRawC) : parent.selling_price;
+        const minN = minRawC ? parseLeadingInt(minRawC) : null;
+        parent.extra_batches.push({
+          rowIndex: r + 1,
+          batch_number: get(cells, 'batch_number') || null,
+          stock_quantity: isNaN(stockN) || stockN < 0 ? 0 : stockN,
+          purchase_price: isNaN(buyN) || buyN < 0 ? parent.purchase_price : buyN,
+          selling_price: isNaN(sellN) || sellN < 0 ? parent.selling_price : sellN,
+          expiry_date: expParsedC.iso,
+          minimum_stock_level: minN,
+        });
+        continue;
+      }
+
       // Pharmacy hierarchy: an empty-NAME row with ONLY generic/strength (no
       // inventory data) is an ingredient continuation of the medicine above.
       // If the row carries real inventory data, treat it as a standalone
