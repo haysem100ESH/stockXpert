@@ -30,6 +30,18 @@ interface BatchAlertItem {
   batch_number: string | null;
   quantity: number;
   expiry_date: string;
+  alert_days: number;          // resolved alert window (per-batch or global)
+  per_batch_alert: boolean;    // true if alert_days came from the batch
+}
+
+interface BatchLowStockItem {
+  batch_id: string;
+  branch_item_id: string;
+  name: string;
+  category: string;
+  batch_number: string | null;
+  quantity: number;
+  min_stock_level: number;
 }
 
 export default function InventoryDashboard() {
