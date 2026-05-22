@@ -5,6 +5,7 @@ import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
 import { ToggleGroup, ToggleGroupItem } from '@/components/ui/toggle-group';
 import { Badge } from '@/components/ui/badge';
+import { toast } from 'sonner';
 import { usePackaging } from '@/hooks/usePackaging';
 import {
   PackagingLevel,
