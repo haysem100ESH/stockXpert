@@ -112,7 +112,7 @@ export default function ItemsHealthList({ items, isPharmacy }: ItemsHealthListPr
                     </TableCell>
                     <TableCell className="text-right">
                       <Badge variant="outline" className={levelTone[it.scoreLevel]}>
-                        {it.inventoryScore}
+                        {Number(it.inventoryScore).toFixed(2)}
                       </Badge>
                     </TableCell>
                   </TableRow>
@@ -136,7 +136,7 @@ export default function ItemsHealthList({ items, isPharmacy }: ItemsHealthListPr
               </SheetHeader>
               <div className="mt-6 space-y-5">
                 <div className="text-center">
-                  <p className="text-5xl font-bold">{selected.inventoryScore}</p>
+                  <p className="text-5xl font-bold">{Number(selected.inventoryScore).toFixed(2)}</p>
                   <p className="text-sm text-muted-foreground">out of 100</p>
                   <Badge variant="outline" className={`mt-2 ${levelTone[selected.scoreLevel]}`}>
                     {selected.scoreLevel.toUpperCase()}
