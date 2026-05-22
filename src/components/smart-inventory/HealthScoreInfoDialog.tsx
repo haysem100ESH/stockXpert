@@ -90,12 +90,15 @@ export default function HealthScoreInfoDialog({ isPharmacy = false }: Props) {
                 <ShoppingCart className="h-4 w-4 text-primary" /> Predicted Demand & Reorder Logic
               </h3>
               <div className="space-y-2 text-sm">
-                <Bullet><b>ADC (Avg Daily Consumption):</b> total quantity sold in the last 30 days ÷ 30.</Bullet>
-                <Bullet><b>Predicted 14-day demand:</b> ADC × 14 × seasonal multiplier (based on the same month's sales in past years).</Bullet>
-                <Bullet><b>Safety stock:</b> 20% of the predicted 14-day demand — a buffer for unexpected spikes.</Bullet>
-                <Bullet><b>Needs Reorder:</b> triggered when current stock falls below the predicted demand <i>or</i> below the configured minimum stock level.</Bullet>
-                <Bullet><b>Suggested Reorder Quantity:</b> enough to bring stock up to (predicted demand + safety stock), or to the minimum stock level — whichever is higher.</Bullet>
-                <Bullet><b>Days Remaining:</b> current stock ÷ ADC.</Bullet>
+                <Bullet><b>ADC (Avg Daily Consumption):</b> Weighted Moving Average of the last 3 weeks — last week counts 3×, week 2 counts 2×, week 3 counts 1×. Recent trends are picked up faster.</Bullet>
+                <Bullet><b>Slow movers (🐢):</b> Items with no sales in the last 30 days but some in the last 60 fall back to a 60-day average so they stay visible.</Bullet>
+                <Bullet><b>Trend multiplier:</b> compares the last 14 days against the prior 16 days. 📈 above +10% boosts forecasts; 📉 below −10% reduces them. Clamped to 0.7×–1.5×.</Bullet>
+                <Bullet><b>Seasonal multiplier:</b> same calendar month's historic share of sales, clamped 0.5×–2×.</Bullet>
+                <Bullet><b>Forecast demand:</b> ADC × forecastDays × seasonal × trend, where forecastDays = max(14, leadTime × 2).</Bullet>
+                <Bullet><b>Reorder Point (ROP):</b> ADC × leadTime + safetyStock (20% of forecast). An item is flagged the moment effective stock drops to ROP — well before crisis.</Bullet>
+                <Bullet><b>Effective stock:</b> total stock minus any batches expiring within the lead-time window — they would be wasted before new stock arrives. ⚠️ icon flags items where this applies.</Bullet>
+                <Bullet><b>Suggested reorder:</b> ceil( max(forecast + safety, minStock) − effectiveStock ), minimum 1.</Bullet>
+                <Bullet><b>Lead time (per item):</b> configurable in the Edit Item dialog. Default 3 days.</Bullet>
               </div>
             </section>
 
