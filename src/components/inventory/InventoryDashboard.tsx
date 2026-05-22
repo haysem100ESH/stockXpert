@@ -322,6 +322,36 @@ export default function InventoryDashboard() {
         </Card>
       )}
 
+      {batchLowStock.length > 0 && (
+        <Card>
+          <CardHeader>
+            <CardTitle className="flex items-center space-x-2">
+              <AlertTriangle className="h-5 w-5 text-warning" />
+              <span>Low Stock Batches</span>
+            </CardTitle>
+            <CardDescription>{batchLowStock.length} batch{batchLowStock.length !== 1 ? 'es' : ''} reached the per-batch low-stock threshold set in Edit Item → Batches</CardDescription>
+          </CardHeader>
+          <CardContent>
+            <div className="grid gap-2">
+              {batchLowStock.map((b) => (
+                <div key={b.batch_id} className="flex items-center justify-between p-2 border rounded-lg">
+                  <div className="min-w-0">
+                    <p className="font-medium truncate">{b.name}</p>
+                    <p className="text-sm text-muted-foreground">
+                      {b.category} · Batch: <span className="font-mono">{b.batch_number || '—'}</span>
+                    </p>
+                  </div>
+                  <div className="text-right shrink-0">
+                    <Badge variant="secondary">{b.quantity} left</Badge>
+                    <p className="text-xs text-muted-foreground">Batch min: {b.min_stock_level}</p>
+                  </div>
+                </div>
+              ))}
+            </div>
+          </CardContent>
+        </Card>
+      )}
+
       {expiringBatches.length > 0 && (
         <Card>
           <CardHeader>
@@ -329,7 +359,10 @@ export default function InventoryDashboard() {
               <CalendarDays className="h-5 w-5 text-warning" />
               <span>Items Expiring Soon</span>
             </CardTitle>
-            <CardDescription>{expiringBatches.length} batch{expiringBatches.length !== 1 ? 'es' : ''} will expire within {thresholdDays} days</CardDescription>
+            <CardDescription>
+              {expiringBatches.length} batch{expiringBatches.length !== 1 ? 'es' : ''} within their alert window
+              {' '}(global default: {thresholdDays} days; some batches use a custom window).
+            </CardDescription>
           </CardHeader>
           <CardContent>
             <div className="grid gap-2">
@@ -347,6 +380,9 @@ export default function InventoryDashboard() {
                       <Badge variant="secondary">{b.quantity} in stock</Badge>
                       <p className="text-xs text-warning">
                         Expires: {new Date(b.expiry_date).toLocaleDateString()} ({daysLeft}d left)
+                      </p>
+                      <p className="text-[11px] text-muted-foreground">
+                        Alert: {b.alert_days}d {b.per_batch_alert ? '(batch override)' : '(global)'}
                       </p>
                     </div>
                   </div>
