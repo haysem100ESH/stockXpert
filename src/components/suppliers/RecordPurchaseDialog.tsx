@@ -94,8 +94,54 @@ export default function RecordPurchaseDialog({ open, onOpenChange, supplierId, s
       setItemType('full_pcs');
       setPaymentType('paid');
       setRecordInExpense(true);
+      setSelectedExisting(null);
+      setPickerSearch('');
     }
   }, [open, selectedBranch, userBranch]);
+
+  // Fetch owner's existing items (medicines catalog) for the picker
+  useEffect(() => {
+    if (!open) return;
+    (async () => {
+      let ownerId: string | null = null;
+      if (profile?.role === 'owner') ownerId = profile.id;
+      else if (profile?.role === 'staff' && profile.branch_id) {
+        const { data } = await supabase
+          .from('pharmacy_branches').select('pharmacy_owner_id').eq('id', profile.branch_id).single();
+        ownerId = (data as any)?.pharmacy_owner_id ?? null;
+      }
+      if (!ownerId) return;
+      const { data: ownerGroups } = await supabase
+        .from('owner_item_groups').select('group_id').eq('owner_id', ownerId);
+      const groupIds = (ownerGroups || []).map((g: any) => g.group_id);
+      if (groupIds.length === 0) { setExistingItems([]); return; }
+      const { data: members } = await supabase
+        .from('grouped_item_members').select('medicine_id').in('group_id', groupIds);
+      const ids = [...new Set((members || []).map((m: any) => m.medicine_id))];
+      if (ids.length === 0) { setExistingItems([]); return; }
+      const { data: meds } = await supabase
+        .from('medicines')
+        .select('id, name, generic_name, category, manufacturer, item_type, unit_label, units_per_pack, minimum_stock_level')
+        .in('id', ids)
+        .order('name')
+        .limit(2000);
+      setExistingItems((meds || []) as ExistingItem[]);
+    })();
+  }, [open, profile?.id, profile?.role, profile?.branch_id]);
+
+  const filteredExisting = useMemo(() => {
+    const q = pickerSearch.trim().toLowerCase();
+    if (!q) return existingItems.slice(0, 50);
+    return existingItems
+      .filter(it => it.name.toLowerCase().includes(q) || (it.generic_name || '').toLowerCase().includes(q))
+      .slice(0, 50);
+  }, [existingItems, pickerSearch]);
+
+  // When user picks an existing item, prefill the form's controlled fields.
+  useEffect(() => {
+    if (!selectedExisting) return;
+    setItemType((selectedExisting.item_type as 'full_pcs' | 'measurable') || 'full_pcs');
+  }, [selectedExisting]);
 
   const handleSubmit = async (e: React.FormEvent<HTMLFormElement>) => {
     e.preventDefault();
