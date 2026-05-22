@@ -49,22 +49,24 @@ interface ScoreUpdateParams {
 export async function updateCreditScore({
   customerId, currentScore, changeAmount, reason, notes, createdBy, branchId
 }: ScoreUpdateParams) {
-  // Always fetch the latest score from DB to avoid stale values
+  // Fetch latest score AND limit. We only touch max_credit_limit when the
+  // customer is in "auto" mode (stored value is NULL). Custom (>0) and
+  // unlimited (-1) overrides are preserved.
   const { data: freshCustomer } = await (supabase as any)
     .from('customers')
-    .select('credit_score')
+    .select('credit_score, max_credit_limit')
     .eq('id', customerId)
     .single();
 
   const actualCurrentScore = freshCustomer?.credit_score ?? currentScore;
   const newScore = clampScore(actualCurrentScore + changeAmount);
+  const isAutoMode = freshCustomer?.max_credit_limit === null || freshCustomer?.max_credit_limit === undefined;
   const newLimit = getCreditLimit(newScore);
 
-  // Update customer score and limit
-  await (supabase as any).from('customers').update({
-    credit_score: newScore,
-    max_credit_limit: newLimit,
-  }).eq('id', customerId);
+  const update: Record<string, any> = { credit_score: newScore };
+  if (isAutoMode) update.max_credit_limit = newLimit;
+
+  await (supabase as any).from('customers').update(update).eq('id', customerId);
 
   // Log the change
   await (supabase as any).from('credit_logs').insert({
@@ -78,7 +80,7 @@ export async function updateCreditScore({
     branch_id: branchId || null,
   });
 
-  return { newScore, newLimit };
+  return { newScore, newLimit: isAutoMode ? newLimit : freshCustomer.max_credit_limit };
 }
 
 // Scoring rules applied after a payment event
