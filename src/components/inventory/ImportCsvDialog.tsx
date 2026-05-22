@@ -1439,7 +1439,7 @@ export default function ImportCsvDialog({ open, onOpenChange, onImported }: Impo
                     {parsedRows.slice(0, 50).map(r => {
                       const batchCount = 1 + r.extra_batches.length;
                       return (
-                        <>
+                        <React.Fragment key={`g-${r.rowIndex}`}>
                           <tr key={`p-${r.rowIndex}`} className="border-t bg-muted/40">
                             <td className="p-2 font-medium">{r.rowIndex}</td>
                             <td className="p-2">
