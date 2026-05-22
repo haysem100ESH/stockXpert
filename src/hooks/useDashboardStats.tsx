@@ -125,19 +125,21 @@ async function fetchDashboardOverview({ selectedBranch, ownerBranchIds, dateFilt
     salesWithItemsQuery = salesWithItemsQuery.eq('branch_id', selectedBranch);
     custQuery = custQuery.eq('branch_id', selectedBranch);
     salesDebtQuery = salesDebtQuery.eq('branch_id', selectedBranch);
+    batchesQuery = batchesQuery.eq('branch_id', selectedBranch);
   } else if (ownerBranchIds.length > 0) {
     branchItemsQuery = branchItemsQuery.in('branch_id', ownerBranchIds);
     salesWithItemsQuery = salesWithItemsQuery.in('branch_id', ownerBranchIds);
     custQuery = custQuery.in('branch_id', ownerBranchIds);
     salesDebtQuery = salesDebtQuery.in('branch_id', ownerBranchIds);
+    batchesQuery = batchesQuery.in('branch_id', ownerBranchIds);
   }
 
   // Fire all queries in parallel.
   const codesQuery = (supabase as any).from('medicine_codes')
     .select('id, code, label')
     .range(0, 9999);
-  const [branchItemsRes, salesWithItemsRes, custRes, salesDebtRes, codesRes] = await Promise.all([
-    branchItemsQuery, salesWithItemsQuery, custQuery, salesDebtQuery, codesQuery,
+  const [branchItemsRes, salesWithItemsRes, custRes, salesDebtRes, codesRes, batchesRes] = await Promise.all([
+    branchItemsQuery, salesWithItemsQuery, custQuery, salesDebtQuery, codesQuery, batchesQuery,
   ]);
 
   const branchItemsData = branchItemsRes.data || [];
