@@ -109,7 +109,9 @@ export default function StockMovementForm({ open, onOpenChange, onSuccess }: Pro
     ? medicines.filter(m => m.branch_id === fromBranchId)
     : medicines;
 
-  const selectedMedicine = medicines.find(m => m.id === medicineId);
+  const selectedMedicine = medicines.find(m =>
+    m.id === medicineId && (!fromBranchId || m.branch_id === fromBranchId)
+  );
 
   const summary = useMemo(() => {
     if (!selectedMedicine || !quantity || Number(quantity) <= 0) return null;
@@ -117,7 +119,7 @@ export default function StockMovementForm({ open, onOpenChange, onSuccess }: Pro
     const fromBranch = branches.find(b => b.id === fromBranchId);
     const toBranch = branches.find(b => b.id === toBranchId);
     const destMed = medicines.find(m =>
-      m.name === selectedMedicine.name && m.id !== selectedMedicine.id && m.branch_id === toBranchId
+      m.id === selectedMedicine.id && m.branch_id === toBranchId
     );
 
     return {
@@ -201,7 +203,7 @@ export default function StockMovementForm({ open, onOpenChange, onSuccess }: Pro
 
       if (toBranchId && (movementType === 'TRANSFER' || movementType === 'SUPPLY')) {
         const destMed = medicines.find(m =>
-          m.name === selectedMedicine?.name && m.id !== selectedMedicine?.id && m.branch_id === toBranchId
+          m.id === selectedMedicine?.id && m.branch_id === toBranchId
         );
 
         if (destMed) {
@@ -313,7 +315,7 @@ export default function StockMovementForm({ open, onOpenChange, onSuccess }: Pro
               {(movementType === 'TRANSFER' || movementType === 'RETURN') && (
                 <div>
                   <Label>From Branch *</Label>
-                  <Select value={fromBranchId} onValueChange={setFromBranchId}>
+                  <Select value={fromBranchId} onValueChange={(value) => { setFromBranchId(value); setMedicineId(''); setShowConfirmation(false); }}>
                     <SelectTrigger><SelectValue placeholder="Select source" /></SelectTrigger>
                     <SelectContent>
                       {branches.map(b => <SelectItem key={b.id} value={b.id}>{b.name} ({b.type})</SelectItem>)}
