@@ -14,6 +14,7 @@ import { useQuery, useQueryClient } from '@tanstack/react-query';
 import { supabase } from '@/lib/db';
 import { useBranchContext } from './useBranchContext';
 import { getCreditLimit } from './useCreditScore';
+import { resolveCreditLimit } from '@/lib/creditLimit';
 import { useAuth } from './useAuth';
 import { useOwnerBranchIds } from './useOwnerBranchIds';
 
@@ -28,6 +29,9 @@ export interface CustomerRow {
   totalDebt: number;
   lastPurchaseDate?: string;
   credit_score: number;
+  /** Raw stored value (null=auto, -1=unlimited, >0=custom) */
+  max_credit_limit_raw: number | null;
+  /** Resolved effective limit; Infinity for unlimited */
   max_credit_limit: number;
 }
 
