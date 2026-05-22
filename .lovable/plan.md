@@ -1,147 +1,88 @@
-## Overview
+# Fix: Transfer fulfillment not moving stock
 
-Two major restructures across the pharmacy system:
-1. **Unit-Based Packaging** — replace fragmented packaging columns with a clean `medicine_packaging` table (unit → strip → pack hierarchy), always store stock as total units.
-2. **Medicine Codes** — owner-defined grouping codes to unify variants of the same drug.
+## Diagnosis
 
-This is a high-risk migration touching: `medicines`, `branch_items`, every inventory dialog, POS/sales flow, stock alerts, smart inventory, exports, transfers, and reports.
+The edge function `manage-transfer-request` (action `fulfill`) issues many separate `supabase.from(...).update(...)` / `insert(...)` calls **without ever checking the returned `error`**. It then unconditionally flips `transfer_requests.status` to `fulfilled`.
 
----
+Because:
 
-## Phase 1 — Database migrations
+- Both `inventory_batches` and `branch_items` stay unchanged after a transfer (you confirmed this), and
+- `transfer_requests` + `transfer_request_items` *do* update,
 
-### 1a. Create `medicine_packaging`
-```sql
-CREATE TABLE medicine_packaging (
-  id uuid PK,
-  medicine_id uuid FK medicines(id) ON DELETE CASCADE UNIQUE,
-  unit_name text NOT NULL DEFAULT 'tablet',
-  strip_enabled boolean NOT NULL DEFAULT false,
-  units_per_strip integer,
-  strip_name text,
-  pack_enabled boolean NOT NULL DEFAULT false,
-  strips_per_pack integer,
-  pack_name text,
-  unit_selling_price numeric,
-  strip_selling_price numeric,
-  pack_selling_price numeric,
-  CHECK (pack_enabled = false OR strip_enabled = true),
-  CHECK (NOT strip_enabled OR units_per_strip > 0),
-  CHECK (NOT pack_enabled OR strips_per_pack > 0)
-);
-```
-RLS: owner via `medicines.owner_id` join; staff read-only via branch.
+…the writes against the stock tables are almost certainly being **silently rejected** by a Postgres trigger / check constraint (your project memory says: *"Direct stock quantity editing is forbidden; must use Adjust Stock"* — that rule is typically enforced by a `BEFORE UPDATE` trigger on `branch_items`, and a related guard often exists on `inventory_batches`). The service role bypasses RLS but **does not bypass triggers**. The errors are swallowed because the code never reads `.error`.
 
-### 1b. Backfill from existing medicines
-For every medicine, insert one `medicine_packaging` row:
-- `unit_name` ← `unit_label` || 'tablet'
-- If `packaging_mode='with_strip'` AND `units_per_strip>0`: `strip_enabled=true`, copy `units_per_strip`, `strips_per_pack` (if >0 set `pack_enabled=true`)
-- Prices: `unit_selling_price ← sub_unit_price` (if exists) else null; `strip_selling_price ← unit_price`
+## Fix strategy
 
-### 1c. Normalize stock to total units in `branch_items`
-Convert existing `quantity` to total units where strip-mode currently stored strip-count (audit current data first via a query). Same for `inventory_batches.remaining_quantity`.
+Replace the JS-side stock manipulation with a single `SECURITY DEFINER` Postgres function executed in one transaction. Benefits:
 
-### 1d. Drop legacy columns from `medicines`
-Drop: `units_per_pack, open_pack_units, unit_label, strips_per_pack, units_per_strip, packaging_mode, sub_units_per_unit, main_unit_name, sub_unit_name, unit_price, sub_unit_price, item_type` (after code migration, in a follow-up migration to avoid breaking deploys).
+1. Atomic — either everything moves (batches + branch_items + expenses) or nothing does.
+2. `SECURITY DEFINER` runs as the function owner, and we can `SET LOCAL "app.transfer_context" = 'true'` (or use `pg_trigger_depth()` / a session flag the guard trigger already checks, if it exists) to legitimately bypass the "no direct quantity edit" guard for this trusted operation.
+3. Any failure raises an exception → the edge function returns 500 with the real Postgres message instead of pretending success.
 
-### 1e. Create `medicine_codes`
-```sql
-CREATE TABLE medicine_codes (
-  id uuid PK,
-  owner_id uuid FK profiles(id),
-  code text NOT NULL,
-  label text NOT NULL,
-  notes text,
-  UNIQUE (owner_id, code)
-);
-ALTER TABLE medicines ADD COLUMN medicine_code_id uuid REFERENCES medicine_codes(id) ON DELETE SET NULL;
-```
+## Changes
 
----
+### 1. New migration: `fulfill_transfer_request(p_request_id uuid, p_user_id uuid)`
 
-## Phase 2 — Shared utilities (`src/lib/packaging.ts`)
+A PL/pgSQL function that:
 
-```ts
-export type Packaging = {
-  unit_name: string;
-  strip_enabled: boolean; units_per_strip?: number; strip_name?: string;
-  pack_enabled: boolean; strips_per_pack?: number; pack_name?: string;
-  unit_selling_price?: number; strip_selling_price?: number; pack_selling_price?: number;
-};
-export function convertToUnits(qty: number, level: 'unit'|'strip'|'pack', p: Packaging): number;
-export function formatStock(totalUnits: number, p: Packaging): string;
-export function packagingSummary(p: Packaging): string; // "1 pack = 10 strips = 100 tablets"
-```
+- Locks the `transfer_requests` row (`FOR UPDATE`), validates status = `approved`.
+- Resolves `requesting_location_id` / `source_location_id` → branch ids.
+- Loops over `transfer_request_items`:
+  - Looks up source `branch_items` row, asserts sufficient quantity.
+  - FIFO-deducts from `inventory_batches` (`branch_item_id = source_bi.id`, ordered by expiry, then created_at), with legacy fallback by `(branch_id, medicine_id)` and backfills `branch_item_id`.
+  - Computes weighted average purchase price for the moved qty.
+  - Upserts destination `branch_items` row (creates if missing).
+  - Applies destination batching per item flags: `target_batch_id`, `create_new_batch` (`new_batch_number`, `new_batch_expiry`, `new_batch_purchase_price`), else clones consumed source batches.
+  - Recomputes `branch_items.quantity = SUM(remaining_quantity)` for both source and destination (or directly adjusts when no batches exist).
+  - Inserts paired `expenses` rows (`-totalCost` on source, `+totalCost` on destination, category `Stock Transfer`).
+- Sets `transfer_requests.status = 'fulfilled'`.
+- Wraps the body in `BEGIN ... EXCEPTION WHEN OTHERS THEN RAISE; END;` (no swallowing).
+- Marks the session with `PERFORM set_config('app.transfer_context', 'on', true);` at the top so any guard trigger on `branch_items` / `inventory_batches` can whitelist this path. (If no such trigger exists, the SET is a harmless no-op.)
+- `GRANT EXECUTE ... TO authenticated, service_role`.
 
-Add `usePackaging(medicineId)` hook + bulk variant for lists.
+### 2. Update `supabase/functions/manage-transfer-request/index.ts`
 
----
+For the `fulfill` action only:
 
-## Phase 3 — Add/Edit Medicine forms
+- Remove the long manual block (lines ~116–429 of stock work).
+- Replace with:
+  ```ts
+  const { error } = await admin.rpc('fulfill_transfer_request', {
+    p_request_id: requestId,
+    p_user_id: user.id,
+  });
+  if (error) {
+    return new Response(JSON.stringify({ error: error.message }), {
+      status: 500, headers: { ...corsHeaders, 'Content-Type': 'application/json' },
+    });
+  }
+  ```
+- Keep `approve` / `reject` paths as-is, but add `.error` checks on their `update` calls and return 500 on failure (so the UI stops saying "success" when nothing happened).
 
-Files: `AddMedicineDialog.tsx`, `EditMedicineDialog.tsx`, `CreateCustomItemDialog.tsx`, `EditBranchItemDialog.tsx`.
+### 3. Trigger discovery step (one read-only migration first)
 
-Replace existing packaging UI with the new 3-step section:
-- Unit (always) — `unit_name`, `unit_selling_price`
-- Strip toggle — `strip_name`, `units_per_strip`, `strip_selling_price` (auto-calc placeholder)
-- Pack toggle (gated on strip) — `pack_name`, `strips_per_pack`, `pack_selling_price`
-- Live summary line
+Before writing the RPC, the first migration is a small **diagnostic**: it queries `pg_trigger` / `pg_policies` on `branch_items` and `inventory_batches` and `RAISE NOTICE`s the names + definitions. Reviewing this lets us decide whether to:
 
-Add **Medicine Code** searchable combobox with inline "+ Create new code" popover.
+- (a) call an existing whitelist mechanism (e.g. setting `app.bypass_stock_guard`), or
+- (b) modify the guard trigger to accept `current_setting('app.transfer_context', true) = 'on'`.
 
-Save flow: upsert `medicine_packaging` for the medicine, convert any quantity entered at strip/pack level to units before writing `branch_items.quantity`.
+We'll commit the guard-aware version of the RPC after that one-shot inspection.
 
----
+### 4. Frontend
 
-## Phase 4 — POS / Sell screen
+No changes required — `TransferRequestList` already calls `manage-transfer-request` and shows the returned error toast. Errors will now actually surface.
 
-Files: `AddToCartDialog.tsx`, `CartSlider.tsx`, `SalesManagement.tsx`, `useSalesInventory.tsx`, sale-confirmation logic, `lib/batchInventory.ts`.
+## Files touched
 
-- Segmented control showing only enabled levels: [Unit] / [Unit|Strip] / [Unit|Strip|Pack]
-- Quantity label updates with unit_name/strip_name/pack_name
-- Price auto-fills from chosen level
-- On confirm: `convertToUnits()` then deduct via existing FIFO
+- `supabase/migrations/<ts>_inspect_stock_guards.sql` (notice-only, single transaction)
+- `supabase/migrations/<ts>_fulfill_transfer_request.sql` (the RPC, possibly accompanied by an `ALTER FUNCTION` on the existing guard trigger to honor `app.transfer_context`)
+- `supabase/functions/manage-transfer-request/index.ts` (slim down fulfill, add error checks)
 
----
+## Verification
 
-## Phase 5 — Display everywhere
+After deploy, run a real transfer and confirm in DB:
 
-Use `formatStock()` in:
-- `StaffInventoryView`, `StaffInventoryWithActions`, `GlobalInventoryView`, `InventoryDashboard`
-- `LowStockItemsTable`, `ExpiredMedicinesTable`, `ExpiringMedicinesAlert`
-- `BatchBreakdownDialog`, `BatchAnalytics`, smart inventory tables
-- Exports (`universal-export-styling`), Telegram reports
-
-Update `useBranchInventory.tsx` to fetch `medicine_packaging` join instead of legacy columns.
-
----
-
-## Phase 6 — Medicine Codes management
-
-New file `src/components/inventory/MedicineCodes.tsx` + route under inventory tabs:
-- Table: code, label, # linked medicines, total combined stock (formatted)
-- Expand row → list linked medicines with per-item stock
-- Create / edit / delete dialogs (delete sets `medicine_code_id` to null on linked medicines via FK)
-
-Add hook `useMedicineCodes()`.
-
----
-
-## Phase 7 — Cleanup
-
-- Remove dead code referencing dropped columns (`itemTypes.ts`, `medicineDisplay.ts`, `OpenPackAdjustmentDialog`, etc.)
-- Update TS types after regeneration
-- Sanity sweep of grep for `units_per_pack|packaging_mode|sub_unit_*|item_type` to catch stragglers
-
----
-
-## Risks / clarifications needed before I execute
-
-1. **Existing data**: I cannot tell from here whether your current `branch_items.quantity` is stored in units or in strips for `with_strip` items. The original memory says strips are deducted FIFO via `inventory_batches`, but the unit basis for the running quantity is ambiguous. I need a one-time audit query before the backfill, otherwise stock counts will silently be wrong by a factor of `units_per_strip`.
-2. **Dropping columns** is destructive and irreversible. I'll do it in a **second migration** after the new code ships and you confirm the UI works, rather than in the same migration.
-3. **`item_type`** is used by smart-inventory + AI assistant for "countable vs measurable" logic (per memory). Removing it means measurable items (ml, g) lose their distinction. I'll fold this into `unit_name` (free text) — confirm that's acceptable, otherwise keep `item_type`.
-4. **Sub-unit pricing**: legacy schema has `unit_price` + `sub_unit_price`. New schema has unit/strip/pack prices. The mapping will be: `unit_selling_price ← sub_unit_price`, `strip_selling_price ← unit_price`. Confirm.
-5. **Branch-level pricing override**: `branch_items.selling_price` currently overrides medicine price. I'll keep that as the unit-level override and not touch it.
-6. Estimated scope: ~25–30 file edits, 2 migrations, ~600 LOC new utilities + medicine codes UI. Plan to do it in sequenced commits matching the phases above.
-
-If you approve, I'll start with the migrations + utility, then forms, then POS, then displays, then medicine codes.
+1. `inventory_batches.remaining_quantity` decreases on source and an equivalent batch appears/grows on destination.
+2. `branch_items.quantity` on both branches reflects the new `SUM(remaining_quantity)`.
+3. Two `expenses` rows (`-x`, `+x`) appear under category `Stock Transfer`.
+4. Forcing a failure (e.g. transfer more than available) returns a visible error toast and **does not** flip `status` to `fulfilled`.

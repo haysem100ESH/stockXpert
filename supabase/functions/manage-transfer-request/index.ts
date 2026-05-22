@@ -3,37 +3,33 @@ import { createClient } from 'https://esm.sh/@supabase/supabase-js@2.56.0';
 
 const corsHeaders = {
   'Access-Control-Allow-Origin': '*',
-  'Access-Control-Allow-Headers': 'authorization, x-client-info, apikey, content-type, x-supabase-client-platform, x-supabase-client-platform-version, x-supabase-client-runtime, x-supabase-client-runtime-version',
+  'Access-Control-Allow-Headers':
+    'authorization, x-client-info, apikey, content-type, x-supabase-client-platform, x-supabase-client-platform-version, x-supabase-client-runtime, x-supabase-client-runtime-version',
 };
 
+const json = (body: unknown, status = 200) =>
+  new Response(JSON.stringify(body), {
+    status,
+    headers: { ...corsHeaders, 'Content-Type': 'application/json' },
+  });
+
 serve(async (req: Request): Promise<Response> => {
-  if (req.method === 'OPTIONS') {
-    return new Response(null, { headers: corsHeaders });
-  }
+  if (req.method === 'OPTIONS') return new Response(null, { headers: corsHeaders });
 
   try {
     const supabaseUrl = Deno.env.get('SUPABASE_URL')!;
     const anonKey = Deno.env.get('SUPABASE_ANON_KEY')!;
     const serviceRoleKey = Deno.env.get('SUPABASE_SERVICE_ROLE_KEY')!;
 
-    // Auth check
     const authHeader = req.headers.get('Authorization');
-    if (!authHeader) {
-      return new Response(JSON.stringify({ error: 'Unauthorized' }), {
-        status: 401, headers: { ...corsHeaders, 'Content-Type': 'application/json' },
-      });
-    }
+    if (!authHeader) return json({ error: 'Unauthorized' }, 401);
 
     const userClient = createClient(supabaseUrl, anonKey, {
       global: { headers: { Authorization: authHeader } },
       auth: { persistSession: false, autoRefreshToken: false },
     });
     const { data: { user }, error: userError } = await userClient.auth.getUser();
-    if (userError || !user) {
-      return new Response(JSON.stringify({ error: 'Unauthorized' }), {
-        status: 401, headers: { ...corsHeaders, 'Content-Type': 'application/json' },
-      });
-    }
+    if (userError || !user) return json({ error: 'Unauthorized' }, 401);
 
     const admin = createClient(supabaseUrl, serviceRoleKey, {
       auth: { persistSession: false, autoRefreshToken: false },
@@ -41,404 +37,77 @@ serve(async (req: Request): Promise<Response> => {
 
     const body = await req.json();
     const { action, requestId } = body;
-
     if (!requestId || !['approve', 'reject', 'fulfill'].includes(action)) {
-      return new Response(JSON.stringify({ error: 'Invalid action or requestId' }), {
-        status: 400, headers: { ...corsHeaders, 'Content-Type': 'application/json' },
-      });
+      return json({ error: 'Invalid action or requestId' }, 400);
     }
 
-    // Fetch the request
     const { data: trReq, error: trErr } = await admin
-      .from('transfer_requests')
-      .select('*')
-      .eq('id', requestId)
-      .single();
-    if (trErr || !trReq) {
-      return new Response(JSON.stringify({ error: 'Request not found' }), {
-        status: 404, headers: { ...corsHeaders, 'Content-Type': 'application/json' },
-      });
-    }
+      .from('transfer_requests').select('*').eq('id', requestId).single();
+    if (trErr || !trReq) return json({ error: 'Request not found' }, 404);
 
-    // Verify user is owner
-    const { data: profile } = await admin.from('profiles').select('id, role').eq('id', user.id).single();
+    const { data: profile } = await admin
+      .from('profiles').select('id, role').eq('id', user.id).single();
     if (!profile || profile.role !== 'owner') {
-      return new Response(JSON.stringify({ error: 'Only owners can manage transfer requests' }), {
-        status: 403, headers: { ...corsHeaders, 'Content-Type': 'application/json' },
-      });
+      return json({ error: 'Only owners can manage transfer requests' }, 403);
     }
 
-    // APPROVE
+    // -------- APPROVE --------
     if (action === 'approve') {
-      if (trReq.status !== 'pending') {
-        return new Response(JSON.stringify({ error: 'Can only approve pending requests' }), {
-          status: 400, headers: { ...corsHeaders, 'Content-Type': 'application/json' },
-        });
+      if (trReq.status !== 'pending') return json({ error: 'Can only approve pending requests' }, 400);
+
+      const { error: updErr } = await admin
+        .from('transfer_requests')
+        .update({ status: 'approved', approved_by: user.id, updated_at: new Date().toISOString() })
+        .eq('id', requestId);
+      if (updErr) return json({ error: updErr.message }, 500);
+
+      const { data: items, error: itemsErr } = await admin
+        .from('transfer_request_items').select('*').eq('request_id', requestId);
+      if (itemsErr) return json({ error: itemsErr.message }, 500);
+
+      for (const item of items || []) {
+        const { error: itErr } = await admin
+          .from('transfer_request_items')
+          .update({ approved_quantity: item.requested_quantity })
+          .eq('id', item.id);
+        if (itErr) return json({ error: itErr.message }, 500);
       }
 
-      await admin.from('transfer_requests').update({
-        status: 'approved', approved_by: user.id, updated_at: new Date().toISOString(),
-      }).eq('id', requestId);
-
-      // Set approved_quantity = requested_quantity for all items
-      const { data: items } = await admin.from('transfer_request_items').select('*').eq('request_id', requestId);
-      if (items) {
-        for (const item of items) {
-          await admin.from('transfer_request_items').update({
-            approved_quantity: item.requested_quantity,
-          }).eq('id', item.id);
-        }
-      }
-
-      return new Response(JSON.stringify({ success: true, message: 'Request approved' }), {
-        status: 200, headers: { ...corsHeaders, 'Content-Type': 'application/json' },
-      });
+      return json({ success: true, message: 'Request approved' });
     }
 
-    // REJECT
+    // -------- REJECT --------
     if (action === 'reject') {
-      if (trReq.status !== 'pending') {
-        return new Response(JSON.stringify({ error: 'Can only reject pending requests' }), {
-          status: 400, headers: { ...corsHeaders, 'Content-Type': 'application/json' },
-        });
-      }
+      if (trReq.status !== 'pending') return json({ error: 'Can only reject pending requests' }, 400);
 
-      await admin.from('transfer_requests').update({
-        status: 'rejected', approved_by: user.id, updated_at: new Date().toISOString(),
-      }).eq('id', requestId);
+      const { error: updErr } = await admin
+        .from('transfer_requests')
+        .update({ status: 'rejected', approved_by: user.id, updated_at: new Date().toISOString() })
+        .eq('id', requestId);
+      if (updErr) return json({ error: updErr.message }, 500);
 
-      return new Response(JSON.stringify({ success: true, message: 'Request rejected' }), {
-        status: 200, headers: { ...corsHeaders, 'Content-Type': 'application/json' },
-      });
+      return json({ success: true, message: 'Request rejected' });
     }
 
-    // FULFILL
+    // -------- FULFILL (atomic via RPC) --------
     if (action === 'fulfill') {
       if (trReq.status !== 'approved') {
-        return new Response(JSON.stringify({ error: 'Can only fulfill approved requests' }), {
-          status: 400, headers: { ...corsHeaders, 'Content-Type': 'application/json' },
-        });
+        return json({ error: 'Can only fulfill approved requests' }, 400);
       }
 
-      // Resolve location IDs to branch IDs
-      const locIds = [trReq.requesting_location_id, trReq.source_location_id].filter(Boolean);
-      const { data: locs } = await admin.from('locations').select('id, branch_id').in('id', locIds);
-      const locToBranch: Record<string, string> = {};
-      (locs || []).forEach((l: any) => { if (l.branch_id) locToBranch[l.id] = l.branch_id; });
-
-      const destBranchId = locToBranch[trReq.requesting_location_id];
-      const sourceBranchId = trReq.source_location_id ? locToBranch[trReq.source_location_id] : null;
-
-      if (!destBranchId) {
-        return new Response(JSON.stringify({ error: 'Could not resolve destination branch' }), {
-          status: 400, headers: { ...corsHeaders, 'Content-Type': 'application/json' },
-        });
-      }
-      if (!sourceBranchId) {
-        return new Response(JSON.stringify({ error: 'Could not resolve source branch' }), {
-          status: 400, headers: { ...corsHeaders, 'Content-Type': 'application/json' },
-        });
-      }
-
-      // Resolve branch names for expense descriptions
-      const { data: branches } = await admin.from('pharmacy_branches').select('id, name, pharmacy_owner_id').in('id', [destBranchId, sourceBranchId]);
-      const branchMap: Record<string, any> = {};
-      (branches || []).forEach((b: any) => { branchMap[b.id] = b; });
-
-      const destName = branchMap[destBranchId]?.name || 'Unknown';
-      const sourceName = branchMap[sourceBranchId]?.name || 'Unknown';
-      const ownerId = branchMap[destBranchId]?.pharmacy_owner_id || branchMap[sourceBranchId]?.pharmacy_owner_id;
-
-      // Fetch approved items (including target mapping)
-      const { data: items, error: itemsErr } = await admin
-        .from('transfer_request_items')
-        .select('id, medicine_id, approved_quantity, requested_quantity, target_medicine_id, target_batch_id, create_new_batch, new_batch_number, new_batch_expiry, new_batch_purchase_price')
-        .eq('request_id', requestId);
-      if (itemsErr || !items || items.length === 0) {
-        return new Response(JSON.stringify({ error: 'No items to fulfill' }), {
-          status: 400, headers: { ...corsHeaders, 'Content-Type': 'application/json' },
-        });
-      }
-
-      // Helper: sync branch_items.quantity = SUM(remaining_quantity) of its batches
-      const syncBranchItemQty = async (branchItemId: string) => {
-        const { data: bs } = await admin
-          .from('inventory_batches')
-          .select('remaining_quantity')
-          .eq('branch_item_id', branchItemId)
-          .gt('remaining_quantity', 0);
-        const total = (bs || []).reduce((s: number, b: any) => s + Number(b.remaining_quantity), 0);
-        const rounded = Math.round(total);
-        const qty = Math.abs(total - rounded) < 0.001 ? rounded : Number(total.toFixed(4));
-        await admin
-          .from('branch_items')
-          .update({ quantity: qty, updated_at: new Date().toISOString() })
-          .eq('id', branchItemId);
-      };
-
-      // Process each item
-      for (const item of items) {
-        const qty = Number(item.approved_quantity || item.requested_quantity);
-        if (qty <= 0) continue;
-
-        // --- Source: locate branch_item for (sourceBranchId, source medicine_id)
-        const { data: sourceBI } = await admin
-          .from('branch_items')
-          .select('id, quantity, selling_price, purchase_price')
-          .eq('branch_id', sourceBranchId)
-          .eq('medicine_id', item.medicine_id)
-          .maybeSingle();
-
-        if (!sourceBI) {
-          return new Response(JSON.stringify({ error: `Source branch does not stock this item` }), {
-            status: 400, headers: { ...corsHeaders, 'Content-Type': 'application/json' },
-          });
-        }
-        if (Number(sourceBI.quantity || 0) < qty) {
-          return new Response(JSON.stringify({ error: `Insufficient stock in source branch` }), {
-            status: 400, headers: { ...corsHeaders, 'Content-Type': 'application/json' },
-          });
-        }
-
-        const { data: sourceMed } = await admin
-          .from('medicines')
-          .select('id, name, unit_label')
-          .eq('id', item.medicine_id)
-          .single();
-        if (!sourceMed) continue;
-
-        // --- FIFO deduct from source batches (look up by branch_item_id OR by branch+medicine for legacy rows)
-        const { data: batchesByItem } = await admin
-          .from('inventory_batches')
-          .select('id, remaining_quantity, purchase_price, selling_price, expiry_date, batch_number, branch_item_id')
-          .eq('branch_item_id', sourceBI.id)
-          .gt('remaining_quantity', 0)
-          .order('expiry_date', { ascending: true, nullsFirst: false })
-          .order('created_at', { ascending: true });
-
-        let batches = batchesByItem || [];
-        if (batches.length === 0) {
-          // Fallback: legacy batches with null branch_item_id
-          const { data: legacyBatches } = await admin
-            .from('inventory_batches')
-            .select('id, remaining_quantity, purchase_price, selling_price, expiry_date, batch_number, branch_item_id')
-            .eq('branch_id', sourceBranchId)
-            .eq('medicine_id', item.medicine_id)
-            .gt('remaining_quantity', 0)
-            .order('expiry_date', { ascending: true, nullsFirst: false })
-            .order('created_at', { ascending: true });
-          batches = legacyBatches || [];
-        }
-
-        let remaining = qty;
-        let totalCost = 0;
-        const consumed: Array<{ qty: number; pp: number; sp: number; expiry: string | null; batch_number: string | null }> = [];
-
-        for (const b of batches) {
-          if (remaining <= 0) break;
-          const br = Number(b.remaining_quantity);
-          const take = Math.min(remaining, br);
-          const newRem = Math.max(0, br - take);
-          const patch: any = { remaining_quantity: newRem, updated_at: new Date().toISOString() };
-          // Backfill branch_item_id link so future syncs work
-          if (!b.branch_item_id) patch.branch_item_id = sourceBI.id;
-          await admin
-            .from('inventory_batches')
-            .update(patch)
-            .eq('id', b.id);
-          consumed.push({
-            qty: take,
-            pp: Number(b.purchase_price || 0),
-            sp: Number(b.selling_price || sourceBI.selling_price || 0),
-            expiry: b.expiry_date,
-            batch_number: b.batch_number,
-          });
-          totalCost += take * Number(b.purchase_price || 0);
-          remaining -= take;
-        }
-
-        const hadSourceBatches = batches.length > 0 && remaining < qty;
-
-        if (hadSourceBatches) {
-          // Sync from batches (source of truth when batches exist)
-          await syncBranchItemQty(sourceBI.id);
-        } else {
-          // No batches existed at source — directly decrement branch_items.quantity
-          const newQty = Math.max(0, Number(sourceBI.quantity || 0) - qty);
-          await admin
-            .from('branch_items')
-            .update({ quantity: newQty, updated_at: new Date().toISOString() })
-            .eq('id', sourceBI.id);
-          totalCost = qty * Number(sourceBI.purchase_price || 0);
-        }
-
-        const avgPurchasePrice = qty > 0 ? totalCost / qty : Number(sourceBI.purchase_price || 0);
-
-        // --- Destination: use mapped target medicine if provided
-        const targetMedicineId: string = (item as any).target_medicine_id || item.medicine_id;
-
-        const { data: existingDestBI } = await admin
-          .from('branch_items')
-          .select('id, quantity, selling_price, purchase_price')
-          .eq('branch_id', destBranchId)
-          .eq('medicine_id', targetMedicineId)
-          .maybeSingle();
-
-        let destBranchItemId: string;
-        let destCurrentQty = 0;
-        if (existingDestBI) {
-          destBranchItemId = existingDestBI.id;
-          destCurrentQty = Number(existingDestBI.quantity || 0);
-        } else {
-          const { data: newBI, error: biErr } = await admin
-            .from('branch_items')
-            .insert({
-              owner_id: ownerId,
-              branch_id: destBranchId,
-              medicine_id: targetMedicineId,
-              selling_price: consumed[0]?.sp || Number(sourceBI.selling_price || 0),
-              purchase_price: avgPurchasePrice,
-              quantity: 0,
-              expiry_date: consumed[0]?.expiry || null,
-            })
-            .select('id')
-            .single();
-          if (biErr || !newBI) throw new Error(biErr?.message || 'Failed to create destination branch_item');
-          destBranchItemId = newBI.id;
-        }
-
-        // --- Destination batching: per requester's selection
-        const targetBatchId: string | null = (item as any).target_batch_id || null;
-        const createNewBatch: boolean = !!(item as any).create_new_batch;
-        let destBatchInserted = false;
-
-        if (!createNewBatch && targetBatchId) {
-          // Add ALL consumed quantity to the chosen existing batch
-          const { data: tb } = await admin
-            .from('inventory_batches')
-            .select('id, quantity, remaining_quantity')
-            .eq('id', targetBatchId)
-            .eq('branch_item_id', destBranchItemId)
-            .maybeSingle();
-          if (tb) {
-            await admin.from('inventory_batches').update({
-              quantity: Number(tb.quantity || 0) + qty,
-              remaining_quantity: Number(tb.remaining_quantity || 0) + qty,
-              updated_at: new Date().toISOString(),
-            }).eq('id', tb.id);
-            destBatchInserted = true;
-          } else {
-            await admin.from('inventory_batches').insert({
-              branch_id: destBranchId,
-              medicine_id: targetMedicineId,
-              branch_item_id: destBranchItemId,
-              batch_number: consumed[0]?.batch_number || null,
-              quantity: qty,
-              remaining_quantity: qty,
-              purchase_price: avgPurchasePrice,
-              selling_price: consumed[0]?.sp || Number(sourceBI.selling_price || 0),
-              expiry_date: consumed[0]?.expiry || null,
-              created_by: user.id,
-            });
-            destBatchInserted = true;
-          }
-        } else if (createNewBatch) {
-          const newBatchNumber = (item as any).new_batch_number || consumed[0]?.batch_number || null;
-          const newExpiry = (item as any).new_batch_expiry || consumed[0]?.expiry || null;
-          const newPP = (item as any).new_batch_purchase_price != null
-            ? Number((item as any).new_batch_purchase_price)
-            : avgPurchasePrice;
-          await admin.from('inventory_batches').insert({
-            branch_id: destBranchId,
-            medicine_id: targetMedicineId,
-            branch_item_id: destBranchItemId,
-            batch_number: newBatchNumber,
-            quantity: qty,
-            remaining_quantity: qty,
-            purchase_price: newPP,
-            selling_price: consumed[0]?.sp || Number(sourceBI.selling_price || 0),
-            expiry_date: newExpiry,
-            created_by: user.id,
-          });
-          destBatchInserted = true;
-        } else if (consumed.length > 0) {
-          // Legacy fallback: preserve source batches
-          for (const c of consumed) {
-            await admin.from('inventory_batches').insert({
-              branch_id: destBranchId,
-              medicine_id: targetMedicineId,
-              branch_item_id: destBranchItemId,
-              batch_number: c.batch_number,
-              quantity: c.qty,
-              remaining_quantity: c.qty,
-              purchase_price: c.pp,
-              selling_price: c.sp,
-              expiry_date: c.expiry,
-              created_by: user.id,
-            });
-          }
-          destBatchInserted = true;
-        }
-
-        // Check whether destination has any batches at all (to decide sync vs direct increment)
-        const { data: anyDestBatch } = await admin
-          .from('inventory_batches')
-          .select('id')
-          .eq('branch_item_id', destBranchItemId)
-          .gt('remaining_quantity', 0)
-          .limit(1);
-
-        if ((anyDestBatch || []).length > 0) {
-          await syncBranchItemQty(destBranchItemId);
-        } else {
-          // No batches at destination — directly increment quantity
-          await admin
-            .from('branch_items')
-            .update({
-              quantity: destCurrentQty + qty,
-              updated_at: new Date().toISOString(),
-            })
-            .eq('id', destBranchItemId);
-        }
-
-        // --- Expenses (paired transfer-out / transfer-in)
-        if (totalCost > 0) {
-          const unitLabel = (sourceMed.unit_label || 'unit').toUpperCase();
-          await admin.from('expenses').insert([
-            {
-              description: `Transfer Out: ${sourceMed.name} (${qty} ${unitLabel}) to ${destName}`,
-              amount: -totalCost,
-              branch_id: sourceBranchId,
-              category: 'Stock Transfer',
-              created_by: user.id,
-            },
-            {
-              description: `Transfer In: ${sourceMed.name} (${qty} ${unitLabel}) from ${sourceName}`,
-              amount: totalCost,
-              branch_id: destBranchId,
-              category: 'Stock Transfer',
-              created_by: user.id,
-            },
-          ]);
-        }
-      }
-
-      // Mark as fulfilled
-      await admin.from('transfer_requests').update({
-        status: 'fulfilled', updated_at: new Date().toISOString(),
-      }).eq('id', requestId);
-
-      return new Response(JSON.stringify({ success: true, message: 'Transfer fulfilled — stock and expenses updated' }), {
-        status: 200, headers: { ...corsHeaders, 'Content-Type': 'application/json' },
+      const { error: rpcErr } = await admin.rpc('fulfill_transfer_request', {
+        p_request_id: requestId,
+        p_user_id: user.id,
       });
+      if (rpcErr) {
+        return json({ error: rpcErr.message || 'Transfer fulfillment failed' }, 500);
+      }
+
+      return json({ success: true, message: 'Transfer fulfilled — stock and expenses updated' });
     }
 
-    return new Response(JSON.stringify({ error: 'Unknown action' }), {
-      status: 400, headers: { ...corsHeaders, 'Content-Type': 'application/json' },
-    });
+    return json({ error: 'Unknown action' }, 400);
   } catch (error: any) {
-    return new Response(JSON.stringify({ error: error.message || 'Unexpected error' }), {
-      status: 500, headers: { ...corsHeaders, 'Content-Type': 'application/json' },
-    });
+    return json({ error: error?.message || 'Unexpected error' }, 500);
   }
 });
