@@ -33,7 +33,17 @@ export default function RecordPurchaseDialog({ open, onOpenChange, supplierId, s
   const [recordInExpense, setRecordInExpense] = useState(true);
   const [paymentType, setPaymentType] = useState<'paid' | 'credit'>('paid');
   const [userRole, setUserRole] = useState<'owner' | 'staff' | null>(null);
-  
+
+  // Existing item picker
+  type ExistingItem = {
+    id: string; name: string; generic_name: string | null; category: string;
+    manufacturer: string | null; item_type: string | null; unit_label: string | null;
+    units_per_pack: number | null; minimum_stock_level: number | null;
+  };
+  const [existingItems, setExistingItems] = useState<ExistingItem[]>([]);
+  const [pickerSearch, setPickerSearch] = useState('');
+  const [selectedExisting, setSelectedExisting] = useState<ExistingItem | null>(null);
+
   const { toast } = useToast();
   const { profile } = useAuth();
   const { selectedBranch, userBranch, branchType } = useBranchContext();
