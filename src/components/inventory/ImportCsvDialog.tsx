@@ -932,6 +932,7 @@ export default function ImportCsvDialog({ open, onOpenChange, onImported }: Impo
         unit_price,
         sub_unit_price,
         active_ingredients: initialIngredients,
+        extra_batches: [],
       });
     }
 
