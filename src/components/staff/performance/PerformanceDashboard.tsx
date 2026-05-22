@@ -97,7 +97,10 @@ export default function PerformanceDashboard() {
 
       const salesMap: Record<string, number> = {};
       (salesRes.data || []).forEach((s: any) => {
-        salesMap[s.created_by] = (salesMap[s.created_by] || 0) + Number(s.total_amount || 0);
+        const sellerId = s.sold_by || s.created_by;
+        if (sellerId && staffIds.includes(sellerId)) {
+          salesMap[sellerId] = (salesMap[sellerId] || 0) + Number(s.total_amount || 0);
+        }
       });
 
       const maxSales = Math.max(...Object.values(salesMap), 1);
