@@ -80,6 +80,9 @@ export default function MedicineCodes() {
     })();
   }, [items]);
 
+  // Batches scoped to current branch context (for expiry status + dashboard cards).
+  const { batchesByMedicine, globalAlertDays } = useMedicineCodeBatches();
+
   // Build per-code aggregates.
   const aggregates = useMemo(() => {
     const byCode = new Map<string, LinkedMedicine[]>();
@@ -87,17 +90,69 @@ export default function MedicineCodes() {
       const codeId = it.medicine_code_id;
       if (!codeId) continue;
       const pk = packagings[it.medicine_id] || defaultPackaging();
+      const batches = batchesByMedicine.get(it.medicine_id) || [];
+      // Worst expiry status across all batches with stock.
+      let worst: ExpiryStatus = 'normal';
+      for (const b of batches) {
+        if (Number(b.remaining_quantity) <= 0) continue;
+        const days = b.expiry_alert_days ?? globalAlertDays;
+        const s = classifyExpiry(b.expiry_date, days);
+        if (s === 'expired') { worst = 'expired'; break; }
+        if (s === 'expiring' && worst !== 'expired') worst = 'expiring';
+      }
       const link: LinkedMedicine = {
         id: it.medicine_id,
         name: it.name,
+        generic_name: it.generic_name,
+        strength: it.strength,
+        manufacturer: it.manufacturer,
         total_units: it.quantity || 0,
+        minimum_stock_level: it.minimum_stock_level || 0,
         packaging: pk,
+        worstStatus: worst,
       };
       if (!byCode.has(codeId)) byCode.set(codeId, []);
       byCode.get(codeId)!.push(link);
     }
     return byCode;
-  }, [items, packagings]);
+  }, [items, packagings, batchesByMedicine, globalAlertDays]);
+
+  // Dashboard card aggregates (across all groups in scope).
+  const dashboardStats = useMemo(() => {
+    const totalGroups = codes.length;
+    let lowStock = 0;
+    let expiring = 0;
+    let expired = 0;
+
+    for (const it of items as any[]) {
+      const min = Number(it.minimum_stock_level) || 0;
+      const qty = Number(it.quantity) || 0;
+      if (min > 0 && qty <= min) lowStock += 1;
+    }
+    for (const list of batchesByMedicine.values()) {
+      for (const b of list) {
+        if (Number(b.remaining_quantity) <= 0) continue;
+        const days = b.expiry_alert_days ?? globalAlertDays;
+        const s = classifyExpiry(b.expiry_date, days);
+        if (s === 'expired') expired += 1;
+        else if (s === 'expiring') expiring += 1;
+      }
+    }
+    return { totalGroups, lowStock, expiring, expired };
+  }, [codes, items, batchesByMedicine, globalAlertDays]);
+
+  // medicine_id -> medicine_code_id (used by analytics hook)
+  const medicineIdToCodeId = useMemo(() => {
+    const m = new Map<string, string | null>();
+    for (const it of items as any[]) {
+      m.set(it.medicine_id, it.medicine_code_id ?? null);
+    }
+    return m;
+  }, [items]);
+
+  // Level-3 dialog state
+  const [batchesFor, setBatchesFor] = useState<{ name: string; batches: any[] } | null>(null);
+
 
   const filtered = useMemo(() => {
     const q = search.trim().toLowerCase();
