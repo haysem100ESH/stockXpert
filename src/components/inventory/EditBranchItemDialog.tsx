@@ -760,17 +760,32 @@ export default function EditBranchItemDialog({ open, onOpenChange, item, onItemU
               })()}
               {/* Expiry date is captured per-batch (Batches view), not at item level */}
 
-              <div className="space-y-2">
-                <Label>Minimum Stock Level (alert!)</Label>
-                <Input
-                  type="number"
-                  min="0"
-                  value={minStockLevel}
-                  onChange={e => setMinStockLevel(e.target.value)}
-                  placeholder="e.g. 10"
-                />
-                <p className="text-xs text-muted-foreground">Triggers low-stock alerts when quantity drops below this.</p>
+              <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+                <div className="space-y-2">
+                  <Label>Minimum Stock Level (alert!)</Label>
+                  <Input
+                    type="number"
+                    min="0"
+                    value={minStockLevel}
+                    onChange={e => setMinStockLevel(e.target.value)}
+                    placeholder="e.g. 10"
+                  />
+                  <p className="text-xs text-muted-foreground">Triggers low-stock alerts when quantity drops below this.</p>
+                </div>
+                <div className="space-y-2">
+                  <Label>Lead Time (days)</Label>
+                  <Input
+                    type="number"
+                    min="0"
+                    value={leadTimeDays}
+                    onChange={e => setLeadTimeDays(e.target.value)}
+                    placeholder="3"
+                    title="How many days does it typically take for this item to arrive after ordering?"
+                  />
+                  <p className="text-xs text-muted-foreground">How many days does this item typically take to arrive after ordering? Used to compute the reorder point.</p>
+                </div>
               </div>
+
 
               {isOwner && branches.length > 0 && (
                 <div className="space-y-2">
