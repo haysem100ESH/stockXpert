@@ -433,7 +433,7 @@ export default function InventoryDashboard() {
         </Card>
       )}
 
-      {outOfStockItems.length === 0 && lowStockItems.length === 0 && 
+      {outOfStockItems.length === 0 && lowStockItems.length === 0 && batchLowStock.length === 0 &&
        expiringBatches.length === 0 && expiredBatches.length === 0 && (
         <Card>
           <CardContent className="text-center py-8">
