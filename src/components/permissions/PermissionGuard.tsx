@@ -24,17 +24,48 @@ export default function PermissionGuard({ page, children }: PermissionGuardProps
     return <Navigate to="/" replace />;
   }
 
-  return (
-    <>
-      {level === 'read' && (
+  if (level === 'read') {
+    return (
+      <>
         <Alert className="mb-4 border-warning/50 bg-warning/10">
           <ShieldAlert className="h-4 w-4" />
           <AlertDescription className="text-sm font-medium">
             Read Only Mode — You can view this page but cannot make changes.
           </AlertDescription>
         </Alert>
-      )}
-      {children}
-    </>
-  );
+        <fieldset
+          disabled
+          className="contents [&_button:not([data-readonly-allow])]:pointer-events-none [&_button:not([data-readonly-allow])]:opacity-60 [&_a[role=button]]:pointer-events-none"
+          onClickCapture={(e) => {
+            const target = e.target as HTMLElement;
+            // Allow navigation links, tabs, dialog close buttons
+            if (target.closest('[data-readonly-allow]')) return;
+            const interactive = target.closest('button, [role="menuitem"], [role="tab"], input, textarea, select, [contenteditable="true"]');
+            if (interactive && !interactive.closest('[data-readonly-allow]')) {
+              // Allow tabs and dialog-close (they have specific roles or aria-labels)
+              const role = interactive.getAttribute('role');
+              const ariaLabel = interactive.getAttribute('aria-label') || '';
+              if (role === 'tab' || ariaLabel.toLowerCase().includes('close') || ariaLabel.toLowerCase().includes('search')) return;
+              e.preventDefault();
+              e.stopPropagation();
+            }
+          }}
+          onKeyDownCapture={(e) => {
+            const target = e.target as HTMLElement;
+            if (target.matches('input, textarea, [contenteditable="true"]') && !target.closest('[data-readonly-allow]')) {
+              // Allow navigation/search keys
+              if (['Tab', 'Escape', 'ArrowLeft', 'ArrowRight', 'ArrowUp', 'ArrowDown', 'Home', 'End'].includes(e.key)) return;
+              if ((e.ctrlKey || e.metaKey) && ['a', 'c'].includes(e.key.toLowerCase())) return;
+              e.preventDefault();
+              e.stopPropagation();
+            }
+          }}
+        >
+          <div className="contents">{children}</div>
+        </fieldset>
+      </>
+    );
+  }
+
+  return <>{children}</>;
 }
