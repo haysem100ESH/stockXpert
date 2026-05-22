@@ -1238,8 +1238,9 @@ export default function ImportCsvDialog({ open, onOpenChange, onImported }: Impo
                 <p><strong>Required:</strong> <code>NAME OF ITEMS</code>, <code>NAME OF UNIT</code>, <code>LPI BUY</code>, <code>LPI SELL</code>, <code>LPI STOCK</code>, <code>MIN STOCK (LPI)</code>.</p>
                 <p><strong>LPI</strong> = <em>Least Possible Item</em> — the smallest indivisible unit (e.g. <code>tablet</code>, <code>capsule</code>, <code>pcs</code>, <code>ml</code>). <code>NAME OF UNIT</code> renames it.</p>
                 <p><strong>Packaging is auto-derived:</strong> filling both <code>STRIPS PER PACK</code> and <code>TABLETS PER STRIP</code> = stripped layout; otherwise no-strip.</p>
+                <p className="pt-1 border-t mt-1"><strong>📦 Multi-batch:</strong> List the same item across multiple rows for different batches. On continuation rows leave <code>NAME OF ITEMS</code> empty and fill only <code>BATCH NO</code>, <code>LPI BUY</code>, <code>LPI SELL</code>, <code>LPI STOCK</code>, <code>EXPIRY DATE</code>. Total stock = sum of all batches.</p>
                 {isPharmacy && (
-                  <p className="pt-1 border-t mt-1"><strong>💊 Composition:</strong> Leave <code>NAME OF ITEMS</code> empty on a row to add it as an <em>active ingredient</em> of the medicine above (just fill GENERIC NAME + STRENGTH).</p>
+                  <p><strong>💊 Composition:</strong> Leave <code>NAME OF ITEMS</code> AND batch/stock columns empty and fill only GENERIC NAME + STRENGTH to add an <em>active ingredient</em> to the medicine above.</p>
                 )}
               </AlertDescription>
             </Alert>
