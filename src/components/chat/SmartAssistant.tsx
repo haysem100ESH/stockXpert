@@ -273,8 +273,9 @@ export default function SmartAssistant() {
       {/* Chat panel */}
       {open && (
         <div
-          style={positionStyle}
+          style={panelStyle}
           className="fixed z-50 w-[380px] max-w-[calc(100vw-2rem)] h-[560px] max-h-[calc(100vh-4rem)] bg-card border rounded-2xl shadow-2xl flex flex-col overflow-hidden"
+
         >
           {/* Header (drag handle) */}
           <div
