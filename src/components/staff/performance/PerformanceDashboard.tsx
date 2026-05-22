@@ -745,34 +745,6 @@ function HowItWorksDialog() {
               </div>
             </div>
 
-            {/* Old vs New comparison */}
-            <div className="rounded-lg bg-white/70 dark:bg-background/40 border border-amber-200/60 dark:border-amber-900/30 overflow-hidden">
-              <div className="px-4 py-2 bg-amber-100/70 dark:bg-amber-900/30 text-sm font-semibold text-amber-900 dark:text-amber-200">
-                ⚖️ Why the New System is Fairer
-              </div>
-              <div className="grid grid-cols-3 text-xs font-semibold bg-muted/40">
-                <div className="px-3 py-2"></div>
-                <div className="px-3 py-2 text-red-700 dark:text-red-400">Old System</div>
-                <div className="px-3 py-2 text-green-700 dark:text-green-400">New System</div>
-              </div>
-              <div className="divide-y divide-amber-100 dark:divide-amber-900/30">
-                <div className="grid grid-cols-3 text-xs items-center">
-                  <div className="px-3 py-2 font-medium">👨 John</div>
-                  <div className="px-3 py-2 text-red-700 dark:text-red-400">❌ 66.7% — penalized for not being Sara</div>
-                  <div className="px-3 py-2 text-green-700 dark:text-green-400">✅ 86.7% — rewarded for doing his job well</div>
-                </div>
-                <div className="grid grid-cols-3 text-xs items-center">
-                  <div className="px-3 py-2 font-medium">👩 Mia</div>
-                  <div className="px-3 py-2 text-red-700 dark:text-red-400">❌ 33.3% — crushed despite selling</div>
-                  <div className="px-3 py-2 text-green-700 dark:text-green-400">✅ ~53% — reflects her actual contribution</div>
-                </div>
-                <div className="grid grid-cols-3 text-xs items-center">
-                  <div className="px-3 py-2 font-medium">👩 Sara</div>
-                  <div className="px-3 py-2 text-green-700 dark:text-green-400">✅ 100% — deserved</div>
-                  <div className="px-3 py-2 text-green-700 dark:text-green-400">✅ 100% — still deserved</div>
-                </div>
-              </div>
-            </div>
 
             {/* Closing callout */}
             <div className="rounded-lg bg-gradient-to-r from-amber-100 to-yellow-100 dark:from-amber-900/40 dark:to-yellow-900/40 border-l-4 border-amber-500 dark:border-amber-400 p-4">
