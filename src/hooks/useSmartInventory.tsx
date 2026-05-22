@@ -1,14 +1,29 @@
 /**
  * useSmartInventory
  * ----------------------------------------------------------------------------
- * v2 — server-side aggregation via the `smart_inventory_summary` RPC.
+ * v3 — Weighted Moving Average + trend multiplier + per-item lead time ROP +
+ *      expiry-adjusted effective stock.
  *
- * Before: 3 round-trips fetching ALL branch_items + 60d sale_items + 365d
- *         sale_items → potentially millions of rows aggregated client-side.
- * Now:    1 RPC returns ONE pre-aggregated row per branch_item. TanStack Query
- *         caches per-branch with staleTime so revisits are instant.
+ * Demand model:
+ *   wk1 = qty_7;  wk2 = qty_14 - qty_7;  wk3 = qty_21 - qty_14
+ *   WMA = (wk1*3 + wk2*2 + wk3*1) / 6   (per week)
+ *   ADC = WMA / 7                       (per day)
+ *   Slow-mover fallback: if qty_30 = 0 but qty_60 > 0 → ADC = qty_60 / 60
  *
- * Cache key: ['smart-inventory', sortedBranchIds.join(',')]
+ * Trend:
+ *   recentRate = qty_14 / 14
+ *   olderRate  = (qty_30 - qty_14) / 16
+ *   trend      = recentRate / olderRate, clamped [0.7, 1.5]
+ *   edge: olderRate=0 & recentRate>0 → 1.3, both 0 → 1.0
+ *
+ * Forecast & Reorder Point:
+ *   forecastDays    = max(14, leadTimeDays * 2)
+ *   forecastDemand  = ADC * forecastDays * seasonalMult * trendMult
+ *   safetyStock     = forecastDemand * 0.20
+ *   ROP             = ADC * leadTimeDays + safetyStock
+ *   effectiveStock  = stock - expiringSoonQty (batches expiring within lead time)
+ *   needsReorder    = effectiveStock <= ROP  OR  effectiveStock < minStockLevel
+ *   suggestedReorder= ceil( max(forecastDemand+safetyStock, minStockLevel) - effectiveStock )
  */
 import { useEffect, useMemo } from 'react';
 import { useQuery, useQueryClient } from '@tanstack/react-query';
@@ -23,12 +38,23 @@ export interface SmartItem {
   name: string;
   category: string;
   currentStock: number;
+  effectiveStock: number;
+  expiringSoonQty: number;
+  hasExpiryExclusion: boolean;
   minStockLevel: number;
+  leadTimeDays: number;
+  reorderPoint: number;
+  forecastDays: number;
   expiryDate: string | null;
   sellingPrice: number;
   branchId: string;
   adc: number;
-  predictedDemand14: number;
+  isSlowMover: boolean;
+  trendMultiplier: number;
+  trendPercent: number; // (trend-1)*100, rounded
+  trendDirection: 'up' | 'down' | 'stable';
+  predictedDemand14: number;  // legacy alias = forecastDemand
+  forecastDemand: number;
   safetyStock: number;
   suggestedReorder: number;
   needsReorder: boolean;
@@ -51,33 +77,18 @@ interface RpcRow {
   branch_id: string;
   stock_quantity: number;
   minimum_stock_level: number;
+  lead_time_days: number | null;
   expiry_date: string | null;
   selling_price: number;
   item_type: string | null;
+  qty_7?: number;
+  qty_14?: number;
+  qty_21?: number;
   qty_30: number;
   qty_60: number;
   last_sale_date: string | null;
   monthly_qty: number[];
-}
-
-interface DirectBranchItemRow {
-  id: string;
-  medicine_id: string;
-  branch_id: string;
-  quantity: number;
-  expiry_date: string | null;
-  selling_price: number;
-  medicines: {
-    name: string | null;
-    category: string | null;
-    minimum_stock_level: number | null;
-    item_type: string | null;
-  } | Array<{
-    name: string | null;
-    category: string | null;
-    minimum_stock_level: number | null;
-    item_type: string | null;
-  }> | null;
+  expiring_soon_qty?: number;
 }
 
 function calcExpiryLevel(d: number | null): SmartItem['expiryAlertLevel'] {
@@ -115,18 +126,73 @@ function getScoreLevel(score: number): SmartItem['scoreLevel'] {
   return 'critical';
 }
 
+function clamp(v: number, min: number, max: number) {
+  return Math.max(min, Math.min(max, v));
+}
+
 function toSmartItem(r: RpcRow, now: number, hasSalesAggregation = true): SmartItem {
-  const adc = (Number(r.qty_30) || 0) / 30;
+  const q7 = Number(r.qty_7 ?? 0);
+  const q14 = Number(r.qty_14 ?? 0);
+  const q21 = Number(r.qty_21 ?? 0);
+  const q30 = Number(r.qty_30 ?? 0);
+  const q60 = Number(r.qty_60 ?? 0);
+
+  // ----- ADC via Weighted Moving Average -----
+  const wk1 = Math.max(0, q7);
+  const wk2 = Math.max(0, q14 - q7);
+  const wk3 = Math.max(0, q21 - q14);
+  let adc = 0;
+  let isSlowMover = false;
+  // Prefer WMA when we have any weekly data; otherwise fall back
+  if (wk1 + wk2 + wk3 > 0) {
+    const wma = (wk1 * 3 + wk2 * 2 + wk3 * 1) / 6;
+    adc = wma / 7;
+  } else if (q30 > 0) {
+    adc = q30 / 30;
+  } else if (q60 > 0) {
+    // Slow mover fallback
+    adc = q60 / 60;
+    isSlowMover = true;
+  }
+
+  // ----- Trend multiplier -----
+  const recentRate = q14 / 14;
+  const olderRate = Math.max(0, q30 - q14) / 16;
+  let trendMultiplier = 1.0;
+  if (olderRate === 0 && recentRate > 0) trendMultiplier = 1.3;
+  else if (olderRate === 0 && recentRate === 0) trendMultiplier = 1.0;
+  else trendMultiplier = clamp(recentRate / olderRate, 0.7, 1.5);
+  if (isSlowMover) trendMultiplier = Math.min(trendMultiplier, 1.0);
+
+  const trendPercent = Math.round((trendMultiplier - 1) * 100);
+  const trendDirection: SmartItem['trendDirection'] =
+    trendMultiplier > 1.1 ? 'up' : trendMultiplier < 0.9 ? 'down' : 'stable';
+
+  // ----- Seasonal -----
   const seasonalMult = getSeasonalMultiplier(r.monthly_qty || new Array(12).fill(0));
-  const predictedDemand14 = adc * 14 * seasonalMult;
-  const safetyStock = predictedDemand14 * 0.2;
-  const minLevel = Number(r.minimum_stock_level) || 0;
+
+  // ----- Lead time & forecast window -----
+  const leadTimeDays = Math.max(1, Number(r.lead_time_days ?? 3));
+  const forecastDays = Math.max(14, leadTimeDays * 2);
+
+  const forecastDemand = adc * forecastDays * seasonalMult * trendMultiplier;
+  const safetyStock = forecastDemand * 0.2;
+  const reorderPoint = adc * leadTimeDays + safetyStock;
+
+  // ----- Stock & expiry adjustment -----
   const stock = Number(r.stock_quantity) || 0;
-  const belowMin = minLevel > 0 && stock < minLevel;
-  const needsReorder = stock < predictedDemand14 || belowMin;
-  const target = Math.max(predictedDemand14 + safetyStock, minLevel);
-  const suggestedReorder = needsReorder ? Math.max(1, Math.ceil(target - stock)) : 0;
-  const daysRemaining = adc > 0 ? Math.round(stock / adc) : null;
+  const expiringSoonQty = Math.min(stock, Math.max(0, Number(r.expiring_soon_qty ?? 0)));
+  const effectiveStock = Math.max(0, stock - expiringSoonQty);
+  const hasExpiryExclusion = expiringSoonQty > 0;
+
+  const minLevel = Number(r.minimum_stock_level) || 0;
+  const belowMin = minLevel > 0 && effectiveStock < minLevel;
+  const needsReorder = effectiveStock <= reorderPoint && (adc > 0 || belowMin) || belowMin;
+
+  const target = Math.max(forecastDemand + safetyStock, minLevel);
+  const suggestedReorder = needsReorder ? Math.max(1, Math.ceil(target - effectiveStock)) : 0;
+
+  const daysRemaining = adc > 0 ? Math.round(effectiveStock / adc) : null;
   const stockOutRisk = daysRemaining !== null && daysRemaining < 7;
 
   let daysUntilExpiry: number | null = null;
@@ -134,20 +200,31 @@ function toSmartItem(r: RpcRow, now: number, hasSalesAggregation = true): SmartI
     daysUntilExpiry = Math.ceil((new Date(r.expiry_date).getTime() - now) / 86_400_000);
   }
   const expiryAlertLevel = calcExpiryLevel(daysUntilExpiry);
-  const isDeadStock = hasSalesAggregation && (Number(r.qty_60) || 0) === 0 && stock > 0;
-  const inventoryScore = calcInventoryScore({ adc, currentStock: stock, predictedDemand14, daysUntilExpiry, isDeadStock });
+  const isDeadStock = hasSalesAggregation && q60 === 0 && stock > 0;
+  const inventoryScore = calcInventoryScore({ adc, currentStock: stock, predictedDemand14: forecastDemand, daysUntilExpiry, isDeadStock });
 
   return {
     id: r.branch_item_id,
     name: r.name || 'Unknown',
     category: r.category || 'Uncategorized',
     currentStock: stock,
+    effectiveStock,
+    expiringSoonQty,
+    hasExpiryExclusion,
     minStockLevel: minLevel,
+    leadTimeDays,
+    reorderPoint,
+    forecastDays,
     expiryDate: r.expiry_date,
     sellingPrice: Number(r.selling_price) || 0,
     branchId: r.branch_id,
     adc,
-    predictedDemand14,
+    isSlowMover,
+    trendMultiplier,
+    trendPercent,
+    trendDirection,
+    predictedDemand14: forecastDemand,
+    forecastDemand,
     safetyStock,
     suggestedReorder,
     needsReorder,
@@ -157,7 +234,7 @@ function toSmartItem(r: RpcRow, now: number, hasSalesAggregation = true): SmartI
     expiryAlertLevel,
     isDeadStock,
     lastSaleDate: r.last_sale_date,
-    totalSold30Days: Number(r.qty_30) || 0,
+    totalSold30Days: q30,
     inventoryScore,
     scoreLevel: getScoreLevel(inventoryScore),
   };
@@ -166,7 +243,7 @@ function toSmartItem(r: RpcRow, now: number, hasSalesAggregation = true): SmartI
 async function fetchBranchItemsFallback(branchIds: string[]): Promise<SmartItem[]> {
   const { data, error } = await supabase
     .from('branch_items')
-    .select('id, medicine_id, branch_id, quantity, expiry_date, selling_price, medicines!inner(name, category, minimum_stock_level, item_type)')
+    .select('id, medicine_id, branch_id, quantity, expiry_date, selling_price, medicines!inner(name, category, minimum_stock_level, item_type, lead_time_days)')
     .in('branch_id', branchIds)
     .order('id', { ascending: false })
     .limit(10_000);
@@ -174,7 +251,7 @@ async function fetchBranchItemsFallback(branchIds: string[]): Promise<SmartItem[
   if (error) throw error;
 
   const now = Date.now();
-  return ((data || []) as DirectBranchItemRow[]).map((item) => {
+  return ((data || []) as any[]).map((item) => {
     const med = Array.isArray(item.medicines) ? item.medicines[0] : item.medicines;
     return toSmartItem({
       branch_item_id: item.id,
@@ -184,13 +261,15 @@ async function fetchBranchItemsFallback(branchIds: string[]): Promise<SmartItem[
       branch_id: item.branch_id,
       stock_quantity: item.quantity,
       minimum_stock_level: med?.minimum_stock_level || 0,
+      lead_time_days: med?.lead_time_days ?? 3,
       expiry_date: item.expiry_date,
       selling_price: item.selling_price,
       item_type: med?.item_type || null,
-      qty_30: 0,
-      qty_60: 0,
+      qty_7: 0, qty_14: 0, qty_21: 0,
+      qty_30: 0, qty_60: 0,
       last_sale_date: null,
       monthly_qty: new Array(12).fill(0),
+      expiring_soon_qty: 0,
     }, now, false);
   });
 }
@@ -240,12 +319,11 @@ export function useSmartInventory() {
     queryKey,
     queryFn: () => fetchSmartInventory(branchIds),
     enabled,
-    staleTime: 2 * 60 * 1000,   // 2 min — heavy aggregation, OK to cache
+    staleTime: 2 * 60 * 1000,
     gcTime: 10 * 60 * 1000,
     placeholderData: (prev) => prev,
   });
 
-  // Pull-to-refresh hook integration
   useEffect(() => {
     const handler = () => queryClient.invalidateQueries({ queryKey: ['smart-inventory'] });
     window.addEventListener('app:refresh', handler);
