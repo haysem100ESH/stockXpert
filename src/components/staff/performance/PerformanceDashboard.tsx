@@ -68,10 +68,11 @@ export default function PerformanceDashboard() {
       // then attributed to staff through sales.sold_by with created_by as legacy fallback.
       let salesQuery = supabase
         .from('sales')
-        .select('sold_by, created_by, total_amount, branch_id')
+        .select('sold_by, total_amount, branch_id')
         .in('branch_id', scopedBranchIds)
         .gte('created_at', startDateTime)
         .lte('created_at', endDateTime);
+
 
       const [staffRes, salesRes] = await Promise.all([
         supabase
@@ -91,11 +92,12 @@ export default function PerformanceDashboard() {
       const sellerBranchMap = new Map<string, string>();
       const sellerIds: string[] = Array.from(new Set<string>((salesRes.data || [])
         .map((s: any) => {
-          const sellerId = s.sold_by || s.created_by;
+          const sellerId = s.sold_by;
           if (sellerId && s.branch_id) sellerBranchMap.set(sellerId, s.branch_id);
           return sellerId;
         })
         .filter((id: unknown): id is string => typeof id === 'string' && id.length > 0)));
+
 
       const missingSellerIds = sellerIds.filter((id) => !staffById.has(id));
       if (missingSellerIds.length > 0) {
@@ -136,11 +138,12 @@ export default function PerformanceDashboard() {
 
       const salesMap: Record<string, number> = {};
       (salesRes.data || []).forEach((s: any) => {
-        const sellerId = s.sold_by || s.created_by;
+        const sellerId = s.sold_by;
         if (sellerId && staffIds.includes(sellerId)) {
           salesMap[sellerId] = (salesMap[sellerId] || 0) + Number(s.total_amount || 0);
         }
       });
+
 
       const maxSales = Math.max(...Object.values(salesMap), 1);
 
