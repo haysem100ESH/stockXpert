@@ -74,6 +74,8 @@ export default function BatchesEditor({
       purchase_price: String(defaultPurchasePrice ?? 0),
       selling_price: String(defaultSellingPrice ?? 0),
       expiry_date: '',
+      min_stock_level: '',
+      expiry_alert_days: '',
     }]);
   };
 
