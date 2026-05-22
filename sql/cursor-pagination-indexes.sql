@@ -79,7 +79,7 @@ AS $$
   LEFT JOIN LATERAL (
     SELECT count(*)::int AS item_count
     FROM public.sale_items
-    WHERE sales_id = s.id
+    WHERE sale_id = s.id
   ) si ON true
   WHERE s.branch_id = _branch_id
     AND (
