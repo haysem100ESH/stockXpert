@@ -672,7 +672,7 @@ function HowItWorksDialog() {
           {/* Simple Story Section */}
           <div className="rounded-xl border-2 border-amber-200 dark:border-amber-900/40 bg-gradient-to-br from-amber-50 via-orange-50/50 to-yellow-50 dark:from-amber-950/30 dark:via-orange-950/20 dark:to-yellow-950/30 p-5 space-y-4 shadow-sm">
             <div>
-              <h3 className="text-lg font-bold text-amber-900 dark:text-amber-200">📖 A Simple Story to Understand Scoring</h3>
+              <h3 className="text-lg font-bold text-amber-900 dark:text-amber-200">📖 A Simple Example to Understand Scoring</h3>
               <p className="text-sm text-amber-950/80 dark:text-amber-100/80 mt-1">
                 Imagine your branch has 3 staff members selling in the same month:
               </p>
