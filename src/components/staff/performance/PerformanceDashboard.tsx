@@ -668,6 +668,119 @@ function HowItWorksDialog() {
               <li>Overall = 91×0.35 + 99×0.30 + 100×0.20 + 100×0.15 = <strong>97%</strong> · 🟢 Excellent</li>
             </ul>
           </div>
+
+          {/* Simple Story Section */}
+          <div className="rounded-xl border-2 border-amber-200 dark:border-amber-900/40 bg-gradient-to-br from-amber-50 via-orange-50/50 to-yellow-50 dark:from-amber-950/30 dark:via-orange-950/20 dark:to-yellow-950/30 p-5 space-y-4 shadow-sm">
+            <div>
+              <h3 className="text-lg font-bold text-amber-900 dark:text-amber-200">📖 A Simple Story to Understand Scoring</h3>
+              <p className="text-sm text-amber-950/80 dark:text-amber-100/80 mt-1">
+                Imagine your branch has 3 staff members selling in the same month:
+              </p>
+            </div>
+
+            {/* Leaderboard */}
+            <div className="rounded-lg bg-white/70 dark:bg-background/40 border border-amber-200/60 dark:border-amber-900/30 overflow-hidden">
+              <div className="px-4 py-2 bg-amber-100/70 dark:bg-amber-900/30 text-xs font-semibold uppercase tracking-wide text-amber-900 dark:text-amber-200">
+                🏆 This Month's Leaderboard
+              </div>
+              <div className="divide-y divide-amber-100 dark:divide-amber-900/30">
+                <div className="flex items-center justify-between px-4 py-2.5">
+                  <span className="flex items-center gap-2 text-sm font-medium">🥇 👩 Sara</span>
+                  <span className="font-mono font-semibold text-amber-900 dark:text-amber-200">ETB 90,000</span>
+                </div>
+                <div className="flex items-center justify-between px-4 py-2.5">
+                  <span className="flex items-center gap-2 text-sm font-medium">🥈 👨 John</span>
+                  <span className="font-mono font-semibold">ETB 60,000</span>
+                </div>
+                <div className="flex items-center justify-between px-4 py-2.5">
+                  <span className="flex items-center gap-2 text-sm font-medium">🥉 👩 Mia</span>
+                  <span className="font-mono font-semibold">ETB 30,000</span>
+                </div>
+              </div>
+            </div>
+
+            {/* Two Bars */}
+            <div className="grid gap-3 sm:grid-cols-2">
+              <div className="rounded-lg bg-white/70 dark:bg-background/40 border border-amber-200/60 dark:border-amber-900/30 p-3">
+                <div className="font-semibold text-sm">🏪 Branch Average</div>
+                <div className="text-xs text-muted-foreground italic">"The Fair Bar"</div>
+                <div className="mt-2 text-xs font-mono bg-amber-100/60 dark:bg-amber-900/30 rounded px-2 py-1">
+                  (90k + 60k + 30k) ÷ 3 = <strong>ETB 60,000</strong>
+                </div>
+                <p className="text-xs mt-2 text-muted-foreground">
+                  A normal, solid month at this branch. Asks: <em>"Did you pull your weight?"</em>
+                </p>
+              </div>
+              <div className="rounded-lg bg-white/70 dark:bg-background/40 border border-amber-200/60 dark:border-amber-900/30 p-3">
+                <div className="font-semibold text-sm">🏆 Top Performer</div>
+                <div className="text-xs text-muted-foreground italic">"The Excellence Bar"</div>
+                <div className="mt-2 text-xs font-mono bg-amber-100/60 dark:bg-amber-900/30 rounded px-2 py-1">
+                  Sara → <strong>ETB 90,000</strong>
+                </div>
+                <p className="text-xs mt-2 text-muted-foreground">
+                  The highest bar anyone reached. Asks: <em>"Did you go above and beyond?"</em>
+                </p>
+              </div>
+            </div>
+
+            {/* Step-by-step for John */}
+            <div className="rounded-lg bg-white/70 dark:bg-background/40 border border-amber-200/60 dark:border-amber-900/30 p-4 space-y-3">
+              <div className="font-semibold text-sm">🧮 Let's score John (ETB 60,000):</div>
+
+              <div className="rounded-md bg-amber-50 dark:bg-amber-950/40 border border-amber-200/60 dark:border-amber-900/40 p-3">
+                <div className="text-xs font-semibold mb-1">Step 1 — Against Branch Average (60% of sales pillar)</div>
+                <div className="text-xs font-mono">60,000 ÷ 60,000 × 100 = <strong>100%</strong></div>
+                <div className="text-xs text-muted-foreground mt-1">→ Exactly average. Fair and solid.</div>
+              </div>
+
+              <div className="rounded-md bg-amber-50 dark:bg-amber-950/40 border border-amber-200/60 dark:border-amber-900/40 p-3">
+                <div className="text-xs font-semibold mb-1">Step 2 — Against Top Performer (40% of sales pillar)</div>
+                <div className="text-xs font-mono">60,000 ÷ 90,000 × 100 = <strong>66.7%</strong></div>
+                <div className="text-xs text-muted-foreground mt-1">→ Below Sara, but that's okay.</div>
+              </div>
+
+              <div className="rounded-md bg-green-50 dark:bg-green-950/40 border border-green-200 dark:border-green-900/40 p-3">
+                <div className="text-xs font-semibold mb-1">Step 3 — John's Final Sales Volume Score</div>
+                <div className="text-xs font-mono">(100% × 60%) + (66.7% × 40%) = 60 + 26.7 = <strong className="text-green-700 dark:text-green-400">86.7%</strong></div>
+              </div>
+            </div>
+
+            {/* Old vs New comparison */}
+            <div className="rounded-lg bg-white/70 dark:bg-background/40 border border-amber-200/60 dark:border-amber-900/30 overflow-hidden">
+              <div className="px-4 py-2 bg-amber-100/70 dark:bg-amber-900/30 text-sm font-semibold text-amber-900 dark:text-amber-200">
+                ⚖️ Why the New System is Fairer
+              </div>
+              <div className="grid grid-cols-3 text-xs font-semibold bg-muted/40">
+                <div className="px-3 py-2"></div>
+                <div className="px-3 py-2 text-red-700 dark:text-red-400">Old System</div>
+                <div className="px-3 py-2 text-green-700 dark:text-green-400">New System</div>
+              </div>
+              <div className="divide-y divide-amber-100 dark:divide-amber-900/30">
+                <div className="grid grid-cols-3 text-xs items-center">
+                  <div className="px-3 py-2 font-medium">👨 John</div>
+                  <div className="px-3 py-2 text-red-700 dark:text-red-400">❌ 66.7% — penalized for not being Sara</div>
+                  <div className="px-3 py-2 text-green-700 dark:text-green-400">✅ 86.7% — rewarded for doing his job well</div>
+                </div>
+                <div className="grid grid-cols-3 text-xs items-center">
+                  <div className="px-3 py-2 font-medium">👩 Mia</div>
+                  <div className="px-3 py-2 text-red-700 dark:text-red-400">❌ 33.3% — crushed despite selling</div>
+                  <div className="px-3 py-2 text-green-700 dark:text-green-400">✅ ~53% — reflects her actual contribution</div>
+                </div>
+                <div className="grid grid-cols-3 text-xs items-center">
+                  <div className="px-3 py-2 font-medium">👩 Sara</div>
+                  <div className="px-3 py-2 text-green-700 dark:text-green-400">✅ 100% — deserved</div>
+                  <div className="px-3 py-2 text-green-700 dark:text-green-400">✅ 100% — still deserved</div>
+                </div>
+              </div>
+            </div>
+
+            {/* Closing callout */}
+            <div className="rounded-lg bg-gradient-to-r from-amber-100 to-yellow-100 dark:from-amber-900/40 dark:to-yellow-900/40 border-l-4 border-amber-500 dark:border-amber-400 p-4">
+              <p className="text-sm text-amber-950 dark:text-amber-100 leading-relaxed">
+                <span className="text-lg">💡</span> The <strong>branch average</strong> asks <em>"did you carry your share?"</em> The <strong>top performer</strong> comparison asks <em>"did you excel?"</em> Your <strong>Sales Volume</strong> score blends both — so solid performers are recognized, and exceptional ones still shine.
+              </p>
+            </div>
+          </div>
         </div>
       </DialogContent>
     </Dialog>
