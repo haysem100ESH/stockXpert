@@ -89,7 +89,7 @@ export default function PerformanceDashboard() {
       (staffRes.data || []).forEach((s: any) => staffById.set(s.id, s));
 
       const sellerBranchMap = new Map<string, string>();
-      const sellerIds = Array.from(new Set((salesRes.data || [])
+      const sellerIds: string[] = Array.from(new Set<string>((salesRes.data || [])
         .map((s: any) => {
           const sellerId = s.sold_by || s.created_by;
           if (sellerId && s.branch_id) sellerBranchMap.set(sellerId, s.branch_id);
