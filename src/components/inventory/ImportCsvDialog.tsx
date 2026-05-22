@@ -246,6 +246,16 @@ interface ParsedRow {
   sub_unit_price: number | null;
   // Pharmacy hierarchical composition (rows with empty name attach here)
   active_ingredients: ActiveIngredient[];
+  // Additional batches for the same item (multi-batch upload via continuation rows)
+  extra_batches: Array<{
+    rowIndex: number;
+    batch_number: string | null;
+    stock_quantity: number;
+    purchase_price: number;
+    selling_price: number;
+    expiry_date: string | null;
+    minimum_stock_level: number | null;
+  }>;
 }
 
 // Final-template column order — pharmacy and general share the parser, but the
