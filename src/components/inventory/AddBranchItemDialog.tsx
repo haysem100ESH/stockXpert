@@ -326,6 +326,7 @@ export default function AddBranchItemDialog({ open, onOpenChange, onItemAdded }:
         }
       }
       toast({ title: 'Success', description: `${selectedItem.name} added to branch inventory (Batch created)` });
+      window.dispatchEvent(new Event('app:refresh'));
       onItemAdded();
       onOpenChange(false);
     } catch (error: any) {
