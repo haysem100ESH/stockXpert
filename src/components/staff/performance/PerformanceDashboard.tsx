@@ -8,6 +8,7 @@ import { Progress } from '@/components/ui/progress';
 import { Trophy, Star, TrendingUp, Medal, Users } from 'lucide-react';
 import { supabase } from '@/lib/db';
 import { useAuth } from '@/hooks/useAuth';
+import { useBranchContext } from '@/hooks/useBranchContext';
 
 interface StaffPerformance {
   id: string;
@@ -35,16 +36,19 @@ export default function PerformanceDashboard() {
   const [performances, setPerformances] = useState<StaffPerformance[]>([]);
   const [loading, setLoading] = useState(true);
   const { profile } = useAuth();
+  const { selectedBranch } = useBranchContext();
 
   useEffect(() => {
     if (profile?.id) fetchPerformance();
-  }, [month, year, profile]);
+  }, [month, year, profile, selectedBranch]);
 
   const fetchPerformance = async () => {
     setLoading(true);
     try {
       const startDate = new Date(year, month, 1).toISOString().split('T')[0];
       const endDate = new Date(year, month + 1, 0).toISOString().split('T')[0];
+      const startDateTime = new Date(Date.UTC(year, month, 1, 0, 0, 0, 0)).toISOString();
+      const endDateTime = new Date(Date.UTC(year, month + 1, 0, 23, 59, 59, 999)).toISOString();
       const workingDays = getWorkingDays(year, month);
 
       // Fetch owner's branches
@@ -58,33 +62,68 @@ export default function PerformanceDashboard() {
       (branches || []).forEach((b: any) => { branchMap[b.id] = b.name; });
 
       if (!branchIds.length) { setPerformances([]); setLoading(false); return; }
+      const scopedBranchIds = selectedBranch && branchIds.includes(selectedBranch) ? [selectedBranch] : branchIds;
 
-      // Fetch staff in those branches
-      const { data: staffData } = await supabase
-        .from('profiles')
-        .select('id, full_name, branch_id')
-        .eq('role', 'staff')
-        .in('branch_id', branchIds);
+      // Fetch assigned staff and branch-scoped sales. Sales are scoped by branch like Finance > Income,
+      // then attributed to staff through sales.sold_by with created_by as legacy fallback.
+      let salesQuery = supabase
+        .from('sales')
+        .select('sold_by, created_by, total_amount, branch_id')
+        .in('branch_id', scopedBranchIds)
+        .gte('created_at', startDateTime)
+        .lte('created_at', endDateTime);
 
-      if (!staffData?.length) { setPerformances([]); setLoading(false); return; }
+      const [staffRes, salesRes] = await Promise.all([
+        supabase
+          .from('profiles')
+          .select('id, full_name, branch_id, role')
+          .eq('role', 'staff')
+          .in('branch_id', scopedBranchIds),
+        salesQuery,
+      ]);
+
+      if (staffRes.error) throw staffRes.error;
+      if (salesRes.error) throw salesRes.error;
+
+      const staffById = new Map<string, any>();
+      (staffRes.data || []).forEach((s: any) => staffById.set(s.id, s));
+
+      const sellerBranchMap = new Map<string, string>();
+      const sellerIds: string[] = Array.from(new Set<string>((salesRes.data || [])
+        .map((s: any) => {
+          const sellerId = s.sold_by || s.created_by;
+          if (sellerId && s.branch_id) sellerBranchMap.set(sellerId, s.branch_id);
+          return sellerId;
+        })
+        .filter((id: unknown): id is string => typeof id === 'string' && id.length > 0)));
+
+      const missingSellerIds = sellerIds.filter((id) => !staffById.has(id));
+      if (missingSellerIds.length > 0) {
+        const { data: sellerProfiles, error: sellerProfilesError } = await supabase
+          .from('profiles')
+          .select('id, full_name, branch_id, role')
+          .eq('role', 'staff')
+          .in('id', missingSellerIds);
+
+        if (sellerProfilesError) throw sellerProfilesError;
+        (sellerProfiles || []).forEach((s: any) => staffById.set(s.id, s));
+      }
+
+      const staffData = Array.from(staffById.values());
+      if (!staffData.length) { setPerformances([]); setLoading(false); return; }
 
       const staffIds = staffData.map((s: any) => s.id);
 
-      // Fetch attendance and sales in parallel
-      const [attendanceRes, salesRes] = await Promise.all([
+      const [attendanceRes] = await Promise.all([
         supabase
           .from('staff_attendance')
           .select('staff_id, attendance_status')
           .in('staff_id', staffIds)
           .gte('date', startDate)
           .lte('date', endDate),
-        supabase
-          .from('sales')
-          .select('sold_by, created_by, total_amount')
-          .or(`sold_by.in.(${staffIds.join(',')}),created_by.in.(${staffIds.join(',')})`)
-          .gte('created_at', `${startDate}T00:00:00`)
-          .lte('created_at', `${endDate}T23:59:59`),
       ]);
+
+      if (attendanceRes.error) throw attendanceRes.error;
 
       // Aggregate per staff
       const attendanceMap: Record<string, { present: number; late: number; absent: number }> = {};
@@ -124,7 +163,7 @@ export default function PerformanceDashboard() {
         return {
           id: s.id,
           name: s.full_name,
-          branch_name: branchMap[s.branch_id] || 'Unknown',
+          branch_name: branchMap[s.branch_id || sellerBranchMap.get(s.id)] || 'Unknown',
           attendanceScore: Math.min(attendanceScore, 100),
           salesScore: Math.min(salesScore, 100),
           overallScore: Math.min(overallScore, 100),
