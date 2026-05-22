@@ -1156,6 +1156,23 @@ export default function ImportCsvDialog({ open, onOpenChange, onImported }: Impo
             if (batchErr) throw batchErr;
           }
 
+          // Create additional batches from continuation rows
+          for (const eb of row.extra_batches) {
+            if (eb.stock_quantity <= 0) continue;
+            const { error: ebErr } = await createBatch({
+              branchId: selectedBranchId,
+              medicineId,
+              branchItemId: newBI.id,
+              batchNumber: eb.batch_number,
+              quantity: eb.stock_quantity,
+              purchasePrice: eb.purchase_price,
+              sellingPrice: eb.selling_price,
+              expiryDate: eb.expiry_date,
+              createdBy: user?.id || null,
+            });
+            if (ebErr) throw ebErr;
+          }
+
           success++;
           setImportProgress(p => ({ ...p, success: p.success + 1 }));
         } catch (e: any) {
