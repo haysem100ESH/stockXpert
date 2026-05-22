@@ -552,6 +552,15 @@ export default function MedicineCodes() {
           </DialogFooter>
         </DialogContent>
       </Dialog>
+
+      {/* Level-3 batches dialog */}
+      <MedicineCodeBatchesDialog
+        open={!!batchesFor}
+        onOpenChange={(v) => { if (!v) setBatchesFor(null); }}
+        medicineName={batchesFor?.name || ''}
+        batches={batchesFor?.batches || []}
+        globalAlertDays={globalAlertDays}
+      />
     </div>
   );
 }
