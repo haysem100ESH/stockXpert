@@ -283,62 +283,69 @@ export default function InventoryDashboard() {
         </Card>
       )}
 
-      {expiringItems.length > 0 && (
+      {expiringBatches.length > 0 && (
         <Card>
           <CardHeader>
             <CardTitle className="flex items-center space-x-2">
               <CalendarDays className="h-5 w-5 text-warning" />
               <span>Items Expiring Soon</span>
             </CardTitle>
-            <CardDescription>{expiringItems.length} items will expire within {thresholdDays} days</CardDescription>
+            <CardDescription>{expiringBatches.length} batch{expiringBatches.length !== 1 ? 'es' : ''} will expire within {thresholdDays} days</CardDescription>
           </CardHeader>
           <CardContent>
             <div className="grid gap-2">
-              {expiringItems.map((item) => (
-                <div key={item.id} className="flex items-center justify-between p-2 border rounded-lg">
-                  <div>
-                    <p className="font-medium">{item.name}</p>
-                    <p className="text-sm text-muted-foreground">{item.category}</p>
+              {expiringBatches.map((b) => {
+                const daysLeft = Math.ceil((new Date(b.expiry_date).getTime() - Date.now()) / 86_400_000);
+                return (
+                  <div key={b.batch_id} className="flex items-center justify-between p-2 border rounded-lg">
+                    <div className="min-w-0">
+                      <p className="font-medium truncate">{b.name}</p>
+                      <p className="text-sm text-muted-foreground">
+                        {b.category} · Batch: <span className="font-mono">{b.batch_number || '—'}</span>
+                      </p>
+                    </div>
+                    <div className="text-right shrink-0">
+                      <Badge variant="secondary">{b.quantity} in stock</Badge>
+                      <p className="text-xs text-warning">
+                        Expires: {new Date(b.expiry_date).toLocaleDateString()} ({daysLeft}d left)
+                      </p>
+                    </div>
                   </div>
-                  <div className="text-right">
-                    <Badge variant="secondary">{item.quantity} in stock</Badge>
-                    <p className="text-xs text-warning">
-                      Expires: {new Date(item.expiry_date!).toLocaleDateString()}
-                    </p>
-                  </div>
-                </div>
-              ))}
+                );
+              })}
             </div>
           </CardContent>
         </Card>
       )}
 
-      {expiredItems.length > 0 && (
+      {expiredBatches.length > 0 && (
         <Card>
           <CardHeader>
             <CardTitle className="flex items-center space-x-2">
               <AlertTriangle className="h-5 w-5 text-destructive" />
               <span>Expired Items</span>
             </CardTitle>
-            <CardDescription>{expiredItems.length} items have expired and should be removed</CardDescription>
+            <CardDescription>{expiredBatches.length} batch{expiredBatches.length !== 1 ? 'es' : ''} have expired and should be removed</CardDescription>
           </CardHeader>
           <CardContent>
             <div className="grid gap-2">
-              {expiredItems.map((item) => (
-                <div key={item.id} className="flex items-center justify-between p-2 border rounded-lg bg-destructive/5">
-                  <div>
-                    <p className="font-medium">{item.name}</p>
-                    <p className="text-sm text-muted-foreground">{item.category}</p>
+              {expiredBatches.map((b) => (
+                <div key={b.batch_id} className="flex items-center justify-between p-2 border rounded-lg bg-destructive/5">
+                  <div className="min-w-0">
+                    <p className="font-medium truncate">{b.name}</p>
+                    <p className="text-sm text-muted-foreground">
+                      {b.category} · Batch: <span className="font-mono">{b.batch_number || '—'}</span>
+                    </p>
                     <p className="text-xs text-destructive">
-                      Expired: {new Date(item.expiry_date!).toLocaleDateString()}
+                      Expired: {new Date(b.expiry_date).toLocaleDateString()} · Stock: {b.quantity}
                     </p>
                   </div>
-                  <div className="flex items-center space-x-2">
+                  <div className="flex items-center space-x-2 shrink-0">
                     <Badge variant="destructive">Expired</Badge>
                     <Button
                       size="sm"
                       variant="outline"
-                      onClick={() => handleRemoveExpiredItem(item.id, item.name)}
+                      onClick={() => handleRemoveExpiredBatch(b)}
                       className="text-destructive hover:text-destructive"
                     >
                       Set Stock to 0
@@ -352,7 +359,7 @@ export default function InventoryDashboard() {
       )}
 
       {outOfStockItems.length === 0 && lowStockItems.length === 0 && 
-       expiringItems.length === 0 && expiredItems.length === 0 && (
+       expiringBatches.length === 0 && expiredBatches.length === 0 && (
         <Card>
           <CardContent className="text-center py-8">
             <Package className="h-12 w-12 text-muted-foreground mx-auto mb-4" />
