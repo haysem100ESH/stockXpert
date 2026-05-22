@@ -397,45 +397,49 @@ export default function RecordPurchaseDialog({ open, onOpenChange, supplierId, s
           )}
 
           <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-            <div className="space-y-2">
-              <Label htmlFor="name">{label.item} Name *</Label>
-              <Input id="name" name="name" required />
-            </div>
+            {!selectedExisting && (
+              <>
+                <div className="space-y-2">
+                  <Label htmlFor="name">{label.item} Name *</Label>
+                  <Input id="name" name="name" required />
+                </div>
 
-            <div className="space-y-2">
-              <Label htmlFor="generic_name">{label.genericName}</Label>
-              <Input id="generic_name" name="generic_name" />
-            </div>
+                <div className="space-y-2">
+                  <Label htmlFor="generic_name">{label.genericName}</Label>
+                  <Input id="generic_name" name="generic_name" />
+                </div>
 
-            <div className="space-y-2">
-              <Label htmlFor="category">Category *</Label>
-              <Select name="category" required>
-                <SelectTrigger>
-                  <SelectValue placeholder="Select category" />
-                </SelectTrigger>
-                <SelectContent>
-                  {categories.map((category) => (
-                    <SelectItem key={category} value={category}>
-                      {category.charAt(0).toUpperCase() + category.slice(1)}
-                    </SelectItem>
-                  ))}
-                </SelectContent>
-              </Select>
-            </div>
+                <div className="space-y-2">
+                  <Label htmlFor="category">Category *</Label>
+                  <Select name="category" required>
+                    <SelectTrigger>
+                      <SelectValue placeholder="Select category" />
+                    </SelectTrigger>
+                    <SelectContent>
+                      {categories.map((category) => (
+                        <SelectItem key={category} value={category}>
+                          {category.charAt(0).toUpperCase() + category.slice(1)}
+                        </SelectItem>
+                      ))}
+                    </SelectContent>
+                  </Select>
+                </div>
 
-            <div className="space-y-2">
-              <Label htmlFor="manufacturer">{label.manufacturer}</Label>
-              <Input id="manufacturer" name="manufacturer" />
-            </div>
+                <div className="space-y-2">
+                  <Label htmlFor="manufacturer">{label.manufacturer}</Label>
+                  <Input id="manufacturer" name="manufacturer" />
+                </div>
+
+                <div className="space-y-2">
+                  <Label htmlFor="country_name">Country Name</Label>
+                  <Input id="country_name" name="country_name" />
+                </div>
+              </>
+            )}
 
             <div className="space-y-2">
               <Label htmlFor="batch_number">Batch Number</Label>
-              <Input id="batch_number" name="batch_number" />
-            </div>
-
-            <div className="space-y-2">
-              <Label htmlFor="country_name">Country Name</Label>
-              <Input id="country_name" name="country_name" />
+              <Input id="batch_number" name="batch_number" placeholder="For this batch" />
             </div>
 
             {userRole === 'owner' && branches.length > 0 && (
