@@ -396,12 +396,40 @@ export default function MedicineCodes() {
                         <p className="text-sm text-muted-foreground">No medicines linked to this code yet.</p>
                       ) : (
                         <div className="divide-y">
-                          {linked.map((l) => (
-                            <div key={l.id} className="flex items-center justify-between py-2 text-sm">
-                              <span className="truncate">{l.name}</span>
-                              <Badge variant="outline">{formatStock(l.total_units, l.packaging)}</Badge>
-                            </div>
-                          ))}
+                          {linked.map((l) => {
+                            const batches = batchesByMedicine.get(l.id) || [];
+                            const isLow = l.minimum_stock_level > 0 && l.total_units <= l.minimum_stock_level;
+                            const statusBadge =
+                              l.worstStatus === 'expired'
+                                ? <Badge variant="destructive" className="gap-1"><CircleAlert className="h-3 w-3" />Expired</Badge>
+                                : l.worstStatus === 'expiring'
+                                  ? <Badge className="gap-1 bg-orange-500 hover:bg-orange-500/90 text-white"><AlertTriangle className="h-3 w-3" />Expiring</Badge>
+                                  : null;
+                            return (
+                              <button
+                                key={l.id}
+                                type="button"
+                                onClick={() => setBatchesFor({ name: l.name, batches })}
+                                className="w-full flex items-center justify-between py-2 text-sm gap-2 hover:bg-accent/40 transition-colors px-2 -mx-2 rounded text-left"
+                              >
+                                <div className="min-w-0 flex-1">
+                                  <div className="flex items-center gap-2 truncate">
+                                    <span className="truncate font-medium">{l.name}</span>
+                                    {l.strength && <span className="text-xs text-muted-foreground">{l.strength}</span>}
+                                  </div>
+                                  <div className="text-xs text-muted-foreground truncate">
+                                    {[l.generic_name, l.manufacturer].filter(Boolean).join(' · ') || '—'}
+                                  </div>
+                                </div>
+                                <div className="flex items-center gap-1.5 shrink-0">
+                                  {isLow && <Badge variant="outline" className="gap-1 border-amber-500 text-amber-600"><PackageX className="h-3 w-3" />Low</Badge>}
+                                  {statusBadge}
+                                  <Badge variant="outline">{formatStock(l.total_units, l.packaging)}</Badge>
+                                  <ChevronRight className="h-4 w-4 text-muted-foreground" />
+                                </div>
+                              </button>
+                            );
+                          })}
                         </div>
                       )}
                     </CardContent>
