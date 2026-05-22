@@ -113,6 +113,12 @@ async function fetchDashboardOverview({ selectedBranch, ownerBranchIds, dateFilt
     .select('total_amount, amount_paid, customer_id, branch_id')
     .not('customer_id', 'is', null)
     .range(0, 49999);
+  // Batch-level expiry data — items have multiple batches with different expiries.
+  let batchesQuery: any = supabase.from('inventory_batches')
+    .select('branch_item_id, expiry_date, remaining_quantity, branch_id')
+    .gt('remaining_quantity', 0)
+    .not('expiry_date', 'is', null)
+    .range(0, 49999);
 
   if (selectedBranch) {
     branchItemsQuery = branchItemsQuery.eq('branch_id', selectedBranch);
