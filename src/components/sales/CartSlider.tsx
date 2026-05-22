@@ -268,6 +268,8 @@ export default function CartSlider({
                           const levels = (item.availableLevels && item.availableLevels.length > 0)
                             ? item.availableLevels
                             : ([item.sellLevel!] as Array<'unit' | 'strip' | 'pack'>);
+                          // Only one level available (unit-only) → hide selector entirely.
+                          if (levels.length <= 1) return null;
                           const labelFor = (lv: 'unit' | 'strip' | 'pack') =>
                             (item.levelLabels?.[lv]) || lv;
                           const upl = (lv: 'unit' | 'strip' | 'pack') =>
@@ -279,7 +281,6 @@ export default function CartSlider({
                                 {levels.map((lv) => {
                                   const isActive = item.sellLevel === lv;
                                   const max = Math.floor((item.stock_quantity || 0) / upl(lv));
-                                  const disabled = !onChangeSellLevel || max < 1 || isActive;
                                   return (
                                     <Button
                                       key={lv}
