@@ -68,10 +68,11 @@ export default function PerformanceDashboard() {
       // then attributed to staff through sales.sold_by with created_by as legacy fallback.
       let salesQuery = supabase
         .from('sales')
-        .select('sold_by, created_by, total_amount, branch_id')
+        .select('sold_by, total_amount, branch_id')
         .in('branch_id', scopedBranchIds)
         .gte('created_at', startDateTime)
         .lte('created_at', endDateTime);
+
 
       const [staffRes, salesRes] = await Promise.all([
         supabase
