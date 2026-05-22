@@ -72,8 +72,8 @@ export function usePlanLimits() {
       
       setPlanLimits({
         planName: plan?.name || 'Basic',
-        branchesLimit: plan?.branches_limit,
-        staffLimit: plan?.staff_limit,
+        branchesLimit: plan?.branches_limit ?? null,
+        staffLimit: plan?.staff_limit ?? null,
         currentBranches: branchesData || 0,
         currentStaff: staffData || 0,
         canAddBranch: canAddBranchData,
