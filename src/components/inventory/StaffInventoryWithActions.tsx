@@ -56,6 +56,22 @@ export default function StaffInventoryWithActions() {
 
   // Cache-first fetch via TanStack Query — instant hydration on revisit.
   const { items: branchItems, loading, refetch, removeItemFromCache } = useBranchInventory();
+  const [batchCounts, setBatchCounts] = useState<Record<string, number>>({});
+
+  useEffect(() => {
+    if (!branchItems || branchItems.length === 0) { setBatchCounts({}); return; }
+    const ids = branchItems.map((i: any) => i.id);
+    (async () => {
+      const { data } = await supabase
+        .from('inventory_batches')
+        .select('branch_item_id')
+        .in('branch_item_id', ids)
+        .gt('remaining_quantity', 0);
+      const counts: Record<string, number> = {};
+      (data || []).forEach((r: any) => { counts[r.branch_item_id] = (counts[r.branch_item_id] || 0) + 1; });
+      setBatchCounts(counts);
+    })();
+  }, [branchItems]);
 
   useEffect(() => {
     const tab = searchParams.get('tab');
@@ -198,7 +214,21 @@ export default function StaffInventoryWithActions() {
       <CardHeader>
         <div className="flex justify-between items-start">
           <div className="flex-1">
-            <CardTitle className="text-lg">{isPharmacy ? formatMedicineName(item.name, item.strength) : item.name}</CardTitle>
+            <CardTitle className="text-lg flex items-center gap-2 flex-wrap">
+              <span>{isPharmacy ? formatMedicineName(item.name, item.strength) : item.name}</span>
+              {batchCounts[item.id] > 0 && (
+                <button
+                  type="button"
+                  onClick={(e) => { e.stopPropagation(); setBatchBreakdown({ open: true, itemId: item.id, itemName: item.name }); }}
+                  className="inline-flex"
+                  title="View batch breakdown"
+                >
+                  <Badge variant="secondary" className="text-[10px] cursor-pointer hover:bg-secondary/80">
+                    {batchCounts[item.id]} batch{batchCounts[item.id] !== 1 ? 'es' : ''}
+                  </Badge>
+                </button>
+              )}
+            </CardTitle>
             {item.generic_name && <CardDescription>{item.generic_name}</CardDescription>}
           </div>
           <div className="flex space-x-1">

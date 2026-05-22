@@ -246,6 +246,16 @@ interface ParsedRow {
   sub_unit_price: number | null;
   // Pharmacy hierarchical composition (rows with empty name attach here)
   active_ingredients: ActiveIngredient[];
+  // Additional batches for the same item (multi-batch upload via continuation rows)
+  extra_batches: Array<{
+    rowIndex: number;
+    batch_number: string | null;
+    stock_quantity: number;
+    purchase_price: number;
+    selling_price: number;
+    expiry_date: string | null;
+    minimum_stock_level: number | null;
+  }>;
 }
 
 // Final-template column order — pharmacy and general share the parser, but the
@@ -623,6 +633,32 @@ export default function ImportCsvDialog({ open, onOpenChange, onImported }: Impo
         get(cells, 'expiry_date') !== ''
       );
 
+      // Multi-batch upload: empty NAME + has batch/inventory data → attach as
+      // an extra batch on the most recent parent row.
+      if (!name && hasStandaloneSignal && out.length > 0) {
+        const parent = out[out.length - 1];
+        const stockRawC = get(cells, 'lpi_stock') || get(cells, 'stock_quantity');
+        const buyRawC = get(cells, 'lpi_buy') || get(cells, 'purchase_price');
+        const sellRawC = get(cells, 'lpi_sell') || get(cells, 'selling_price') || get(cells, 'pack_price');
+        const minRawC = get(cells, 'minimum_stock_level');
+        const expRawC = getRaw(cells, 'expiry_date');
+        const expParsedC = parseExpiryDate(expRawC);
+        const stockN = stockRawC ? parseFloat(stockRawC) : 0;
+        const buyN = buyRawC ? parseFloat(buyRawC) : parent.purchase_price;
+        const sellN = sellRawC ? parseFloat(sellRawC) : parent.selling_price;
+        const minN = minRawC ? parseLeadingInt(minRawC) : null;
+        parent.extra_batches.push({
+          rowIndex: r + 1,
+          batch_number: get(cells, 'batch_number') || null,
+          stock_quantity: isNaN(stockN) || stockN < 0 ? 0 : stockN,
+          purchase_price: isNaN(buyN) || buyN < 0 ? parent.purchase_price : buyN,
+          selling_price: isNaN(sellN) || sellN < 0 ? parent.selling_price : sellN,
+          expiry_date: expParsedC.iso,
+          minimum_stock_level: minN,
+        });
+        continue;
+      }
+
       // Pharmacy hierarchy: an empty-NAME row with ONLY generic/strength (no
       // inventory data) is an ingredient continuation of the medicine above.
       // If the row carries real inventory data, treat it as a standalone
@@ -896,6 +932,7 @@ export default function ImportCsvDialog({ open, onOpenChange, onImported }: Impo
         unit_price,
         sub_unit_price,
         active_ingredients: initialIngredients,
+        extra_batches: [],
       });
     }
 
@@ -1119,6 +1156,23 @@ export default function ImportCsvDialog({ open, onOpenChange, onImported }: Impo
             if (batchErr) throw batchErr;
           }
 
+          // Create additional batches from continuation rows
+          for (const eb of row.extra_batches) {
+            if (eb.stock_quantity <= 0) continue;
+            const { error: ebErr } = await createBatch({
+              branchId: selectedBranchId,
+              medicineId,
+              branchItemId: newBI.id,
+              batchNumber: eb.batch_number,
+              quantity: eb.stock_quantity,
+              purchasePrice: eb.purchase_price,
+              sellingPrice: eb.selling_price,
+              expiryDate: eb.expiry_date,
+              createdBy: user?.id || null,
+            });
+            if (ebErr) throw ebErr;
+          }
+
           success++;
           setImportProgress(p => ({ ...p, success: p.success + 1 }));
         } catch (e: any) {
@@ -1184,8 +1238,9 @@ export default function ImportCsvDialog({ open, onOpenChange, onImported }: Impo
                 <p><strong>Required:</strong> <code>NAME OF ITEMS</code>, <code>NAME OF UNIT</code>, <code>LPI BUY</code>, <code>LPI SELL</code>, <code>LPI STOCK</code>, <code>MIN STOCK (LPI)</code>.</p>
                 <p><strong>LPI</strong> = <em>Least Possible Item</em> — the smallest indivisible unit (e.g. <code>tablet</code>, <code>capsule</code>, <code>pcs</code>, <code>ml</code>). <code>NAME OF UNIT</code> renames it.</p>
                 <p><strong>Packaging is auto-derived:</strong> filling both <code>STRIPS PER PACK</code> and <code>TABLETS PER STRIP</code> = stripped layout; otherwise no-strip.</p>
+                <p className="pt-1 border-t mt-1"><strong>📦 Multi-batch:</strong> List the same item across multiple rows for different batches. On continuation rows leave <code>NAME OF ITEMS</code> empty and fill only <code>BATCH NO</code>, <code>LPI BUY</code>, <code>LPI SELL</code>, <code>LPI STOCK</code>, <code>EXPIRY DATE</code>. Total stock = sum of all batches.</p>
                 {isPharmacy && (
-                  <p className="pt-1 border-t mt-1"><strong>💊 Composition:</strong> Leave <code>NAME OF ITEMS</code> empty on a row to add it as an <em>active ingredient</em> of the medicine above (just fill GENERIC NAME + STRENGTH).</p>
+                  <p><strong>💊 Composition:</strong> Leave <code>NAME OF ITEMS</code> AND batch/stock columns empty and fill only GENERIC NAME + STRENGTH to add an <em>active ingredient</em> to the medicine above.</p>
                 )}
               </AlertDescription>
             </Alert>

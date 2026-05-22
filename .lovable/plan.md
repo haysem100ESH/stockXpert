@@ -1,21 +1,41 @@
-## Goal
-Force Lovable to redeploy `supabase/functions/manage-transfer-request/index.ts` so the live version contains the `fulfill_transfer_request` RPC call.
+# Batch Management System — Implementation Plan
 
-## Background
-- The SQL RPC has been applied in Supabase (user confirmed).
-- The local edge function source already calls `admin.rpc('fulfill_transfer_request', …)` at line 98.
-- Lovable auto-deploys edge functions on file save; no manual deploy button exists.
-- Likely cause of the issue: the file hasn't been re-saved since the RPC was added, or the previous deploy silently failed.
+## 1. Data migration (existing stock → default batches)
+- New SQL migration: for every `branch_items` row with `quantity > 0` and no existing `inventory_batches`, insert one default batch using current `quantity`, `purchase_price`, `selling_price`, `expiry_date` (and `batch_number = 'DEFAULT'`). Run via migration tool.
+- After migration, `branch_items.quantity` continues to be kept in sync via `syncBranchItemQuantity` (already exists in `src/lib/batchInventory.ts`).
 
-## Steps
-1. Add a harmless deploy-marker comment at the top of `supabase/functions/manage-transfer-request/index.ts` (e.g. `// deploy: fulfill-rpc v2`). This guarantees a content change and triggers redeploy.
-2. Wait ~10s for deploy to settle.
-3. Test a fulfill action from the UI on an approved transfer request.
-4. Verify:
-   - `branch_items.quantity` decreases at source and increases at destination.
-   - `inventory_batches.remaining_quantity` updates accordingly.
-   - Two paired rows appear in `expenses` under category `Stock Transfer`.
-5. If it still fails, read the edge function logs for the exact error returned by the RPC (the function now surfaces `rpcErr.message`) and diagnose from there.
+## 2. Edit Item dialog — add "Batches" tab
+File: `src/components/inventory/EditBranchItemDialog.tsx`
+- Wrap content in `<Tabs>` with two triggers: **Item Info** (current form, expiry already hidden) and **Batches**.
+- Batches tab: editable table of `inventory_batches` for this `branch_item_id`:
+  - columns: Batch #, Stock Qty, Buy Price, Sell Price, Expiry, Delete
+  - "+ Add Batch" button (pre-fills buy/sell from item defaults)
+  - On save, upsert/delete batches, then call `syncBranchItemQuantity`
+  - Shows read-only "Total stock = Σ batches" badge
+- Disable direct `quantity` field on Item Info tab (read-only, shows computed total).
 
-## Notes
-No schema changes. No business logic changes. Only a whitespace/comment bump to force redeploy + post-deploy verification.
+## 3. Per-batch expiry dialog
+- New `src/components/inventory/SelectBatchForExpiryDialog.tsx`: lists batches with current expiry, allows picking one and updating its `expiry_date`.
+- Wire into any UI that currently exposes "edit expiry" on an item (search `expiry_date` edit callers in inventory list/staff view).
+
+## 4. Excel upload — multi-batch rows
+File: `src/components/inventory/ImportCsvDialog.tsx`
+- Parser change: when a row's item-name/identifier column is empty, treat it as a continuation batch for the most recent parent row. Capture per-batch fields: batch number, buy price, sell price, stock qty, min stock, expiry.
+- On import: for the parent row → create/find medicine + `branch_item` (qty starts 0); for each batch row (parent + continuations) → call `createBatch(...)` which auto-syncs total.
+- Template download: update header comments/legend to explain continuation-row format and highlight batch-only columns.
+
+## 5. Inventory list — batch count badge
+Files: `src/components/inventory/InventoryManagement.tsx`, `StaffInventoryView.tsx`, `StaffInventoryWithActions.tsx`
+- Fetch batch counts per `branch_item_id` (single grouped query) and show a small "{n} batches" badge next to item name. Clicking opens existing `BatchBreakdownDialog`.
+
+## 6. Sales / FEFO
+- Already implemented: `getFIFOBatches` orders by `expiry_date ASC NULLS LAST, created_at ASC` and `deductFIFO` uses it. No change needed; verify after migration.
+
+## Out of scope
+- No schema changes (table already supports everything).
+- No change to POS/sales business logic beyond confirming FEFO still works.
+
+## Technical notes
+- Keep `branch_items.purchase_price/selling_price/expiry_date` as display defaults (don't drop columns).
+- All batch mutations go through `src/lib/batchInventory.ts` so `quantity` stays consistent.
+- Migration uses `INSERT ... SELECT ... WHERE NOT EXISTS` so re-runs are safe.
