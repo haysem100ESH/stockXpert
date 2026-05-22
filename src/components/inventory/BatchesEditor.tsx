@@ -113,8 +113,13 @@ export default function BatchesEditor({
         if (isNaN(buy) || buy < 0) throw new Error(`Invalid buy price for batch "${d.batch_number}"`);
         if (isNaN(sell) || sell < 0) throw new Error(`Invalid sell price for batch "${d.batch_number}"`);
 
+        const minStock = d.min_stock_level.trim() === '' ? null : parseFloat(d.min_stock_level);
+        const alertDays = d.expiry_alert_days.trim() === '' ? null : parseInt(d.expiry_alert_days, 10);
+        if (minStock !== null && (isNaN(minStock) || minStock < 0)) throw new Error(`Invalid min stock for batch "${d.batch_number}"`);
+        if (alertDays !== null && (isNaN(alertDays) || alertDays < 0)) throw new Error(`Invalid alert days for batch "${d.batch_number}"`);
+
         if (d.isNew) {
-          const { error } = await createBatch({
+          const { error, batch } = await createBatch({
             branchId,
             medicineId,
             branchItemId,
@@ -126,6 +131,12 @@ export default function BatchesEditor({
             createdBy: user?.id || null,
           });
           if (error) throw error;
+          if (batch && (minStock !== null || alertDays !== null)) {
+            await supabase.from('inventory_batches').update({
+              min_stock_level: minStock,
+              expiry_alert_days: alertDays,
+            }).eq('id', batch.id);
+          }
         } else {
           const orig = d._original!;
           const update: any = {
@@ -133,6 +144,8 @@ export default function BatchesEditor({
             purchase_price: buy,
             selling_price: sell,
             expiry_date: d.expiry_date || null,
+            min_stock_level: minStock,
+            expiry_alert_days: alertDays,
             updated_at: new Date().toISOString(),
           };
           update.remaining_quantity = qty;
