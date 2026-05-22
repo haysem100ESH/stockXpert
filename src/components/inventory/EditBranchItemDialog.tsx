@@ -732,10 +732,7 @@ export default function EditBranchItemDialog({ open, onOpenChange, item, onItemU
                   </>
                 );
               })()}
-              <div className="space-y-2">
-                <Label>Expiry Date</Label>
-                <Input type="date" value={expiryDate} onChange={e => setExpiryDate(e.target.value)} />
-              </div>
+              {/* Expiry date is captured per-batch (Batches view), not at item level */}
 
               <div className="space-y-2">
                 <Label>Minimum Stock Level (alert!)</Label>
