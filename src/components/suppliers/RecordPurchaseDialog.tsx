@@ -157,74 +157,98 @@ export default function RecordPurchaseDialog({ open, onOpenChange, supplierId, s
       return;
     }
 
-    const selectedCategory = (formData.get('category') as string) || 'other';
-    const unitLabel = itemType === 'measurable' ? measurableUnit : (formData.get('unit_label') as string || 'strip');
+    const selectedCategory = (formData.get('category') as string) || selectedExisting?.category || 'other';
+    const unitLabel = itemType === 'measurable'
+      ? measurableUnit
+      : (formData.get('unit_label') as string || selectedExisting?.unit_label || 'strip');
     const unitsPerPackValue = formData.get('units_per_pack') as string;
-    const unitsPerPack = itemType === 'full_pcs' && unitsPerPackValue ? parseInt(unitsPerPackValue) : null;
+    const unitsPerPack = itemType === 'full_pcs'
+      ? (unitsPerPackValue ? parseInt(unitsPerPackValue) : (selectedExisting?.units_per_pack ?? null))
+      : null;
 
     const stockQtyRaw = formData.get('stock_quantity') as string;
     const stockQuantity = itemType === 'measurable' ? parseFloat(stockQtyRaw) : parseInt(stockQtyRaw);
     const purchasePrice = parseFloat(formData.get('purchase_price') as string);
     const sellingPrice = parseFloat(formData.get('selling_price') as string);
-    const itemName = formData.get('name') as string;
+    const itemName = selectedExisting?.name || (formData.get('name') as string);
     const totalCost = stockQuantity * purchasePrice;
 
     try {
-      // 1. Insert into medicines (inventory catalog)
-      const medicineData: Record<string, any> = {
-        name: itemName,
-        generic_name: formData.get('generic_name') as string || null,
-        category: selectedCategory,
-        manufacturer: formData.get('manufacturer') as string || null,
-        batch_number: formData.get('batch_number') as string || null,
-        country_name: formData.get('country_name') as string || null,
-        purchase_price: purchasePrice,
-        selling_price: sellingPrice,
-        stock_quantity: stockQuantity,
-        minimum_stock_level: parseInt(formData.get('minimum_stock_level') as string),
-        units_per_pack: unitsPerPack,
-        unit_label: unitLabel,
-        open_pack_units: 0,
-        expiry_date: formData.get('expiry_date') as string || null,
-        expiry_alert_enabled: formData.get('expiry_alert_enabled') === 'on',
-        branch_id: branchId,
-        created_by: user?.id || null,
-        item_type: itemType,
-        supplier_id: supplierId,
-      };
+      let medicineId: string;
 
-      const { data: medResult, error: medicineErr } = await supabase.from('medicines').insert([medicineData]).select('id').single();
-      if (medicineErr) throw medicineErr;
-
-      // 1b. Create branch_item + inventory batch
-      const { data: branchItem, error: biErr } = await supabase.from('branch_items').insert({
-        owner_id: profile?.id,
-        branch_id: branchId,
-        medicine_id: medResult.id,
-        selling_price: sellingPrice,
-        purchase_price: purchasePrice,
-        quantity: stockQuantity,
-        expiry_date: formData.get('expiry_date') as string || null,
-      }).select('id').single();
-
-      if (biErr) {
-        // If branch_item creation fails, continue without batch (non-critical)
-        console.warn('Branch item creation failed:', biErr);
+      if (selectedExisting) {
+        // Reuse existing master catalog item
+        medicineId = selectedExisting.id;
       } else {
-        // Create inventory batch
+        // 1. Insert into medicines (inventory catalog)
+        const medicineData: Record<string, any> = {
+          name: itemName,
+          generic_name: formData.get('generic_name') as string || null,
+          category: selectedCategory,
+          manufacturer: formData.get('manufacturer') as string || null,
+          batch_number: formData.get('batch_number') as string || null,
+          country_name: formData.get('country_name') as string || null,
+          purchase_price: purchasePrice,
+          selling_price: sellingPrice,
+          stock_quantity: stockQuantity,
+          minimum_stock_level: parseInt(formData.get('minimum_stock_level') as string),
+          units_per_pack: unitsPerPack,
+          unit_label: unitLabel,
+          open_pack_units: 0,
+          expiry_alert_enabled: formData.get('expiry_alert_enabled') === 'on',
+          branch_id: branchId,
+          created_by: user?.id || null,
+          item_type: itemType,
+          supplier_id: supplierId,
+        };
+
+        const { data: medResult, error: medicineErr } = await supabase.from('medicines').insert([medicineData]).select('id').single();
+        if (medicineErr) throw medicineErr;
+        medicineId = medResult.id;
+      }
+
+      // 1b. Find or create branch_item for this medicine+branch
+      let branchItemId: string | null = null;
+      const { data: existingBI } = await supabase
+        .from('branch_items')
+        .select('id')
+        .eq('branch_id', branchId)
+        .eq('medicine_id', medicineId)
+        .maybeSingle();
+
+      if (existingBI) {
+        branchItemId = (existingBI as any).id;
+      } else {
+        const { data: newBI, error: biErr } = await supabase.from('branch_items').insert({
+          owner_id: profile?.id,
+          branch_id: branchId,
+          medicine_id: medicineId,
+          selling_price: sellingPrice,
+          purchase_price: purchasePrice,
+          quantity: stockQuantity,
+        }).select('id').single();
+        if (biErr) {
+          console.warn('Branch item creation failed:', biErr);
+        } else {
+          branchItemId = newBI.id;
+        }
+      }
+
+      if (branchItemId) {
         await createBatch({
           branchId,
-          medicineId: medResult.id,
-          branchItemId: branchItem.id,
+          medicineId,
+          branchItemId,
           supplierId,
           batchNumber: formData.get('batch_number') as string || null,
           quantity: stockQuantity,
           purchasePrice,
           sellingPrice,
-          expiryDate: formData.get('expiry_date') as string || null,
+          expiryDate: null, // expiry now lives on batches; user can set via Batches view
           createdBy: user?.id || null,
         });
       }
+
 
       // 2. Insert purchase record
       const { error: purchaseErr } = await supabase.from('supplier_purchases').insert({
