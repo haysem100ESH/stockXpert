@@ -85,16 +85,73 @@ const handler = async (req: Request): Promise<Response> => {
       }
     }
 
+    // Nullify common FK references that would block deletion (best-effort)
+    const nullifyTargets: Array<{ table: string; column: string }> = [
+      { table: 'sales', column: 'sold_by' },
+      { table: 'sales', column: 'staff_id' },
+      { table: 'sales', column: 'created_by' },
+      { table: 'medicines', column: 'created_by' },
+      { table: 'customers', column: 'created_by' },
+      { table: 'customer_payments', column: 'created_by' },
+      { table: 'stock_movements', column: 'created_by' },
+      { table: 'inventory_batches', column: 'created_by' },
+      { table: 'expenses', column: 'created_by' },
+      { table: 'credit_logs', column: 'created_by' },
+      { table: 'transfer_requests', column: 'requested_by' },
+      { table: 'transfer_requests', column: 'fulfilled_by' },
+      { table: 'transfer_requests', column: 'created_by' },
+      { table: 'transfer_requests', column: 'approved_by' },
+      { table: 'branch_items', column: 'created_by' },
+      { table: 'pharmacy_branches', column: 'manager_staff_id' },
+      { table: 'payment_requests', column: 'approved_by' },
+      { table: 'salary_expenses', column: 'created_by' },
+    ];
+    for (const t of nullifyTargets) {
+      try {
+        const { error } = await supabaseAdmin.from(t.table).update({ [t.column]: null }).eq(t.column, staffId);
+        if (error) console.warn(`Could not clear ${t.table}.${t.column}:`, error.message);
+      } catch (_) { /* ignore - column/table may not exist */ }
+    }
+
+    // Delete staff-owned settings/biometric/attendance rows (best-effort)
+    const deleteTargets: Array<{ table: string; column: string }> = [
+      { table: 'staff_permissions', column: 'staff_id' },
+      { table: 'staff_face_data', column: 'staff_id' },
+      { table: 'staff_face_embeddings', column: 'staff_id' },
+      { table: 'staff_attendance', column: 'staff_id' },
+      { table: 'attendance_records', column: 'staff_id' },
+      { table: 'attendance_schedules', column: 'staff_id' },
+      { table: 'attendance_suspicious_alerts', column: 'staff_id' },
+      { table: 'salary_expenses', column: 'staff_id' },
+      { table: 'staff_salaries', column: 'staff_id' },
+      { table: 'salary_payments', column: 'staff_id' },
+      { table: 'user_roles', column: 'user_id' },
+      { table: 'telegram_links', column: 'user_id' },
+    ];
+    for (const t of deleteTargets) {
+      try {
+        const { error } = await supabaseAdmin.from(t.table).delete().eq(t.column, staffId);
+        if (error) console.warn(`Could not delete ${t.table}.${t.column}:`, error.message);
+      } catch (_) { /* ignore - column/table may not exist */ }
+    }
+
     // Delete auth user (cascades to profiles via trigger)
     const { error: deleteError } = await supabaseAdmin.auth.admin.deleteUser(staffId);
     if (deleteError) {
-      console.error('Delete user error:', deleteError);
-      // Fallback: try to delete profile directly
+      console.error('Delete auth user error:', deleteError);
+      // Fallback: delete profile row directly
       const { error: profileDeleteError } = await supabaseAdmin
         .from('profiles')
         .delete()
         .eq('id', staffId);
-      if (profileDeleteError) throw profileDeleteError;
+      if (profileDeleteError) {
+        console.error('Delete profile error:', profileDeleteError);
+        return new Response(JSON.stringify({
+          error: `Failed to delete staff: ${profileDeleteError.message}. Auth: ${deleteError.message}`,
+        }), {
+          status: 500, headers: { ...corsHeaders, 'Content-Type': 'application/json' },
+        });
+      }
     }
 
     return new Response(JSON.stringify({ success: true }), {

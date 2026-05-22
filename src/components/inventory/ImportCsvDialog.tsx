@@ -1,4 +1,4 @@
-import { useState, useEffect, useRef } from 'react';
+import React, { useState, useEffect, useRef } from 'react';
 import * as XLSX from 'xlsx';
 import { Dialog, DialogContent, DialogDescription, DialogHeader, DialogTitle } from '@/components/ui/dialog';
 import { Button } from '@/components/ui/button';
@@ -246,6 +246,16 @@ interface ParsedRow {
   sub_unit_price: number | null;
   // Pharmacy hierarchical composition (rows with empty name attach here)
   active_ingredients: ActiveIngredient[];
+  // Additional batches for the same item (multi-batch upload via continuation rows)
+  extra_batches: Array<{
+    rowIndex: number;
+    batch_number: string | null;
+    stock_quantity: number;
+    purchase_price: number;
+    selling_price: number;
+    expiry_date: string | null;
+    minimum_stock_level: number | null;
+  }>;
 }
 
 // Final-template column order — pharmacy and general share the parser, but the
@@ -310,6 +320,12 @@ const REQUIRED_GENERAL = new Set([
   'ITEM NAME', 'NAME OF UNIT', 'LPI BUY', 'LPI SELL', 'LPI STOCK', 'MIN STOCK (LPI)',
 ]);
 
+// Batch-only / batch-continuation columns. On extra batch rows the user fills
+// only these; all other columns may be left empty.
+const BATCH_COLUMNS = new Set([
+  'BATCH NO', 'LPI BUY', 'LPI SELL', 'LPI STOCK', 'MIN STOCK (LPI)', 'EXPIRY DATE',
+]);
+
 async function buildTemplateXlsx(mode: 'pharmacy' | 'general'): Promise<Blob> {
   const ExcelJS = (await import('exceljs')).default;
   const headers = mode === 'pharmacy' ? PHARMACY_HEADERS : GENERAL_HEADERS;
@@ -318,11 +334,9 @@ async function buildTemplateXlsx(mode: 'pharmacy' | 'general'): Promise<Blob> {
 
   const wb = new ExcelJS.Workbook();
   const ws = wb.addWorksheet('Inventory', {
-    views: [{ state: 'frozen', ySplit: 1 }], // freeze header row
+    views: [{ state: 'frozen', ySplit: 1 }],
   });
 
-  // Numeric columns must be stored as numbers with an explicit number format,
-  // otherwise Excel may auto-detect values like "10" or "2/3" as dates.
   const NUMERIC_HEADERS = new Set([
     'STRIPS PER PACK', 'TABLETS PER STRIP', 'UNITS PER ITEM',
     'LPI BUY', 'LPI SELL', 'LPI STOCK', 'MIN STOCK (LPI)',
@@ -347,33 +361,52 @@ async function buildTemplateXlsx(mode: 'pharmacy' | 'general'): Promise<Blob> {
     ws.addRow(coerced);
   });
 
-  // Apply per-column number format so Excel never coerces values to dates
   headers.forEach((h, i) => {
     const col = ws.getColumn(i + 1);
-    if (NUMERIC_HEADERS.has(h)) {
-      col.numFmt = '0';
-    } else if (DATE_HEADERS.has(h)) {
-      col.numFmt = 'dd/mm/yyyy';
-    } else if (TEXT_HEADERS.has(h)) {
-      col.numFmt = '@'; // text
-    }
+    if (NUMERIC_HEADERS.has(h)) col.numFmt = '0';
+    else if (DATE_HEADERS.has(h)) col.numFmt = 'dd/mm/yyyy';
+    else if (TEXT_HEADERS.has(h)) col.numFmt = '@';
   });
 
-  // Style header row
+  const RED = 'FFDC2626';
+  const ORANGE = 'FFF59E0B';
+  const GRAY = 'FFE5E7EB';
+
   const headerRow = ws.getRow(1);
-  headerRow.height = 24;
+  headerRow.height = 28;
   headerRow.eachCell((cell, colNumber) => {
     const label = headers[colNumber - 1];
     const isRequired = required.has(label);
+    const isBatch = BATCH_COLUMNS.has(label);
+    const isBoth = isRequired && isBatch;
+
+    let fill: any;
+    if (isBoth) {
+      // Diagonal split: red top-left → orange bottom-right
+      fill = {
+        type: 'gradient',
+        gradient: 'angle',
+        degree: 135,
+        stops: [
+          { position: 0, color: { argb: RED } },
+          { position: 0.5, color: { argb: RED } },
+          { position: 0.5001, color: { argb: ORANGE } },
+          { position: 1, color: { argb: ORANGE } },
+        ],
+      };
+    } else if (isRequired) {
+      fill = { type: 'pattern', pattern: 'solid', fgColor: { argb: RED } };
+    } else if (isBatch) {
+      fill = { type: 'pattern', pattern: 'solid', fgColor: { argb: ORANGE } };
+    } else {
+      fill = { type: 'pattern', pattern: 'solid', fgColor: { argb: GRAY } };
+    }
+
+    cell.fill = fill;
     cell.font = {
       bold: true,
-      color: { argb: isRequired ? 'FFFFFFFF' : 'FF111827' },
+      color: { argb: (isRequired || isBatch) ? 'FFFFFFFF' : 'FF111827' },
       size: 12,
-    };
-    cell.fill = {
-      type: 'pattern',
-      pattern: 'solid',
-      fgColor: { argb: isRequired ? 'FFDC2626' : 'FFE5E7EB' }, // red-600 / gray-200
     };
     cell.alignment = { vertical: 'middle', horizontal: 'center', wrapText: true };
     cell.border = {
@@ -384,15 +417,58 @@ async function buildTemplateXlsx(mode: 'pharmacy' | 'general'): Promise<Blob> {
     };
   });
 
-  // Auto-fit column widths
   headers.forEach((h, i) => {
     let max = h.length;
     sample.forEach(r => { const v = String(r[i] ?? ''); if (v.length > max) max = v.length; });
     ws.getColumn(i + 1).width = Math.min(Math.max(max + 2, 12), 32);
   });
 
-  // Auto-filter on header row
   ws.autoFilter = { from: { row: 1, column: 1 }, to: { row: 1, column: headers.length } };
+
+  // Legend sheet
+  const legend = wb.addWorksheet('Legend');
+  legend.columns = [
+    { header: 'Color', key: 'color', width: 28 },
+    { header: 'Meaning', key: 'meaning', width: 80 },
+  ];
+  legend.getRow(1).font = { bold: true, size: 12 };
+  legend.getRow(1).alignment = { vertical: 'middle' };
+
+  const legendRows = [
+    { fill: { type: 'pattern', pattern: 'solid', fgColor: { argb: RED } }, fontColor: 'FFFFFFFF', label: 'Red', meaning: 'Required for every primary item row (the first row of each item).' },
+    { fill: { type: 'pattern', pattern: 'solid', fgColor: { argb: ORANGE } }, fontColor: 'FFFFFFFF', label: 'Orange', meaning: 'Fill this on additional batch rows. Leave all other (non-orange) columns empty on those rows.' },
+    {
+      fill: {
+        type: 'gradient', gradient: 'angle', degree: 135,
+        stops: [
+          { position: 0, color: { argb: RED } },
+          { position: 0.5, color: { argb: RED } },
+          { position: 0.5001, color: { argb: ORANGE } },
+          { position: 1, color: { argb: ORANGE } },
+        ],
+      },
+      fontColor: 'FFFFFFFF',
+      label: 'Red / Orange (split)',
+      meaning: 'Both required on the primary row AND the key field to fill on batch-continuation rows.',
+    },
+    { fill: { type: 'pattern', pattern: 'solid', fgColor: { argb: GRAY } }, fontColor: 'FF111827', label: 'Gray', meaning: 'Optional. Fill on the primary row only if relevant.' },
+  ];
+
+  legendRows.forEach((r) => {
+    const row = legend.addRow({ color: r.label, meaning: r.meaning });
+    row.height = 24;
+    const cell = row.getCell(1);
+    cell.fill = r.fill as any;
+    cell.font = { bold: true, color: { argb: r.fontColor } };
+    cell.alignment = { vertical: 'middle', horizontal: 'center' };
+    row.getCell(2).alignment = { vertical: 'middle', wrapText: true };
+  });
+
+  legend.addRow([]);
+  const tip = legend.addRow(['Tip', 'On a continuation batch row, leave NAME OF ITEMS empty and fill the orange columns (Batch No, LPI Buy, LPI Sell, LPI Stock, Min Stock, Expiry).']);
+  tip.getCell(1).font = { bold: true };
+  tip.getCell(2).alignment = { wrapText: true };
+  tip.height = 36;
 
   const buf = await wb.xlsx.writeBuffer();
   return new Blob([buf], {
@@ -622,6 +698,32 @@ export default function ImportCsvDialog({ open, onOpenChange, onImported }: Impo
         get(cells, 'minimum_stock_level') !== '' ||
         get(cells, 'expiry_date') !== ''
       );
+
+      // Multi-batch upload: empty NAME + has batch/inventory data → attach as
+      // an extra batch on the most recent parent row.
+      if (!name && hasStandaloneSignal && out.length > 0) {
+        const parent = out[out.length - 1];
+        const stockRawC = get(cells, 'lpi_stock') || get(cells, 'stock_quantity');
+        const buyRawC = get(cells, 'lpi_buy') || get(cells, 'purchase_price');
+        const sellRawC = get(cells, 'lpi_sell') || get(cells, 'selling_price') || get(cells, 'pack_price');
+        const minRawC = get(cells, 'minimum_stock_level');
+        const expRawC = getRaw(cells, 'expiry_date');
+        const expParsedC = parseExpiryDate(expRawC);
+        const stockN = stockRawC ? parseFloat(stockRawC) : 0;
+        const buyN = buyRawC ? parseFloat(buyRawC) : parent.purchase_price;
+        const sellN = sellRawC ? parseFloat(sellRawC) : parent.selling_price;
+        const minN = minRawC ? parseLeadingInt(minRawC) : null;
+        parent.extra_batches.push({
+          rowIndex: r + 1,
+          batch_number: get(cells, 'batch_number') || null,
+          stock_quantity: isNaN(stockN) || stockN < 0 ? 0 : stockN,
+          purchase_price: isNaN(buyN) || buyN < 0 ? parent.purchase_price : buyN,
+          selling_price: isNaN(sellN) || sellN < 0 ? parent.selling_price : sellN,
+          expiry_date: expParsedC.iso,
+          minimum_stock_level: minN,
+        });
+        continue;
+      }
 
       // Pharmacy hierarchy: an empty-NAME row with ONLY generic/strength (no
       // inventory data) is an ingredient continuation of the medicine above.
@@ -896,6 +998,7 @@ export default function ImportCsvDialog({ open, onOpenChange, onImported }: Impo
         unit_price,
         sub_unit_price,
         active_ingredients: initialIngredients,
+        extra_batches: [],
       });
     }
 
@@ -1119,6 +1222,23 @@ export default function ImportCsvDialog({ open, onOpenChange, onImported }: Impo
             if (batchErr) throw batchErr;
           }
 
+          // Create additional batches from continuation rows
+          for (const eb of row.extra_batches) {
+            if (eb.stock_quantity <= 0) continue;
+            const { error: ebErr } = await createBatch({
+              branchId: selectedBranchId,
+              medicineId,
+              branchItemId: newBI.id,
+              batchNumber: eb.batch_number,
+              quantity: eb.stock_quantity,
+              purchasePrice: eb.purchase_price,
+              sellingPrice: eb.selling_price,
+              expiryDate: eb.expiry_date,
+              createdBy: user?.id || null,
+            });
+            if (ebErr) throw ebErr;
+          }
+
           success++;
           setImportProgress(p => ({ ...p, success: p.success + 1 }));
         } catch (e: any) {
@@ -1184,8 +1304,9 @@ export default function ImportCsvDialog({ open, onOpenChange, onImported }: Impo
                 <p><strong>Required:</strong> <code>NAME OF ITEMS</code>, <code>NAME OF UNIT</code>, <code>LPI BUY</code>, <code>LPI SELL</code>, <code>LPI STOCK</code>, <code>MIN STOCK (LPI)</code>.</p>
                 <p><strong>LPI</strong> = <em>Least Possible Item</em> — the smallest indivisible unit (e.g. <code>tablet</code>, <code>capsule</code>, <code>pcs</code>, <code>ml</code>). <code>NAME OF UNIT</code> renames it.</p>
                 <p><strong>Packaging is auto-derived:</strong> filling both <code>STRIPS PER PACK</code> and <code>TABLETS PER STRIP</code> = stripped layout; otherwise no-strip.</p>
+                <p className="pt-1 border-t mt-1"><strong>📦 Multi-batch:</strong> List the same item across multiple rows for different batches. On continuation rows leave <code>NAME OF ITEMS</code> empty and fill only <code>BATCH NO</code>, <code>LPI BUY</code>, <code>LPI SELL</code>, <code>LPI STOCK</code>, <code>EXPIRY DATE</code>. Total stock = sum of all batches.</p>
                 {isPharmacy && (
-                  <p className="pt-1 border-t mt-1"><strong>💊 Composition:</strong> Leave <code>NAME OF ITEMS</code> empty on a row to add it as an <em>active ingredient</em> of the medicine above (just fill GENERIC NAME + STRENGTH).</p>
+                  <p><strong>💊 Composition:</strong> Leave <code>NAME OF ITEMS</code> AND batch/stock columns empty and fill only GENERIC NAME + STRENGTH to add an <em>active ingredient</em> to the medicine above.</p>
                 )}
               </AlertDescription>
             </Alert>
@@ -1302,42 +1423,82 @@ export default function ImportCsvDialog({ open, onOpenChange, onImported }: Impo
             )}
 
             {parsedRows.length > 0 && (
-              <div className="border rounded-lg overflow-x-auto max-h-64">
+              <div className="border rounded-lg overflow-x-auto max-h-72">
                 <table className="w-full text-xs">
-                  <thead className="bg-muted sticky top-0">
+                  <thead className="bg-muted sticky top-0 z-10">
                     <tr>
                       <th className="text-left p-2">Row</th>
-                      <th className="text-left p-2">Name</th>
-                      <th className="text-left p-2">Type</th>
+                      <th className="text-left p-2">Item / Batch</th>
                       <th className="text-left p-2">Stock</th>
-                      <th className="text-left p-2">Cost / Sell</th>
+                      <th className="text-left p-2">Buy / Sell</th>
+                      <th className="text-left p-2">Expiry</th>
                       <th className="text-left p-2">Status</th>
                     </tr>
                   </thead>
                   <tbody>
-                    {parsedRows.slice(0, 50).map(r => (
-                      <tr key={r.rowIndex} className="border-t">
-                        <td className="p-2">{r.rowIndex}</td>
-                        <td className="p-2">
-                          {r.name || <span className="text-destructive">—</span>}
-                          {isPharmacy && r.active_ingredients.length > 0 && (
-                            <div className="text-[10px] text-muted-foreground mt-0.5">
-                              Contains: {r.active_ingredients.map(i => i.ingredient_name + (i.strength ? ` ${i.strength}` : '')).join(' + ')}
-                            </div>
+                    {parsedRows.slice(0, 50).map(r => {
+                      const batchCount = 1 + r.extra_batches.length;
+                      return (
+                        <React.Fragment key={`g-${r.rowIndex}`}>
+                          <tr key={`p-${r.rowIndex}`} className="border-t bg-muted/40">
+                            <td className="p-2 font-medium">{r.rowIndex}</td>
+                            <td className="p-2">
+                              <div className="font-semibold">
+                                {r.name || <span className="text-destructive">—</span>}
+                                {batchCount > 1 && (
+                                  <Badge variant="secondary" className="ml-2 text-[10px]">{batchCount} batches</Badge>
+                                )}
+                              </div>
+                              <div className="text-[10px] text-muted-foreground mt-0.5">
+                                {[r.category, r.manufacturer, r.item_type + (r.packaging_mode === 'with_strip' ? ' (strip)' : '')]
+                                  .filter(Boolean).join(' • ')}
+                                {r.minimum_stock_level > 0 && ` • min ${r.minimum_stock_level}`}
+                              </div>
+                              {isPharmacy && r.active_ingredients.length > 0 && (
+                                <div className="text-[10px] text-muted-foreground mt-0.5">
+                                  Contains: {r.active_ingredients.map(i => i.ingredient_name + (i.strength ? ` ${i.strength}` : '')).join(' + ')}
+                                </div>
+                              )}
+                            </td>
+                            <td className="p-2 font-medium">{r.stock_quantity} {r.unit_label}</td>
+                            <td className="p-2">{r.purchase_price} / {r.selling_price}</td>
+                            <td className="p-2">{r.expiry_date || '—'}</td>
+                            <td className="p-2">
+                              {r.errors.length > 0
+                                ? <Badge variant="destructive" className="text-[10px]">Invalid</Badge>
+                                : r.isDuplicate
+                                  ? <Badge variant="outline" className="text-[10px] border-warning text-warning">Duplicate</Badge>
+                                  : <Badge variant="outline" className="text-[10px] border-green-600 text-green-600">OK</Badge>}
+                            </td>
+                          </tr>
+                          {/* Primary batch (from parent row) shown as nested when there are extras */}
+                          {batchCount > 1 && (
+                            <tr key={`b0-${r.rowIndex}`} className="border-t border-l-4 border-l-primary/60">
+                              <td className="p-2 pl-6 text-muted-foreground">└─</td>
+                              <td className="p-2 pl-2">
+                                <span className="font-mono text-[11px]">{r.batch_number || <span className="italic text-muted-foreground">no batch #</span>}</span>
+                              </td>
+                              <td className="p-2">{r.stock_quantity} {r.unit_label}</td>
+                              <td className="p-2">{r.purchase_price} / {r.selling_price}</td>
+                              <td className="p-2">{r.expiry_date || '—'}</td>
+                              <td className="p-2"><Badge variant="outline" className="text-[10px]">batch 1</Badge></td>
+                            </tr>
                           )}
-                        </td>
-                        <td className="p-2">{r.item_type}{r.packaging_mode === 'with_strip' && ' (strip)'}</td>
-                        <td className="p-2">{r.stock_quantity} {r.unit_label}</td>
-                        <td className="p-2">{r.purchase_price} / {r.selling_price}</td>
-                        <td className="p-2">
-                          {r.errors.length > 0
-                            ? <Badge variant="destructive" className="text-[10px]">Invalid</Badge>
-                            : r.isDuplicate
-                              ? <Badge variant="outline" className="text-[10px] border-warning text-warning">Duplicate</Badge>
-                              : <Badge variant="outline" className="text-[10px] border-green-600 text-green-600">OK</Badge>}
-                        </td>
-                      </tr>
-                    ))}
+                          {r.extra_batches.map((eb, i) => (
+                            <tr key={`b-${r.rowIndex}-${i}`} className="border-t border-l-4 border-l-primary/60">
+                              <td className="p-2 pl-6 text-muted-foreground">└─ {eb.rowIndex}</td>
+                              <td className="p-2 pl-2">
+                                <span className="font-mono text-[11px]">{eb.batch_number || <span className="italic text-muted-foreground">no batch #</span>}</span>
+                              </td>
+                              <td className="p-2">{eb.stock_quantity} {r.unit_label}</td>
+                              <td className="p-2">{eb.purchase_price} / {eb.selling_price}</td>
+                              <td className="p-2">{eb.expiry_date || '—'}</td>
+                              <td className="p-2"><Badge variant="outline" className="text-[10px]">batch {i + 2}</Badge></td>
+                            </tr>
+                          ))}
+                        </React.Fragment>
+                      );
+                    })}
                   </tbody>
                 </table>
                 {parsedRows.length > 50 && (

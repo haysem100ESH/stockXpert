@@ -240,6 +240,7 @@ export default function StockAdjustmentDialog({ open, onOpenChange, medicine, on
       }
 
       toast({ title: 'Success', description: `Stock ${adjustmentType}d successfully.` });
+      window.dispatchEvent(new Event('app:refresh'));
       resetForm();
       onOpenChange(false);
       onAdjusted();
@@ -366,6 +367,7 @@ export default function StockAdjustmentDialog({ open, onOpenChange, medicine, on
       }
 
       toast({ title: 'Success', description: 'New batch added. It will be sold via FIFO based on expiry.' });
+      window.dispatchEvent(new Event('app:refresh'));
       resetForm();
       onOpenChange(false);
       onAdjusted();

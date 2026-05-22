@@ -180,6 +180,23 @@ export default function SmartAssistant() {
     transition: dragging ? 'none' : 'left 0.25s ease, right 0.25s ease',
   };
 
+  // Keep the chat panel within the viewport even if the launcher button was dragged near the top
+  const PANEL_HEIGHT = 560;
+  const [viewportH, setViewportH] = useState<number>(() =>
+    typeof window !== 'undefined' ? window.innerHeight : 800
+  );
+  useEffect(() => {
+    const onResize = () => setViewportH(window.innerHeight);
+    window.addEventListener('resize', onResize);
+    return () => window.removeEventListener('resize', onResize);
+  }, []);
+  const panelBottom = Math.max(16, Math.min(bottomOffset, viewportH - PANEL_HEIGHT - 16));
+  const panelStyle: React.CSSProperties = {
+    ...positionStyle,
+    bottom: `${panelBottom}px`,
+  };
+
+
   const justDraggedRef = useRef(false);
 
   const makeDragHandlers = (opts: { headerOnly?: boolean } = {}) => ({
@@ -256,8 +273,9 @@ export default function SmartAssistant() {
       {/* Chat panel */}
       {open && (
         <div
-          style={positionStyle}
+          style={panelStyle}
           className="fixed z-50 w-[380px] max-w-[calc(100vw-2rem)] h-[560px] max-h-[calc(100vh-4rem)] bg-card border rounded-2xl shadow-2xl flex flex-col overflow-hidden"
+
         >
           {/* Header (drag handle) */}
           <div

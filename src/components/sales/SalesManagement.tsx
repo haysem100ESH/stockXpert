@@ -168,24 +168,21 @@ export default function SalesManagement() {
       setSelectedMedicineForDialog(medicine);
       return;
     }
+    // Always route through the new packaging-aware flow so the cart strictly
+    // respects medicine packaging config (strip/pack enabled flags). Unit
+    // (LPI) is ALWAYS available, even when no packaging row exists.
     const pkg = packagingMap[medicine.medicine_id];
-    if (pkg && (pkg.strip_enabled || pkg.pack_enabled)) {
-      // Add directly at the unit level — user can change level in the cart.
-      const unitPrice = pkg.unit_selling_price
-        ?? (medicine.selling_price && unitsPerPackSafe(pkg)
-          ? medicine.selling_price / unitsPerPackSafe(pkg)
-          : medicine.selling_price);
-      addToCart(medicine, 'full_pack', 1, {
-        sellLevel: 'unit',
-        unitsPerLevel: 1,
-        levelPrice: unitPrice,
-        levelLabel: pkg.unit_name || medicine.unit_label || 'unit',
-      });
-      if (isSmallScreen) setCartOpen(true);
-      return;
-    }
-    const defaultSaleType: 'full_pack' | 'by_stripe' = medicine.units_per_pack ? 'by_stripe' : 'full_pack';
-    addToCart(medicine, defaultSaleType, 1);
+    const upPack = pkg ? unitsPerPackSafe(pkg) : (medicine.units_per_pack || 1);
+    const unitPrice = pkg?.unit_selling_price
+      ?? (medicine.selling_price && upPack > 1
+        ? medicine.selling_price / upPack
+        : medicine.selling_price);
+    addToCart(medicine, 'full_pack', 1, {
+      sellLevel: 'unit',
+      unitsPerLevel: 1,
+      levelPrice: unitPrice,
+      levelLabel: pkg?.unit_name || medicine.unit_label || 'unit',
+    });
     if (isSmallScreen) setCartOpen(true);
   };
 
@@ -466,6 +463,7 @@ export default function SalesManagement() {
     const currentDebt = selectedCustomer.computed_debt || 0;
     const maxLimit = selectedCustomer.max_credit_limit ?? 5000;
     const score = selectedCustomer.credit_score ?? 50;
+    if (!isFinite(maxLimit)) return { allowed: true, score };
     if (maxLimit === 0) return { allowed: false, reason: 'Credit score too low — Cash Only', score };
     const available = Math.max(0, maxLimit - currentDebt);
     if (shortfall > available) return { allowed: false, reason: `Debt (ETB ${(currentDebt + shortfall).toFixed(2)}) would exceed credit limit (ETB ${maxLimit.toFixed(2)})`, score };
@@ -799,6 +797,8 @@ export default function SalesManagement() {
       setCartOpen(false);
       // Revalidate cached product list + customers (debt may have changed).
       invalidateSalesCache();
+      // Broadcast to all pages (Inventory, Dashboard, etc.) so stock cards refresh live.
+      window.dispatchEvent(new Event('app:refresh'));
     } catch (error: any) {
       console.error('[Checkout Error]', error);
       toast({

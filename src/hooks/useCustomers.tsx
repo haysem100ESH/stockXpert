@@ -14,6 +14,7 @@ import { useQuery, useQueryClient } from '@tanstack/react-query';
 import { supabase } from '@/lib/db';
 import { useBranchContext } from './useBranchContext';
 import { getCreditLimit } from './useCreditScore';
+import { resolveCreditLimit } from '@/lib/creditLimit';
 import { useAuth } from './useAuth';
 import { useOwnerBranchIds } from './useOwnerBranchIds';
 
@@ -28,6 +29,9 @@ export interface CustomerRow {
   totalDebt: number;
   lastPurchaseDate?: string;
   credit_score: number;
+  /** Raw stored value (null=auto, -1=unlimited, >0=custom) */
+  max_credit_limit_raw: number | null;
+  /** Resolved effective limit; Infinity for unlimited */
   max_credit_limit: number;
 }
 
@@ -96,7 +100,8 @@ async function fetchCustomers(
     const totalDebt = debtMap[c.id] || 0;
     const totalPaid = Math.max(0, totalPurchases - totalDebt);
     const creditScore = latestScoreMap[c.id] ?? c.credit_score ?? 50;
-    const maxCreditLimit = c.max_credit_limit ?? getCreditLimit(creditScore);
+    const rawLimit: number | null = c.max_credit_limit ?? null;
+    const maxCreditLimit = resolveCreditLimit(rawLimit, creditScore);
     return {
       ...c,
       totalPurchases,
@@ -104,6 +109,7 @@ async function fetchCustomers(
       totalDebt,
       lastPurchaseDate,
       credit_score: creditScore,
+      max_credit_limit_raw: rawLimit,
       max_credit_limit: maxCreditLimit,
     } as CustomerRow;
   });
