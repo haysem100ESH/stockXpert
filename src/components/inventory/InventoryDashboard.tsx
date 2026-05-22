@@ -35,14 +35,16 @@ interface BatchAlertItem {
 export default function InventoryDashboard() {
   const [outOfStockItems, setOutOfStockItems] = useState<AlertItem[]>([]);
   const [lowStockItems, setLowStockItems] = useState<AlertItem[]>([]);
-  const [expiringItems, setExpiringItems] = useState<AlertItem[]>([]);
-  const [expiredItems, setExpiredItems] = useState<AlertItem[]>([]);
+  const [expiringBatches, setExpiringBatches] = useState<BatchAlertItem[]>([]);
+  const [expiredBatches, setExpiredBatches] = useState<BatchAlertItem[]>([]);
   const [loading, setLoading] = useState(true);
   const [deleteConfirm, setDeleteConfirm] = useState<{
     open: boolean;
-    itemId: string;
+    batchId: string;
+    branchItemId: string;
     itemName: string;
-  }>({ open: false, itemId: '', itemName: '' });
+    batchNumber: string | null;
+  }>({ open: false, batchId: '', branchItemId: '', itemName: '', batchNumber: null });
   const { toast } = useToast();
   const { selectedBranch, branchType } = useBranchContext();
   const { profile } = useAuth();
