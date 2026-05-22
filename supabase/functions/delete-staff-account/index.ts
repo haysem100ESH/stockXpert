@@ -104,11 +104,34 @@ const handler = async (req: Request): Promise<Response> => {
       { table: 'branch_items', column: 'created_by' },
       { table: 'pharmacy_branches', column: 'manager_staff_id' },
       { table: 'payment_requests', column: 'approved_by' },
+      { table: 'salary_expenses', column: 'created_by' },
     ];
     for (const t of nullifyTargets) {
       try {
         const { error } = await supabaseAdmin.from(t.table).update({ [t.column]: null }).eq(t.column, staffId);
         if (error) console.warn(`Could not clear ${t.table}.${t.column}:`, error.message);
+      } catch (_) { /* ignore - column/table may not exist */ }
+    }
+
+    // Delete staff-owned settings/biometric/attendance rows (best-effort)
+    const deleteTargets: Array<{ table: string; column: string }> = [
+      { table: 'staff_permissions', column: 'staff_id' },
+      { table: 'staff_face_data', column: 'staff_id' },
+      { table: 'staff_face_embeddings', column: 'staff_id' },
+      { table: 'staff_attendance', column: 'staff_id' },
+      { table: 'attendance_records', column: 'staff_id' },
+      { table: 'attendance_schedules', column: 'staff_id' },
+      { table: 'attendance_suspicious_alerts', column: 'staff_id' },
+      { table: 'salary_expenses', column: 'staff_id' },
+      { table: 'staff_salaries', column: 'staff_id' },
+      { table: 'salary_payments', column: 'staff_id' },
+      { table: 'user_roles', column: 'user_id' },
+      { table: 'telegram_links', column: 'user_id' },
+    ];
+    for (const t of deleteTargets) {
+      try {
+        const { error } = await supabaseAdmin.from(t.table).delete().eq(t.column, staffId);
+        if (error) console.warn(`Could not delete ${t.table}.${t.column}:`, error.message);
       } catch (_) { /* ignore - column/table may not exist */ }
     }
 
