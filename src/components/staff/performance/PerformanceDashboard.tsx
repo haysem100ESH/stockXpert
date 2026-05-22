@@ -92,11 +92,12 @@ export default function PerformanceDashboard() {
       const sellerBranchMap = new Map<string, string>();
       const sellerIds: string[] = Array.from(new Set<string>((salesRes.data || [])
         .map((s: any) => {
-          const sellerId = s.sold_by || s.created_by;
+          const sellerId = s.sold_by;
           if (sellerId && s.branch_id) sellerBranchMap.set(sellerId, s.branch_id);
           return sellerId;
         })
         .filter((id: unknown): id is string => typeof id === 'string' && id.length > 0)));
+
 
       const missingSellerIds = sellerIds.filter((id) => !staffById.has(id));
       if (missingSellerIds.length > 0) {
