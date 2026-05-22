@@ -188,30 +188,42 @@ export default function BatchesEditor({
                   No batches yet. Click <strong>Add Batch</strong> to create one.
                 </TableCell>
               </TableRow>
-            ) : drafts.map(d => (
+            ) : drafts.map(d => {
+              const missingBN = !d.batch_number.trim();
+              return (
               <TableRow key={d.id}>
-                <TableCell>
-                  <Input value={d.batch_number} onChange={e => updateField(d.id, 'batch_number', e.target.value)} placeholder="e.g. BN-001" />
+                <TableCell className="align-top">
+                  <Input
+                    value={d.batch_number}
+                    onChange={e => updateField(d.id, 'batch_number', e.target.value)}
+                    placeholder="e.g. BN-001"
+                    className={missingBN ? 'border-destructive focus-visible:ring-destructive' : ''}
+                    aria-invalid={missingBN}
+                  />
+                  {missingBN && (
+                    <p className="text-[11px] text-destructive mt-1">Batch number is required.</p>
+                  )}
                 </TableCell>
-                <TableCell>
+                <TableCell className="align-top">
                   <Input type="number" step="0.01" min="0" value={d.remaining_quantity} onChange={e => updateField(d.id, 'remaining_quantity', e.target.value)} />
                 </TableCell>
-                <TableCell>
+                <TableCell className="align-top">
                   <Input type="number" step="0.01" min="0" value={d.purchase_price} onChange={e => updateField(d.id, 'purchase_price', e.target.value)} />
                 </TableCell>
-                <TableCell>
+                <TableCell className="align-top">
                   <Input type="number" step="0.01" min="0" value={d.selling_price} onChange={e => updateField(d.id, 'selling_price', e.target.value)} />
                 </TableCell>
-                <TableCell>
+                <TableCell className="align-top">
                   <Input type="date" value={d.expiry_date} onChange={e => updateField(d.id, 'expiry_date', e.target.value)} />
                 </TableCell>
-                <TableCell>
+                <TableCell className="align-top">
                   <Button type="button" size="sm" variant="ghost" onClick={() => removeBatch(d.id)} title="Delete batch">
                     <Trash2 className="h-4 w-4 text-destructive" />
                   </Button>
                 </TableCell>
               </TableRow>
-            ))}
+              );
+            })}
           </TableBody>
         </Table>
       </div>
