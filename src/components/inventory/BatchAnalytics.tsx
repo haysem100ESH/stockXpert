@@ -204,7 +204,7 @@ export default function BatchAnalytics() {
                       <TableRow key={b.batchId}>
                         <TableCell className="font-medium">{b.medicineName}</TableCell>
                         <TableCell className="font-mono text-xs">{b.batchNumber || '—'}</TableCell>
-                        <TableCell className="text-right">{b.soldQty}</TableCell>
+                        <TableCell className="text-right">{Number.isInteger(b.soldQty) ? b.soldQty : Number(b.soldQty).toFixed(2)}</TableCell>
                         <TableCell className="text-right font-medium text-primary">ETB {b.profit.toFixed(2)}</TableCell>
                       </TableRow>
                     ))}

@@ -74,7 +74,8 @@ export default function CreateCustomItemDialog({ open, onOpenChange, onItemCreat
   };
 
   const handleCreate = async () => {
-    const finalCategory = (category === '__custom__' ? customCategory.trim() : category) || 'Uncategorized';
+    const isNewCategory = category === '__custom__';
+    const finalCategory = (isNewCategory ? customCategory.trim() : category) || 'Uncategorized';
     if (!name.trim()) {
       toast({ title: 'Error', description: 'Item name is required', variant: 'destructive' });
       return;
@@ -92,6 +93,25 @@ export default function CreateCustomItemDialog({ open, onOpenChange, onItemCreat
           .eq('id', profile.branch_id)
           .single();
         ownerId = branch?.pharmacy_owner_id || undefined;
+      }
+
+      // Persist a brand-new category to custom_categories so it shows up in the
+      // Categories management UI and other dropdowns.
+      if (isNewCategory && customCategory.trim() && ownerId) {
+        const exists = categories.some(c => c.toLowerCase() === customCategory.trim().toLowerCase());
+        if (!exists) {
+          const { error: catErr } = await supabase.from('custom_categories').insert({
+            owner_id: ownerId,
+            name: customCategory.trim(),
+            system_type: isPharmacy ? 'pharmacy' : 'general',
+          });
+          // Ignore duplicate-key errors silently; surface other failures.
+          if (catErr && !String(catErr.message || '').toLowerCase().includes('duplicate')) {
+            console.warn('Failed to register custom category:', catErr);
+          } else {
+            window.dispatchEvent(new Event('categories-updated'));
+          }
+        }
       }
 
       // Compute units_per_pack: if "with strip" → strips × units/strip, else manual input

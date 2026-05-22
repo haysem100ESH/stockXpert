@@ -5,6 +5,7 @@ import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
 import { ToggleGroup, ToggleGroupItem } from '@/components/ui/toggle-group';
 import { Badge } from '@/components/ui/badge';
+import { toast } from 'sonner';
 import { usePackaging } from '@/hooks/usePackaging';
 import {
   PackagingLevel,
@@ -125,11 +126,29 @@ export default function AddToCartDialog({ open, onOpenChange, medicine, onAddToC
   const handleAdd = () => {
     if (isMeasurableItem) {
       const qty = getMeasurableQuantity();
-      if (qty <= 0 || qty > totalUnits) return;
+      if (qty <= 0) {
+        toast.error('Enter a quantity greater than zero');
+        return;
+      }
+      if (qty > totalUnits) {
+        toast.error(`Not enough stock — only ${totalUnits} ${unitName} available`);
+        return;
+      }
       onAddToCart(medicine, 'full_pack', qty);
     } else {
       const n = parseInt(count);
-      if (!n || n <= 0 || n > maxAtLevel) return;
+      if (!n || n <= 0) {
+        toast.error(`Enter at least 1 ${levelLabel}`);
+        return;
+      }
+      if (n > maxAtLevel) {
+        toast.error(
+          maxAtLevel < 1
+            ? `Out of stock — cannot sell by ${levelLabel}`
+            : `Not enough stock — only ${maxAtLevel} ${levelLabel}${maxAtLevel === 1 ? '' : 's'} available`,
+        );
+        return;
+      }
       onAddToCart(medicine, 'full_pack', n, {
         sellLevel: level,
         unitsPerLevel,
