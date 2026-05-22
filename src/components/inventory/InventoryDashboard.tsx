@@ -11,6 +11,7 @@ import { ConfirmationDialog } from '@/components/ui/confirmation-dialog';
 import { useBranchContext } from '@/hooks/useBranchContext';
 import { useAuth } from '@/hooks/useAuth';
 import { useExpiryThreshold } from '@/hooks/useExpiryThreshold';
+import { syncBranchItemQuantity } from '@/lib/batchInventory';
 
 interface AlertItem {
   id: string;
@@ -19,6 +20,16 @@ interface AlertItem {
   quantity: number;
   minimum_stock_level?: number;
   expiry_date?: string;
+}
+
+interface BatchAlertItem {
+  batch_id: string;
+  branch_item_id: string;
+  name: string;
+  category: string;
+  batch_number: string | null;
+  quantity: number;
+  expiry_date: string;
 }
 
 export default function InventoryDashboard() {
