@@ -98,7 +98,7 @@ export default function MedicineCodes() {
         const days = b.expiry_alert_days ?? globalAlertDays;
         const s = classifyExpiry(b.expiry_date, days);
         if (s === 'expired') { worst = 'expired'; break; }
-        if (s === 'expiring' && worst !== 'expired') worst = 'expiring';
+        if (s === 'expiring' && (worst as ExpiryStatus) !== 'expired') worst = 'expiring';
       }
       const link: LinkedMedicine = {
         id: it.medicine_id,
