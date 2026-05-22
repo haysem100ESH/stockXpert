@@ -17,6 +17,7 @@ import { useQuery } from '@tanstack/react-query';
 import { createBatch, deductFIFO, getFIFOBatches, syncBranchItemQuantity, type InventoryBatch } from '@/lib/batchInventory';
 import { Textarea } from '@/components/ui/textarea';
 import PackagingEditor from './PackagingEditor';
+import BatchesEditor from './BatchesEditor';
 import {
   defaultPackaging,
   Packaging,
@@ -673,10 +674,22 @@ export default function EditBranchItemDialog({ open, onOpenChange, item, onItemU
 
         <form onSubmit={handleSubmit} className="space-y-4">
           <Tabs defaultValue="branch" className="w-full">
-            <TabsList className="grid w-full grid-cols-2">
+            <TabsList className="grid w-full grid-cols-3">
               <TabsTrigger value="branch">Pricing & Stock</TabsTrigger>
+              <TabsTrigger value="batches">Batches</TabsTrigger>
               <TabsTrigger value="catalog">Item Info</TabsTrigger>
             </TabsList>
+
+            <TabsContent value="batches" className="space-y-4 mt-4">
+              <BatchesEditor
+                branchId={item.branch_id}
+                medicineId={item.medicine_id}
+                branchItemId={item.id}
+                defaultPurchasePrice={Number(item.purchase_price) || 0}
+                defaultSellingPrice={Number(item.selling_price) || 0}
+                onChanged={() => { onItemUpdated(); }}
+              />
+            </TabsContent>
 
             <TabsContent value="branch" className="space-y-4 mt-4">
               {/* Read-only stock info — total never changes when packaging is reconfigured */}
