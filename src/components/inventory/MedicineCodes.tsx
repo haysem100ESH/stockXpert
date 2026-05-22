@@ -18,19 +18,31 @@ import {
   Collapsible, CollapsibleContent, CollapsibleTrigger,
 } from '@/components/ui/collapsible';
 import { ConfirmationDialog } from '@/components/ui/confirmation-dialog';
-import { Plus, Edit, Trash2, ChevronDown, Tag, Search, Link2 } from 'lucide-react';
+import { Plus, Edit, Trash2, ChevronDown, Tag, Search, Link2, Layers, AlertTriangle, CircleAlert, PackageX, ChevronRight } from 'lucide-react';
 import { cn } from '@/lib/utils';
 import { supabase } from '@/lib/db';
 import { useToast } from '@/hooks/use-toast';
 import { useMedicineCodes, type MedicineCode } from '@/hooks/useMedicineCodes';
 import { useBranchInventory } from '@/hooks/useBranchInventory';
 import { formatStock, defaultPackaging, type Packaging } from '@/lib/packaging';
+import {
+  useMedicineCodeBatches,
+  classifyExpiry,
+  type ExpiryStatus,
+} from '@/hooks/useMedicineCodeAnalytics';
+import MedicineCodeBatchesDialog from './MedicineCodeBatchesDialog';
+import MedicineCodeAnalytics from './MedicineCodeAnalytics';
 
 interface LinkedMedicine {
   id: string;
   name: string;
+  generic_name?: string | null;
+  strength?: string | null;
+  manufacturer?: string | null;
   total_units: number;
+  minimum_stock_level: number;
   packaging: Packaging;
+  worstStatus: ExpiryStatus;
 }
 
 export default function MedicineCodes() {
