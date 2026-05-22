@@ -83,21 +83,18 @@ export default function InventoryDashboard() {
       }
 
       if (!selectedBranch && ownerBranchIds.length === 0 && profile?.role === 'owner') {
-        setOutOfStockItems([]); setLowStockItems([]); setExpiringItems([]); setExpiredItems([]);
+        setOutOfStockItems([]); setLowStockItems([]); setExpiringBatches([]); setExpiredBatches([]);
         setLoading(false);
         return;
       }
 
-      // Fetch all branch_items with medicine details
+      // Parent-level stock for out-of-stock/low-stock
       let query = supabase
         .from('branch_items')
-        .select('id, quantity, expiry_date, medicines!inner(name, category, minimum_stock_level)');
+        .select('id, quantity, medicines!inner(name, category, minimum_stock_level)');
 
-      if (selectedBranch) {
-        query = query.eq('branch_id', selectedBranch);
-      } else if (ownerBranchIds.length > 0) {
-        query = query.in('branch_id', ownerBranchIds);
-      }
+      if (selectedBranch) query = query.eq('branch_id', selectedBranch);
+      else if (ownerBranchIds.length > 0) query = query.in('branch_id', ownerBranchIds);
 
       const { data, error } = await query;
       if (error) throw error;
@@ -106,29 +103,45 @@ export default function InventoryDashboard() {
         id: bi.id,
         name: bi.medicines?.name || 'Unknown',
         category: bi.medicines?.category || 'Uncategorized',
-        quantity: bi.quantity,
+        quantity: Number(bi.quantity) || 0,
         minimum_stock_level: bi.medicines?.minimum_stock_level || 0,
-        expiry_date: bi.expiry_date,
       }));
 
-      const outOfStock = items.filter(i => i.quantity === 0);
-      const lowStock = items.filter(i => i.quantity > 0 && i.minimum_stock_level && i.quantity <= i.minimum_stock_level);
+      setOutOfStockItems(items.filter(i => i.quantity === 0));
+      setLowStockItems(items.filter(i => i.quantity > 0 && i.minimum_stock_level && i.quantity <= i.minimum_stock_level));
+
+      // Batch-level expiry
+      let batchQuery = supabase
+        .from('inventory_batches')
+        .select('id, branch_item_id, batch_number, remaining_quantity, expiry_date, medicines!inner(name, category)')
+        .not('expiry_date', 'is', null)
+        .gt('remaining_quantity', 0);
+
+      if (selectedBranch) batchQuery = batchQuery.eq('branch_id', selectedBranch);
+      else if (ownerBranchIds.length > 0) batchQuery = batchQuery.in('branch_id', ownerBranchIds);
+
+      const { data: batchRows } = await batchQuery;
 
       const today = new Date().toISOString().split('T')[0];
       const thresholdDate = new Date();
       thresholdDate.setDate(thresholdDate.getDate() + thresholdDays);
-      const tomorrow = new Date();
-      tomorrow.setDate(tomorrow.getDate() + 1);
-      const tomorrowStr = tomorrow.toISOString().split('T')[0];
       const thresholdStr = thresholdDate.toISOString().split('T')[0];
 
-      const expiring = items.filter(i => i.expiry_date && i.quantity > 0 && i.expiry_date >= tomorrowStr && i.expiry_date <= thresholdStr);
-      const expired = items.filter(i => i.expiry_date && i.quantity > 0 && i.expiry_date <= today);
+      const mappedBatches: BatchAlertItem[] = ((batchRows || []) as any[])
+        .filter(b => b.branch_item_id)
+        .map(b => ({
+          batch_id: b.id,
+          branch_item_id: b.branch_item_id,
+          name: b.medicines?.name || 'Unknown',
+          category: b.medicines?.category || 'Uncategorized',
+          batch_number: b.batch_number,
+          quantity: Number(b.remaining_quantity) || 0,
+          expiry_date: b.expiry_date,
+        }))
+        .sort((a, b) => a.expiry_date.localeCompare(b.expiry_date));
 
-      setOutOfStockItems(outOfStock);
-      setLowStockItems(lowStock);
-      setExpiringItems(expiring);
-      setExpiredItems(expired);
+      setExpiringBatches(mappedBatches.filter(b => b.expiry_date > today && b.expiry_date <= thresholdStr));
+      setExpiredBatches(mappedBatches.filter(b => b.expiry_date <= today));
     } catch (error) {
       console.error('Error fetching inventory data:', error);
       toast({ title: "Error", description: "Failed to fetch inventory data", variant: "destructive" });
@@ -137,25 +150,34 @@ export default function InventoryDashboard() {
     }
   };
 
-  const handleRemoveExpiredItem = (itemId: string, itemName: string) => {
-    setDeleteConfirm({ open: true, itemId, itemName });
+  const handleRemoveExpiredBatch = (batch: BatchAlertItem) => {
+    setDeleteConfirm({
+      open: true,
+      batchId: batch.batch_id,
+      branchItemId: batch.branch_item_id,
+      itemName: batch.name,
+      batchNumber: batch.batch_number,
+    });
   };
 
   const confirmRemoveExpiredItem = async () => {
     try {
       const { error } = await supabase
-        .from('branch_items')
-        .update({ quantity: 0 })
-        .eq('id', deleteConfirm.itemId);
-
+        .from('inventory_batches')
+        .update({ remaining_quantity: 0 })
+        .eq('id', deleteConfirm.batchId);
       if (error) throw error;
 
-      setExpiredItems(expiredItems.filter(item => item.id !== deleteConfirm.itemId));
-      toast({ title: "Success", description: "Expired item stock set to 0" });
-      setDeleteConfirm({ open: false, itemId: '', itemName: '' });
+      if (deleteConfirm.branchItemId) {
+        await syncBranchItemQuantity(deleteConfirm.branchItemId);
+      }
+
+      setExpiredBatches(expiredBatches.filter(b => b.batch_id !== deleteConfirm.batchId));
+      toast({ title: "Success", description: "Expired batch stock set to 0" });
+      setDeleteConfirm({ open: false, batchId: '', branchItemId: '', itemName: '', batchNumber: null });
     } catch (error) {
-      console.error('Error updating expired item:', error);
-      toast({ title: "Error", description: "Failed to update expired item", variant: "destructive" });
+      console.error('Error updating expired batch:', error);
+      toast({ title: "Error", description: "Failed to update expired batch", variant: "destructive" });
     }
   };
 
