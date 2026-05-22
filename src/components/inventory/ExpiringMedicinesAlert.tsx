@@ -65,10 +65,10 @@ export default function ExpiringMedicinesAlert() {
         return null;
       };
 
-      // Fetch all branch_items with medicine details in one query
+      // Fetch all branch_items (parent-level stock + min stock)
       let query: any = supabase
         .from('branch_items')
-        .select('id, quantity, expiry_date, medicines!inner(minimum_stock_level)');
+        .select('id, medicine_id, quantity, medicines!inner(minimum_stock_level)');
       query = addBranchFilter(query);
       if (!query) {
         setExpiringCount(0);
@@ -79,7 +79,14 @@ export default function ExpiringMedicinesAlert() {
       }
       const { data: items } = await query;
 
-      if (!items || items.length === 0) {
+      // Fetch batch-level expiry data
+      let batchQuery: any = supabase
+        .from('inventory_batches')
+        .select('id, medicine_id, branch_id, remaining_quantity, expiry_date');
+      batchQuery = addBranchFilter(batchQuery);
+      const { data: batches } = batchQuery ? await batchQuery : { data: [] };
+
+      if ((!items || items.length === 0) && (!batches || batches.length === 0)) {
         setExpiringCount(0);
         setExpiredCount(0);
         setOutOfStockCount(0);
@@ -87,26 +94,26 @@ export default function ExpiringMedicinesAlert() {
         return;
       }
 
-      let expiring = 0, expired = 0, oos = 0, low = 0;
-
-      for (const item of items as any[]) {
+      let oos = 0, low = 0;
+      for (const item of (items || []) as any[]) {
         if (item.quantity === 0) {
           oos++;
         } else if (item.medicines?.minimum_stock_level && item.quantity <= item.medicines.minimum_stock_level) {
           low++;
         }
-
-        if (item.expiry_date && item.quantity > 0) {
-          if (item.expiry_date <= today) {
-            expired++;
-          } else if (item.expiry_date <= thresholdStr) {
-            expiring++;
-          }
-        }
       }
 
-      setExpiringCount(expiring);
-      setExpiredCount(expired);
+      // Expiry counted per batch (unique parents per bucket so badge counts parent items)
+      const expiredParents = new Set<string>();
+      const expiringParents = new Set<string>();
+      for (const b of (batches || []) as any[]) {
+        if (!b.expiry_date || Number(b.remaining_quantity) <= 0) continue;
+        if (b.expiry_date <= today) expiredParents.add(b.medicine_id);
+        else if (b.expiry_date <= thresholdStr) expiringParents.add(b.medicine_id);
+      }
+
+      setExpiringCount(expiringParents.size);
+      setExpiredCount(expiredParents.size);
       setOutOfStockCount(oos);
       setLowStockCount(low);
     } catch (error) {

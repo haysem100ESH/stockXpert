@@ -226,7 +226,7 @@ export default function SmartInventoryDashboard() {
         </TabsContent>
         {isPharmacy && (
           <TabsContent value="expiry">
-            <ExpiryRiskPanel items={summary.expiryAlerts} />
+            <ExpiryRiskPanel items={items} />
           </TabsContent>
         )}
       </Tabs>
