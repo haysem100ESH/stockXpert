@@ -74,8 +74,35 @@ export default function StockMovementForm({ open, onOpenChange, onSuccess }: Pro
     const { data: branchData } = await supabase.from('pharmacy_branches').select('id').eq('pharmacy_owner_id', profile.id);
     const branchIds = (branchData || []).map((b: any) => b.id);
     if (branchIds.length === 0) return;
-    const { data } = await supabase.from('medicines').select('id, name, stock_quantity, branch_id').in('branch_id', branchIds).order('name');
-    setMedicines(data || []);
+
+    // Source of truth: branch_items.quantity (kept in sync by fulfill/sale RPCs)
+    const { data: bItems } = await supabase
+      .from('branch_items')
+      .select('medicine_id, branch_id, quantity')
+      .in('branch_id', branchIds);
+
+    const medIds = [...new Set((bItems || []).map((b: any) => b.medicine_id))];
+    if (medIds.length === 0) { setMedicines([]); return; }
+
+    const { data: meds } = await supabase
+      .from('medicines')
+      .select('id, name')
+      .in('id', medIds);
+
+    const nameMap: Record<string, string> = {};
+    (meds || []).forEach((m: any) => { nameMap[m.id] = m.name; });
+
+    // Build one virtual row per (medicine_id, branch_id) using branch_items.quantity
+    const rows = (bItems || [])
+      .map((b: any) => ({
+        id: b.medicine_id,
+        name: nameMap[b.medicine_id] || 'Unknown',
+        stock_quantity: Number(b.quantity || 0),
+        branch_id: b.branch_id,
+      }))
+      .sort((a, b) => a.name.localeCompare(b.name));
+
+    setMedicines(rows);
   };
 
   const availableMedicines = fromBranchId
