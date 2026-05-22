@@ -1496,7 +1496,7 @@ export default function ImportCsvDialog({ open, onOpenChange, onImported }: Impo
                               <td className="p-2"><Badge variant="outline" className="text-[10px]">batch {i + 2}</Badge></td>
                             </tr>
                           ))}
-                        </>
+                        </React.Fragment>
                       );
                     })}
                   </tbody>
