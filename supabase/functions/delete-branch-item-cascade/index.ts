@@ -123,10 +123,11 @@ serve(async (req: Request): Promise<Response> => {
     const saleIds = [...new Set((linkedSaleItems || []).map((row: any) => row.sale_id).filter(Boolean))];
     if (saleIds.length > 0 && !cascade) {
       return json({
-        error: "SALES_HISTORY_EXISTS",
+        success: false,
+        requiresCascade: true,
         saleCount: linkedSaleItems?.length || 0,
         message: "This item has sales history. Confirm cascade deletion first.",
-      }, 409);
+      });
     }
 
     const deleted = {
