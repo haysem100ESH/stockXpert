@@ -156,36 +156,33 @@ export default function StaffInventoryWithActions() {
     const itemId = deleteConfirmation.itemId;
     const itemName = deleteConfirmation.itemName;
 
-    // Check if item has sales history (sale_items referencing this branch_item)
-    const { count: saleCount } = await supabase
-      .from('sale_items')
-      .select('id', { count: 'exact', head: true })
-      .eq('branch_item_id', itemId);
+    const { data, error } = await supabase.functions.invoke('delete-branch-item-cascade', {
+      body: { itemId, cascade: false },
+    });
 
-    if ((saleCount ?? 0) > 0) {
-      // Defer to cascade confirmation dialog
-      setDeleteConfirmation({ open: false, itemId: '', itemName: '' });
-      setCascadeConfirmation({ open: true, itemId, itemName, saleCount: saleCount ?? 0 });
+    if (error) {
+      toast({ title: 'Error', description: error.message || `Failed to delete ${isPharmacy ? 'medicine' : 'item'}.`, variant: 'destructive' });
       return;
     }
 
-    await performDelete(itemId, false);
+    if (data?.requiresCascade) {
+      setDeleteConfirmation({ open: false, itemId: '', itemName: '' });
+      setCascadeConfirmation({ open: true, itemId, itemName, saleCount: data.saleCount ?? 0 });
+      return;
+    }
+
+    removeItemFromCache(itemId);
+    toast({ title: 'Success', description: `${isPharmacy ? 'Medicine' : 'Item'} removed from branch` });
     setDeleteConfirmation({ open: false, itemId: '', itemName: '' });
   };
 
   const performDelete = async (itemId: string, cascade: boolean) => {
     try {
-      if (cascade) {
-        // Delete sale_items first — they have FK to branch_items.id and block deletion.
-        const { error: siErr } = await supabase.from('sale_items').delete().eq('branch_item_id', itemId);
-        if (siErr) throw siErr;
-      }
-
-      // inventory_batches.branch_item_id is ON DELETE SET NULL, but clearing up keeps things tidy.
-      await supabase.from('inventory_batches').delete().eq('branch_item_id', itemId);
-
-      const { error } = await supabase.from('branch_items').delete().eq('id', itemId);
+      const { error } = await supabase.functions.invoke('delete-branch-item-cascade', {
+        body: { itemId, cascade },
+      });
       if (error) throw error;
+
       removeItemFromCache(itemId);
       toast({
         title: 'Success',
