@@ -44,6 +44,12 @@ export default function StaffInventoryWithActions() {
     itemId: string;
     itemName: string;
   }>({ open: false, itemId: '', itemName: '' });
+  const [cascadeConfirmation, setCascadeConfirmation] = useState<{
+    open: boolean;
+    itemId: string;
+    itemName: string;
+    saleCount: number;
+  }>({ open: false, itemId: '', itemName: '', saleCount: 0 });
   const [hasBranches, setHasBranches] = useState(true);
   const [batchBreakdown, setBatchBreakdown] = useState<{ open: boolean; itemId: string; itemName: string }>({ open: false, itemId: '', itemName: '' });
   const [adjustingItem, setAdjustingItem] = useState<BranchItem | null>(null);
@@ -147,37 +153,52 @@ export default function StaffInventoryWithActions() {
   };
 
   const confirmDeleteItem = async () => {
-    try {
-      const itemId = deleteConfirmation.itemId;
+    const itemId = deleteConfirmation.itemId;
+    const itemName = deleteConfirmation.itemName;
 
-      // Check if item has sales history (sale_items referencing this branch_item)
-      const { count: saleCount } = await supabase
-        .from('sale_items')
-        .select('id', { count: 'exact', head: true })
-        .eq('branch_item_id', itemId);
+    const { data, error } = await supabase.functions.invoke('delete-branch-item-cascade', {
+      body: { itemId, cascade: false },
+    });
 
-      if ((saleCount ?? 0) > 0) {
-        toast({
-          title: 'Cannot Delete',
-          description: `This item has sales history and cannot be removed. You can set its stock to 0 instead.`,
-          variant: 'destructive',
-        });
-        setDeleteConfirmation({ open: false, itemId: '', itemName: '' });
-        return;
-      }
-
-      // Delete related inventory_batches first (no sales history means batches are unused)
-      await supabase.from('inventory_batches').delete().eq('branch_item_id', itemId);
-
-      const { error } = await supabase.from('branch_items').delete().eq('id', itemId);
-      if (error) throw error;
-      // Optimistically remove from cache so UI updates instantly.
-      removeItemFromCache(itemId);
-      toast({ title: 'Success', description: `${isPharmacy ? 'Medicine' : 'Item'} removed from branch` });
-      setDeleteConfirmation({ open: false, itemId: '', itemName: '' });
-    } catch (error) {
-      toast({ title: 'Error', description: `Failed to delete ${isPharmacy ? 'medicine' : 'item'}. It may have related records.`, variant: 'destructive' });
+    if (error) {
+      toast({ title: 'Error', description: error.message || `Failed to delete ${isPharmacy ? 'medicine' : 'item'}.`, variant: 'destructive' });
+      return;
     }
+
+    if (data?.requiresCascade) {
+      setDeleteConfirmation({ open: false, itemId: '', itemName: '' });
+      setCascadeConfirmation({ open: true, itemId, itemName, saleCount: data.saleCount ?? 0 });
+      return;
+    }
+
+    removeItemFromCache(itemId);
+    toast({ title: 'Success', description: `${isPharmacy ? 'Medicine' : 'Item'} removed from branch` });
+    setDeleteConfirmation({ open: false, itemId: '', itemName: '' });
+  };
+
+  const performDelete = async (itemId: string, cascade: boolean) => {
+    try {
+      const { error } = await supabase.functions.invoke('delete-branch-item-cascade', {
+        body: { itemId, cascade },
+      });
+      if (error) throw error;
+
+      removeItemFromCache(itemId);
+      toast({
+        title: 'Success',
+        description: cascade
+          ? `${isPharmacy ? 'Medicine' : 'Item'} and its sales history were permanently deleted`
+          : `${isPharmacy ? 'Medicine' : 'Item'} removed from branch`,
+      });
+    } catch (error: any) {
+      toast({ title: 'Error', description: error?.message || `Failed to delete ${isPharmacy ? 'medicine' : 'item'}. It may have related records.`, variant: 'destructive' });
+    }
+  };
+
+  const confirmCascadeDelete = async () => {
+    const itemId = cascadeConfirmation.itemId;
+    await performDelete(itemId, true);
+    setCascadeConfirmation({ open: false, itemId: '', itemName: '', saleCount: 0 });
   };
 
   const isOutOfStock = (item: BranchItem) => item.quantity === 0;
@@ -483,6 +504,15 @@ export default function StaffInventoryWithActions() {
         description="This will remove the item from this branch's inventory. The master catalog entry will not be affected."
         onConfirm={confirmDeleteItem}
         confirmText="Remove"
+      />
+
+      <ConfirmationDialog
+        open={cascadeConfirmation.open}
+        onOpenChange={(open) => setCascadeConfirmation(prev => ({ ...prev, open }))}
+        title={`⚠️ Delete "${cascadeConfirmation.itemName}" and its sales history?`}
+        description={`This item has ${cascadeConfirmation.saleCount} sale record${cascadeConfirmation.saleCount === 1 ? '' : 's'} linked to it. Deleting it will also permanently remove all related sales history, stock movements, batches, and transfer records for this item. This action CANNOT be undone and will affect past reports. If you only want to clear stock, cancel and use "Adjust Stock" instead.`}
+        onConfirm={confirmCascadeDelete}
+        confirmText="Delete Everything"
       />
 
       <BatchBreakdownDialog
