@@ -44,6 +44,12 @@ export default function StaffInventoryWithActions() {
     itemId: string;
     itemName: string;
   }>({ open: false, itemId: '', itemName: '' });
+  const [cascadeConfirmation, setCascadeConfirmation] = useState<{
+    open: boolean;
+    itemId: string;
+    itemName: string;
+    saleCount: number;
+  }>({ open: false, itemId: '', itemName: '', saleCount: 0 });
   const [hasBranches, setHasBranches] = useState(true);
   const [batchBreakdown, setBatchBreakdown] = useState<{ open: boolean; itemId: string; itemName: string }>({ open: false, itemId: '', itemName: '' });
   const [adjustingItem, setAdjustingItem] = useState<BranchItem | null>(null);
