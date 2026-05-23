@@ -193,8 +193,8 @@ export default function StaffInventoryWithActions() {
           ? `${isPharmacy ? 'Medicine' : 'Item'} and its sales history were permanently deleted`
           : `${isPharmacy ? 'Medicine' : 'Item'} removed from branch`,
       });
-    } catch (error) {
-      toast({ title: 'Error', description: `Failed to delete ${isPharmacy ? 'medicine' : 'item'}. It may have related records.`, variant: 'destructive' });
+    } catch (error: any) {
+      toast({ title: 'Error', description: error?.message || `Failed to delete ${isPharmacy ? 'medicine' : 'item'}. It may have related records.`, variant: 'destructive' });
     }
   };
 
