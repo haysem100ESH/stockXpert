@@ -176,14 +176,12 @@ export default function StaffInventoryWithActions() {
   const performDelete = async (itemId: string, cascade: boolean) => {
     try {
       if (cascade) {
-        // Best-effort cleanup of related records before removing the branch item.
-        await supabase.from('sale_items').delete().eq('branch_item_id', itemId);
-        await (supabase as any).from('stock_edit_history').delete().eq('branch_item_id', itemId);
-        await (supabase as any).from('stock_movements').delete().eq('branch_item_id', itemId);
-        await (supabase as any).from('transfer_request_items').delete().eq('branch_item_id', itemId);
-        await (supabase as any).from('transfer_request_items').delete().eq('target_branch_item_id', itemId);
+        // Delete sale_items first — they have FK to branch_items.id and block deletion.
+        const { error: siErr } = await supabase.from('sale_items').delete().eq('branch_item_id', itemId);
+        if (siErr) throw siErr;
       }
 
+      // inventory_batches.branch_item_id is ON DELETE SET NULL, but clearing up keeps things tidy.
       await supabase.from('inventory_batches').delete().eq('branch_item_id', itemId);
 
       const { error } = await supabase.from('branch_items').delete().eq('id', itemId);
