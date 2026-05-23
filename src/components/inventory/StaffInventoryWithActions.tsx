@@ -511,6 +511,15 @@ export default function StaffInventoryWithActions() {
         confirmText="Remove"
       />
 
+      <ConfirmationDialog
+        open={cascadeConfirmation.open}
+        onOpenChange={(open) => setCascadeConfirmation(prev => ({ ...prev, open }))}
+        title={`⚠️ Delete "${cascadeConfirmation.itemName}" and its sales history?`}
+        description={`This item has ${cascadeConfirmation.saleCount} sale record${cascadeConfirmation.saleCount === 1 ? '' : 's'} linked to it. Deleting it will also permanently remove all related sales history, stock movements, batches, and transfer records for this item. This action CANNOT be undone and will affect past reports. If you only want to clear stock, cancel and use "Adjust Stock" instead.`}
+        onConfirm={confirmCascadeDelete}
+        confirmText="Delete Everything"
+      />
+
       <BatchBreakdownDialog
         open={batchBreakdown.open}
         onOpenChange={(open) => setBatchBreakdown(prev => ({ ...prev, open }))}
