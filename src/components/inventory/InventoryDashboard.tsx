@@ -11,6 +11,7 @@ import { ConfirmationDialog } from '@/components/ui/confirmation-dialog';
 import { useBranchContext } from '@/hooks/useBranchContext';
 import { useAuth } from '@/hooks/useAuth';
 import { useExpiryThreshold } from '@/hooks/useExpiryThreshold';
+import { useLowStockThreshold } from '@/hooks/useLowStockThreshold';
 import { syncBranchItemQuantity } from '@/lib/batchInventory';
 
 interface AlertItem {
@@ -62,10 +63,13 @@ export default function InventoryDashboard() {
   const { selectedBranch, branchType } = useBranchContext();
   const { profile } = useAuth();
   const { days: thresholdDays, setDays: setThresholdDays, defaultDays } = useExpiryThreshold();
+  const { threshold: lowStockThreshold, setThreshold: setLowStockThreshold, defaultThreshold: defaultLowStock } = useLowStockThreshold();
   const [thresholdInput, setThresholdInput] = useState<string>(String(thresholdDays));
+  const [lowStockInput, setLowStockInput] = useState<string>(String(lowStockThreshold));
   const isPharmacy = branchType === 'pharmacy';
 
   useEffect(() => { setThresholdInput(String(thresholdDays)); }, [thresholdDays]);
+  useEffect(() => { setLowStockInput(String(lowStockThreshold)); }, [lowStockThreshold]);
 
   useEffect(() => {
     fetchInventoryData();
@@ -121,7 +125,11 @@ export default function InventoryDashboard() {
       }));
 
       setOutOfStockItems(items.filter(i => i.quantity === 0));
-      setLowStockItems(items.filter(i => i.quantity > 0 && i.minimum_stock_level && i.quantity <= i.minimum_stock_level));
+      setLowStockItems(items.filter(i => {
+        if (i.quantity <= 0) return false;
+        const effectiveMin = (i.minimum_stock_level && i.minimum_stock_level > 0) ? i.minimum_stock_level : lowStockThreshold;
+        return effectiveMin > 0 && i.quantity <= effectiveMin;
+      }));
 
       // Batch-level expiry + per-batch overrides
       let batchQuery = supabase
