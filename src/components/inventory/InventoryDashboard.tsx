@@ -11,6 +11,7 @@ import { ConfirmationDialog } from '@/components/ui/confirmation-dialog';
 import { useBranchContext } from '@/hooks/useBranchContext';
 import { useAuth } from '@/hooks/useAuth';
 import { useExpiryThreshold } from '@/hooks/useExpiryThreshold';
+import { useLowStockThreshold } from '@/hooks/useLowStockThreshold';
 import { syncBranchItemQuantity } from '@/lib/batchInventory';
 
 interface AlertItem {
@@ -62,14 +63,17 @@ export default function InventoryDashboard() {
   const { selectedBranch, branchType } = useBranchContext();
   const { profile } = useAuth();
   const { days: thresholdDays, setDays: setThresholdDays, defaultDays } = useExpiryThreshold();
+  const { threshold: lowStockThreshold, setThreshold: setLowStockThreshold, defaultThreshold: defaultLowStock } = useLowStockThreshold();
   const [thresholdInput, setThresholdInput] = useState<string>(String(thresholdDays));
+  const [lowStockInput, setLowStockInput] = useState<string>(String(lowStockThreshold));
   const isPharmacy = branchType === 'pharmacy';
 
   useEffect(() => { setThresholdInput(String(thresholdDays)); }, [thresholdDays]);
+  useEffect(() => { setLowStockInput(String(lowStockThreshold)); }, [lowStockThreshold]);
 
   useEffect(() => {
     fetchInventoryData();
-  }, [selectedBranch, thresholdDays]);
+  }, [selectedBranch, thresholdDays, lowStockThreshold]);
 
   useEffect(() => {
     const channel = supabase
@@ -121,7 +125,11 @@ export default function InventoryDashboard() {
       }));
 
       setOutOfStockItems(items.filter(i => i.quantity === 0));
-      setLowStockItems(items.filter(i => i.quantity > 0 && i.minimum_stock_level && i.quantity <= i.minimum_stock_level));
+      setLowStockItems(items.filter(i => {
+        if (i.quantity <= 0) return false;
+        const effectiveMin = (i.minimum_stock_level && i.minimum_stock_level > 0) ? i.minimum_stock_level : lowStockThreshold;
+        return effectiveMin > 0 && i.quantity <= effectiveMin;
+      }));
 
       // Batch-level expiry + per-batch overrides
       let batchQuery = supabase
@@ -261,6 +269,46 @@ export default function InventoryDashboard() {
               </Button>
               {thresholdDays !== defaultDays && (
                 <Button size="sm" variant="ghost" onClick={() => setThresholdDays(defaultDays)}>
+                  Reset
+                </Button>
+              )}
+            </div>
+          </div>
+
+          <div className="mt-4 pt-4 border-t flex flex-col sm:flex-row sm:items-end gap-3">
+            <div className="flex-1">
+              <Label htmlFor="low-stock-threshold" className="flex items-center gap-2 mb-1">
+                <Settings2 className="h-4 w-4" />
+                Default low-stock threshold
+              </Label>
+              <p className="text-xs text-muted-foreground">
+                Applied to items that do not have their own minimum stock level configured. Default: {defaultLowStock} units.
+              </p>
+            </div>
+            <div className="flex items-center gap-2">
+              <Input
+                id="low-stock-threshold"
+                type="number"
+                min={0}
+                max={100000}
+                step="0.01"
+                value={lowStockInput}
+                onChange={(e) => setLowStockInput(e.target.value)}
+                className="w-24"
+              />
+              <span className="text-sm text-muted-foreground">units</span>
+              <Button
+                size="sm"
+                onClick={() => {
+                  const n = parseFloat(lowStockInput);
+                  if (Number.isFinite(n) && n >= 0) setLowStockThreshold(n);
+                  else setLowStockInput(String(lowStockThreshold));
+                }}
+              >
+                Save
+              </Button>
+              {lowStockThreshold !== defaultLowStock && (
+                <Button size="sm" variant="ghost" onClick={() => setLowStockThreshold(defaultLowStock)}>
                   Reset
                 </Button>
               )}

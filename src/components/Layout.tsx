@@ -10,6 +10,7 @@ import { Loader2 } from 'lucide-react';
 import { ConfirmationDialog } from '@/components/ui/confirmation-dialog';
 import SubscriptionStatus from '@/components/subscription/SubscriptionStatus';
 import ExpiringMedicinesAlert from '@/components/inventory/ExpiringMedicinesAlert';
+import InventoryAlertBadge from '@/components/inventory/InventoryAlertBadge';
 import { BranchProvider } from '@/hooks/useBranchContext';
 import SmartAssistant from '@/components/chat/SmartAssistant';
 import { usePullToRefresh } from '@/hooks/usePullToRefresh';
@@ -147,6 +148,7 @@ function LayoutHeader({ profile, user, onSignOut }: { profile: any, user: any, o
       
       <div className="flex items-center space-x-2 sm:space-x-3">
         <AdvancedModeToggle />
+        {profile?.role !== 'developer' && <InventoryAlertBadge />}
         <ThemeToggle />
         <DropdownMenu>
           <DropdownMenuTrigger asChild>

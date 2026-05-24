@@ -148,7 +148,7 @@ export default function ItemsHealthList({ items, isPharmacy }: ItemsHealthListPr
                   icon={<Package className="h-4 w-4" />}
                   label="Stock on hand"
                   value={`${selected.currentStock}`}
-                  hint={selected.minStockLevel > 0 ? `min level: ${selected.minStockLevel}` : undefined}
+                  hint={selected.minStockLevel > 0 ? `min level: ${selected.minStockLevel}${selected.minStockSource === 'global' ? ' (global default)' : ' (custom)'}` : undefined}
                   warn={selected.minStockLevel > 0 && selected.currentStock < selected.minStockLevel}
                 />
                 <FactorRow

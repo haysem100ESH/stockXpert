@@ -32,6 +32,7 @@ import { useAuth } from '@/hooks/useAuth';
 import { useBranchContext } from '@/hooks/useBranchContext';
 import { useOwnerBranchIds } from '@/hooks/useOwnerBranchIds';
 import { getSeasonalMultiplier } from '@/hooks/useSeasonalPerformance';
+import { getGlobalLowStockThreshold, useLowStockThreshold } from '@/hooks/useLowStockThreshold';
 
 export interface SmartItem {
   id: string;
@@ -42,6 +43,7 @@ export interface SmartItem {
   expiringSoonQty: number;
   hasExpiryExclusion: boolean;
   minStockLevel: number;
+  minStockSource: 'item' | 'global';
   leadTimeDays: number;
   reorderPoint: number;
   forecastDays: number;
@@ -185,7 +187,10 @@ function toSmartItem(r: RpcRow, now: number, hasSalesAggregation = true): SmartI
   const effectiveStock = Math.max(0, stock - expiringSoonQty);
   const hasExpiryExclusion = expiringSoonQty > 0;
 
-  const minLevel = Number(r.minimum_stock_level) || 0;
+  const rawMin = Number(r.minimum_stock_level) || 0;
+  const globalMin = getGlobalLowStockThreshold();
+  const minLevel = rawMin > 0 ? rawMin : globalMin;
+  const minStockSource: SmartItem['minStockSource'] = rawMin > 0 ? 'item' : 'global';
   const belowMin = minLevel > 0 && effectiveStock < minLevel;
   const needsReorder = effectiveStock <= reorderPoint && (adc > 0 || belowMin) || belowMin;
 
@@ -212,6 +217,7 @@ function toSmartItem(r: RpcRow, now: number, hasSalesAggregation = true): SmartI
     expiringSoonQty,
     hasExpiryExclusion,
     minStockLevel: minLevel,
+    minStockSource,
     leadTimeDays,
     reorderPoint,
     forecastDays,
@@ -300,6 +306,7 @@ export function useSmartInventory() {
   const { branchIds: cachedOwnerBranchIds, isLoading: ownerBranchesLoading } = useOwnerBranchIds();
   const isPharmacy = branchType === 'pharmacy';
   const queryClient = useQueryClient();
+  const { threshold: globalLowStock } = useLowStockThreshold();
 
   const branchIds = useMemo(() => {
     if (selectedBranch) return [selectedBranch];
@@ -311,8 +318,8 @@ export function useSmartInventory() {
   const enabled = !!profile && (profile.role !== 'owner' || !ownerBranchesLoading) && branchIds.length > 0;
 
   const queryKey = useMemo(
-    () => ['smart-inventory', [...branchIds].sort().join(',')] as const,
-    [branchIds]
+    () => ['smart-inventory', [...branchIds].sort().join(','), globalLowStock] as const,
+    [branchIds, globalLowStock]
   );
 
   const query = useQuery({
