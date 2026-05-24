@@ -306,6 +306,7 @@ export function useSmartInventory() {
   const { branchIds: cachedOwnerBranchIds, isLoading: ownerBranchesLoading } = useOwnerBranchIds();
   const isPharmacy = branchType === 'pharmacy';
   const queryClient = useQueryClient();
+  const { threshold: globalLowStock } = useLowStockThreshold();
 
   const branchIds = useMemo(() => {
     if (selectedBranch) return [selectedBranch];
@@ -317,8 +318,8 @@ export function useSmartInventory() {
   const enabled = !!profile && (profile.role !== 'owner' || !ownerBranchesLoading) && branchIds.length > 0;
 
   const queryKey = useMemo(
-    () => ['smart-inventory', [...branchIds].sort().join(',')] as const,
-    [branchIds]
+    () => ['smart-inventory', [...branchIds].sort().join(','), globalLowStock] as const,
+    [branchIds, globalLowStock]
   );
 
   const query = useQuery({
