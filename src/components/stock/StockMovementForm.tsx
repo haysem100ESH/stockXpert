@@ -77,10 +77,10 @@ export default function StockMovementForm({ open, onOpenChange, onSuccess }: Pro
     const branchIds = (branchData || []).map((b: any) => b.id);
     if (branchIds.length === 0) return;
 
-    // Source of truth: branch_items.quantity (kept in sync by fulfill/sale RPCs)
+    // Source of truth: branch_items (id, quantity, prices) — needed for FIFO + cloning to destination
     const { data: bItems } = await supabase
       .from('branch_items')
-      .select('medicine_id, branch_id, quantity')
+      .select('id, medicine_id, branch_id, quantity, purchase_price, selling_price')
       .in('branch_id', branchIds);
 
     const medIds = [...new Set((bItems || []).map((b: any) => b.medicine_id))];
@@ -94,18 +94,21 @@ export default function StockMovementForm({ open, onOpenChange, onSuccess }: Pro
     const nameMap: Record<string, string> = {};
     (meds || []).forEach((m: any) => { nameMap[m.id] = m.name; });
 
-    // Build one virtual row per (medicine_id, branch_id) using branch_items.quantity
     const rows = (bItems || [])
       .map((b: any) => ({
         id: b.medicine_id,
         name: nameMap[b.medicine_id] || 'Unknown',
         stock_quantity: Number(b.quantity || 0),
         branch_id: b.branch_id,
+        branch_item_id: b.id,
+        purchase_price: Number(b.purchase_price || 0),
+        selling_price: Number(b.selling_price || 0),
       }))
       .sort((a, b) => a.name.localeCompare(b.name));
 
     setMedicines(rows);
   };
+
 
   const availableMedicines = fromBranchId
     ? medicines.filter(m => m.branch_id === fromBranchId)
