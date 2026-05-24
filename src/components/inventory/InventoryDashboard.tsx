@@ -274,6 +274,46 @@ export default function InventoryDashboard() {
               )}
             </div>
           </div>
+
+          <div className="mt-4 pt-4 border-t flex flex-col sm:flex-row sm:items-end gap-3">
+            <div className="flex-1">
+              <Label htmlFor="low-stock-threshold" className="flex items-center gap-2 mb-1">
+                <Settings2 className="h-4 w-4" />
+                Default low-stock threshold
+              </Label>
+              <p className="text-xs text-muted-foreground">
+                Applied to items that do not have their own minimum stock level configured. Default: {defaultLowStock} units.
+              </p>
+            </div>
+            <div className="flex items-center gap-2">
+              <Input
+                id="low-stock-threshold"
+                type="number"
+                min={0}
+                max={100000}
+                step="0.01"
+                value={lowStockInput}
+                onChange={(e) => setLowStockInput(e.target.value)}
+                className="w-24"
+              />
+              <span className="text-sm text-muted-foreground">units</span>
+              <Button
+                size="sm"
+                onClick={() => {
+                  const n = parseFloat(lowStockInput);
+                  if (Number.isFinite(n) && n >= 0) setLowStockThreshold(n);
+                  else setLowStockInput(String(lowStockThreshold));
+                }}
+              >
+                Save
+              </Button>
+              {lowStockThreshold !== defaultLowStock && (
+                <Button size="sm" variant="ghost" onClick={() => setLowStockThreshold(defaultLowStock)}>
+                  Reset
+                </Button>
+              )}
+            </div>
+          </div>
         </CardContent>
       </Card>
 
