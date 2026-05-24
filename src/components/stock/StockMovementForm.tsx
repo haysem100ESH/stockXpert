@@ -198,36 +198,81 @@ export default function StockMovementForm({ open, onOpenChange, onSuccess }: Pro
       });
       if (moveError) throw moveError;
 
+      // === SOURCE: deduct via FIFO from oldest batches ===
       if (fromBranchId && (movementType === 'TRANSFER' || movementType === 'RETURN')) {
-        if (selectedMedicine) {
-          await supabase.from('medicines').update({
-            stock_quantity: selectedMedicine.stock_quantity - qty
-          }).eq('id', selectedMedicine.id);
-        }
-      }
-
-      if (toBranchId && (movementType === 'TRANSFER' || movementType === 'SUPPLY')) {
-        const destMed = medicines.find(m =>
-          m.id === selectedMedicine?.id && m.branch_id === toBranchId
-        );
-
-        if (destMed) {
-          await supabase.from('medicines').update({
-            stock_quantity: destMed.stock_quantity + qty
-          }).eq('id', destMed.id);
-        } else if (selectedMedicine) {
-          const { data: fullMed } = await supabase.from('medicines').select('*').eq('id', selectedMedicine.id).single();
-          if (fullMed) {
-            const { id, stock_quantity, location_id, branch_id, created_at, updated_at, ...rest } = fullMed as any;
-            await supabase.from('medicines').insert({
-              ...rest,
-              stock_quantity: qty,
-              branch_id: toBranchId,
-              created_by: user?.id,
-            });
+        if (selectedMedicine?.branch_item_id) {
+          const { error: fifoErr } = await deductFIFO(selectedMedicine.branch_item_id, qty);
+          if (fifoErr) {
+            // No batches yet — direct branch_items quantity decrement as fallback
+            const newQty = Math.max(0, (selectedMedicine.stock_quantity || 0) - qty);
+            await supabase
+              .from('branch_items')
+              .update({ quantity: newQty, updated_at: new Date().toISOString() })
+              .eq('id', selectedMedicine.branch_item_id);
           }
         }
       }
+
+      // === DESTINATION: ensure branch_item exists, then create a batch for the incoming qty ===
+      if (toBranchId && (movementType === 'TRANSFER' || movementType === 'SUPPLY')) {
+        const pp = selectedMedicine?.purchase_price ?? 0;
+        const sp = selectedMedicine?.selling_price ?? pp;
+
+        // Find or create destination branch_item for this medicine
+        const { data: existingDest } = await supabase
+          .from('branch_items')
+          .select('id')
+          .eq('branch_id', toBranchId)
+          .eq('medicine_id', medicineId)
+          .maybeSingle();
+
+        let destBranchItemId = (existingDest as any)?.id as string | undefined;
+
+        if (!destBranchItemId) {
+          const { data: created, error: createErr } = await supabase
+            .from('branch_items')
+            .insert({
+              branch_id: toBranchId,
+              medicine_id: medicineId,
+              owner_id: profile?.id,
+              quantity: 0,
+              purchase_price: pp,
+              selling_price: sp,
+            })
+            .select('id')
+            .single();
+          if (createErr) throw createErr;
+          destBranchItemId = (created as any).id;
+        }
+
+        if (destBranchItemId) {
+          const { error: batchErr } = await createBatch({
+            branchId: toBranchId,
+            medicineId,
+            branchItemId: destBranchItemId,
+            quantity: qty,
+            purchasePrice: pp,
+            sellingPrice: sp,
+            createdBy: user?.id || null,
+          });
+          if (batchErr) {
+            // Fallback: bump branch_items.quantity directly so stock still reflects the move
+            const { data: current } = await supabase
+              .from('branch_items')
+              .select('quantity')
+              .eq('id', destBranchItemId)
+              .single();
+            const next = Number((current as any)?.quantity || 0) + qty;
+            await supabase
+              .from('branch_items')
+              .update({ quantity: next, updated_at: new Date().toISOString() })
+              .eq('id', destBranchItemId);
+          } else {
+            await syncBranchItemQuantity(destBranchItemId);
+          }
+        }
+      }
+
 
       toast({ title: 'Success', description: 'Stock movement recorded successfully' });
       onSuccess?.();
