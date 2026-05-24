@@ -198,10 +198,13 @@ export default function StockMovementForm({ open, onOpenChange, onSuccess }: Pro
       });
       if (moveError) throw moveError;
 
+      // Track transferred cost for balanced expense accounting
+      let transferredCost = 0;
+
       // === SOURCE: deduct via FIFO from oldest batches ===
       if (fromBranchId && (movementType === 'TRANSFER' || movementType === 'RETURN')) {
         if (selectedMedicine?.branch_item_id) {
-          const { error: fifoErr } = await deductFIFO(selectedMedicine.branch_item_id, qty);
+          const { consumed, error: fifoErr } = await deductFIFO(selectedMedicine.branch_item_id, qty);
           if (fifoErr) {
             // No batches yet — direct branch_items quantity decrement as fallback
             const newQty = Math.max(0, (selectedMedicine.stock_quantity || 0) - qty);
@@ -209,6 +212,18 @@ export default function StockMovementForm({ open, onOpenChange, onSuccess }: Pro
               .from('branch_items')
               .update({ quantity: newQty, updated_at: new Date().toISOString() })
               .eq('id', selectedMedicine.branch_item_id);
+            // Fallback cost basis: branch_items.purchase_price
+            transferredCost = qty * Number(selectedMedicine.purchase_price || 0);
+          } else {
+            // Sum the FIFO consumed cost (per-batch purchase price)
+            transferredCost = (consumed || []).reduce(
+              (sum, c) => sum + Number(c.quantity) * Number(c.purchasePrice || 0),
+              0
+            );
+            // If batches had no purchase price recorded, fallback to branch_items.purchase_price
+            if (transferredCost === 0) {
+              transferredCost = qty * Number(selectedMedicine.purchase_price || 0);
+            }
           }
         }
       }
@@ -273,6 +288,26 @@ export default function StockMovementForm({ open, onOpenChange, onSuccess }: Pro
         }
       }
 
+      // === FINANCIAL IMPACT: balanced expense entries between branches ===
+      if (movementType === 'TRANSFER' && fromBranchId && toBranchId && transferredCost > 0) {
+        const label = selectedMedicine?.name || 'Item';
+        await supabase.from('expenses').insert([
+          {
+            description: `Stock Transfer Out: ${label} × ${qty}`,
+            amount: -transferredCost,
+            category: 'Stock Transfer',
+            created_by: user?.id || null,
+            branch_id: fromBranchId,
+          },
+          {
+            description: `Stock Transfer In: ${label} × ${qty}`,
+            amount: transferredCost,
+            category: 'Stock Transfer',
+            created_by: user?.id || null,
+            branch_id: toBranchId,
+          },
+        ]);
+      }
 
       toast({ title: 'Success', description: 'Stock moved between branches successfully' });
       window.dispatchEvent(new Event('app:refresh'));
