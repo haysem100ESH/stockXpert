@@ -73,7 +73,7 @@ export default function InventoryDashboard() {
 
   useEffect(() => {
     fetchInventoryData();
-  }, [selectedBranch, thresholdDays]);
+  }, [selectedBranch, thresholdDays, lowStockThreshold]);
 
   useEffect(() => {
     const channel = supabase
