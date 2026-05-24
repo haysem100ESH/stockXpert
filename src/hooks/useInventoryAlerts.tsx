@@ -64,7 +64,7 @@ export function useInventoryAlerts() {
 
       let itemsQuery: any = supabase
         .from('branch_items')
-        .select('id, medicine_id, quantity, medicines!inner(minimum_stock_level)');
+        .select('id, medicine_id, branch_id, quantity, medicines!inner(minimum_stock_level)');
       itemsQuery = addBranchFilter(itemsQuery);
       if (!itemsQuery) { setCounts(EMPTY); return; }
       const { data: items } = await itemsQuery;
@@ -75,21 +75,33 @@ export function useInventoryAlerts() {
       batchQuery = addBranchFilter(batchQuery);
       const { data: batches } = batchQuery ? await batchQuery : { data: [] };
 
+      // Sum expiring-soon batch qty per (branch, medicine) to compute effective stock,
+      // matching Smart Inventory's low-stock logic.
+      const expiringQtyByKey = new Map<string, number>();
+      const expiredParents = new Set<string>();
+      const expiringParents = new Set<string>();
+      for (const b of (batches || []) as any[]) {
+        const remaining = Number(b.remaining_quantity) || 0;
+        if (!b.expiry_date || remaining <= 0) continue;
+        if (b.expiry_date <= today) {
+          expiredParents.add(b.medicine_id);
+        } else if (b.expiry_date <= thresholdStr) {
+          expiringParents.add(b.medicine_id);
+          const key = `${b.branch_id}:${b.medicine_id}`;
+          expiringQtyByKey.set(key, (expiringQtyByKey.get(key) || 0) + remaining);
+        }
+      }
+
       let oos = 0, low = 0;
       for (const item of (items || []) as any[]) {
         const qty = Number(item.quantity) || 0;
         const itemMin = Number(item.medicines?.minimum_stock_level) || 0;
         const effectiveMin = itemMin > 0 ? itemMin : lowStockThreshold;
+        const key = `${item.branch_id}:${item.medicine_id}`;
+        const expiringQty = expiringQtyByKey.get(key) || 0;
+        const effectiveStock = Math.max(0, qty - expiringQty);
         if (qty === 0) oos++;
-        else if (effectiveMin > 0 && qty <= effectiveMin) low++;
-      }
-
-      const expiredParents = new Set<string>();
-      const expiringParents = new Set<string>();
-      for (const b of (batches || []) as any[]) {
-        if (!b.expiry_date || Number(b.remaining_quantity) <= 0) continue;
-        if (b.expiry_date <= today) expiredParents.add(b.medicine_id);
-        else if (b.expiry_date <= thresholdStr) expiringParents.add(b.medicine_id);
+        else if (effectiveMin > 0 && effectiveStock <= effectiveMin) low++;
       }
 
       const expired = expiredParents.size;
