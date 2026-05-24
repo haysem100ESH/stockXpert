@@ -274,10 +274,12 @@ export default function StockMovementForm({ open, onOpenChange, onSuccess }: Pro
       }
 
 
-      toast({ title: 'Success', description: 'Stock movement recorded successfully' });
+      toast({ title: 'Success', description: 'Stock moved between branches successfully' });
+      window.dispatchEvent(new Event('app:refresh'));
       onSuccess?.();
       onOpenChange(false);
       resetForm();
+
     } catch (err: any) {
       toast({ title: 'Error', description: err.message || 'Failed to record movement', variant: 'destructive' });
     } finally {
