@@ -104,6 +104,81 @@ serve(async (req: Request): Promise<Response> => {
         return json({ error: rpcErr.message || 'Transfer fulfillment failed' }, 500);
       }
 
+      // -------- Financial impact: balanced expense entries per branch --------
+      try {
+        const locIds = [trReq.source_location_id, trReq.requesting_location_id].filter(Boolean);
+        const { data: locs } = await admin
+          .from('locations')
+          .select('id, branch_id')
+          .in('id', locIds);
+        const locMap: Record<string, string> = {};
+        (locs || []).forEach((l: any) => { if (l.branch_id) locMap[l.id] = l.branch_id; });
+        const sourceBranchId = trReq.source_location_id ? locMap[trReq.source_location_id] : null;
+        const destBranchId = trReq.requesting_location_id ? locMap[trReq.requesting_location_id] : null;
+
+        if (sourceBranchId && destBranchId) {
+          const { data: items } = await admin
+            .from('transfer_request_items')
+            .select('medicine_id, approved_quantity, requested_quantity, new_batch_purchase_price')
+            .eq('request_id', requestId);
+
+          const rows = (items || []).filter((i: any) => Number(i.approved_quantity ?? i.requested_quantity) > 0);
+          if (rows.length > 0) {
+            const medIds = [...new Set(rows.map((r: any) => r.medicine_id))];
+
+            // Cost basis per spec: source branch_items.purchase_price fallback
+            const { data: srcItems } = await admin
+              .from('branch_items')
+              .select('medicine_id, purchase_price')
+              .eq('branch_id', sourceBranchId)
+              .in('medicine_id', medIds);
+            const priceMap: Record<string, number> = {};
+            (srcItems || []).forEach((s: any) => { priceMap[s.medicine_id] = Number(s.purchase_price || 0); });
+
+            const { data: meds } = await admin
+              .from('medicines')
+              .select('id, name')
+              .in('id', medIds);
+            const nameMap: Record<string, string> = {};
+            (meds || []).forEach((m: any) => { nameMap[m.id] = m.name; });
+
+            let totalCost = 0;
+            const lineDescriptions: string[] = [];
+            for (const r of rows) {
+              const qty = Number(r.approved_quantity ?? r.requested_quantity);
+              const pp = Number(r.new_batch_purchase_price ?? priceMap[r.medicine_id] ?? 0);
+              totalCost += qty * pp;
+              lineDescriptions.push(`${nameMap[r.medicine_id] || 'Item'} × ${qty}`);
+            }
+
+            if (totalCost > 0) {
+              const refId = String(requestId).slice(0, 8);
+              const summary = lineDescriptions.slice(0, 3).join(', ') +
+                (lineDescriptions.length > 3 ? `, +${lineDescriptions.length - 3} more` : '');
+              await admin.from('expenses').insert([
+                {
+                  description: `Stock Transfer Out (Req #${refId}): ${summary}`,
+                  amount: -totalCost,
+                  category: 'Stock Transfer',
+                  created_by: user.id,
+                  branch_id: sourceBranchId,
+                },
+                {
+                  description: `Stock Transfer In (Req #${refId}): ${summary}`,
+                  amount: totalCost,
+                  category: 'Stock Transfer',
+                  created_by: user.id,
+                  branch_id: destBranchId,
+                },
+              ]);
+            }
+          }
+        }
+      } catch (expErr) {
+        console.error('Transfer expense recording failed:', expErr);
+        // Do not fail the whole fulfillment if expense logging fails
+      }
+
       return json({ success: true, message: 'Transfer fulfilled — stock and expenses updated' });
     }
 
