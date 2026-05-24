@@ -10,6 +10,8 @@ import { ArrowRight, Package } from 'lucide-react';
 import { supabase } from '@/lib/db';
 import { useToast } from '@/hooks/use-toast';
 import { useAuth } from '@/hooks/useAuth';
+import { createBatch, deductFIFO, syncBranchItemQuantity } from '@/lib/batchInventory';
+
 
 interface Props {
   open: boolean;
