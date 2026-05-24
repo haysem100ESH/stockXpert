@@ -660,14 +660,21 @@ export default function ImportCsvDialog({ open, onOpenChange, onImported }: Impo
       return i === undefined ? '' : cells[i];
     };
 
-    // Fetch existing medicines (catalog) to detect duplicates by name+manufacturer+strength+batch
-    const { data: existingMeds } = await supabase
-      .from('medicines')
-      .select('id, name, manufacturer, batch_number, strength');
+    // Duplicate detection is BRANCH-SCOPED: an item is only considered a
+    // duplicate if it already exists in the SAME target branch. The same
+    // medicine living in a different branch (or a different owner's account)
+    // must not be flagged as a duplicate here.
     const existingKey = new Set<string>();
-    (existingMeds || []).forEach((m: any) => {
-      existingKey.add(`${(m.name || '').toLowerCase().trim()}|${(m.manufacturer || '').toLowerCase().trim()}|${(m.strength || '').toLowerCase().trim()}|${(m.batch_number || '').toLowerCase().trim()}`);
-    });
+    if (selectedBranchId) {
+      const { data: branchRows } = await supabase
+        .from('branch_items')
+        .select('medicine_id, medicines:medicine_id(name, manufacturer, strength, batch_number)')
+        .eq('branch_id', selectedBranchId);
+      (branchRows || []).forEach((r: any) => {
+        const m = r.medicines || {};
+        existingKey.add(`${(m.name || '').toLowerCase().trim()}|${(m.manufacturer || '').toLowerCase().trim()}|${(m.strength || '').toLowerCase().trim()}|${(m.batch_number || '').toLowerCase().trim()}`);
+      });
+    }
 
     const seenInFile = new Set<string>();
     const out: ParsedRow[] = [];
