@@ -22,7 +22,7 @@ interface Props {
 export default function StockMovementForm({ open, onOpenChange, onSuccess }: Props) {
   const [branches, setBranches] = useState<{ id: string; name: string; type: string }[]>([]);
   const [branchToLocationMap, setBranchToLocationMap] = useState<Record<string, string>>({});
-  const [medicines, setMedicines] = useState<{ id: string; name: string; stock_quantity: number; branch_id?: string }[]>([]);
+  const [medicines, setMedicines] = useState<{ id: string; name: string; stock_quantity: number; branch_id?: string; branch_item_id?: string; purchase_price?: number; selling_price?: number }[]>([]);
   const [fromBranchId, setFromBranchId] = useState('');
   const [toBranchId, setToBranchId] = useState('');
   const [medicineId, setMedicineId] = useState('');
