@@ -89,6 +89,7 @@ export default function StockAdjustmentDialog({ open, onOpenChange, medicine, on
     setQuantity('');
     setReason('');
     setDeductFromExpense(false);
+    setAddToExpense(true);
     setBatchQty('');
     setBatchPurchasePrice('');
     setBatchSellingPrice('');
