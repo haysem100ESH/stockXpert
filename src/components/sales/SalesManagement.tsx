@@ -842,14 +842,27 @@ export default function SalesManagement() {
     }
 
     return (
-    <Card key={medicine.id} className="cursor-pointer hover:shadow-md transition-shadow">
-      <CardHeader>
-        <div className="flex items-start justify-between">
-          <div>
-            <CardTitle className="text-base">{medicine.name}</CardTitle>
-            {medicine.generic_name && <CardDescription>{medicine.generic_name}</CardDescription>}
+    <Card key={medicine.id} className="group relative overflow-hidden cursor-pointer transition-all duration-200 hover:shadow-lg hover:-translate-y-0.5 border-border/60 hover:border-primary/40">
+      <div className="absolute inset-x-0 top-0 h-1 bg-gradient-to-r from-primary/60 via-primary to-primary/60 opacity-0 group-hover:opacity-100 transition-opacity" />
+      <CardHeader className="pb-3">
+        <div className="flex items-start justify-between gap-2">
+          <div className="min-w-0 flex-1">
+            <div className="flex items-baseline gap-1.5 flex-wrap">
+              <CardTitle className="text-base leading-tight truncate">{medicine.name}</CardTitle>
+              {isPharmacy && medicine.strength && (
+                <span className="text-sm font-semibold text-primary tabular-nums">{medicine.strength}</span>
+              )}
+            </div>
+            {medicine.generic_name && (
+              <CardDescription className="text-xs mt-0.5 truncate italic">{medicine.generic_name}</CardDescription>
+            )}
+            {isPharmacy && medicine.medicine_group && (
+              <div className="mt-1.5">
+                <Badge variant="outline" className="text-[10px] h-5 px-1.5 font-normal">{medicine.medicine_group}</Badge>
+              </div>
+            )}
           </div>
-          <div className="flex flex-col gap-1 items-end">
+          <div className="flex flex-col gap-1 items-end shrink-0">
             <Button
               size="sm"
               variant="ghost"
