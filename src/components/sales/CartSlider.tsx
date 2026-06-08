@@ -191,7 +191,8 @@ export default function CartSlider({
           // Mobile: fixed right-side drawer
           'fixed top-0 right-0 h-full z-50 w-[90vw] max-w-sm bg-background shadow-2xl flex flex-col',
           'transition-transform duration-300 ease-in-out',
-          'lg:sticky lg:top-0 lg:h-screen lg:z-auto lg:w-auto lg:max-w-none lg:shadow-none',
+          // Desktop: sticky panel sized to viewport minus the app header (h-14 = 3.5rem)
+          'lg:sticky lg:top-0 lg:h-[calc(100dvh-3.5rem)] lg:z-auto lg:w-auto lg:max-w-none lg:shadow-none',
           'lg:translate-x-0', // always visible on desktop
           open ? 'translate-x-0' : 'translate-x-full lg:translate-x-0'
         )}
@@ -526,12 +527,6 @@ export default function CartSlider({
 
               <Separator />
 
-              {/* Totals */}
-              <div className="space-y-1 text-sm">
-                <div className="flex justify-between"><span className="text-muted-foreground">Subtotal</span><span>ETB {subtotal.toFixed(2)}</span></div>
-                {discount > 0 && <div className="flex justify-between text-success"><span>Discount ({discountPercent}%)</span><span>−ETB {discount.toFixed(2)}</span></div>}
-                <div className="flex justify-between font-bold text-base pt-1"><span>Total</span><span>ETB {total.toFixed(2)}</span></div>
-              </div>
 
               {/* Amount Received */}
               <div className="space-y-1.5">
@@ -613,17 +608,34 @@ export default function CartSlider({
           )}
         </div>
 
-        {/* Footer checkout button */}
-        <div className="border-t p-4 bg-card">
+        {/* Footer: totals + checkout (always visible) */}
+        <div className="border-t bg-card p-3 space-y-2">
+          {cart.length > 0 && (
+            <div className="space-y-0.5 text-sm">
+              <div className="flex justify-between">
+                <span className="text-muted-foreground">Subtotal</span>
+                <span>ETB {subtotal.toFixed(2)}</span>
+              </div>
+              {discount > 0 && (
+                <div className="flex justify-between text-success">
+                  <span>Discount ({discountPercent}%)</span>
+                  <span>−ETB {discount.toFixed(2)}</span>
+                </div>
+              )}
+              <div className="flex justify-between font-bold text-base">
+                <span>Total</span>
+                <span>ETB {total.toFixed(2)}</span>
+              </div>
+            </div>
+          )}
+
           {/* Credit denied warning */}
           {creditCheck && !creditCheck.allowed && (
-            <div className="px-4 pb-2">
-              <div className="rounded-md bg-destructive/10 border border-destructive/30 p-3 flex items-start gap-2">
-                <AlertTriangle className="h-4 w-4 text-destructive mt-0.5 shrink-0" />
-                <div className="text-xs text-destructive">
-                  <p className="font-semibold">Credit Denied</p>
-                  <p>{creditCheck.reason}</p>
-                </div>
+            <div className="rounded-md bg-destructive/10 border border-destructive/30 p-2 flex items-start gap-2">
+              <AlertTriangle className="h-4 w-4 text-destructive mt-0.5 shrink-0" />
+              <div className="text-xs text-destructive">
+                <p className="font-semibold">Credit Denied</p>
+                <p>{creditCheck.reason}</p>
               </div>
             </div>
           )}
@@ -635,6 +647,7 @@ export default function CartSlider({
             <CreditCard className="h-4 w-4 mr-2" />
             {processing ? 'Processing...' : `Checkout · ETB ${total.toFixed(2)}`}
           </Button>
+
           {hasShortfall && selectedCustomerId === 'none' && (
             <p className="text-xs text-destructive text-center mt-1">
               Walk-in customers cannot purchase on debt. Please collect full amount or select a customer.
