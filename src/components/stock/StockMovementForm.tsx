@@ -31,8 +31,10 @@ export default function StockMovementForm({ open, onOpenChange, onSuccess }: Pro
   const [notes, setNotes] = useState('');
   const [batchNumber, setBatchNumber] = useState('');
   const [expiryDate, setExpiryDate] = useState('');
-  const [alertStrategy, setAlertStrategy] = useState<'parent' | 'custom'>('parent');
+  const [minStockStrategy, setMinStockStrategy] = useState<'parent' | 'custom'>('parent');
   const [customMinStock, setCustomMinStock] = useState('');
+  const [expiryAlertStrategy, setExpiryAlertStrategy] = useState<'parent' | 'custom'>('parent');
+  const [customExpiryAlertDays, setCustomExpiryAlertDays] = useState('');
   const [saving, setSaving] = useState(false);
   const [showConfirmation, setShowConfirmation] = useState(false);
   const { toast } = useToast();
@@ -188,10 +190,17 @@ export default function StockMovementForm({ open, onOpenChange, onSuccess }: Pro
         toast({ title: 'Error', description: 'Expiry date is required for supply', variant: 'destructive' });
         return false;
       }
-      if (alertStrategy === 'custom') {
+      if (minStockStrategy === 'custom') {
         const v = Number(customMinStock);
-        if (!customMinStock || Number.isNaN(v) || v < 0) {
+        if (customMinStock === '' || Number.isNaN(v) || v < 0) {
           toast({ title: 'Error', description: 'Enter a valid low-stock alert value', variant: 'destructive' });
+          return false;
+        }
+      }
+      if (expiryAlertStrategy === 'custom') {
+        const v = Number(customExpiryAlertDays);
+        if (customExpiryAlertDays === '' || Number.isNaN(v) || v < 1) {
+          toast({ title: 'Error', description: 'Enter a valid expiry alert window (days)', variant: 'destructive' });
           return false;
         }
       }
@@ -270,16 +279,18 @@ export default function StockMovementForm({ open, onOpenChange, onSuccess }: Pro
         const pp = selectedMedicine?.purchase_price ?? 0;
         const sp = selectedMedicine?.selling_price ?? pp;
 
-        // Resolve effective low-stock alert: parent (medicines.minimum_stock_level) or user-configured
-        const parentMin = selectedMedicine?.parent_min_stock ?? null;
-        const effectiveMinStock = movementType === 'SUPPLY'
-          ? (alertStrategy === 'custom' ? Number(customMinStock) : (parentMin ?? null))
+        // Resolve per-batch alerts for SUPPLY: parent (NULL = inherit) or user-configured override
+        const batchMinStock = movementType === 'SUPPLY' && minStockStrategy === 'custom'
+          ? Number(customMinStock)
+          : null;
+        const batchExpiryAlertDays = movementType === 'SUPPLY' && expiryAlertStrategy === 'custom'
+          ? Number(customExpiryAlertDays)
           : null;
 
         // Find or create destination branch_item for this medicine
         const { data: existingDest } = await supabase
           .from('branch_items')
-          .select('id, minimum_stock_level')
+          .select('id')
           .eq('branch_id', toBranchId)
           .eq('medicine_id', medicineId)
           .maybeSingle();
@@ -287,28 +298,20 @@ export default function StockMovementForm({ open, onOpenChange, onSuccess }: Pro
         let destBranchItemId = (existingDest as any)?.id as string | undefined;
 
         if (!destBranchItemId) {
-          const insertPayload: any = {
-            branch_id: toBranchId,
-            medicine_id: medicineId,
-            owner_id: profile?.id,
-            quantity: 0,
-            purchase_price: pp,
-            selling_price: sp,
-          };
-          if (effectiveMinStock != null) insertPayload.minimum_stock_level = effectiveMinStock;
           const { data: created, error: createErr } = await supabase
             .from('branch_items')
-            .insert(insertPayload)
+            .insert({
+              branch_id: toBranchId,
+              medicine_id: medicineId,
+              owner_id: profile?.id,
+              quantity: 0,
+              purchase_price: pp,
+              selling_price: sp,
+            })
             .select('id')
             .single();
           if (createErr) throw createErr;
           destBranchItemId = (created as any).id;
-        } else if (movementType === 'SUPPLY' && alertStrategy === 'custom' && effectiveMinStock != null) {
-          // User explicitly chose to override the destination's alert threshold
-          await supabase
-            .from('branch_items')
-            .update({ minimum_stock_level: effectiveMinStock, updated_at: new Date().toISOString() })
-            .eq('id', destBranchItemId);
         }
 
         if (destBranchItemId) {
@@ -321,6 +324,8 @@ export default function StockMovementForm({ open, onOpenChange, onSuccess }: Pro
             sellingPrice: sp,
             batchNumber: movementType === 'SUPPLY' ? batchNumber.trim() : null,
             expiryDate: movementType === 'SUPPLY' ? expiryDate : null,
+            minStockLevel: batchMinStock,
+            expiryAlertDays: batchExpiryAlertDays,
             createdBy: user?.id || null,
           } as any);
           if (batchErr) {
@@ -392,7 +397,8 @@ export default function StockMovementForm({ open, onOpenChange, onSuccess }: Pro
     setFromBranchId(''); setToBranchId(''); setMedicineId('');
     setQuantity(''); setMovementType('TRANSFER'); setNotes('');
     setBatchNumber(''); setExpiryDate('');
-    setAlertStrategy('parent'); setCustomMinStock('');
+    setMinStockStrategy('parent'); setCustomMinStock('');
+    setExpiryAlertStrategy('parent'); setCustomExpiryAlertDays('');
     setShowConfirmation(false);
   };
 
@@ -530,15 +536,15 @@ export default function StockMovementForm({ open, onOpenChange, onSuccess }: Pro
                   </div>
 
                   <div className="rounded-md border p-3 space-y-2 bg-muted/30">
-                    <Label className="text-sm">Low-stock alert</Label>
+                    <Label className="text-sm">Low-stock alert (this batch)</Label>
                     <div className="flex flex-col gap-2 text-sm">
                       <label className="flex items-start gap-2 cursor-pointer">
                         <input
                           type="radio"
-                          name="alertStrategy"
+                          name="minStockStrategy"
                           className="mt-1"
-                          checked={alertStrategy === 'parent'}
-                          onChange={() => setAlertStrategy('parent')}
+                          checked={minStockStrategy === 'parent'}
+                          onChange={() => setMinStockStrategy('parent')}
                         />
                         <span>
                           Use parent item's alert
@@ -552,20 +558,55 @@ export default function StockMovementForm({ open, onOpenChange, onSuccess }: Pro
                       <label className="flex items-start gap-2 cursor-pointer">
                         <input
                           type="radio"
-                          name="alertStrategy"
+                          name="minStockStrategy"
                           className="mt-1"
-                          checked={alertStrategy === 'custom'}
-                          onChange={() => setAlertStrategy('custom')}
+                          checked={minStockStrategy === 'custom'}
+                          onChange={() => setMinStockStrategy('custom')}
                         />
-                        <span>Configure now</span>
+                        <span>Override for this batch</span>
                       </label>
-                      {alertStrategy === 'custom' && (
+                      {minStockStrategy === 'custom' && (
                         <Input
                           type="number"
                           min="0"
                           value={customMinStock}
                           onChange={e => setCustomMinStock(e.target.value)}
-                          placeholder="Minimum stock level"
+                          placeholder="Minimum remaining quantity"
+                        />
+                      )}
+                    </div>
+                  </div>
+
+                  <div className="rounded-md border p-3 space-y-2 bg-muted/30">
+                    <Label className="text-sm">Expiry alert window (this batch)</Label>
+                    <div className="flex flex-col gap-2 text-sm">
+                      <label className="flex items-start gap-2 cursor-pointer">
+                        <input
+                          type="radio"
+                          name="expiryAlertStrategy"
+                          className="mt-1"
+                          checked={expiryAlertStrategy === 'parent'}
+                          onChange={() => setExpiryAlertStrategy('parent')}
+                        />
+                        <span>Use parent / global default</span>
+                      </label>
+                      <label className="flex items-start gap-2 cursor-pointer">
+                        <input
+                          type="radio"
+                          name="expiryAlertStrategy"
+                          className="mt-1"
+                          checked={expiryAlertStrategy === 'custom'}
+                          onChange={() => setExpiryAlertStrategy('custom')}
+                        />
+                        <span>Override for this batch</span>
+                      </label>
+                      {expiryAlertStrategy === 'custom' && (
+                        <Input
+                          type="number"
+                          min="1"
+                          value={customExpiryAlertDays}
+                          onChange={e => setCustomExpiryAlertDays(e.target.value)}
+                          placeholder="Days before expiry to alert"
                         />
                       )}
                     </div>
