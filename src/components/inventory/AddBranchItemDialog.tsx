@@ -215,6 +215,18 @@ export default function AddBranchItemDialog({ open, onOpenChange, onItemAdded }:
       toast({ title: 'Error', description: 'Please fill all required fields', variant: 'destructive' });
       return;
     }
+    if (!batchNumber.trim()) {
+      toast({ title: 'Batch number required', description: 'Please enter a batch number.', variant: 'destructive' });
+      return;
+    }
+    if (!expiryDate) {
+      toast({ title: 'Expiry date required', description: 'Please select an expiry date.', variant: 'destructive' });
+      return;
+    }
+    if (minStockLevel === '' || isNaN(parseInt(minStockLevel)) || parseInt(minStockLevel) < 0) {
+      toast({ title: 'Minimum stock level required', description: 'Please enter a valid minimum stock level (0 or more).', variant: 'destructive' });
+      return;
+    }
 
     setSubmitting(true);
 
@@ -462,20 +474,24 @@ export default function AddBranchItemDialog({ open, onOpenChange, onItemAdded }:
                 </div>
 
                 <div className="space-y-2">
-                  <Label>Batch Number</Label>
-                  <Input value={batchNumber} onChange={e => setBatchNumber(e.target.value)} placeholder="e.g. BN-2026-001" />
+                  <Label>Batch Number *</Label>
+                  <Input value={batchNumber} onChange={e => setBatchNumber(e.target.value)} placeholder="e.g. BN-2026-001" required />
                 </div>
 
-                {/* Expiry date is captured per-batch (Batches view), not at item level */}
+                <div className="space-y-2">
+                  <Label>Expiry Date *</Label>
+                  <Input type="date" value={expiryDate} onChange={e => setExpiryDate(e.target.value)} required />
+                </div>
 
                 <div className="space-y-2">
-                  <Label>Minimum Stock Level</Label>
+                  <Label>Minimum Stock Level *</Label>
                   <Input
                     type="number"
                     min="0"
                     value={minStockLevel}
                     onChange={e => setMinStockLevel(e.target.value)}
                     placeholder="e.g. 5"
+                    required
                   />
                 </div>
               </div>
