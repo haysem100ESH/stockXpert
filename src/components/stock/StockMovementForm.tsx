@@ -469,7 +469,7 @@ export default function StockMovementForm({ open, onOpenChange, onSuccess }: Pro
                     <SelectItem value="TRANSFER">Transfer</SelectItem>
                     <SelectItem value="SUPPLY">Supply (Incoming)</SelectItem>
                     <SelectItem value="RETURN">Return</SelectItem>
-                    <SelectItem value="ADJUSTMENT">Adjustment</SelectItem>
+                    
                   </SelectContent>
                 </Select>
               </div>
