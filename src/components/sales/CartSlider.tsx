@@ -493,22 +493,7 @@ export default function CartSlider({
               )}
             </div>
 
-              {/* Payment Method */}
-              <div className="space-y-1.5">
-                <Label className="text-xs">Payment Method</Label>
-                <Select value={paymentMethod} onValueChange={onPaymentMethodChange}>
-                  <SelectTrigger className="h-9 text-sm"><SelectValue /></SelectTrigger>
-                  <SelectContent>
-                    <SelectItem value="Cash">Cash</SelectItem>
-                    <SelectItem value="Commercial Bank of Ethiopia">Commercial Bank of Ethiopia</SelectItem>
-                    <SelectItem value="Awash International Bank">Awash International Bank</SelectItem>
-                    <SelectItem value="Bank of Abyssinia">Bank of Abyssinia</SelectItem>
-                    <SelectItem value="Dashen Bank">Dashen Bank</SelectItem>
-                    <SelectItem value="Telebirr">Telebirr</SelectItem>
-                    <SelectItem value="M-PESA | Safaricom">M-PESA | Safaricom</SelectItem>
-                  </SelectContent>
-                </Select>
-              </div>
+              {/* Payment Method moved to fixed footer below */}
 
               {/* Discount */}
               <div className="space-y-1.5">
