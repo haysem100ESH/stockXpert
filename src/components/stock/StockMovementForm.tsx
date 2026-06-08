@@ -391,8 +391,11 @@ export default function StockMovementForm({ open, onOpenChange, onSuccess }: Pro
   const resetForm = () => {
     setFromBranchId(''); setToBranchId(''); setMedicineId('');
     setQuantity(''); setMovementType('TRANSFER'); setNotes('');
+    setBatchNumber(''); setExpiryDate('');
+    setAlertStrategy('parent'); setCustomMinStock('');
     setShowConfirmation(false);
   };
+
 
   return (
     <Dialog open={open} onOpenChange={onOpenChange}>
