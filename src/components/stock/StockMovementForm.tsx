@@ -93,21 +93,22 @@ export default function StockMovementForm({ open, onOpenChange, onSuccess }: Pro
 
     const { data: meds } = await supabase
       .from('medicines')
-      .select('id, name')
+      .select('id, name, minimum_stock_level')
       .in('id', medIds);
 
-    const nameMap: Record<string, string> = {};
-    (meds || []).forEach((m: any) => { nameMap[m.id] = m.name; });
+    const medMap: Record<string, { name: string; minimum_stock_level: number | null }> = {};
+    (meds || []).forEach((m: any) => { medMap[m.id] = { name: m.name, minimum_stock_level: m.minimum_stock_level }; });
 
     const rows = (bItems || [])
       .map((b: any) => ({
         id: b.medicine_id,
-        name: nameMap[b.medicine_id] || 'Unknown',
+        name: medMap[b.medicine_id]?.name || 'Unknown',
         stock_quantity: Number(b.quantity || 0),
         branch_id: b.branch_id,
         branch_item_id: b.id,
         purchase_price: Number(b.purchase_price || 0),
         selling_price: Number(b.selling_price || 0),
+        parent_min_stock: medMap[b.medicine_id]?.minimum_stock_level ?? null,
       }))
       .sort((a, b) => a.name.localeCompare(b.name));
 
@@ -115,13 +116,22 @@ export default function StockMovementForm({ open, onOpenChange, onSuccess }: Pro
   };
 
 
-  const availableMedicines = fromBranchId
-    ? medicines.filter(m => m.branch_id === fromBranchId)
-    : medicines;
+  // Scope item list to the relevant branch per movement type:
+  // - TRANSFER / RETURN: items in the source branch
+  // - SUPPLY: items in the destination branch (so user picks an item belonging there)
+  const availableMedicines = (movementType === 'SUPPLY' && toBranchId)
+    ? medicines.filter(m => m.branch_id === toBranchId)
+    : fromBranchId
+      ? medicines.filter(m => m.branch_id === fromBranchId)
+      : medicines;
 
-  const selectedMedicine = medicines.find(m =>
-    m.id === medicineId && (!fromBranchId || m.branch_id === fromBranchId)
-  );
+  const selectedMedicine = medicines.find(m => {
+    if (m.id !== medicineId) return false;
+    if (movementType === 'SUPPLY' && toBranchId) return m.branch_id === toBranchId;
+    if (fromBranchId) return m.branch_id === fromBranchId;
+    return true;
+  });
+
 
   const summary = useMemo(() => {
     if (!selectedMedicine || !quantity || Number(quantity) <= 0) return null;
