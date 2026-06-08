@@ -22,17 +22,22 @@ interface Props {
 export default function StockMovementForm({ open, onOpenChange, onSuccess }: Props) {
   const [branches, setBranches] = useState<{ id: string; name: string; type: string }[]>([]);
   const [branchToLocationMap, setBranchToLocationMap] = useState<Record<string, string>>({});
-  const [medicines, setMedicines] = useState<{ id: string; name: string; stock_quantity: number; branch_id?: string; branch_item_id?: string; purchase_price?: number; selling_price?: number }[]>([]);
+  const [medicines, setMedicines] = useState<{ id: string; name: string; stock_quantity: number; branch_id?: string; branch_item_id?: string; purchase_price?: number; selling_price?: number; parent_min_stock?: number | null }[]>([]);
   const [fromBranchId, setFromBranchId] = useState('');
   const [toBranchId, setToBranchId] = useState('');
   const [medicineId, setMedicineId] = useState('');
   const [quantity, setQuantity] = useState('');
   const [movementType, setMovementType] = useState('TRANSFER');
   const [notes, setNotes] = useState('');
+  const [batchNumber, setBatchNumber] = useState('');
+  const [expiryDate, setExpiryDate] = useState('');
+  const [alertStrategy, setAlertStrategy] = useState<'parent' | 'custom'>('parent');
+  const [customMinStock, setCustomMinStock] = useState('');
   const [saving, setSaving] = useState(false);
   const [showConfirmation, setShowConfirmation] = useState(false);
   const { toast } = useToast();
   const { profile, user } = useAuth();
+
 
   useEffect(() => {
     if (open) { fetchBranchesAndLocations(); fetchMedicines(); setShowConfirmation(false); }
