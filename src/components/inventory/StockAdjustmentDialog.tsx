@@ -41,6 +41,7 @@ export default function StockAdjustmentDialog({ open, onOpenChange, medicine, on
   const [quantity, setQuantity] = useState('');
   const [reason, setReason] = useState('');
   const [deductFromExpense, setDeductFromExpense] = useState(false);
+  const [addToExpense, setAddToExpense] = useState(true);
   // New batch mode
   const [batchQty, setBatchQty] = useState('');
   const [batchPurchasePrice, setBatchPurchasePrice] = useState('');
@@ -88,6 +89,7 @@ export default function StockAdjustmentDialog({ open, onOpenChange, medicine, on
     setQuantity('');
     setReason('');
     setDeductFromExpense(false);
+    setAddToExpense(true);
     setBatchQty('');
     setBatchPurchasePrice('');
     setBatchSellingPrice('');
@@ -214,12 +216,12 @@ export default function StockAdjustmentDialog({ open, onOpenChange, medicine, on
         console.warn('Failed to log to stock_edit_history:', e);
       }
 
-      // Auto-record expense for measurable items on stock increase
-      if (adjustmentType === 'increase' && medicine.item_type === 'measurable' && medicine.purchase_price > 0) {
+      // Record expense for stock increase if user opted in
+      if (adjustmentType === 'increase' && addToExpense && medicine.purchase_price > 0) {
         const expenseAmount = qty * medicine.purchase_price;
         const unit = (medicine.unit_label || 'unit').toUpperCase();
         await supabase.from('expenses').insert({
-          description: `Purchase of ${medicine.name} (${qty} ${unit})`,
+          description: `Stock adjustment (increase): ${medicine.name} (${qty} ${unit})`,
           amount: expenseAmount,
           category: 'Stock Purchase',
           created_by: profile?.id || null,
@@ -448,6 +450,15 @@ export default function StockAdjustmentDialog({ open, onOpenChange, medicine, on
                 <Checkbox id="deduct-expense" checked={deductFromExpense} onCheckedChange={(c) => setDeductFromExpense(!!c)} />
                 <Label htmlFor="deduct-expense" className="text-sm cursor-pointer">
                   Deduct cost from expenses (ETB {quantity ? (parseFloat(quantity) * (medicine?.purchase_price || 0)).toFixed(2) : '0.00'})
+                </Label>
+              </div>
+            )}
+
+            {adjustmentType === 'increase' && (
+              <div className="flex items-center space-x-2 rounded-md border p-3">
+                <Checkbox id="add-expense" checked={addToExpense} onCheckedChange={(c) => setAddToExpense(!!c)} />
+                <Label htmlFor="add-expense" className="text-sm cursor-pointer">
+                  Add cost to expenses (ETB {quantity ? (parseFloat(quantity) * (medicine?.purchase_price || 0)).toFixed(2) : '0.00'})
                 </Label>
               </div>
             )}

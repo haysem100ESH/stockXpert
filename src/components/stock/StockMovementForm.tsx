@@ -22,17 +22,24 @@ interface Props {
 export default function StockMovementForm({ open, onOpenChange, onSuccess }: Props) {
   const [branches, setBranches] = useState<{ id: string; name: string; type: string }[]>([]);
   const [branchToLocationMap, setBranchToLocationMap] = useState<Record<string, string>>({});
-  const [medicines, setMedicines] = useState<{ id: string; name: string; stock_quantity: number; branch_id?: string; branch_item_id?: string; purchase_price?: number; selling_price?: number }[]>([]);
+  const [medicines, setMedicines] = useState<{ id: string; name: string; stock_quantity: number; branch_id?: string; branch_item_id?: string; purchase_price?: number; selling_price?: number; parent_min_stock?: number | null }[]>([]);
   const [fromBranchId, setFromBranchId] = useState('');
   const [toBranchId, setToBranchId] = useState('');
   const [medicineId, setMedicineId] = useState('');
   const [quantity, setQuantity] = useState('');
   const [movementType, setMovementType] = useState('TRANSFER');
   const [notes, setNotes] = useState('');
+  const [batchNumber, setBatchNumber] = useState('');
+  const [expiryDate, setExpiryDate] = useState('');
+  const [minStockStrategy, setMinStockStrategy] = useState<'parent' | 'custom'>('parent');
+  const [customMinStock, setCustomMinStock] = useState('');
+  const [expiryAlertStrategy, setExpiryAlertStrategy] = useState<'parent' | 'custom'>('parent');
+  const [customExpiryAlertDays, setCustomExpiryAlertDays] = useState('');
   const [saving, setSaving] = useState(false);
   const [showConfirmation, setShowConfirmation] = useState(false);
   const { toast } = useToast();
   const { profile, user } = useAuth();
+
 
   useEffect(() => {
     if (open) { fetchBranchesAndLocations(); fetchMedicines(); setShowConfirmation(false); }
@@ -88,21 +95,22 @@ export default function StockMovementForm({ open, onOpenChange, onSuccess }: Pro
 
     const { data: meds } = await supabase
       .from('medicines')
-      .select('id, name')
+      .select('id, name, minimum_stock_level')
       .in('id', medIds);
 
-    const nameMap: Record<string, string> = {};
-    (meds || []).forEach((m: any) => { nameMap[m.id] = m.name; });
+    const medMap: Record<string, { name: string; minimum_stock_level: number | null }> = {};
+    (meds || []).forEach((m: any) => { medMap[m.id] = { name: m.name, minimum_stock_level: m.minimum_stock_level }; });
 
     const rows = (bItems || [])
       .map((b: any) => ({
         id: b.medicine_id,
-        name: nameMap[b.medicine_id] || 'Unknown',
+        name: medMap[b.medicine_id]?.name || 'Unknown',
         stock_quantity: Number(b.quantity || 0),
         branch_id: b.branch_id,
         branch_item_id: b.id,
         purchase_price: Number(b.purchase_price || 0),
         selling_price: Number(b.selling_price || 0),
+        parent_min_stock: medMap[b.medicine_id]?.minimum_stock_level ?? null,
       }))
       .sort((a, b) => a.name.localeCompare(b.name));
 
@@ -110,13 +118,22 @@ export default function StockMovementForm({ open, onOpenChange, onSuccess }: Pro
   };
 
 
-  const availableMedicines = fromBranchId
-    ? medicines.filter(m => m.branch_id === fromBranchId)
-    : medicines;
+  // Scope item list to the relevant branch per movement type:
+  // - TRANSFER / RETURN: items in the source branch
+  // - SUPPLY: items in the destination branch (so user picks an item belonging there)
+  const availableMedicines = (movementType === 'SUPPLY' && toBranchId)
+    ? medicines.filter(m => m.branch_id === toBranchId)
+    : fromBranchId
+      ? medicines.filter(m => m.branch_id === fromBranchId)
+      : medicines;
 
-  const selectedMedicine = medicines.find(m =>
-    m.id === medicineId && (!fromBranchId || m.branch_id === fromBranchId)
-  );
+  const selectedMedicine = medicines.find(m => {
+    if (m.id !== medicineId) return false;
+    if (movementType === 'SUPPLY' && toBranchId) return m.branch_id === toBranchId;
+    if (fromBranchId) return m.branch_id === fromBranchId;
+    return true;
+  });
+
 
   const summary = useMemo(() => {
     if (!selectedMedicine || !quantity || Number(quantity) <= 0) return null;
@@ -160,8 +177,37 @@ export default function StockMovementForm({ open, onOpenChange, onSuccess }: Pro
       toast({ title: 'Error', description: `Insufficient stock. Available: ${selectedMedicine.stock_quantity}`, variant: 'destructive' });
       return false;
     }
+    if (movementType === 'SUPPLY') {
+      if (!toBranchId) {
+        toast({ title: 'Error', description: 'Select a destination branch', variant: 'destructive' });
+        return false;
+      }
+      if (!batchNumber.trim()) {
+        toast({ title: 'Error', description: 'Batch number is required for supply', variant: 'destructive' });
+        return false;
+      }
+      if (!expiryDate) {
+        toast({ title: 'Error', description: 'Expiry date is required for supply', variant: 'destructive' });
+        return false;
+      }
+      if (minStockStrategy === 'custom') {
+        const v = Number(customMinStock);
+        if (customMinStock === '' || Number.isNaN(v) || v < 0) {
+          toast({ title: 'Error', description: 'Enter a valid low-stock alert value', variant: 'destructive' });
+          return false;
+        }
+      }
+      if (expiryAlertStrategy === 'custom') {
+        const v = Number(customExpiryAlertDays);
+        if (customExpiryAlertDays === '' || Number.isNaN(v) || v < 1) {
+          toast({ title: 'Error', description: 'Enter a valid expiry alert window (days)', variant: 'destructive' });
+          return false;
+        }
+      }
+    }
     return true;
   };
+
 
   const handleReview = () => {
     if (validateForm()) setShowConfirmation(true);
@@ -233,6 +279,14 @@ export default function StockMovementForm({ open, onOpenChange, onSuccess }: Pro
         const pp = selectedMedicine?.purchase_price ?? 0;
         const sp = selectedMedicine?.selling_price ?? pp;
 
+        // Resolve per-batch alerts for SUPPLY: parent (NULL = inherit) or user-configured override
+        const batchMinStock = movementType === 'SUPPLY' && minStockStrategy === 'custom'
+          ? Number(customMinStock)
+          : null;
+        const batchExpiryAlertDays = movementType === 'SUPPLY' && expiryAlertStrategy === 'custom'
+          ? Number(customExpiryAlertDays)
+          : null;
+
         // Find or create destination branch_item for this medicine
         const { data: existingDest } = await supabase
           .from('branch_items')
@@ -268,8 +322,12 @@ export default function StockMovementForm({ open, onOpenChange, onSuccess }: Pro
             quantity: qty,
             purchasePrice: pp,
             sellingPrice: sp,
+            batchNumber: movementType === 'SUPPLY' ? batchNumber.trim() : null,
+            expiryDate: movementType === 'SUPPLY' ? expiryDate : null,
+            minStockLevel: batchMinStock,
+            expiryAlertDays: batchExpiryAlertDays,
             createdBy: user?.id || null,
-          });
+          } as any);
           if (batchErr) {
             // Fallback: bump branch_items.quantity directly so stock still reflects the move
             const { data: current } = await supabase
@@ -287,6 +345,7 @@ export default function StockMovementForm({ open, onOpenChange, onSuccess }: Pro
           }
         }
       }
+
 
       // === FINANCIAL IMPACT: balanced expense entries between branches ===
       if (movementType === 'TRANSFER' && fromBranchId && toBranchId && transferredCost > 0) {
@@ -309,6 +368,18 @@ export default function StockMovementForm({ open, onOpenChange, onSuccess }: Pro
         ]);
       }
 
+      // === RETURN: reduce expense in the source branch (goods leaving inventory, e.g. returned to supplier) ===
+      if (movementType === 'RETURN' && fromBranchId && transferredCost > 0) {
+        const label = selectedMedicine?.name || 'Item';
+        await supabase.from('expenses').insert({
+          description: `Stock Return: ${label} × ${qty}`,
+          amount: -transferredCost,
+          category: 'Stock Return',
+          created_by: user?.id || null,
+          branch_id: fromBranchId,
+        });
+      }
+
       toast({ title: 'Success', description: 'Stock moved between branches successfully' });
       window.dispatchEvent(new Event('app:refresh'));
       onSuccess?.();
@@ -325,8 +396,12 @@ export default function StockMovementForm({ open, onOpenChange, onSuccess }: Pro
   const resetForm = () => {
     setFromBranchId(''); setToBranchId(''); setMedicineId('');
     setQuantity(''); setMovementType('TRANSFER'); setNotes('');
+    setBatchNumber(''); setExpiryDate('');
+    setMinStockStrategy('parent'); setCustomMinStock('');
+    setExpiryAlertStrategy('parent'); setCustomExpiryAlertDays('');
     setShowConfirmation(false);
   };
+
 
   return (
     <Dialog open={open} onOpenChange={onOpenChange}>
@@ -394,7 +469,7 @@ export default function StockMovementForm({ open, onOpenChange, onSuccess }: Pro
                     <SelectItem value="TRANSFER">Transfer</SelectItem>
                     <SelectItem value="SUPPLY">Supply (Incoming)</SelectItem>
                     <SelectItem value="RETURN">Return</SelectItem>
-                    <SelectItem value="ADJUSTMENT">Adjustment</SelectItem>
+                    
                   </SelectContent>
                 </Select>
               </div>
@@ -414,7 +489,7 @@ export default function StockMovementForm({ open, onOpenChange, onSuccess }: Pro
               {(movementType === 'TRANSFER' || movementType === 'SUPPLY') && (
                 <div>
                   <Label>To Branch *</Label>
-                  <Select value={toBranchId} onValueChange={setToBranchId}>
+                  <Select value={toBranchId} onValueChange={(v) => { setToBranchId(v); if (movementType === 'SUPPLY') setMedicineId(''); }}>
                     <SelectTrigger><SelectValue placeholder="Select destination" /></SelectTrigger>
                     <SelectContent>
                       {branches.filter(b => b.id !== fromBranchId).map(b => <SelectItem key={b.id} value={b.id}>{b.name} ({b.type})</SelectItem>)}
@@ -425,12 +500,18 @@ export default function StockMovementForm({ open, onOpenChange, onSuccess }: Pro
 
               <div>
                 <Label>Item *</Label>
-                <Select value={medicineId} onValueChange={setMedicineId}>
-                  <SelectTrigger><SelectValue placeholder="Select item" /></SelectTrigger>
+                <Select value={medicineId} onValueChange={setMedicineId} disabled={movementType === 'SUPPLY' && !toBranchId}>
+                  <SelectTrigger>
+                    <SelectValue placeholder={movementType === 'SUPPLY' && !toBranchId ? 'Select destination branch first' : 'Select item'} />
+                  </SelectTrigger>
                   <SelectContent>
-                    {(fromBranchId ? availableMedicines : medicines).map(m => (
-                      <SelectItem key={m.id} value={m.id}>{m.name} (Stock: {m.stock_quantity})</SelectItem>
-                    ))}
+                    {availableMedicines.length === 0 ? (
+                      <div className="px-2 py-1.5 text-xs text-muted-foreground">No items in this branch</div>
+                    ) : (
+                      availableMedicines.map(m => (
+                        <SelectItem key={`${m.branch_id}-${m.id}`} value={m.id}>{m.name} (Stock: {m.stock_quantity})</SelectItem>
+                      ))
+                    )}
                   </SelectContent>
                 </Select>
               </div>
@@ -441,10 +522,103 @@ export default function StockMovementForm({ open, onOpenChange, onSuccess }: Pro
                 {selectedMedicine && <p className="text-xs text-muted-foreground mt-1">Available: {selectedMedicine.stock_quantity}</p>}
               </div>
 
+              {movementType === 'SUPPLY' && (
+                <>
+                  <div className="grid grid-cols-2 gap-3">
+                    <div>
+                      <Label>Batch Number *</Label>
+                      <Input value={batchNumber} onChange={e => setBatchNumber(e.target.value)} placeholder="e.g. BN-2025-001" maxLength={64} />
+                    </div>
+                    <div>
+                      <Label>Expiry Date *</Label>
+                      <Input type="date" value={expiryDate} onChange={e => setExpiryDate(e.target.value)} />
+                    </div>
+                  </div>
+
+                  <div className="rounded-md border p-3 space-y-2 bg-muted/30">
+                    <Label className="text-sm">Low-stock alert (this batch)</Label>
+                    <div className="flex flex-col gap-2 text-sm">
+                      <label className="flex items-start gap-2 cursor-pointer">
+                        <input
+                          type="radio"
+                          name="minStockStrategy"
+                          className="mt-1"
+                          checked={minStockStrategy === 'parent'}
+                          onChange={() => setMinStockStrategy('parent')}
+                        />
+                        <span>
+                          Use parent item's alert
+                          {selectedMedicine && (
+                            <span className="text-muted-foreground ml-1">
+                              ({selectedMedicine.parent_min_stock != null ? `min ${selectedMedicine.parent_min_stock}` : 'not set'})
+                            </span>
+                          )}
+                        </span>
+                      </label>
+                      <label className="flex items-start gap-2 cursor-pointer">
+                        <input
+                          type="radio"
+                          name="minStockStrategy"
+                          className="mt-1"
+                          checked={minStockStrategy === 'custom'}
+                          onChange={() => setMinStockStrategy('custom')}
+                        />
+                        <span>Override for this batch</span>
+                      </label>
+                      {minStockStrategy === 'custom' && (
+                        <Input
+                          type="number"
+                          min="0"
+                          value={customMinStock}
+                          onChange={e => setCustomMinStock(e.target.value)}
+                          placeholder="Minimum remaining quantity"
+                        />
+                      )}
+                    </div>
+                  </div>
+
+                  <div className="rounded-md border p-3 space-y-2 bg-muted/30">
+                    <Label className="text-sm">Expiry alert window (this batch)</Label>
+                    <div className="flex flex-col gap-2 text-sm">
+                      <label className="flex items-start gap-2 cursor-pointer">
+                        <input
+                          type="radio"
+                          name="expiryAlertStrategy"
+                          className="mt-1"
+                          checked={expiryAlertStrategy === 'parent'}
+                          onChange={() => setExpiryAlertStrategy('parent')}
+                        />
+                        <span>Use parent / global default</span>
+                      </label>
+                      <label className="flex items-start gap-2 cursor-pointer">
+                        <input
+                          type="radio"
+                          name="expiryAlertStrategy"
+                          className="mt-1"
+                          checked={expiryAlertStrategy === 'custom'}
+                          onChange={() => setExpiryAlertStrategy('custom')}
+                        />
+                        <span>Override for this batch</span>
+                      </label>
+                      {expiryAlertStrategy === 'custom' && (
+                        <Input
+                          type="number"
+                          min="1"
+                          value={customExpiryAlertDays}
+                          onChange={e => setCustomExpiryAlertDays(e.target.value)}
+                          placeholder="Days before expiry to alert"
+                        />
+                      )}
+                    </div>
+                  </div>
+                </>
+              )}
+
               <div>
                 <Label>Notes</Label>
                 <Textarea value={notes} onChange={e => setNotes(e.target.value)} placeholder="Optional notes..." rows={2} />
               </div>
+
             </div>
             <DialogFooter>
               <Button variant="outline" onClick={() => onOpenChange(false)}>Cancel</Button>
