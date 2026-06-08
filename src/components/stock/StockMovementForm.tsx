@@ -190,10 +190,17 @@ export default function StockMovementForm({ open, onOpenChange, onSuccess }: Pro
         toast({ title: 'Error', description: 'Expiry date is required for supply', variant: 'destructive' });
         return false;
       }
-      if (alertStrategy === 'custom') {
+      if (minStockStrategy === 'custom') {
         const v = Number(customMinStock);
-        if (!customMinStock || Number.isNaN(v) || v < 0) {
+        if (customMinStock === '' || Number.isNaN(v) || v < 0) {
           toast({ title: 'Error', description: 'Enter a valid low-stock alert value', variant: 'destructive' });
+          return false;
+        }
+      }
+      if (expiryAlertStrategy === 'custom') {
+        const v = Number(customExpiryAlertDays);
+        if (customExpiryAlertDays === '' || Number.isNaN(v) || v < 1) {
+          toast({ title: 'Error', description: 'Enter a valid expiry alert window (days)', variant: 'destructive' });
           return false;
         }
       }
