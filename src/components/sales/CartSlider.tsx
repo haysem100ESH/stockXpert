@@ -608,17 +608,34 @@ export default function CartSlider({
           )}
         </div>
 
-        {/* Footer checkout button */}
-        <div className="border-t p-4 bg-card">
+        {/* Footer: totals + checkout (always visible) */}
+        <div className="border-t bg-card p-3 space-y-2">
+          {cart.length > 0 && (
+            <div className="space-y-0.5 text-sm">
+              <div className="flex justify-between">
+                <span className="text-muted-foreground">Subtotal</span>
+                <span>ETB {subtotal.toFixed(2)}</span>
+              </div>
+              {discount > 0 && (
+                <div className="flex justify-between text-success">
+                  <span>Discount ({discountPercent}%)</span>
+                  <span>−ETB {discount.toFixed(2)}</span>
+                </div>
+              )}
+              <div className="flex justify-between font-bold text-base">
+                <span>Total</span>
+                <span>ETB {total.toFixed(2)}</span>
+              </div>
+            </div>
+          )}
+
           {/* Credit denied warning */}
           {creditCheck && !creditCheck.allowed && (
-            <div className="px-4 pb-2">
-              <div className="rounded-md bg-destructive/10 border border-destructive/30 p-3 flex items-start gap-2">
-                <AlertTriangle className="h-4 w-4 text-destructive mt-0.5 shrink-0" />
-                <div className="text-xs text-destructive">
-                  <p className="font-semibold">Credit Denied</p>
-                  <p>{creditCheck.reason}</p>
-                </div>
+            <div className="rounded-md bg-destructive/10 border border-destructive/30 p-2 flex items-start gap-2">
+              <AlertTriangle className="h-4 w-4 text-destructive mt-0.5 shrink-0" />
+              <div className="text-xs text-destructive">
+                <p className="font-semibold">Credit Denied</p>
+                <p>{creditCheck.reason}</p>
               </div>
             </div>
           )}
@@ -630,6 +647,7 @@ export default function CartSlider({
             <CreditCard className="h-4 w-4 mr-2" />
             {processing ? 'Processing...' : `Checkout · ETB ${total.toFixed(2)}`}
           </Button>
+
           {hasShortfall && selectedCustomerId === 'none' && (
             <p className="text-xs text-destructive text-center mt-1">
               Walk-in customers cannot purchase on debt. Please collect full amount or select a customer.
