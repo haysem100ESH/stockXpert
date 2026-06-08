@@ -279,16 +279,18 @@ export default function StockMovementForm({ open, onOpenChange, onSuccess }: Pro
         const pp = selectedMedicine?.purchase_price ?? 0;
         const sp = selectedMedicine?.selling_price ?? pp;
 
-        // Resolve effective low-stock alert: parent (medicines.minimum_stock_level) or user-configured
-        const parentMin = selectedMedicine?.parent_min_stock ?? null;
-        const effectiveMinStock = movementType === 'SUPPLY'
-          ? (alertStrategy === 'custom' ? Number(customMinStock) : (parentMin ?? null))
+        // Resolve per-batch alerts for SUPPLY: parent (NULL = inherit) or user-configured override
+        const batchMinStock = movementType === 'SUPPLY' && minStockStrategy === 'custom'
+          ? Number(customMinStock)
+          : null;
+        const batchExpiryAlertDays = movementType === 'SUPPLY' && expiryAlertStrategy === 'custom'
+          ? Number(customExpiryAlertDays)
           : null;
 
         // Find or create destination branch_item for this medicine
         const { data: existingDest } = await supabase
           .from('branch_items')
-          .select('id, minimum_stock_level')
+          .select('id')
           .eq('branch_id', toBranchId)
           .eq('medicine_id', medicineId)
           .maybeSingle();
@@ -296,28 +298,20 @@ export default function StockMovementForm({ open, onOpenChange, onSuccess }: Pro
         let destBranchItemId = (existingDest as any)?.id as string | undefined;
 
         if (!destBranchItemId) {
-          const insertPayload: any = {
-            branch_id: toBranchId,
-            medicine_id: medicineId,
-            owner_id: profile?.id,
-            quantity: 0,
-            purchase_price: pp,
-            selling_price: sp,
-          };
-          if (effectiveMinStock != null) insertPayload.minimum_stock_level = effectiveMinStock;
           const { data: created, error: createErr } = await supabase
             .from('branch_items')
-            .insert(insertPayload)
+            .insert({
+              branch_id: toBranchId,
+              medicine_id: medicineId,
+              owner_id: profile?.id,
+              quantity: 0,
+              purchase_price: pp,
+              selling_price: sp,
+            })
             .select('id')
             .single();
           if (createErr) throw createErr;
           destBranchItemId = (created as any).id;
-        } else if (movementType === 'SUPPLY' && alertStrategy === 'custom' && effectiveMinStock != null) {
-          // User explicitly chose to override the destination's alert threshold
-          await supabase
-            .from('branch_items')
-            .update({ minimum_stock_level: effectiveMinStock, updated_at: new Date().toISOString() })
-            .eq('id', destBranchItemId);
         }
 
         if (destBranchItemId) {
@@ -330,6 +324,8 @@ export default function StockMovementForm({ open, onOpenChange, onSuccess }: Pro
             sellingPrice: sp,
             batchNumber: movementType === 'SUPPLY' ? batchNumber.trim() : null,
             expiryDate: movementType === 'SUPPLY' ? expiryDate : null,
+            minStockLevel: batchMinStock,
+            expiryAlertDays: batchExpiryAlertDays,
             createdBy: user?.id || null,
           } as any);
           if (batchErr) {
