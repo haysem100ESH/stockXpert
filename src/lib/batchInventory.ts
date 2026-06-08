@@ -30,24 +30,31 @@ export async function createBatch(params: {
   sellingPrice: number;
   expiryDate?: string | null;
   createdBy?: string | null;
+  minStockLevel?: number | null;
+  expiryAlertDays?: number | null;
 }): Promise<{ error: any; batch: any }> {
+  const insertPayload: any = {
+    branch_id: params.branchId,
+    medicine_id: params.medicineId,
+    branch_item_id: params.branchItemId,
+    supplier_id: params.supplierId || null,
+    batch_number: params.batchNumber || null,
+    quantity: params.quantity,
+    remaining_quantity: params.quantity,
+    purchase_price: params.purchasePrice,
+    selling_price: params.sellingPrice,
+    expiry_date: params.expiryDate || null,
+    created_by: params.createdBy || null,
+  };
+  if (params.minStockLevel != null) insertPayload.min_stock_level = params.minStockLevel;
+  if (params.expiryAlertDays != null) insertPayload.expiry_alert_days = params.expiryAlertDays;
+
   const { data: batch, error } = await supabase
     .from('inventory_batches')
-    .insert({
-      branch_id: params.branchId,
-      medicine_id: params.medicineId,
-      branch_item_id: params.branchItemId,
-      supplier_id: params.supplierId || null,
-      batch_number: params.batchNumber || null,
-      quantity: params.quantity,
-      remaining_quantity: params.quantity,
-      purchase_price: params.purchasePrice,
-      selling_price: params.sellingPrice,
-      expiry_date: params.expiryDate || null,
-      created_by: params.createdBy || null,
-    })
+    .insert(insertPayload)
     .select()
     .single();
+
 
   if (error) return { error, batch: null };
 
