@@ -175,8 +175,30 @@ export default function StockMovementForm({ open, onOpenChange, onSuccess }: Pro
       toast({ title: 'Error', description: `Insufficient stock. Available: ${selectedMedicine.stock_quantity}`, variant: 'destructive' });
       return false;
     }
+    if (movementType === 'SUPPLY') {
+      if (!toBranchId) {
+        toast({ title: 'Error', description: 'Select a destination branch', variant: 'destructive' });
+        return false;
+      }
+      if (!batchNumber.trim()) {
+        toast({ title: 'Error', description: 'Batch number is required for supply', variant: 'destructive' });
+        return false;
+      }
+      if (!expiryDate) {
+        toast({ title: 'Error', description: 'Expiry date is required for supply', variant: 'destructive' });
+        return false;
+      }
+      if (alertStrategy === 'custom') {
+        const v = Number(customMinStock);
+        if (!customMinStock || Number.isNaN(v) || v < 0) {
+          toast({ title: 'Error', description: 'Enter a valid low-stock alert value', variant: 'destructive' });
+          return false;
+        }
+      }
+    }
     return true;
   };
+
 
   const handleReview = () => {
     if (validateForm()) setShowConfirmation(true);
