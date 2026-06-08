@@ -527,12 +527,6 @@ export default function CartSlider({
 
               <Separator />
 
-              {/* Totals */}
-              <div className="space-y-1 text-sm">
-                <div className="flex justify-between"><span className="text-muted-foreground">Subtotal</span><span>ETB {subtotal.toFixed(2)}</span></div>
-                {discount > 0 && <div className="flex justify-between text-success"><span>Discount ({discountPercent}%)</span><span>−ETB {discount.toFixed(2)}</span></div>}
-                <div className="flex justify-between font-bold text-base pt-1"><span>Total</span><span>ETB {total.toFixed(2)}</span></div>
-              </div>
 
               {/* Amount Received */}
               <div className="space-y-1.5">
