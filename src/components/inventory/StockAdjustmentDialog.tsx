@@ -454,6 +454,15 @@ export default function StockAdjustmentDialog({ open, onOpenChange, medicine, on
               </div>
             )}
 
+            {adjustmentType === 'increase' && (
+              <div className="flex items-center space-x-2 rounded-md border p-3">
+                <Checkbox id="add-expense" checked={addToExpense} onCheckedChange={(c) => setAddToExpense(!!c)} />
+                <Label htmlFor="add-expense" className="text-sm cursor-pointer">
+                  Add cost to expenses (ETB {quantity ? (parseFloat(quantity) * (medicine?.purchase_price || 0)).toFixed(2) : '0.00'})
+                </Label>
+              </div>
+            )}
+
             <p className="text-xs text-muted-foreground">
               {adjustmentType === 'increase'
                 ? (existingBatches.length === 0
