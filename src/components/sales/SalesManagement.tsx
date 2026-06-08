@@ -46,6 +46,8 @@ interface Medicine {
   sub_unit_name?: string | null;
   unit_price?: number | null;
   sub_unit_price?: number | null;
+  strength?: string | null;
+  medicine_group?: string | null;
 }
 
 interface CartItem extends Medicine {
