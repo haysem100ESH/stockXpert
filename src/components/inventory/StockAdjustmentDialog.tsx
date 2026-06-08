@@ -41,6 +41,7 @@ export default function StockAdjustmentDialog({ open, onOpenChange, medicine, on
   const [quantity, setQuantity] = useState('');
   const [reason, setReason] = useState('');
   const [deductFromExpense, setDeductFromExpense] = useState(false);
+  const [addToExpense, setAddToExpense] = useState(true);
   // New batch mode
   const [batchQty, setBatchQty] = useState('');
   const [batchPurchasePrice, setBatchPurchasePrice] = useState('');
