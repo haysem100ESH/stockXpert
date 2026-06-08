@@ -483,7 +483,7 @@ export default function StockMovementForm({ open, onOpenChange, onSuccess }: Pro
               {(movementType === 'TRANSFER' || movementType === 'SUPPLY') && (
                 <div>
                   <Label>To Branch *</Label>
-                  <Select value={toBranchId} onValueChange={setToBranchId}>
+                  <Select value={toBranchId} onValueChange={(v) => { setToBranchId(v); if (movementType === 'SUPPLY') setMedicineId(''); }}>
                     <SelectTrigger><SelectValue placeholder="Select destination" /></SelectTrigger>
                     <SelectContent>
                       {branches.filter(b => b.id !== fromBranchId).map(b => <SelectItem key={b.id} value={b.id}>{b.name} ({b.type})</SelectItem>)}
@@ -494,12 +494,18 @@ export default function StockMovementForm({ open, onOpenChange, onSuccess }: Pro
 
               <div>
                 <Label>Item *</Label>
-                <Select value={medicineId} onValueChange={setMedicineId}>
-                  <SelectTrigger><SelectValue placeholder="Select item" /></SelectTrigger>
+                <Select value={medicineId} onValueChange={setMedicineId} disabled={movementType === 'SUPPLY' && !toBranchId}>
+                  <SelectTrigger>
+                    <SelectValue placeholder={movementType === 'SUPPLY' && !toBranchId ? 'Select destination branch first' : 'Select item'} />
+                  </SelectTrigger>
                   <SelectContent>
-                    {(fromBranchId ? availableMedicines : medicines).map(m => (
-                      <SelectItem key={m.id} value={m.id}>{m.name} (Stock: {m.stock_quantity})</SelectItem>
-                    ))}
+                    {availableMedicines.length === 0 ? (
+                      <div className="px-2 py-1.5 text-xs text-muted-foreground">No items in this branch</div>
+                    ) : (
+                      availableMedicines.map(m => (
+                        <SelectItem key={`${m.branch_id}-${m.id}`} value={m.id}>{m.name} (Stock: {m.stock_quantity})</SelectItem>
+                      ))
+                    )}
                   </SelectContent>
                 </Select>
               </div>
@@ -510,10 +516,68 @@ export default function StockMovementForm({ open, onOpenChange, onSuccess }: Pro
                 {selectedMedicine && <p className="text-xs text-muted-foreground mt-1">Available: {selectedMedicine.stock_quantity}</p>}
               </div>
 
+              {movementType === 'SUPPLY' && (
+                <>
+                  <div className="grid grid-cols-2 gap-3">
+                    <div>
+                      <Label>Batch Number *</Label>
+                      <Input value={batchNumber} onChange={e => setBatchNumber(e.target.value)} placeholder="e.g. BN-2025-001" maxLength={64} />
+                    </div>
+                    <div>
+                      <Label>Expiry Date *</Label>
+                      <Input type="date" value={expiryDate} onChange={e => setExpiryDate(e.target.value)} />
+                    </div>
+                  </div>
+
+                  <div className="rounded-md border p-3 space-y-2 bg-muted/30">
+                    <Label className="text-sm">Low-stock alert</Label>
+                    <div className="flex flex-col gap-2 text-sm">
+                      <label className="flex items-start gap-2 cursor-pointer">
+                        <input
+                          type="radio"
+                          name="alertStrategy"
+                          className="mt-1"
+                          checked={alertStrategy === 'parent'}
+                          onChange={() => setAlertStrategy('parent')}
+                        />
+                        <span>
+                          Use parent item's alert
+                          {selectedMedicine && (
+                            <span className="text-muted-foreground ml-1">
+                              ({selectedMedicine.parent_min_stock != null ? `min ${selectedMedicine.parent_min_stock}` : 'not set'})
+                            </span>
+                          )}
+                        </span>
+                      </label>
+                      <label className="flex items-start gap-2 cursor-pointer">
+                        <input
+                          type="radio"
+                          name="alertStrategy"
+                          className="mt-1"
+                          checked={alertStrategy === 'custom'}
+                          onChange={() => setAlertStrategy('custom')}
+                        />
+                        <span>Configure now</span>
+                      </label>
+                      {alertStrategy === 'custom' && (
+                        <Input
+                          type="number"
+                          min="0"
+                          value={customMinStock}
+                          onChange={e => setCustomMinStock(e.target.value)}
+                          placeholder="Minimum stock level"
+                        />
+                      )}
+                    </div>
+                  </div>
+                </>
+              )}
+
               <div>
                 <Label>Notes</Label>
                 <Textarea value={notes} onChange={e => setNotes(e.target.value)} placeholder="Optional notes..." rows={2} />
               </div>
+
             </div>
             <DialogFooter>
               <Button variant="outline" onClick={() => onOpenChange(false)}>Cancel</Button>
