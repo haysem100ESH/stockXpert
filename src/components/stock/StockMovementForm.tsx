@@ -31,8 +31,10 @@ export default function StockMovementForm({ open, onOpenChange, onSuccess }: Pro
   const [notes, setNotes] = useState('');
   const [batchNumber, setBatchNumber] = useState('');
   const [expiryDate, setExpiryDate] = useState('');
-  const [alertStrategy, setAlertStrategy] = useState<'parent' | 'custom'>('parent');
+  const [minStockStrategy, setMinStockStrategy] = useState<'parent' | 'custom'>('parent');
   const [customMinStock, setCustomMinStock] = useState('');
+  const [expiryAlertStrategy, setExpiryAlertStrategy] = useState<'parent' | 'custom'>('parent');
+  const [customExpiryAlertDays, setCustomExpiryAlertDays] = useState('');
   const [saving, setSaving] = useState(false);
   const [showConfirmation, setShowConfirmation] = useState(false);
   const { toast } = useToast();
