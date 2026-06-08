@@ -309,6 +309,18 @@ export default function StockMovementForm({ open, onOpenChange, onSuccess }: Pro
         ]);
       }
 
+      // === RETURN: reduce expense in the source branch (goods leaving inventory, e.g. returned to supplier) ===
+      if (movementType === 'RETURN' && fromBranchId && transferredCost > 0) {
+        const label = selectedMedicine?.name || 'Item';
+        await supabase.from('expenses').insert({
+          description: `Stock Return: ${label} × ${qty}`,
+          amount: -transferredCost,
+          category: 'Stock Return',
+          created_by: user?.id || null,
+          branch_id: fromBranchId,
+        });
+      }
+
       toast({ title: 'Success', description: 'Stock moved between branches successfully' });
       window.dispatchEvent(new Event('app:refresh'));
       onSuccess?.();
