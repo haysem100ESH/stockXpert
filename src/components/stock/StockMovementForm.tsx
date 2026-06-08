@@ -536,15 +536,15 @@ export default function StockMovementForm({ open, onOpenChange, onSuccess }: Pro
                   </div>
 
                   <div className="rounded-md border p-3 space-y-2 bg-muted/30">
-                    <Label className="text-sm">Low-stock alert</Label>
+                    <Label className="text-sm">Low-stock alert (this batch)</Label>
                     <div className="flex flex-col gap-2 text-sm">
                       <label className="flex items-start gap-2 cursor-pointer">
                         <input
                           type="radio"
-                          name="alertStrategy"
+                          name="minStockStrategy"
                           className="mt-1"
-                          checked={alertStrategy === 'parent'}
-                          onChange={() => setAlertStrategy('parent')}
+                          checked={minStockStrategy === 'parent'}
+                          onChange={() => setMinStockStrategy('parent')}
                         />
                         <span>
                           Use parent item's alert
@@ -558,20 +558,55 @@ export default function StockMovementForm({ open, onOpenChange, onSuccess }: Pro
                       <label className="flex items-start gap-2 cursor-pointer">
                         <input
                           type="radio"
-                          name="alertStrategy"
+                          name="minStockStrategy"
                           className="mt-1"
-                          checked={alertStrategy === 'custom'}
-                          onChange={() => setAlertStrategy('custom')}
+                          checked={minStockStrategy === 'custom'}
+                          onChange={() => setMinStockStrategy('custom')}
                         />
-                        <span>Configure now</span>
+                        <span>Override for this batch</span>
                       </label>
-                      {alertStrategy === 'custom' && (
+                      {minStockStrategy === 'custom' && (
                         <Input
                           type="number"
                           min="0"
                           value={customMinStock}
                           onChange={e => setCustomMinStock(e.target.value)}
-                          placeholder="Minimum stock level"
+                          placeholder="Minimum remaining quantity"
+                        />
+                      )}
+                    </div>
+                  </div>
+
+                  <div className="rounded-md border p-3 space-y-2 bg-muted/30">
+                    <Label className="text-sm">Expiry alert window (this batch)</Label>
+                    <div className="flex flex-col gap-2 text-sm">
+                      <label className="flex items-start gap-2 cursor-pointer">
+                        <input
+                          type="radio"
+                          name="expiryAlertStrategy"
+                          className="mt-1"
+                          checked={expiryAlertStrategy === 'parent'}
+                          onChange={() => setExpiryAlertStrategy('parent')}
+                        />
+                        <span>Use parent / global default</span>
+                      </label>
+                      <label className="flex items-start gap-2 cursor-pointer">
+                        <input
+                          type="radio"
+                          name="expiryAlertStrategy"
+                          className="mt-1"
+                          checked={expiryAlertStrategy === 'custom'}
+                          onChange={() => setExpiryAlertStrategy('custom')}
+                        />
+                        <span>Override for this batch</span>
+                      </label>
+                      {expiryAlertStrategy === 'custom' && (
+                        <Input
+                          type="number"
+                          min="1"
+                          value={customExpiryAlertDays}
+                          onChange={e => setCustomExpiryAlertDays(e.target.value)}
+                          placeholder="Days before expiry to alert"
                         />
                       )}
                     </div>
