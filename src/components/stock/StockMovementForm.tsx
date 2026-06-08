@@ -397,7 +397,8 @@ export default function StockMovementForm({ open, onOpenChange, onSuccess }: Pro
     setFromBranchId(''); setToBranchId(''); setMedicineId('');
     setQuantity(''); setMovementType('TRANSFER'); setNotes('');
     setBatchNumber(''); setExpiryDate('');
-    setAlertStrategy('parent'); setCustomMinStock('');
+    setMinStockStrategy('parent'); setCustomMinStock('');
+    setExpiryAlertStrategy('parent'); setCustomExpiryAlertDays('');
     setShowConfirmation(false);
   };
 
