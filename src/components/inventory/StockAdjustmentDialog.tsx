@@ -216,12 +216,12 @@ export default function StockAdjustmentDialog({ open, onOpenChange, medicine, on
         console.warn('Failed to log to stock_edit_history:', e);
       }
 
-      // Auto-record expense for measurable items on stock increase
-      if (adjustmentType === 'increase' && medicine.item_type === 'measurable' && medicine.purchase_price > 0) {
+      // Record expense for stock increase if user opted in
+      if (adjustmentType === 'increase' && addToExpense && medicine.purchase_price > 0) {
         const expenseAmount = qty * medicine.purchase_price;
         const unit = (medicine.unit_label || 'unit').toUpperCase();
         await supabase.from('expenses').insert({
-          description: `Purchase of ${medicine.name} (${qty} ${unit})`,
+          description: `Stock adjustment (increase): ${medicine.name} (${qty} ${unit})`,
           amount: expenseAmount,
           category: 'Stock Purchase',
           created_by: profile?.id || null,
