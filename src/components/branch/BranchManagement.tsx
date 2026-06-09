@@ -209,17 +209,28 @@ export default function BranchManagement() {
     setSaving(true);
     try {
       // Unassign staff from this branch first (avoid FK constraint blocking delete)
-      await (supabase as any).from('profiles')
+      const { error: profErr } = await (supabase as any).from('profiles')
         .update({ branch_id: null })
         .eq('branch_id', deletingBranch.id);
+      if (profErr) throw profErr;
 
       // Clear manager reference on the branch itself
-      await (supabase as any).from('pharmacy_branches')
+      const { error: mgrErr } = await (supabase as any).from('pharmacy_branches')
         .update({ manager_staff_id: null })
         .eq('id', deletingBranch.id);
+      if (mgrErr) throw mgrErr;
 
-      // Delete linked location
-      await (supabase as any).from('locations').delete().eq('branch_id', deletingBranch.id);
+      // Detach linked location(s) from the branch. Try to delete first; if other
+      // tables (stock_movements, transfer_requests, etc.) still reference the
+      // location, fall back to nulling out branch_id so the branch FK is freed
+      // without destroying historical movement data.
+      const { error: locDelErr } = await (supabase as any)
+        .from('locations').delete().eq('branch_id', deletingBranch.id);
+      if (locDelErr) {
+        const { error: locNullErr } = await (supabase as any)
+          .from('locations').update({ branch_id: null }).eq('branch_id', deletingBranch.id);
+        if (locNullErr) throw locNullErr;
+      }
 
       const { error } = await (supabase as any).from('pharmacy_branches').delete().eq('id', deletingBranch.id);
       if (error) throw error;
