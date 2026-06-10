@@ -1050,9 +1050,21 @@ export default function FinanceManagement() {
                   <CardTitle>Income vs Expenses Summary</CardTitle>
                 </CardHeader>
                 <CardContent>
-                  <div className="space-y-4">
+                  <div className="space-y-3">
+                    <div className="flex justify-between items-center text-sm">
+                      <span className="text-muted-foreground">Sales Revenue</span>
+                      <span className="font-medium">ETB {stats.salesRevenue.toFixed(2)}</span>
+                    </div>
+                    {stats.extraProfit > 0 && (
+                      <div className="flex justify-between items-center text-sm">
+                        <span className="text-success inline-flex items-center gap-1">
+                          + Extra Profit (Keep Change)
+                        </span>
+                        <span className="font-medium text-success">+ ETB {stats.extraProfit.toFixed(2)}</span>
+                      </div>
+                    )}
                     <div className="flex justify-between items-center">
-                      <span>Income</span>
+                      <span>Total Income</span>
                       <span className="text-success font-medium">ETB {stats.totalIncome.toFixed(2)}</span>
                     </div>
                     <div className="flex justify-between items-center">
