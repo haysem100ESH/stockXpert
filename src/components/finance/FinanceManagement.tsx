@@ -1084,7 +1084,7 @@ export default function FinanceManagement() {
                     <ArrowLeft className="h-4 w-4" />
                   </Button>
                 )}
-                <div>
+                <div className="flex-1">
                   <CardTitle>{selectedItem ? `Transactions: ${selectedItem}` : 'Income by Item'}</CardTitle>
                   <CardDescription>
                     {selectedItem 
@@ -1093,7 +1093,23 @@ export default function FinanceManagement() {
                   </CardDescription>
                 </div>
               </div>
+              {/* Income composition: Sales Revenue + Extra Profit = Total Income */}
+              <div className="mt-3 grid grid-cols-3 gap-2">
+                <div className="rounded-md border bg-muted/40 p-2">
+                  <div className="text-[10px] uppercase tracking-wide text-muted-foreground">Sales Revenue</div>
+                  <div className="text-sm font-semibold">ETB {stats.salesRevenue.toFixed(2)}</div>
+                </div>
+                <div className="rounded-md border bg-success/10 p-2">
+                  <div className="text-[10px] uppercase tracking-wide text-success">Extra Profit (Keep Change)</div>
+                  <div className="text-sm font-semibold text-success">+ ETB {stats.extraProfit.toFixed(2)}</div>
+                </div>
+                <div className="rounded-md border bg-primary/10 p-2">
+                  <div className="text-[10px] uppercase tracking-wide text-primary">Total Income</div>
+                  <div className="text-sm font-bold text-primary">ETB {stats.totalIncome.toFixed(2)}</div>
+                </div>
+              </div>
             </CardHeader>
+
             <CardContent>
               {!selectedItem ? (
                 /* === Item Summary List === */
