@@ -89,7 +89,10 @@ interface FinanceStats {
   totalExpenses: number;
   netProfit: number;
   profitMargin: number;
+  salesRevenue: number;
+  extraProfit: number;
 }
+
 
 interface Expense {
   id: string;
@@ -162,7 +165,9 @@ export default function FinanceManagement() {
     totalIncome: 0,
     totalExpenses: 0,
     netProfit: 0,
-    profitMargin: 0
+    profitMargin: 0,
+    salesRevenue: 0,
+    extraProfit: 0,
   });
   const [expenses, setExpenses] = useState<Expense[]>([]);
   const [sales, setSales] = useState<Sale[]>([]);
@@ -249,7 +254,7 @@ export default function FinanceManagement() {
       // If owner has no branches yet, show empty data
       if (!selectedBranch && ownerBranchIds.length === 0 && profile?.role === 'owner') {
         setSales([]); setExpenses([]); setInventoryExpenses([]); setBranchData([]);
-        setStats({ totalIncome: 0, totalExpenses: 0, netProfit: 0, profitMargin: 0 });
+        setStats({ totalIncome: 0, totalExpenses: 0, netProfit: 0, profitMargin: 0, salesRevenue: 0, extraProfit: 0 });
         setLoading(false);
         return;
       }
@@ -426,7 +431,9 @@ export default function FinanceManagement() {
 
       // Calculate stats - include inventory expenses in total
       // Include extra_profit (tips/kept change) — it's real income but not part of total_amount
-      const totalIncome = salesData?.reduce((sum, sale: any) => sum + Number(sale.total_amount) + Number(sale.extra_profit || 0), 0) || 0;
+      const salesRevenue = salesData?.reduce((sum, sale: any) => sum + Number(sale.total_amount), 0) || 0;
+      const extraProfit = salesData?.reduce((sum, sale: any) => sum + Number(sale.extra_profit || 0), 0) || 0;
+      const totalIncome = salesRevenue + extraProfit;
       const totalCustomExpenses = expensesData?.reduce((sum, expense) => sum + Number(expense.amount), 0) || 0;
       const totalInventoryExpenses = invExpenses.reduce((sum, inv) => sum + inv.total_cost, 0);
       const totalExpenses = totalCustomExpenses + totalInventoryExpenses;
@@ -437,7 +444,9 @@ export default function FinanceManagement() {
         totalIncome,
         totalExpenses,
         netProfit,
-        profitMargin
+        profitMargin,
+        salesRevenue,
+        extraProfit,
       });
 
       // Branch-wise data for chart
@@ -1041,9 +1050,21 @@ export default function FinanceManagement() {
                   <CardTitle>Income vs Expenses Summary</CardTitle>
                 </CardHeader>
                 <CardContent>
-                  <div className="space-y-4">
+                  <div className="space-y-3">
+                    <div className="flex justify-between items-center text-sm">
+                      <span className="text-muted-foreground">Sales Revenue</span>
+                      <span className="font-medium">ETB {stats.salesRevenue.toFixed(2)}</span>
+                    </div>
+                    {stats.extraProfit > 0 && (
+                      <div className="flex justify-between items-center text-sm">
+                        <span className="text-success inline-flex items-center gap-1">
+                          + Extra Profit (Keep Change)
+                        </span>
+                        <span className="font-medium text-success">+ ETB {stats.extraProfit.toFixed(2)}</span>
+                      </div>
+                    )}
                     <div className="flex justify-between items-center">
-                      <span>Income</span>
+                      <span>Total Income</span>
                       <span className="text-success font-medium">ETB {stats.totalIncome.toFixed(2)}</span>
                     </div>
                     <div className="flex justify-between items-center">
@@ -1075,7 +1096,7 @@ export default function FinanceManagement() {
                     <ArrowLeft className="h-4 w-4" />
                   </Button>
                 )}
-                <div>
+                <div className="flex-1">
                   <CardTitle>{selectedItem ? `Transactions: ${selectedItem}` : 'Income by Item'}</CardTitle>
                   <CardDescription>
                     {selectedItem 
@@ -1084,7 +1105,23 @@ export default function FinanceManagement() {
                   </CardDescription>
                 </div>
               </div>
+              {/* Income composition: Sales Revenue + Extra Profit = Total Income */}
+              <div className="mt-3 grid grid-cols-3 gap-2">
+                <div className="rounded-md border bg-muted/40 p-2">
+                  <div className="text-[10px] uppercase tracking-wide text-muted-foreground">Sales Revenue</div>
+                  <div className="text-sm font-semibold">ETB {stats.salesRevenue.toFixed(2)}</div>
+                </div>
+                <div className="rounded-md border bg-success/10 p-2">
+                  <div className="text-[10px] uppercase tracking-wide text-success">Extra Profit (Keep Change)</div>
+                  <div className="text-sm font-semibold text-success">+ ETB {stats.extraProfit.toFixed(2)}</div>
+                </div>
+                <div className="rounded-md border bg-primary/10 p-2">
+                  <div className="text-[10px] uppercase tracking-wide text-primary">Total Income</div>
+                  <div className="text-sm font-bold text-primary">ETB {stats.totalIncome.toFixed(2)}</div>
+                </div>
+              </div>
             </CardHeader>
+
             <CardContent>
               {!selectedItem ? (
                 /* === Item Summary List === */
@@ -1159,50 +1196,86 @@ export default function FinanceManagement() {
                   {selectedItemTransactions.length === 0 ? (
                     <p className="text-muted-foreground text-center py-4">No transactions found</p>
                   ) : (
-                    selectedItemTransactions.map((sale) => (
-                      <div key={sale.id} className="flex justify-between items-start p-3 border rounded-lg">
-                        <div className="flex-1 space-y-1">
-                          <div className="font-medium">
-                            {selectedItem}
-                          </div>
-                          <div className="text-sm text-muted-foreground space-x-3">
-                            {(['pack','strip','unit'] as SaleLevel[]).map(lvl => {
-                              const seg = sale.perLevel[lvl];
-                              if (!seg.qty) return null;
-                              return (
-                                <span key={lvl}>
-                                  {seg.qty % 1 === 0 ? seg.qty : seg.qty.toFixed(2)} {pluralLabel(seg.levelLabel, seg.qty)}
-                                  {lvl !== 'unit' && seg.baseUnits > 0 && (
-                                    <span className="text-xs ml-1">
-                                      ({seg.baseUnits} {pluralLabel(seg.baseLabel, seg.baseUnits)})
-                                    </span>
-                                  )}
+                    selectedItemTransactions.map((sale) => {
+                      const extraProfit = Number((sale as any).extra_profit || 0);
+                      const saleTotal = Number(sale.total_amount || 0);
+                      const finalReceived = saleTotal + extraProfit;
+                      const hasExtra = extraProfit > 0.001;
+                      return (
+                        <div key={sale.id} className="flex justify-between items-start p-3 border rounded-lg">
+                          <div className="flex-1 space-y-1">
+                            <div className="font-medium flex items-center gap-2 flex-wrap">
+                              {selectedItem}
+                              {hasExtra && (
+                                <span className="inline-flex items-center text-[10px] font-semibold rounded-full bg-success/15 text-success px-2 py-0.5">
+                                  + ETB {extraProfit.toFixed(2)} Extra Profit (Keep Change)
                                 </span>
-                              );
-                            })}
-                          </div>
-                          <div className="text-xs text-muted-foreground">
-                            {new Date(sale.created_at).toLocaleDateString()} · {new Date(sale.created_at).toLocaleTimeString()}
-                          </div>
-                          {Number(sale.discount_amount || 0) > 0 && (
-                            <div className="text-xs text-muted-foreground">
-                              Discount: ETB {Number(sale.discount_amount).toFixed(2)}
+                              )}
                             </div>
-                          )}
-                          <div className="text-xs flex gap-2">
-                            <span className="text-muted-foreground">Sold by:</span>
-                            {sale.seller ? (
-                              <span className="font-medium text-foreground">
-                                {sale.seller.role === 'owner' ? 'Owner' : 'Staff'} ({sale.seller.full_name || 'N/A'})
-                              </span>
-                            ) : (
-                              <span className="font-medium text-foreground">N/A</span>
+                            <div className="text-sm text-muted-foreground space-x-3">
+                              {(['pack','strip','unit'] as SaleLevel[]).map(lvl => {
+                                const seg = sale.perLevel[lvl];
+                                if (!seg.qty) return null;
+                                return (
+                                  <span key={lvl}>
+                                    {seg.qty % 1 === 0 ? seg.qty : seg.qty.toFixed(2)} {pluralLabel(seg.levelLabel, seg.qty)}
+                                    {lvl !== 'unit' && seg.baseUnits > 0 && (
+                                      <span className="text-xs ml-1">
+                                        ({seg.baseUnits} {pluralLabel(seg.baseLabel, seg.baseUnits)})
+                                      </span>
+                                    )}
+                                  </span>
+                                );
+                              })}
+                            </div>
+                            <div className="text-xs text-muted-foreground">
+                              {new Date(sale.created_at).toLocaleDateString()} · {new Date(sale.created_at).toLocaleTimeString()}
+                            </div>
+                            {Number(sale.discount_amount || 0) > 0 && (
+                              <div className="text-xs text-muted-foreground">
+                                Discount: ETB {Number(sale.discount_amount).toFixed(2)}
+                              </div>
+                            )}
+                            <div className="text-xs flex gap-2">
+                              <span className="text-muted-foreground">Sold by:</span>
+                              {sale.seller ? (
+                                <span className="font-medium text-foreground">
+                                  {sale.seller.role === 'owner' ? 'Owner' : 'Staff'} ({sale.seller.full_name || 'N/A'})
+                                </span>
+                              ) : (
+                                <span className="font-medium text-foreground">N/A</span>
+                              )}
+                            </div>
+                            {hasExtra && (
+                              <div className="mt-2 rounded-md border bg-muted/30 p-2 text-xs space-y-0.5">
+                                <div className="flex justify-between">
+                                  <span className="text-muted-foreground">Selling Amount</span>
+                                  <span>ETB {saleTotal.toFixed(2)}</span>
+                                </div>
+                                <div className="flex justify-between">
+                                  <span className="text-muted-foreground">Amount Received</span>
+                                  <span>ETB {finalReceived.toFixed(2)}</span>
+                                </div>
+                                <div className="flex justify-between text-success">
+                                  <span>Extra Profit (Keep Change)</span>
+                                  <span>+ ETB {extraProfit.toFixed(2)}</span>
+                                </div>
+                                <div className="flex justify-between font-semibold border-t pt-1 mt-1">
+                                  <span>Final Total</span>
+                                  <span>ETB {finalReceived.toFixed(2)}</span>
+                                </div>
+                              </div>
+                            )}
+                          </div>
+                          <div className="text-right">
+                            <div className="text-success font-medium">ETB {sale.itemTotal.toFixed(2)}</div>
+                            {hasExtra && (
+                              <div className="text-[10px] text-success/80 mt-0.5">+ ETB {extraProfit.toFixed(2)} tip</div>
                             )}
                           </div>
                         </div>
-                        <div className="text-success font-medium">ETB {sale.itemTotal.toFixed(2)}</div>
-                      </div>
-                    ))
+                      );
+                    })
                   )}
                   <div className="text-center text-sm text-muted-foreground">
                     {selectedItemTransactions.length} transaction(s)
