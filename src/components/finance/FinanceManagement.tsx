@@ -1184,50 +1184,86 @@ export default function FinanceManagement() {
                   {selectedItemTransactions.length === 0 ? (
                     <p className="text-muted-foreground text-center py-4">No transactions found</p>
                   ) : (
-                    selectedItemTransactions.map((sale) => (
-                      <div key={sale.id} className="flex justify-between items-start p-3 border rounded-lg">
-                        <div className="flex-1 space-y-1">
-                          <div className="font-medium">
-                            {selectedItem}
-                          </div>
-                          <div className="text-sm text-muted-foreground space-x-3">
-                            {(['pack','strip','unit'] as SaleLevel[]).map(lvl => {
-                              const seg = sale.perLevel[lvl];
-                              if (!seg.qty) return null;
-                              return (
-                                <span key={lvl}>
-                                  {seg.qty % 1 === 0 ? seg.qty : seg.qty.toFixed(2)} {pluralLabel(seg.levelLabel, seg.qty)}
-                                  {lvl !== 'unit' && seg.baseUnits > 0 && (
-                                    <span className="text-xs ml-1">
-                                      ({seg.baseUnits} {pluralLabel(seg.baseLabel, seg.baseUnits)})
-                                    </span>
-                                  )}
+                    selectedItemTransactions.map((sale) => {
+                      const extraProfit = Number((sale as any).extra_profit || 0);
+                      const saleTotal = Number(sale.total_amount || 0);
+                      const finalReceived = saleTotal + extraProfit;
+                      const hasExtra = extraProfit > 0.001;
+                      return (
+                        <div key={sale.id} className="flex justify-between items-start p-3 border rounded-lg">
+                          <div className="flex-1 space-y-1">
+                            <div className="font-medium flex items-center gap-2 flex-wrap">
+                              {selectedItem}
+                              {hasExtra && (
+                                <span className="inline-flex items-center text-[10px] font-semibold rounded-full bg-success/15 text-success px-2 py-0.5">
+                                  + ETB {extraProfit.toFixed(2)} Extra Profit (Keep Change)
                                 </span>
-                              );
-                            })}
-                          </div>
-                          <div className="text-xs text-muted-foreground">
-                            {new Date(sale.created_at).toLocaleDateString()} · {new Date(sale.created_at).toLocaleTimeString()}
-                          </div>
-                          {Number(sale.discount_amount || 0) > 0 && (
-                            <div className="text-xs text-muted-foreground">
-                              Discount: ETB {Number(sale.discount_amount).toFixed(2)}
+                              )}
                             </div>
-                          )}
-                          <div className="text-xs flex gap-2">
-                            <span className="text-muted-foreground">Sold by:</span>
-                            {sale.seller ? (
-                              <span className="font-medium text-foreground">
-                                {sale.seller.role === 'owner' ? 'Owner' : 'Staff'} ({sale.seller.full_name || 'N/A'})
-                              </span>
-                            ) : (
-                              <span className="font-medium text-foreground">N/A</span>
+                            <div className="text-sm text-muted-foreground space-x-3">
+                              {(['pack','strip','unit'] as SaleLevel[]).map(lvl => {
+                                const seg = sale.perLevel[lvl];
+                                if (!seg.qty) return null;
+                                return (
+                                  <span key={lvl}>
+                                    {seg.qty % 1 === 0 ? seg.qty : seg.qty.toFixed(2)} {pluralLabel(seg.levelLabel, seg.qty)}
+                                    {lvl !== 'unit' && seg.baseUnits > 0 && (
+                                      <span className="text-xs ml-1">
+                                        ({seg.baseUnits} {pluralLabel(seg.baseLabel, seg.baseUnits)})
+                                      </span>
+                                    )}
+                                  </span>
+                                );
+                              })}
+                            </div>
+                            <div className="text-xs text-muted-foreground">
+                              {new Date(sale.created_at).toLocaleDateString()} · {new Date(sale.created_at).toLocaleTimeString()}
+                            </div>
+                            {Number(sale.discount_amount || 0) > 0 && (
+                              <div className="text-xs text-muted-foreground">
+                                Discount: ETB {Number(sale.discount_amount).toFixed(2)}
+                              </div>
+                            )}
+                            <div className="text-xs flex gap-2">
+                              <span className="text-muted-foreground">Sold by:</span>
+                              {sale.seller ? (
+                                <span className="font-medium text-foreground">
+                                  {sale.seller.role === 'owner' ? 'Owner' : 'Staff'} ({sale.seller.full_name || 'N/A'})
+                                </span>
+                              ) : (
+                                <span className="font-medium text-foreground">N/A</span>
+                              )}
+                            </div>
+                            {hasExtra && (
+                              <div className="mt-2 rounded-md border bg-muted/30 p-2 text-xs space-y-0.5">
+                                <div className="flex justify-between">
+                                  <span className="text-muted-foreground">Selling Amount</span>
+                                  <span>ETB {saleTotal.toFixed(2)}</span>
+                                </div>
+                                <div className="flex justify-between">
+                                  <span className="text-muted-foreground">Amount Received</span>
+                                  <span>ETB {finalReceived.toFixed(2)}</span>
+                                </div>
+                                <div className="flex justify-between text-success">
+                                  <span>Extra Profit (Keep Change)</span>
+                                  <span>+ ETB {extraProfit.toFixed(2)}</span>
+                                </div>
+                                <div className="flex justify-between font-semibold border-t pt-1 mt-1">
+                                  <span>Final Total</span>
+                                  <span>ETB {finalReceived.toFixed(2)}</span>
+                                </div>
+                              </div>
+                            )}
+                          </div>
+                          <div className="text-right">
+                            <div className="text-success font-medium">ETB {sale.itemTotal.toFixed(2)}</div>
+                            {hasExtra && (
+                              <div className="text-[10px] text-success/80 mt-0.5">+ ETB {extraProfit.toFixed(2)} tip</div>
                             )}
                           </div>
                         </div>
-                        <div className="text-success font-medium">ETB {sale.itemTotal.toFixed(2)}</div>
-                      </div>
-                    ))
+                      );
+                    })
                   )}
                   <div className="text-center text-sm text-muted-foreground">
                     {selectedItemTransactions.length} transaction(s)
