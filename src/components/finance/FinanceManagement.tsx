@@ -431,7 +431,9 @@ export default function FinanceManagement() {
 
       // Calculate stats - include inventory expenses in total
       // Include extra_profit (tips/kept change) — it's real income but not part of total_amount
-      const totalIncome = salesData?.reduce((sum, sale: any) => sum + Number(sale.total_amount) + Number(sale.extra_profit || 0), 0) || 0;
+      const salesRevenue = salesData?.reduce((sum, sale: any) => sum + Number(sale.total_amount), 0) || 0;
+      const extraProfit = salesData?.reduce((sum, sale: any) => sum + Number(sale.extra_profit || 0), 0) || 0;
+      const totalIncome = salesRevenue + extraProfit;
       const totalCustomExpenses = expensesData?.reduce((sum, expense) => sum + Number(expense.amount), 0) || 0;
       const totalInventoryExpenses = invExpenses.reduce((sum, inv) => sum + inv.total_cost, 0);
       const totalExpenses = totalCustomExpenses + totalInventoryExpenses;
@@ -442,7 +444,9 @@ export default function FinanceManagement() {
         totalIncome,
         totalExpenses,
         netProfit,
-        profitMargin
+        profitMargin,
+        salesRevenue,
+        extraProfit,
       });
 
       // Branch-wise data for chart
