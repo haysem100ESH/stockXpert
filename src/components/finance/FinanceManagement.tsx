@@ -89,7 +89,10 @@ interface FinanceStats {
   totalExpenses: number;
   netProfit: number;
   profitMargin: number;
+  salesRevenue: number;
+  extraProfit: number;
 }
+
 
 interface Expense {
   id: string;
