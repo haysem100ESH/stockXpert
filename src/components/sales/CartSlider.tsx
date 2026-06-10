@@ -612,24 +612,48 @@ export default function CartSlider({
               </Select>
             </div>
           )}
-          {cart.length > 0 && (
-            <div className="space-y-0.5 text-sm">
-              <div className="flex justify-between">
-                <span className="text-muted-foreground">Subtotal</span>
-                <span>ETB {subtotal.toFixed(2)}</span>
-              </div>
-              {discount > 0 && (
-                <div className="flex justify-between text-success">
-                  <span>Discount ({discountPercent}%)</span>
-                  <span>−ETB {discount.toFixed(2)}</span>
+          {cart.length > 0 && (() => {
+            const keepProfitActive = hasChange && changeAction === 'keep_profit' && keepChangeOption === 'profit';
+            const extraProfit = keepProfitActive ? changeAmount : 0;
+            const finalTotal = total + extraProfit;
+            return (
+              <div className="space-y-0.5 text-sm">
+                <div className="flex justify-between">
+                  <span className="text-muted-foreground">Subtotal</span>
+                  <span>ETB {subtotal.toFixed(2)}</span>
                 </div>
-              )}
-              <div className="flex justify-between font-bold text-base">
-                <span>Total</span>
-                <span>ETB {total.toFixed(2)}</span>
+                {discount > 0 && (
+                  <div className="flex justify-between text-success">
+                    <span>Discount ({discountPercent}%)</span>
+                    <span>−ETB {discount.toFixed(2)}</span>
+                  </div>
+                )}
+                {keepProfitActive ? (
+                  <>
+                    <div className="flex justify-between">
+                      <span className="text-muted-foreground">Selling Price</span>
+                      <span>ETB {total.toFixed(2)}</span>
+                    </div>
+                    <div className="flex justify-between items-center">
+                      <span className="text-xs font-medium inline-flex items-center gap-1 rounded-full bg-success/15 text-success px-2 py-0.5">
+                        + Extra Profit (Keep Change)
+                      </span>
+                      <span className="text-success font-semibold">+ETB {extraProfit.toFixed(2)}</span>
+                    </div>
+                    <div className="flex justify-between font-bold text-base pt-0.5 border-t mt-1">
+                      <span>Total Amount</span>
+                      <span>ETB {finalTotal.toFixed(2)}</span>
+                    </div>
+                  </>
+                ) : (
+                  <div className="flex justify-between font-bold text-base">
+                    <span>Total</span>
+                    <span>ETB {total.toFixed(2)}</span>
+                  </div>
+                )}
               </div>
-            </div>
-          )}
+            );
+          })()}
 
           {/* Credit denied warning */}
           {creditCheck && !creditCheck.allowed && (
@@ -641,14 +665,20 @@ export default function CartSlider({
               </div>
             </div>
           )}
-          <Button
-            onClick={onCheckout}
-            className="w-full"
-            disabled={processing || cart.length === 0 || (hasChange && !changeAction) || (hasShortfall && selectedCustomerId === 'none') || (creditCheck != null && !creditCheck.allowed)}
-          >
-            <CreditCard className="h-4 w-4 mr-2" />
-            {processing ? 'Processing...' : `Checkout · ETB ${total.toFixed(2)}`}
-          </Button>
+          {(() => {
+            const keepProfitActive = hasChange && changeAction === 'keep_profit' && keepChangeOption === 'profit';
+            const checkoutAmt = keepProfitActive ? (total + changeAmount) : total;
+            return (
+              <Button
+                onClick={onCheckout}
+                className="w-full"
+                disabled={processing || cart.length === 0 || (hasChange && !changeAction) || (hasShortfall && selectedCustomerId === 'none') || (creditCheck != null && !creditCheck.allowed)}
+              >
+                <CreditCard className="h-4 w-4 mr-2" />
+                {processing ? 'Processing...' : `Checkout · ETB ${checkoutAmt.toFixed(2)}`}
+              </Button>
+            );
+          })()}
 
           {hasShortfall && selectedCustomerId === 'none' && (
             <p className="text-xs text-destructive text-center mt-1">
