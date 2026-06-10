@@ -254,7 +254,7 @@ export default function FinanceManagement() {
       // If owner has no branches yet, show empty data
       if (!selectedBranch && ownerBranchIds.length === 0 && profile?.role === 'owner') {
         setSales([]); setExpenses([]); setInventoryExpenses([]); setBranchData([]);
-        setStats({ totalIncome: 0, totalExpenses: 0, netProfit: 0, profitMargin: 0 });
+        setStats({ totalIncome: 0, totalExpenses: 0, netProfit: 0, profitMargin: 0, salesRevenue: 0, extraProfit: 0 });
         setLoading(false);
         return;
       }
