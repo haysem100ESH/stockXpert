@@ -38,6 +38,7 @@ export default function BatchesEditor({
 }: BatchesEditorProps) {
   const { profile } = useAuth();
   const { toast } = useToast();
+  const queryClient = useQueryClient();
   const [drafts, setDrafts] = useState<DraftBatch[]>([]);
   const [deletedIds, setDeletedIds] = useState<string[]>([]);
   const [loading, setLoading] = useState(false);
