@@ -146,6 +146,7 @@ export default function CartSlider({
   customers, selectedCustomerId, onSelectCustomer,
   paymentMethod, onPaymentMethodChange,
   discountPercent, onDiscountChange,
+  discountMode, onDiscountModeChange,
   amountReceived, onAmountReceivedChange,
   changeAction, onChangeAction,
   keepChangeOption, onKeepChangeOption,
