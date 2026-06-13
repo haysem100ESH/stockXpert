@@ -496,6 +496,10 @@ export default function SalesManagement() {
       toast({ title: 'Error', description: 'Cart is empty', variant: 'destructive' });
       return;
     }
+    if (!paymentMethod) {
+      toast({ title: 'Payment Method Required', description: 'Please select a payment method before checkout.', variant: 'destructive' });
+      return;
+    }
     // Prevent selling items with 0 quantity
     const zeroItem = cart.find(item => 
       (item.saleType === 'by_stripe' && (item.stripesCount ?? 0) <= 0) ||
