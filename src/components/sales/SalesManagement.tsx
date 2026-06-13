@@ -134,6 +134,16 @@ export default function SalesManagement() {
     setAmountReceived('');
   }, [cart, discountPercent]);
 
+  // Reset payment method whenever a new item is added to the cart,
+  // so staff must re-select it each time instead of reusing the previous choice.
+  const prevCartCountRef = React.useRef(cart.length);
+  useEffect(() => {
+    if (cart.length > prevCartCountRef.current) {
+      setPaymentMethod('');
+    }
+    prevCartCountRef.current = cart.length;
+  }, [cart.length]);
+
   // Reset change action when amount received changes
   useEffect(() => {
     setChangeAction(null);
