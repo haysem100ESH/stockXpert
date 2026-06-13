@@ -25,17 +25,17 @@ export default function SubscriptionStatus() {
 
   if (isSubscriptionExpired()) {
     return (
-      <Alert variant="destructive" className="mb-4">
-        <Lock className="h-4 w-4" />
-        <AlertDescription className="flex items-center justify-between">
-          <span>🚫 Subscription expired. Please contact support to renew.</span>
+      <Alert variant="destructive" className="mb-2 py-1.5 px-3 [&>svg]:left-2 [&>svg]:top-2 [&>svg~*]:pl-5">
+        <Lock className="h-3.5 w-3.5" />
+        <AlertDescription className="flex items-center justify-between gap-2">
+          <span className="text-xs truncate">🚫 Subscription expired.</span>
           <Button 
             variant="outline" 
             size="sm"
             onClick={() => navigate('/account')}
-            className="ml-4"
+            className="h-6 px-2 text-xs flex-shrink-0"
           >
-            Contact Support
+            Renew
           </Button>
         </AlertDescription>
       </Alert>
@@ -45,10 +45,10 @@ export default function SubscriptionStatus() {
   if (isSubscriptionExpiring()) {
     const daysLeft = getDaysRemaining();
     return (
-      <Alert variant="default" className="mb-4 border-amber-500 bg-amber-50 text-amber-800">
-        <AlertTriangle className="h-4 w-4" />
-        <AlertDescription>
-          ⚠ Subscription expires in {daysLeft} day{daysLeft !== 1 ? 's' : ''}. Please renew soon to continue using the system.
+      <Alert variant="default" className="mb-2 py-1.5 px-3 border-amber-500 bg-amber-50 text-amber-800 [&>svg]:left-2 [&>svg]:top-2 [&>svg~*]:pl-5">
+        <AlertTriangle className="h-3.5 w-3.5" />
+        <AlertDescription className="text-xs">
+          ⚠ Expires in {daysLeft} day{daysLeft !== 1 ? 's' : ''}.
         </AlertDescription>
       </Alert>
     );
