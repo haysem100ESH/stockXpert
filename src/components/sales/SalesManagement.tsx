@@ -82,8 +82,9 @@ export default function SalesManagement() {
   const [currentPage, setCurrentPage] = useState(1);
   const [processing, setProcessing] = useState(false);
   const [infoMed, setInfoMed] = useState<{ branchItemId: string; medicineId?: string; name: string } | null>(null);
-  const [paymentMethod, setPaymentMethod] = useState<string>('Cash');
+  const [paymentMethod, setPaymentMethod] = useState<string>('');
   const [discountPercent, setDiscountPercent] = useState<number>(0);
+  const [discountMode, setDiscountMode] = useState<'percent' | 'fixed'>('percent');
   const [showCheckoutConfirm, setShowCheckoutConfirm] = useState(false);
   const [selectedCustomerId, setSelectedCustomerId] = useState<string>('none');
   const [amountReceived, setAmountReceived] = useState<string>('');
@@ -406,7 +407,11 @@ export default function SalesManagement() {
   };
 
   const calculateSubtotal = () => cart.reduce((sum, item) => sum + item.total, 0);
-  const calculateDiscount = () => (calculateSubtotal() * discountPercent) / 100;
+  const calculateDiscount = () => {
+    const sub = calculateSubtotal();
+    if (discountMode === 'fixed') return Math.max(0, Math.min(sub, discountPercent));
+    return (sub * Math.max(0, Math.min(100, discountPercent))) / 100;
+  };
   const calculateTotal = () => calculateSubtotal() - calculateDiscount();
 
   const getChangeAmount = () => {
@@ -489,6 +494,10 @@ export default function SalesManagement() {
     }
     if (cart.length === 0) {
       toast({ title: 'Error', description: 'Cart is empty', variant: 'destructive' });
+      return;
+    }
+    if (!paymentMethod) {
+      toast({ title: 'Payment Method Required', description: 'Please select a payment method before checkout.', variant: 'destructive' });
       return;
     }
     // Prevent selling items with 0 quantity
@@ -1102,6 +1111,8 @@ export default function SalesManagement() {
         onPaymentMethodChange={setPaymentMethod}
         discountPercent={discountPercent}
         onDiscountChange={setDiscountPercent}
+        discountMode={discountMode}
+        onDiscountModeChange={(m) => { setDiscountMode(m); setDiscountPercent(0); }}
         amountReceived={amountReceived}
         onAmountReceivedChange={setAmountReceived}
         changeAction={changeAction}
