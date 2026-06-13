@@ -644,7 +644,7 @@ export default function CartSlider({
                 </div>
                 {discount > 0 && (
                   <div className="flex justify-between text-success">
-                    <span>Discount ({discountPercent}%)</span>
+                    <span>Discount {discountMode === 'percent' ? `(${discountPercent}%)` : '(Fixed)'}</span>
                     <span>−ETB {discount.toFixed(2)}</span>
                   </div>
                 )}
