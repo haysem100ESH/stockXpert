@@ -407,7 +407,11 @@ export default function SalesManagement() {
   };
 
   const calculateSubtotal = () => cart.reduce((sum, item) => sum + item.total, 0);
-  const calculateDiscount = () => (calculateSubtotal() * discountPercent) / 100;
+  const calculateDiscount = () => {
+    const sub = calculateSubtotal();
+    if (discountMode === 'fixed') return Math.max(0, Math.min(sub, discountPercent));
+    return (sub * Math.max(0, Math.min(100, discountPercent))) / 100;
+  };
   const calculateTotal = () => calculateSubtotal() - calculateDiscount();
 
   const getChangeAmount = () => {
