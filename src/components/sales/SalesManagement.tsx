@@ -1111,6 +1111,8 @@ export default function SalesManagement() {
         onPaymentMethodChange={setPaymentMethod}
         discountPercent={discountPercent}
         onDiscountChange={setDiscountPercent}
+        discountMode={discountMode}
+        onDiscountModeChange={(m) => { setDiscountMode(m); setDiscountPercent(0); }}
         amountReceived={amountReceived}
         onAmountReceivedChange={setAmountReceived}
         changeAction={changeAction}
