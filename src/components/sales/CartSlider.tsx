@@ -500,13 +500,30 @@ export default function CartSlider({
 
               {/* Discount */}
               <div className="space-y-1.5">
-                <Label className="text-xs">Discount (%)</Label>
+                <div className="flex items-center justify-between">
+                  <Label className="text-xs">Discount {discountMode === 'percent' ? '(%)' : '(ETB)'}</Label>
+                  <div className="inline-flex rounded-md border overflow-hidden">
+                    <button
+                      type="button"
+                      onClick={() => onDiscountModeChange('percent')}
+                      className={`px-2 py-0.5 text-xs ${discountMode === 'percent' ? 'bg-primary text-primary-foreground' : 'bg-background text-muted-foreground'}`}
+                    >%</button>
+                    <button
+                      type="button"
+                      onClick={() => onDiscountModeChange('fixed')}
+                      className={`px-2 py-0.5 text-xs border-l ${discountMode === 'fixed' ? 'bg-primary text-primary-foreground' : 'bg-background text-muted-foreground'}`}
+                    >ETB</button>
+                  </div>
+                </div>
                 <div className="flex items-center gap-2">
                   <Percent className="h-4 w-4 text-muted-foreground shrink-0" />
                   <Input
-                    type="number" min="0" max="100"
+                    type="number" min="0" {...(discountMode === 'percent' ? { max: 100 } : {})} step="0.01"
                     value={discountPercent}
-                    onChange={(e) => onDiscountChange(Math.max(0, Math.min(100, Number(e.target.value))))}
+                    onChange={(e) => {
+                      const v = Math.max(0, Number(e.target.value) || 0);
+                      onDiscountChange(discountMode === 'percent' ? Math.min(100, v) : v);
+                    }}
                     placeholder="0"
                     className="h-9 text-sm"
                   />
