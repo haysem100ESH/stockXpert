@@ -1,4 +1,5 @@
 import { useEffect, useState } from 'react';
+import { useQueryClient } from '@tanstack/react-query';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Badge } from '@/components/ui/badge';
@@ -37,6 +38,7 @@ export default function BatchesEditor({
 }: BatchesEditorProps) {
   const { profile } = useAuth();
   const { toast } = useToast();
+  const queryClient = useQueryClient();
   const [drafts, setDrafts] = useState<DraftBatch[]>([]);
   const [deletedIds, setDeletedIds] = useState<string[]>([]);
   const [loading, setLoading] = useState(false);
@@ -189,6 +191,14 @@ export default function BatchesEditor({
         }
       }
 
+      // Force-refresh all caches that show prices/stock derived from this item.
+      await Promise.all([
+        queryClient.invalidateQueries({ queryKey: ['branch-inventory'] }),
+        queryClient.invalidateQueries({ queryKey: ['sales-inventory'] }),
+        queryClient.invalidateQueries({ queryKey: ['medicine_packaging'] }),
+        queryClient.invalidateQueries({ queryKey: ['medicine_packaging_map'] }),
+        queryClient.invalidateQueries({ queryKey: ['inventory_batches'] }),
+      ]);
       toast({ title: 'Batches saved', description: 'Item batches updated successfully.' });
       window.dispatchEvent(new Event('app:refresh'));
       onChanged?.();
