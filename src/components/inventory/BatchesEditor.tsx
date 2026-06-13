@@ -191,6 +191,14 @@ export default function BatchesEditor({
         }
       }
 
+      // Force-refresh all caches that show prices/stock derived from this item.
+      await Promise.all([
+        queryClient.invalidateQueries({ queryKey: ['branch-inventory'] }),
+        queryClient.invalidateQueries({ queryKey: ['sales-inventory'] }),
+        queryClient.invalidateQueries({ queryKey: ['medicine_packaging'] }),
+        queryClient.invalidateQueries({ queryKey: ['medicine_packaging_map'] }),
+        queryClient.invalidateQueries({ queryKey: ['inventory_batches'] }),
+      ]);
       toast({ title: 'Batches saved', description: 'Item batches updated successfully.' });
       window.dispatchEvent(new Event('app:refresh'));
       onChanged?.();
