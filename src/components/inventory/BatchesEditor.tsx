@@ -101,9 +101,45 @@ export default function BatchesEditor({
     try {
       const { data: { user } } = await supabase.auth.getUser();
 
+      // Resolve item name once for history logs
+      const { data: medRow } = await supabase
+        .from('medicines')
+        .select('name')
+        .eq('id', medicineId)
+        .maybeSingle();
+      const itemName = (medRow as any)?.name || 'Unknown Item';
+
+      const historyRows: any[] = [];
+      const baseLog = (action_type: string, field_name: string, oldVal: any, newVal: any, reason: string) => ({
+        medicine_id: medicineId,
+        branch_id: branchId || null,
+        action_type,
+        field_name,
+        old_value: oldVal == null ? '' : String(oldVal),
+        new_value: newVal == null ? '' : String(newVal),
+        reason,
+        done_by: profile?.id || null,
+        done_by_name: profile?.full_name || 'Unknown',
+        item_name: itemName,
+      });
+
       for (const id of deletedIds) {
+        const { data: delBatch } = await supabase
+          .from('inventory_batches')
+          .select('batch_number, remaining_quantity')
+          .eq('id', id)
+          .maybeSingle();
+        const bn = (delBatch as any)?.batch_number || '—';
+        const rem = (delBatch as any)?.remaining_quantity ?? 0;
         const { error } = await supabase.from('inventory_batches').delete().eq('id', id);
         if (error) throw error;
+        historyRows.push(baseLog(
+          'Batch Deleted',
+          'inventory_batches',
+          `Batch #${bn} (qty ${rem})`,
+          '—',
+          'Deleted batch via Batches tab',
+        ));
       }
 
       for (const d of drafts) {
@@ -139,6 +175,13 @@ export default function BatchesEditor({
               expiry_alert_days: alertDays,
             }).eq('id', batch.id);
           }
+          historyRows.push(baseLog(
+            'New Batch Added',
+            'inventory_batches',
+            '—',
+            `Batch #${d.batch_number.trim()} · qty ${qty} · PP ${buy} / SP ${sell}${d.expiry_date ? ` · exp ${d.expiry_date}` : ''}`,
+            'Added new batch via Batches tab',
+          ));
         } else {
           const orig = d._original!;
           const update: any = {
@@ -154,6 +197,33 @@ export default function BatchesEditor({
           if (qty > Number(orig.quantity)) update.quantity = qty;
           const { error } = await supabase.from('inventory_batches').update(update).eq('id', d.id);
           if (error) throw error;
+
+          const bnLabel = `Batch #${d.batch_number.trim() || orig.batch_number || '—'}`;
+          const fieldDiffs: Array<[string, any, any]> = [
+            ['batch_number', orig.batch_number || '—', d.batch_number.trim() || '—'],
+            ['remaining_quantity', Number(orig.remaining_quantity), qty],
+            ['purchase_price', Number(orig.purchase_price), buy],
+            ['selling_price', Number(orig.selling_price), sell],
+            ['expiry_date', orig.expiry_date || '—', d.expiry_date || '—'],
+            ['min_stock_level', (orig as any).min_stock_level ?? '—', minStock ?? '—'],
+            ['expiry_alert_days', (orig as any).expiry_alert_days ?? '—', alertDays ?? '—'],
+          ];
+          for (const [field, oldVal, newVal] of fieldDiffs) {
+            if (String(oldVal) !== String(newVal)) {
+              const action = field === 'remaining_quantity'
+                ? (Number(newVal) > Number(oldVal) ? 'Stock Increased' : 'Stock Decreased')
+                : 'Batch Modified';
+              historyRows.push(baseLog(action, `${bnLabel} · ${field}`, oldVal, newVal, 'Edited batch via Batches tab'));
+            }
+          }
+        }
+      }
+
+      if (historyRows.length > 0) {
+        try {
+          await (supabase as any).from('stock_edit_history').insert(historyRows);
+        } catch (e) {
+          console.warn('Failed to log batch history:', e);
         }
       }
 
