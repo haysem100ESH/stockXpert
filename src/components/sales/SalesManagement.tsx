@@ -82,8 +82,9 @@ export default function SalesManagement() {
   const [currentPage, setCurrentPage] = useState(1);
   const [processing, setProcessing] = useState(false);
   const [infoMed, setInfoMed] = useState<{ branchItemId: string; medicineId?: string; name: string } | null>(null);
-  const [paymentMethod, setPaymentMethod] = useState<string>('Cash');
+  const [paymentMethod, setPaymentMethod] = useState<string>('');
   const [discountPercent, setDiscountPercent] = useState<number>(0);
+  const [discountMode, setDiscountMode] = useState<'percent' | 'fixed'>('percent');
   const [showCheckoutConfirm, setShowCheckoutConfirm] = useState(false);
   const [selectedCustomerId, setSelectedCustomerId] = useState<string>('none');
   const [amountReceived, setAmountReceived] = useState<string>('');
