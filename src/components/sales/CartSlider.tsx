@@ -124,6 +124,8 @@ interface CartSliderProps {
   onPaymentMethodChange: (v: string) => void;
   discountPercent: number;
   onDiscountChange: (v: number) => void;
+  discountMode: 'percent' | 'fixed';
+  onDiscountModeChange: (m: 'percent' | 'fixed') => void;
   amountReceived: string;
   onAmountReceivedChange: (v: string) => void;
   changeAction: ChangeAction;
