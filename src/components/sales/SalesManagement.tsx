@@ -1,4 +1,4 @@
-import { useState, useEffect } from 'react';
+import { useState, useEffect, useRef } from 'react';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
@@ -133,6 +133,16 @@ export default function SalesManagement() {
   useEffect(() => {
     setAmountReceived('');
   }, [cart, discountPercent]);
+
+  // Reset payment method whenever a new item is added to the cart,
+  // so staff must re-select it each time instead of reusing the previous choice.
+  const prevCartCountRef = useRef(cart.length);
+  useEffect(() => {
+    if (cart.length > prevCartCountRef.current) {
+      setPaymentMethod('');
+    }
+    prevCartCountRef.current = cart.length;
+  }, [cart.length]);
 
   // Reset change action when amount received changes
   useEffect(() => {
