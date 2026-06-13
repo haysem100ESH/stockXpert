@@ -3,13 +3,39 @@
  * ----------------------------------------------------------------------------
  * Fetch the medicine_packaging row for a single medicine, or batch-fetch
  * many at once. Falls back to defaultPackaging() when missing.
+ *
+ * Cache invalidation:
+ * - Listens to the global `app:refresh` event so edits made elsewhere
+ *   (e.g. EditBranchItemDialog updating selling price) propagate to the
+ *   Sales screen and inventory cards that derive prices from packaging.
+ * - Subscribes to realtime changes on `medicine_packaging`.
  */
-import { useEffect, useState } from 'react';
-import { useQuery } from '@tanstack/react-query';
+import { useEffect } from 'react';
+import { useQuery, useQueryClient } from '@tanstack/react-query';
 import { supabase } from '@/lib/db';
 import { Packaging, defaultPackaging } from '@/lib/packaging';
 
+function usePackagingInvalidation() {
+  const queryClient = useQueryClient();
+  useEffect(() => {
+    const invalidate = () => {
+      queryClient.invalidateQueries({ queryKey: ['medicine_packaging'] });
+      queryClient.invalidateQueries({ queryKey: ['medicine_packaging_map'] });
+    };
+    window.addEventListener('app:refresh', invalidate);
+    const channel = (supabase as any)
+      .channel(`medicine-packaging-${Math.random().toString(36).slice(2)}`)
+      .on('postgres_changes', { event: '*', schema: 'public', table: 'medicine_packaging' }, invalidate)
+      .subscribe();
+    return () => {
+      window.removeEventListener('app:refresh', invalidate);
+      (supabase as any).removeChannel(channel);
+    };
+  }, [queryClient]);
+}
+
 export function usePackaging(medicineId?: string | null) {
+  usePackagingInvalidation();
   const q = useQuery({
     queryKey: ['medicine_packaging', medicineId],
     queryFn: async (): Promise<Packaging | null> => {
@@ -28,6 +54,7 @@ export function usePackaging(medicineId?: string | null) {
 }
 
 export function usePackagingMap(medicineIds: string[]) {
+  usePackagingInvalidation();
   const ids = [...new Set(medicineIds || [])].filter(Boolean).sort();
   const key = ids.join(',');
   return useQuery({
