@@ -156,6 +156,39 @@ export default function BatchesEditor({
       }
 
       await syncBranchItemQuantity(branchItemId);
+
+      // Propagate latest batch's prices to branch_items + medicine_packaging
+      // so the inventory card and Sales screen reflect the edited values.
+      const newDrafts = drafts.filter(d => d.isNew);
+      const existingDrafts = drafts.filter(d => !d.isNew);
+      const latest =
+        newDrafts[newDrafts.length - 1] ||
+        [...existingDrafts].sort((a, b) =>
+          String(b._original?.created_at || '').localeCompare(String(a._original?.created_at || ''))
+        )[0];
+
+      if (latest) {
+        const sell = parseFloat(latest.selling_price);
+        const buy = parseFloat(latest.purchase_price);
+        if (!isNaN(sell) && !isNaN(buy)) {
+          await supabase
+            .from('branch_items')
+            .update({ selling_price: sell, purchase_price: buy, updated_at: new Date().toISOString() })
+            .eq('id', branchItemId);
+
+          const { data: bi } = await supabase
+            .from('branch_items')
+            .select('units_per_pack')
+            .eq('id', branchItemId)
+            .maybeSingle();
+          const upp = Math.max(1, Number((bi as any)?.units_per_pack || 1));
+          await supabase
+            .from('medicine_packaging')
+            .update({ unit_selling_price: sell / upp })
+            .eq('medicine_id', medicineId);
+        }
+      }
+
       toast({ title: 'Batches saved', description: 'Item batches updated successfully.' });
       window.dispatchEvent(new Event('app:refresh'));
       onChanged?.();
