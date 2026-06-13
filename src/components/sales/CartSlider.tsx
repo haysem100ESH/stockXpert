@@ -618,8 +618,8 @@ export default function CartSlider({
           {cart.length > 0 && (
             <div className="space-y-1">
               <Label className="text-xs">Payment Method</Label>
-              <Select value={paymentMethod} onValueChange={onPaymentMethodChange}>
-                <SelectTrigger className="h-8 text-xs"><SelectValue /></SelectTrigger>
+              <Select value={paymentMethod || undefined} onValueChange={onPaymentMethodChange}>
+                <SelectTrigger className={`h-8 text-xs ${!paymentMethod ? 'border-destructive text-destructive' : ''}`}><SelectValue placeholder="Select payment method *" /></SelectTrigger>
                 <SelectContent>
                   <SelectItem value="Cash">Cash</SelectItem>
                   <SelectItem value="Commercial Bank of Ethiopia">Commercial Bank of Ethiopia</SelectItem>
