@@ -821,7 +821,7 @@ export default function SalesManagement() {
           items: cart.map((it) => ({
             name: it.name,
             quantity: it.saleType === 'by_stripe' ? (it.stripesCount ?? 0) : it.quantity,
-            unit_price: it.unitPrice ?? it.price,
+            unit_price: (it as any).unit_price ?? (it as any).unitPrice ?? (it as any).price ?? 0,
             sale_type: it.saleType,
           })),
         },
