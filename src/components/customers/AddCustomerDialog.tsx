@@ -10,6 +10,7 @@ import { useToast } from '@/hooks/use-toast';
 import { useAuth } from '@/hooks/useAuth';
 import { useBranchContext } from '@/hooks/useBranchContext';
 import { UNLIMITED_SENTINEL, type CreditLimitMode } from '@/lib/creditLimit';
+import { logActivity } from '@/lib/activityLog';
 
 interface AddCustomerDialogProps {
   open: boolean;
@@ -46,15 +47,16 @@ export default function AddCustomerDialog({ open, onOpenChange, onCustomerAdded 
 
     setLoading(true);
     try {
-      const { error } = await supabase.from('customers').insert({
+      const { data: inserted, error } = await supabase.from('customers').insert({
         name: name.trim(),
         phone: phone.trim() || null,
         notes: notes.trim() || null,
         branch_id: selectedBranch || profile?.branch_id,
         created_by: profile?.id,
         max_credit_limit: maxLimit,
-      });
+      }).select('id').single();
       if (error) throw error;
+      logActivity({ type: 'create_customer', entityType: 'customer', entityId: (inserted as any)?.id, next: { name: name.trim(), phone: phone.trim() || null }, metadata: { name: name.trim() } });
       toast({ title: "Success", description: "Customer added successfully" });
       setName(''); setPhone(''); setNotes(''); setLimitMode('auto'); setCustomLimit('');
       onOpenChange(false);
