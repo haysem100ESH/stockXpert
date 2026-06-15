@@ -38,9 +38,9 @@ export default function GoalManager() {
     (async () => {
       const { data: br } = await (supabase as any)
         .from('pharmacy_branches')
-        .select('id, branch_name')
+        .select('id, name')
         .eq('pharmacy_owner_id', profile.id);
-      setBranches((br || []).map((b: any) => ({ id: b.id, name: b.branch_name })));
+      setBranches((br || []).map((b: any) => ({ id: b.id, name: b.name })));
       const branchIds = (br || []).map((b: any) => b.id);
       if (branchIds.length === 0) return;
       const { data: pe } = await (supabase as any)
