@@ -12,6 +12,7 @@ import { useToast } from '@/hooks/use-toast';
 import { useAuth } from '@/hooks/useAuth';
 import { useBranchContext } from '@/hooks/useBranchContext';
 import { createBatch, deductFIFO, getBatchesForItem, syncBranchItemQuantity, type InventoryBatch } from '@/lib/batchInventory';
+import { logActivity } from '@/lib/activityLog';
 
 interface Medicine {
   id: string;                // branch_items.id
@@ -195,6 +196,16 @@ export default function StockAdjustmentDialog({ open, onOpenChange, medicine, on
         });
         if (logErr) console.warn('Failed to log adjustment:', logErr);
       }
+
+      // Activity log
+      logActivity({
+        type: 'adjust_stock',
+        entityType: 'branch_item',
+        entityId: medicine.id,
+        previous: { quantity: medicine.stock_quantity },
+        next: { quantity: adjustmentType === 'increase' ? medicine.stock_quantity + qty : medicine.stock_quantity - qty },
+        metadata: { item_name: medicine.name, adjustment: adjustmentType, amount: qty, reason: reason.trim() },
+      });
 
       // Log to stock_edit_history (visible in Stock Edit History page)
       try {

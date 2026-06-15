@@ -9,6 +9,7 @@ import { supabase } from '@/lib/db';
 import { useToast } from '@/hooks/use-toast';
 import { useAuth } from '@/hooks/useAuth';
 import TransferRequestItemWizard, { type WizardResult } from './TransferRequestItemWizard';
+import { logActivity } from '@/lib/activityLog';
 
 interface LocationOption {
   id: string;
@@ -105,6 +106,12 @@ export default function TransferRequestForm({ open, onOpenChange, onSuccess }: P
       if (data?.error) throw new Error(data.error);
 
       toast({ title: 'Success', description: 'Transfer request submitted' });
+      logActivity({
+        type: 'request_stock_transfer',
+        entityType: 'transfer_request',
+        entityId: (data as any)?.id || null,
+        metadata: { item_count: items.length, source_branch_id: sourceLocationId, requesting_branch_id: requestingLocationId, notes: notes || null },
+      });
       onSuccess?.();
       onOpenChange(false);
       setRequestingLocationId(''); setSourceLocationId(''); setNotes(''); setItems([]);
