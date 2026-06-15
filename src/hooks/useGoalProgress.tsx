@@ -40,22 +40,13 @@ export function useGoalProgress(goal: StaffGoal, onComplete?: (g: StaffGoal) => 
 
   const load = useCallback(async () => {
     if (!user) return;
-    const { data, error } = await (supabase as any)
-      .from('activity_log')
-      .select('id', { count: 'exact', head: true })
-      .eq('user_id', user.id)
-      .gte('created_at', period.from.toISOString())
-      .lt('created_at', period.to.toISOString());
-    const c = (data as any)?.length ?? 0;
-    // when head:true, count comes via response — fall back to refetching with select
-    if (error) return;
     const { count: realCount } = await (supabase as any)
       .from('activity_log')
       .select('id', { count: 'exact', head: true })
       .eq('user_id', user.id)
       .gte('created_at', period.from.toISOString())
       .lt('created_at', period.to.toISOString());
-    setCount(realCount ?? c ?? 0);
+    setCount(realCount ?? 0);
 
     const { data: comp } = await (supabase as any)
       .from('staff_goal_completions')
