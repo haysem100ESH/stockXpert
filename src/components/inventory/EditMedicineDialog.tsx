@@ -15,6 +15,7 @@ import { MEASURABLE_UNIT_OPTIONS } from '@/lib/itemTypes';
 import MedicineCodeCombobox from './MedicineCodeCombobox';
 import PackagingEditor from './PackagingEditor';
 import { defaultPackaging, Packaging, autoStripPrice, autoPackPrice, formatStock, packagingSummary } from '@/lib/packaging';
+import { logActivity } from '@/lib/activityLog';
 
 interface Medicine {
   id: string;
@@ -277,6 +278,14 @@ export default function EditMedicineDialog({
 
       const { error } = await supabase.from('medicines').update(updateData).eq('id', medicine.id);
       if (error) throw error;
+      logActivity({
+        type: 'edit_item',
+        entityType: 'medicine',
+        entityId: medicine.id,
+        previous: { name: (medicine as any).name, selling_price: (medicine as any).selling_price, purchase_price: (medicine as any).purchase_price, category: (medicine as any).category },
+        next: { name: updateData.name, selling_price: updateData.selling_price, purchase_price: updateData.purchase_price, category: updateData.category },
+        metadata: { item_name: updateData.name },
+      });
 
       // Upsert packaging row (Full PCS items only)
       if (!isMeas) {
