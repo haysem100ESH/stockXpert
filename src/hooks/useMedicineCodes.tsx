@@ -10,6 +10,7 @@
 import { useQuery, useQueryClient } from '@tanstack/react-query';
 import { supabase } from '@/lib/db';
 import { useAuth } from './useAuth';
+import { logActivity } from '@/lib/activityLog';
 
 export interface MedicineCode {
   id: string;
@@ -85,23 +86,28 @@ export function useMedicineCodes() {
       .single();
     if (error) throw error;
     qc.invalidateQueries({ queryKey: [KEY] });
+    logActivity({ type: 'create_medicine_code', entityType: 'medicine_code', entityId: (data as any).id, next: { code: (data as any).code, label: (data as any).label }, metadata: { code: (data as any).code, label: (data as any).label } });
     return data as MedicineCode;
   };
 
   const update = async (id: string, patch: Partial<Pick<MedicineCode, 'code' | 'label' | 'notes'>>) => {
+    const prev = (query.data ?? []).find((c) => c.id === id);
+    const nextPatch = {
+      ...(patch.code !== undefined ? { code: patch.code.trim() } : {}),
+      ...(patch.label !== undefined ? { label: patch.label.trim() } : {}),
+      ...(patch.notes !== undefined ? { notes: (patch.notes || '').trim() || null } : {}),
+    };
     const { error } = await (supabase as any)
       .from('medicine_codes')
-      .update({
-        ...(patch.code !== undefined ? { code: patch.code.trim() } : {}),
-        ...(patch.label !== undefined ? { label: patch.label.trim() } : {}),
-        ...(patch.notes !== undefined ? { notes: (patch.notes || '').trim() || null } : {}),
-      })
+      .update(nextPatch)
       .eq('id', id);
     if (error) throw error;
     qc.invalidateQueries({ queryKey: [KEY] });
+    logActivity({ type: 'edit_medicine_code', entityType: 'medicine_code', entityId: id, previous: prev ? { code: prev.code, label: prev.label, notes: prev.notes } : null, next: nextPatch, metadata: { code: prev?.code, label: prev?.label } });
   };
 
   const remove = async (id: string) => {
+    const prev = (query.data ?? []).find((c) => c.id === id);
     const { error } = await (supabase as any)
       .from('medicine_codes')
       .delete()
@@ -109,6 +115,7 @@ export function useMedicineCodes() {
     if (error) throw error;
     qc.invalidateQueries({ queryKey: [KEY] });
     qc.invalidateQueries({ queryKey: ['branch-inventory'] });
+    logActivity({ type: 'delete_medicine_code', entityType: 'medicine_code', entityId: id, previous: prev ? { code: prev.code, label: prev.label } : null, metadata: { code: prev?.code, label: prev?.label } });
   };
 
   return {

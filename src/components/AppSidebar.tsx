@@ -16,7 +16,8 @@ import {
   ClipboardList,
   Globe,
   Brain,
-  Tag
+  Tag,
+  Activity
 } from "lucide-react";
 
 import {
@@ -65,6 +66,7 @@ export function AppSidebar() {
     { title: "Branches", url: "/branches", icon: Building2 },
     
     { title: "Transfer Requests", url: "/transfer-requests", icon: ClipboardList },
+    { title: "Activity Center", url: "/owner/activity", icon: Activity },
     { title: "Account", url: "/account", icon: Settings },
   ];
 
@@ -78,6 +80,7 @@ export function AppSidebar() {
     { title: "Suppliers", url: "/suppliers", icon: Truck },
     { title: "Attendance", url: "/staff", icon: MapPin },
     { title: "Transfer Requests", url: "/transfer-requests", icon: ClipboardList },
+    { title: "Activity Center", url: "/activity", icon: Activity },
     { title: "Account", url: "/account", icon: Settings },
   ];
 

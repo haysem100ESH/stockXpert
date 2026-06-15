@@ -16,6 +16,7 @@ import { useBranchContext } from '@/hooks/useBranchContext';
 import AddMedicineDialog from './AddMedicineDialog';
 import EditMedicineDialog from './EditMedicineDialog';
 import { ConfirmationDialog } from '@/components/ui/confirmation-dialog';
+import { logActivity } from '@/lib/activityLog';
 
 interface Medicine {
   id: string;
@@ -269,6 +270,7 @@ export default function InventoryManagement() {
     try {
       const { error } = await supabase.from('medicines').delete().eq('id', medicineToDelete);
       if (error) throw error;
+      logActivity({ type: 'delete_item', entityType: 'medicine', entityId: medicineToDelete });
       toast({ title: "Success", description: `${isPharmacy ? 'Medicine' : 'Item'} deleted successfully` });
       fetchMedicines();
     } catch (error) {
