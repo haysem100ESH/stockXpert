@@ -93,7 +93,9 @@ export default function EditMedicineDialog({
   const [userRole, setUserRole] = useState<'owner' | 'staff' | null>(null);
   const [loading, setLoading] = useState(false);
   const [medicineCodeId, setMedicineCodeId] = useState<string | null>(null);
+  const [originalMedicineCodeId, setOriginalMedicineCodeId] = useState<string | null>(null);
   const [packaging, setPackaging] = useState<Packaging>(defaultPackaging());
+  const [originalPackaging, setOriginalPackaging] = useState<Packaging | null>(null);
   const { toast } = useToast();
 
   useEffect(() => {
