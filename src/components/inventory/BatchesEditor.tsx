@@ -9,6 +9,7 @@ import { supabase } from '@/lib/db';
 import { useToast } from '@/hooks/use-toast';
 import { useAuth } from '@/hooks/useAuth';
 import { getBatchesForItem, createBatch, syncBranchItemQuantity, type InventoryBatch } from '@/lib/batchInventory';
+import { logActivity, logFieldChanges } from '@/lib/activityLog';
 
 interface BatchesEditorProps {
   branchId: string;
