@@ -141,6 +141,13 @@ export default function BatchesEditor({
           '—',
           'Deleted batch via Batches tab',
         ));
+        logActivity({
+          type: 'delete_batch',
+          entityType: 'batch',
+          entityId: id,
+          previous: { batch_number: bn, remaining_quantity: rem },
+          metadata: { item_name: itemName, batch_number: bn },
+        });
       }
 
       for (const d of drafts) {
