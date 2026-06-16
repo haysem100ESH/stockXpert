@@ -15,7 +15,7 @@ import { MEASURABLE_UNIT_OPTIONS } from '@/lib/itemTypes';
 import MedicineCodeCombobox from './MedicineCodeCombobox';
 import PackagingEditor from './PackagingEditor';
 import { defaultPackaging, Packaging, autoStripPrice, autoPackPrice, formatStock, packagingSummary } from '@/lib/packaging';
-import { logActivity } from '@/lib/activityLog';
+import { logActivity, logFieldChanges } from '@/lib/activityLog';
 
 interface Medicine {
   id: string;
