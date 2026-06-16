@@ -70,16 +70,19 @@ CREATE POLICY staff_goals_owner_all ON public.staff_goals
   USING (owner_id = auth.uid())
   WITH CHECK (owner_id = auth.uid());
 
--- staff can SELECT goals where they're an assignee OR the goal scope = 'all' for their owner OR scope = 'branch' for their branch
+-- Owners read all their goals directly (branch_id is NULL for owners, so no join).
+-- Staff read goals scoped 'all' for their owner, 'branch' for their branch, or 'staff' assignments.
 DROP POLICY IF EXISTS staff_goals_select_assigned ON public.staff_goals;
 CREATE POLICY staff_goals_select_assigned ON public.staff_goals
   FOR SELECT TO authenticated
   USING (
-    EXISTS (
+    owner_id = auth.uid()
+    OR EXISTS (
       SELECT 1
       FROM public.profiles p
-      LEFT JOIN public.pharmacy_branches b ON b.id = p.branch_id
+      JOIN public.pharmacy_branches b ON b.id = p.branch_id
       WHERE p.id = auth.uid()
+        AND p.role != 'owner'
         AND b.pharmacy_owner_id = staff_goals.owner_id
         AND (
           staff_goals.assignment_scope = 'all'
