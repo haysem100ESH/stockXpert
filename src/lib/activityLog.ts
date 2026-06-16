@@ -20,7 +20,10 @@ export type ActivityType =
   | 'delete_customer'
   | 'record_payment'
   | 'create_supplier'
-  | 'edit_supplier';
+  | 'edit_supplier'
+  | 'edit_batch'
+  | 'create_batch'
+  | 'delete_batch';
 
 export interface LogActivityInput {
   type: ActivityType;
