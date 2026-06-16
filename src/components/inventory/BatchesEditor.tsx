@@ -190,6 +190,21 @@ export default function BatchesEditor({
             `Batch #${d.batch_number.trim()} · qty ${qty} · PP ${buy} / SP ${sell}${d.expiry_date ? ` · exp ${d.expiry_date}` : ''}`,
             'Added new batch via Batches tab',
           ));
+          logActivity({
+            type: 'create_batch',
+            entityType: 'batch',
+            entityId: batch?.id,
+            next: {
+              batch_number: d.batch_number.trim(),
+              stock_quantity: qty,
+              buy_price: buy,
+              sell_price: sell,
+              expiry_date: d.expiry_date || null,
+              low_stock_alert: minStock,
+              alert_before_days: alertDays,
+            },
+            metadata: { item_name: itemName, batch_number: d.batch_number.trim() },
+          });
         } else {
           const orig = d._original!;
           const update: any = {
@@ -224,6 +239,18 @@ export default function BatchesEditor({
               historyRows.push(baseLog(action, `${bnLabel} · ${field}`, oldVal, newVal, 'Edited batch via Batches tab'));
             }
           }
+
+          // Detailed per-field activity logging for this batch.
+          const batchMeta = { item_name: itemName, batch_number: d.batch_number.trim() || orig.batch_number };
+          await logFieldChanges('edit_batch', {
+            'Batch Number':       [orig.batch_number, d.batch_number.trim()],
+            'Stock Quantity':     [Number(orig.remaining_quantity), qty],
+            'Buy Price':          [Number(orig.purchase_price), buy],
+            'Sell Price':         [Number(orig.selling_price), sell],
+            'Expiry Date':        [orig.expiry_date, d.expiry_date || null],
+            'Low Stock Alert':    [(orig as any).min_stock_level, minStock],
+            'Alert Before (days)':[(orig as any).expiry_alert_days, alertDays],
+          }, { entityType: 'batch', entityId: d.id, metadata: batchMeta });
         }
       }
 
