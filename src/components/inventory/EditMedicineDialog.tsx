@@ -162,6 +162,7 @@ export default function EditMedicineDialog({
       });
       setCustomGroup('');
       setMedicineCodeId(medicine.medicine_code_id ?? null);
+      setOriginalMedicineCodeId(medicine.medicine_code_id ?? null);
 
       // Load packaging row (or build from legacy fields as fallback)
       (async () => {
