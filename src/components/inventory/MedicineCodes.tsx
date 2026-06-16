@@ -254,6 +254,10 @@ export default function MedicineCodes() {
       const toAssign = [...assignSelection].filter((id) => !currentlyInThisCode.has(id));
       const toUnassign = [...currentlyInThisCode].filter((id) => !assignSelection.has(id));
 
+      // Snapshot previous code per medicine BEFORE the update.
+      const prevCodeByMed = new Map<string, string | null>();
+      uniqueMedicines.forEach((m) => prevCodeByMed.set(m.medicine_id, m.code_id));
+
       if (toAssign.length > 0) {
         const { error } = await (supabase as any)
           .from('medicines')
@@ -268,6 +272,53 @@ export default function MedicineCodes() {
           .in('id', toUnassign);
         if (error) throw error;
       }
+
+      // Log per-medicine activity (assign/unassign with previous code label).
+      const { logActivity } = await import('@/lib/activityLog');
+      const codeLabel = `${assignFor.code} — ${assignFor.label}`;
+      const labelFor = (codeId: string | null | undefined) => {
+        if (!codeId) return null;
+        const c = codeById.get(codeId);
+        return c ? `${c.code} — ${c.label}` : codeId;
+      };
+      toAssign.forEach((mid) => {
+        const med = uniqueMedicines.find((m) => m.medicine_id === mid);
+        const prevLabel = labelFor(prevCodeByMed.get(mid) ?? null);
+        logActivity({
+          type: 'assign_item_to_code',
+          entityType: 'medicine',
+          entityId: mid,
+          previous: { medicine_code: prevLabel },
+          next: { medicine_code: codeLabel },
+          metadata: {
+            item_name: med?.name,
+            medicine_name: med?.name,
+            code: assignFor.code,
+            label: assignFor.label,
+            new_code: codeLabel,
+            previous_code: prevLabel,
+          },
+        });
+      });
+      toUnassign.forEach((mid) => {
+        const med = uniqueMedicines.find((m) => m.medicine_id === mid);
+        const prevLabel = labelFor(prevCodeByMed.get(mid) ?? null) ?? codeLabel;
+        logActivity({
+          type: 'unassign_item_from_code',
+          entityType: 'medicine',
+          entityId: mid,
+          previous: { medicine_code: prevLabel },
+          next: { medicine_code: null },
+          metadata: {
+            item_name: med?.name,
+            medicine_name: med?.name,
+            code: assignFor.code,
+            label: assignFor.label,
+            previous_code: prevLabel,
+          },
+        });
+      });
+
       toast({
         title: 'Assignments updated',
         description: `${toAssign.length} added, ${toUnassign.length} removed.`,

@@ -12,6 +12,9 @@ const TYPE_META: Record<string, { label: string; icon: any; color: string }> = {
   edit_item:               { label: 'Item Edited',           icon: Pencil,         color: 'text-amber-600' },
   delete_item:             { label: 'Item Deleted',          icon: Trash2,         color: 'text-destructive' },
   adjust_stock:            { label: 'Stock Adjusted',        icon: Layers,         color: 'text-orange-600' },
+  create_batch:            { label: 'Batch Created',         icon: Layers,         color: 'text-blue-600' },
+  edit_batch:              { label: 'Batch Edited',          icon: Layers,         color: 'text-amber-600' },
+  delete_batch:            { label: 'Batch Deleted',         icon: Layers,         color: 'text-destructive' },
   create_medicine_code:    { label: 'Code Created',          icon: Tag,            color: 'text-blue-600' },
   edit_medicine_code:      { label: 'Code Edited',           icon: Tag,            color: 'text-amber-600' },
   delete_medicine_code:    { label: 'Code Deleted',          icon: Tag,            color: 'text-destructive' },
@@ -40,13 +43,10 @@ export default function ActivityRowItem({ row }: { row: ActivityRow }) {
   const meta = TYPE_META[row.activity_type] || { label: row.activity_type, icon: Package, color: 'text-muted-foreground' };
   const Icon = meta.icon;
   const m = row.metadata || {};
-  const title =
-    m.item_name ||
-    m.name ||
-    m.code ||
-    m.label ||
-    row.entity_id ||
-    meta.label;
+  const baseName = m.item_name || m.name || m.code || m.label || row.entity_id || meta.label;
+  const batchSuffix = m.batch_number ? ` · Batch #${m.batch_number}` : '';
+  const fieldSuffix = m.field ? ` — ${m.field}` : '';
+  const title = `${baseName}${batchSuffix}${fieldSuffix}`;
 
   const renderDetails = () => {
     if (row.activity_type === 'sell_item') {

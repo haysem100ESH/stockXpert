@@ -20,7 +20,10 @@ export type ActivityType =
   | 'delete_customer'
   | 'record_payment'
   | 'create_supplier'
-  | 'edit_supplier';
+  | 'edit_supplier'
+  | 'edit_batch'
+  | 'create_batch'
+  | 'delete_batch';
 
 export interface LogActivityInput {
   type: ActivityType;
@@ -55,3 +58,37 @@ export function diffFields(prev: Record<string, any> | null | undefined, next: R
   if (!prev) return Object.keys(next);
   return Object.keys(next).filter((k) => JSON.stringify(prev[k]) !== JSON.stringify(next[k]));
 }
+
+const normalize = (v: any) => (v === undefined || v === null || v === '' ? null : v);
+
+/**
+ * Log one activity entry per changed field. Each entry has previous_value /
+ * new_value containing just the single field, so the Activity Center renders
+ * it as a granular "Field X changed from A → B" row.
+ *
+ * `fields` is a map of { humanLabel: [previousValue, newValue] }.
+ */
+export async function logFieldChanges(
+  type: ActivityType,
+  fields: Record<string, [any, any]>,
+  opts: { entityType?: string; entityId?: string; metadata?: Record<string, any> } = {}
+): Promise<void> {
+  const tasks: Promise<void>[] = [];
+  for (const [label, [prev, next]] of Object.entries(fields)) {
+    const a = normalize(prev);
+    const b = normalize(next);
+    if (JSON.stringify(a) === JSON.stringify(b)) continue;
+    tasks.push(
+      logActivity({
+        type,
+        entityType: opts.entityType,
+        entityId: opts.entityId,
+        previous: { [label]: a },
+        next: { [label]: b },
+        metadata: { ...(opts.metadata || {}), field: label, previous: a, new: b },
+      })
+    );
+  }
+  await Promise.all(tasks);
+}
+
