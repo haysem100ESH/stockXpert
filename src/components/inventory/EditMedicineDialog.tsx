@@ -191,6 +191,7 @@ export default function EditMedicineDialog({
           resolved = fallback;
         }
         setPackaging(resolved);
+        setOriginalPackaging(JSON.parse(JSON.stringify(resolved)));
       })();
 
       // Check if an expense exists for this item
