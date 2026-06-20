@@ -8,6 +8,7 @@ import { Plus, Pencil, Trash2, Tag, X, Check } from 'lucide-react';
 import { supabase } from '@/lib/db';
 import { useToast } from '@/hooks/use-toast';
 import { ConfirmationDialog } from '@/components/ui/confirmation-dialog';
+import { logActivity } from '@/lib/activityLog';
 
 interface Category {
   id: string;
@@ -64,6 +65,7 @@ export default function CategoryManagement() {
       });
     } else {
       toast({ title: 'Success', description: 'Category added' });
+      logActivity({ type: 'create_category', entityType: 'category', next: { name: trimmed, system_type: activeTab }, metadata: { name: trimmed } });
       setNewCategoryName('');
       fetchCategories();
       window.dispatchEvent(new Event('categories-updated'));
@@ -79,6 +81,8 @@ export default function CategoryManagement() {
     if (error) {
       toast({ title: 'Error', description: error.message.includes('duplicate') ? 'Category already exists' : 'Failed to update', variant: 'destructive' });
     } else {
+      const prev = categories.find((c) => c.id === id);
+      logActivity({ type: 'edit_category', entityType: 'category', entityId: id, previous: prev ? { name: prev.name } : null, next: { name: trimmed }, metadata: { name: trimmed } });
       toast({ title: 'Success', description: 'Category updated' });
       setEditingId(null);
       fetchCategories();
@@ -91,6 +95,7 @@ export default function CategoryManagement() {
     if (error) {
       toast({ title: 'Error', description: 'Failed to delete category', variant: 'destructive' });
     } else {
+      logActivity({ type: 'delete_category', entityType: 'category', entityId: deleteConfirm.id, previous: { name: deleteConfirm.name }, metadata: { name: deleteConfirm.name } });
       toast({ title: 'Success', description: 'Category deleted' });
       fetchCategories();
       window.dispatchEvent(new Event('categories-updated'));

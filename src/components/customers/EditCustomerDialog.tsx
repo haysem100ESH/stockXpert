@@ -8,6 +8,7 @@ import { RadioGroup, RadioGroupItem } from '@/components/ui/radio-group';
 import { supabase } from '@/lib/db';
 import { useToast } from '@/hooks/use-toast';
 import { UNLIMITED_SENTINEL, getLimitMode, type CreditLimitMode } from '@/lib/creditLimit';
+import { logActivity } from '@/lib/activityLog';
 
 interface Customer {
   id: string;
@@ -80,13 +81,11 @@ export default function EditCustomerDialog({ open, onOpenChange, customer, onCus
 
     setLoading(true);
     try {
-      const { error } = await supabase.from('customers').update({
-        name: name.trim(),
-        phone: phone.trim() || null,
-        notes: notes.trim() || null,
-        max_credit_limit: maxLimit,
-      }).eq('id', customer.id);
+      const prev = { name: customer.name, phone: customer.phone || null, notes: customer.notes || null };
+      const nextVal = { name: name.trim(), phone: phone.trim() || null, notes: notes.trim() || null, max_credit_limit: maxLimit };
+      const { error } = await supabase.from('customers').update(nextVal).eq('id', customer.id);
       if (error) throw error;
+      logActivity({ type: 'edit_customer', entityType: 'customer', entityId: customer.id, previous: prev, next: nextVal, metadata: { name: nextVal.name } });
       toast({ title: "Success", description: "Customer updated" });
       onOpenChange(false);
       onCustomerUpdated();

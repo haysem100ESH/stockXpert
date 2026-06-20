@@ -15,6 +15,7 @@ import { MEASURABLE_UNIT_OPTIONS } from '@/lib/itemTypes';
 import MedicineCodeCombobox from './MedicineCodeCombobox';
 import PackagingEditor from './PackagingEditor';
 import { defaultPackaging, Packaging, autoStripPrice, autoPackPrice, formatStock, packagingSummary } from '@/lib/packaging';
+import { logActivity, logFieldChanges } from '@/lib/activityLog';
 
 interface Medicine {
   id: string;
@@ -92,7 +93,9 @@ export default function EditMedicineDialog({
   const [userRole, setUserRole] = useState<'owner' | 'staff' | null>(null);
   const [loading, setLoading] = useState(false);
   const [medicineCodeId, setMedicineCodeId] = useState<string | null>(null);
+  const [originalMedicineCodeId, setOriginalMedicineCodeId] = useState<string | null>(null);
   const [packaging, setPackaging] = useState<Packaging>(defaultPackaging());
+  const [originalPackaging, setOriginalPackaging] = useState<Packaging | null>(null);
   const { toast } = useToast();
 
   useEffect(() => {
@@ -159,6 +162,7 @@ export default function EditMedicineDialog({
       });
       setCustomGroup('');
       setMedicineCodeId(medicine.medicine_code_id ?? null);
+      setOriginalMedicineCodeId(medicine.medicine_code_id ?? null);
 
       // Load packaging row (or build from legacy fields as fallback)
       (async () => {
@@ -187,6 +191,7 @@ export default function EditMedicineDialog({
           resolved = fallback;
         }
         setPackaging(resolved);
+        setOriginalPackaging(JSON.parse(JSON.stringify(resolved)));
       })();
 
       // Check if an expense exists for this item
@@ -277,6 +282,59 @@ export default function EditMedicineDialog({
 
       const { error } = await supabase.from('medicines').update(updateData).eq('id', medicine.id);
       if (error) throw error;
+      // Detailed per-field activity logging (only changed fields).
+      const prev = medicine as any;
+      const itemMeta = { item_name: updateData.name, entity_name: updateData.name };
+      await logFieldChanges('edit_item', {
+        'Item Name':           [prev.name, updateData.name],
+        'Generic Name':        [prev.generic_name, updateData.generic_name],
+        'Strength':            [prev.strength, updateData.strength],
+        'Medicine Group':      [prev.medicine_group, updateData.medicine_group],
+        'Category':            [prev.category, updateData.category],
+        'Manufacturer / Brand':[prev.manufacturer, updateData.manufacturer],
+        'Batch Number':        [prev.batch_number, updateData.batch_number],
+        'Country':             [prev.country_name, updateData.country_name],
+        'LPI Buy Price':       [Number(prev.purchase_price), Number(updateData.purchase_price)],
+        'LPI Sell Price':      [Number(prev.selling_price), Number(updateData.selling_price)],
+        'Minimum Stock Level': [Number(prev.minimum_stock_level), Number(updateData.minimum_stock_level)],
+        'Unit Name':           [prev.unit_label, updateData.unit_label],
+        'Units Per Strip':     [prev.units_per_strip, updateData.units_per_strip],
+        'Strips Per Pack':     [prev.strips_per_pack, updateData.strips_per_pack],
+        'Expiry Alert':        [prev.expiry_alert_enabled, updateData.expiry_alert_enabled],
+      }, { entityType: 'medicine', entityId: medicine.id, metadata: itemMeta });
+
+      // Packaging-level fields.
+      if (originalPackaging) {
+        await logFieldChanges('edit_item', {
+          'Has Strip / Blister': [originalPackaging.strip_enabled, packaging.strip_enabled],
+          'Strip Name':          [originalPackaging.strip_name, packaging.strip_name],
+          'Units Per Strip (Packaging)': [originalPackaging.units_per_strip, packaging.units_per_strip],
+          'Has Pack / Box':      [originalPackaging.pack_enabled, packaging.pack_enabled],
+          'Pack Name':           [originalPackaging.pack_name, packaging.pack_name],
+          'Strips Per Pack (Packaging)': [originalPackaging.strips_per_pack, packaging.strips_per_pack],
+          'Unit Selling Price':  [originalPackaging.unit_selling_price, packaging.unit_selling_price],
+          'Strip Selling Price': [originalPackaging.strip_selling_price, packaging.strip_selling_price],
+          'Pack Selling Price':  [originalPackaging.pack_selling_price, packaging.pack_selling_price],
+        }, { entityType: 'medicine', entityId: medicine.id, metadata: itemMeta });
+      }
+
+      // Medicine code assignment change.
+      if ((originalMedicineCodeId ?? null) !== (medicineCodeId ?? null)) {
+        logActivity({
+          type: medicineCodeId ? 'assign_item_to_code' : 'unassign_item_from_code',
+          entityType: 'medicine',
+          entityId: medicine.id,
+          previous: { medicine_code_id: originalMedicineCodeId },
+          next: { medicine_code_id: medicineCodeId },
+          metadata: {
+            item_name: updateData.name,
+            medicine_name: updateData.name,
+            previous_code_id: originalMedicineCodeId,
+            new_code_id: medicineCodeId,
+          },
+        });
+      }
+
 
       // Upsert packaging row (Full PCS items only)
       if (!isMeas) {

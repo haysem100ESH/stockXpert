@@ -14,6 +14,7 @@ import { createBatch } from '@/lib/batchInventory';
 import { useAuth } from '@/hooks/useAuth';
 import { useBranchContext } from '@/hooks/useBranchContext';
 import CreateCustomItemDialog from './CreateCustomItemDialog';
+import { logActivity } from '@/lib/activityLog';
 
 interface CatalogItem {
   id: string;
@@ -288,6 +289,15 @@ export default function AddBranchItemDialog({ open, onOpenChange, onItemAdded }:
       });
 
       if (batchErr) throw batchErr;
+
+      // Log activity
+      logActivity({
+        type: 'create_item',
+        entityType: 'branch_item',
+        entityId: branchItemId,
+        next: { name: selectedItem.name, quantity: qty, selling_price: sp, purchase_price: pp, expiry_date: expiryDate || null },
+        metadata: { item_name: selectedItem.name, quantity: qty, selling_price: sp },
+      });
 
       const totalAmount = qty * pp;
 

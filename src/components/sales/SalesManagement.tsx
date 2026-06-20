@@ -18,6 +18,7 @@ import AddToCartDialog from './AddToCartDialog';
 import { useIsMobile } from '@/hooks/use-mobile';
 import { updateCreditScore } from '@/hooks/useCreditScore';
 import { isMeasurable } from '@/lib/itemTypes';
+import { logActivity } from '@/lib/activityLog';
 import { deductFIFO, recordSaleItemBatches } from '@/lib/batchInventory';
 import { useReadOnly } from '@/hooks/useReadOnly';
 import { usePackagingMap } from '@/hooks/usePackaging';
@@ -806,6 +807,25 @@ export default function SalesManagement() {
       if (shouldDeductDebt) successMessage += ` ETB ${Math.min(change, selectedCustomer?.computed_debt || 0).toFixed(2)} deducted from customer debt.`;
 
       toast({ title: 'Success', description: successMessage });
+
+      // Log activity (fire-and-forget)
+      logActivity({
+        type: 'sell_item',
+        entityType: 'sale',
+        entityId: (saleData as any)?.id,
+        metadata: {
+          total: Number(total.toFixed(2)),
+          payment_method: paymentMethod,
+          discount: Number(calculateDiscount().toFixed(2)),
+          customer_name: selectedCustomer?.name || null,
+          items: cart.map((it) => ({
+            name: it.name,
+            quantity: it.saleType === 'by_stripe' ? (it.stripesCount ?? 0) : it.quantity,
+            unit_price: (it as any).unit_price ?? (it as any).unitPrice ?? (it as any).price ?? 0,
+            sale_type: it.saleType,
+          })),
+        },
+      });
 
       // Reset state
       setCart([]);
