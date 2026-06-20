@@ -735,7 +735,7 @@ export default function EditBranchItemDialog({ open, onOpenChange, item, onItemU
         <form onSubmit={handleSubmit} className="space-y-4">
           <Tabs defaultValue="branch" className="w-full">
             <TabsList className="grid w-full grid-cols-3">
-              <TabsTrigger value="branch">Pricing & Stock</TabsTrigger>
+              <TabsTrigger value="branch">Packaging & Config</TabsTrigger>
               <TabsTrigger value="batches">Batches</TabsTrigger>
               <TabsTrigger value="catalog">Item Info</TabsTrigger>
             </TabsList>
@@ -774,38 +774,12 @@ export default function EditBranchItemDialog({ open, onOpenChange, item, onItemU
               </div>
 
 
-              {(() => {
-                const unitName = packaging.unit_name || unitLabel || item.unit_label || 'unit';
-                const upp = Math.max(1, Number(computeUnitsPerPack() || item.units_per_pack || 1));
-                const lpiSellNum = parseFloat(sellingPrice);
-                const lpiBuyNum = parseFloat(purchasePrice);
-                return (
-                  <>
-                    <div className="rounded-md border border-primary/30 bg-primary/5 px-3 py-2 text-xs text-muted-foreground">
-                      Prices below are <span className="font-semibold text-foreground">per LPI (1 {unitName})</span> — the smallest sellable unit.
-                      Strip / pack prices on the sales page are computed automatically from this
-                      {upp > 1 ? <> (1 pack = {upp} {unitName}{upp === 1 ? '' : 's'})</> : null}.
-                    </div>
-                    <div className="grid grid-cols-2 gap-4">
-                      <div className="space-y-1">
-                        <Label>LPI Sell Price * <span className="text-muted-foreground font-normal">(per {unitName})</span></Label>
-                        <Input type="number" step="0.0001" min="0" value={sellingPrice} onChange={e => setSellingPrice(e.target.value)} required />
-                        {Number.isFinite(lpiSellNum) && upp > 1 && (
-                          <p className="text-[11px] text-muted-foreground">= ETB {(lpiSellNum * upp).toFixed(2)} per pack</p>
-                        )}
-                      </div>
-                      <div className="space-y-1">
-                        <Label>LPI Buy Price * <span className="text-muted-foreground font-normal">(per {unitName})</span></Label>
-                        <Input type="number" step="0.0001" min="0" value={purchasePrice} onChange={e => setPurchasePrice(e.target.value)} required />
-                        {Number.isFinite(lpiBuyNum) && upp > 1 && (
-                          <p className="text-[11px] text-muted-foreground">= ETB {(lpiBuyNum * upp).toFixed(2)} per pack</p>
-                        )}
-                      </div>
-                    </div>
-                  </>
-                );
-              })()}
-              {/* Expiry date is captured per-batch (Batches view), not at item level */}
+              {/* Prices are managed per-batch in the Batches tab. */}
+              <div className="rounded-md border border-primary/30 bg-primary/5 px-3 py-2 text-xs text-muted-foreground">
+                Prices are now configured <span className="font-semibold text-foreground">per batch</span>. Open the
+                <span className="font-semibold text-foreground"> Batches </span> tab to set buy/sell prices for each batch of this item.
+              </div>
+
 
               <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
                 <div className="space-y-2">
