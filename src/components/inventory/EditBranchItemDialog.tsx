@@ -26,6 +26,7 @@ import {
   formatStock,
   packagingSummary,
 } from '@/lib/packaging';
+import { logFieldChanges } from '@/lib/activityLog';
 
 export interface BranchItem {
   id: string;
@@ -111,6 +112,7 @@ export default function EditBranchItemDialog({ open, onOpenChange, item, onItemU
 
   const [loading, setLoading] = useState(false);
   const [packaging, setPackaging] = useState<Packaging>(defaultPackaging());
+  const [originalPackaging, setOriginalPackaging] = useState<Packaging | null>(null);
   const { toast } = useToast();
   const { profile } = useAuth();
   const { branchType } = useBranchContext();
@@ -219,6 +221,7 @@ export default function EditBranchItemDialog({ open, onOpenChange, item, onItemU
           resolved = fallback;
         }
         setPackaging(resolved);
+        setOriginalPackaging(JSON.parse(JSON.stringify(resolved)));
       })();
       // Load batches for FIFO/specific selection
       getFIFOBatches(item.id).then(setAvailableBatches).catch(() => setAvailableBatches([]));
@@ -660,6 +663,50 @@ export default function EditBranchItemDialog({ open, onOpenChange, item, onItemU
         }
       } catch (logErr) {
         console.warn('Failed to log edit history:', logErr);
+      }
+
+      // Activity Center: log every changed field across Pricing & Stock + Item Info tabs.
+      try {
+        const oldLpiSell = Number(item.selling_price) / originalUpp;
+        const oldLpiBuy = Number(item.purchase_price) / originalUpp;
+        const oldGroup = item.medicine_group || '';
+        const newGroup = medicineGroup === '__custom__' ? customGroup.trim() : (medicineGroup || '');
+        const itemMeta = { item_name: itemName || item.name, entity_name: itemName || item.name };
+        const round4 = (n: number) => Number.isFinite(n) ? Number(n.toFixed(4)) : n;
+
+        await logFieldChanges('edit_item', {
+          // Pricing & Stock tab
+          'LPI Sell Price':         [round4(oldLpiSell), round4(lpiSell)],
+          'LPI Buy Price':          [round4(oldLpiBuy), round4(lpiBuy)],
+          'Minimum Stock Level':    [(item as any).minimum_stock_level ?? null, minStockLevel === '' ? null : parseInt(minStockLevel)],
+          'Lead Time (days)':       [(item as any).lead_time_days ?? null, leadTimeDays === '' ? null : parseInt(leadTimeDays)],
+          'Branch':                 [item.branch_id, branchId || item.branch_id],
+          'Container Type':         [item.packaging_mode || null, containerType || null],
+          // Item Info tab
+          'Item Name':              [item.name, itemName],
+          'Generic Name':           [item.generic_name, genericName],
+          'Strength':               [item.strength, strength],
+          'Medicine Group':         [oldGroup, newGroup],
+          'Category':               [item.category, category],
+          'Manufacturer / Brand':   [item.manufacturer, manufacturer],
+          'Batch Number':           [item.batch_number, batchNumber],
+          'Unit Label':             [item.unit_label, unitLabel],
+        }, { entityType: 'branch_item', entityId: item.id, metadata: itemMeta });
+
+        // Packaging (Pricing & Stock tab — strip / pack settings)
+        if (originalPackaging) {
+          await logFieldChanges('edit_item', {
+            'Unit Name':                    [originalPackaging.unit_name, packaging.unit_name],
+            'Has Strip / Blister':          [originalPackaging.strip_enabled, packaging.strip_enabled],
+            'Strip Name':                   [originalPackaging.strip_name, packaging.strip_name],
+            'Units Per Strip':              [originalPackaging.units_per_strip, packaging.units_per_strip],
+            'Has Pack / Box':               [originalPackaging.pack_enabled, packaging.pack_enabled],
+            'Pack Name':                    [originalPackaging.pack_name, packaging.pack_name],
+            'Strips Per Pack':              [originalPackaging.strips_per_pack, packaging.strips_per_pack],
+          }, { entityType: 'branch_item', entityId: item.id, metadata: itemMeta });
+        }
+      } catch (e) {
+        console.warn('Activity log (edit item) failed', e);
       }
 
       toast({ title: 'Success', description: 'Item updated successfully' });
