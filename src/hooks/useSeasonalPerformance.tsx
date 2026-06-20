@@ -3,6 +3,7 @@ import { supabase } from '@/lib/db';
 import { useAuth } from '@/hooks/useAuth';
 import { useBranchContext } from '@/hooks/useBranchContext';
 import { useOwnerBranchIds } from '@/hooks/useOwnerBranchIds';
+import { chunkedInPartial } from '@/lib/supabaseBatch';
 
 export interface MonthlyData {
   month: number; // 1-12
@@ -98,17 +99,21 @@ export function useSeasonalPerformance() {
         .select('medicine_id, branch_id')
         .in('branch_id', branchIds);
 
-      const medIds = [...new Set((branchItems || []).map((bi: any) => bi.medicine_id))];
+      const medIds = [...new Set((branchItems || []).map((bi: any) => bi.medicine_id).filter(Boolean))] as string[];
       if (medIds.length === 0) {
         setItems([]);
         setLoading(false);
         return;
       }
 
-      const { data: medicines } = await supabase
-        .from('medicines')
-        .select('id, name, category')
-        .in('id', medIds);
+      const medicineBatchSize = 20;
+      console.log(`[Supabase batching] medicines id/name/category by id: ${Math.ceil(medIds.length / medicineBatchSize)} batches for ${medIds.length} ids`);
+      const { data: medicines } = await chunkedInPartial<any>(medIds, (ids) =>
+        supabase
+          .from('medicines')
+          .select('id, name, category')
+          .in('id', ids)
+      , medicineBatchSize);
 
       if (!medicines || medicines.length === 0) {
         setItems([]);

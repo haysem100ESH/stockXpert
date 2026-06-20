@@ -61,6 +61,8 @@ export function usePackagingMap(medicineIds: string[]) {
     queryKey: ['medicine_packaging_map', key],
     queryFn: async (): Promise<Record<string, Packaging>> => {
       if (ids.length === 0) return {};
+      const batchSize = 20;
+      console.log(`[Supabase batching] medicine_packaging by medicine_id: ${Math.ceil(ids.length / batchSize)} batches for ${ids.length} ids`);
       // Chunk + retry: large id lists used to be sent in a single .in() URL
       // which proxies could truncate, silently dropping packaging data.
       const { chunkedInPartial } = await import('@/lib/supabaseBatch');
@@ -69,7 +71,7 @@ export function usePackagingMap(medicineIds: string[]) {
           .from('medicine_packaging')
           .select('*')
           .in('medicine_id', chunk)
-      );
+      , batchSize);
       const map: Record<string, Packaging> = {};
       data.forEach((row: any) => { map[row.medicine_id] = row as Packaging; });
       return map;
