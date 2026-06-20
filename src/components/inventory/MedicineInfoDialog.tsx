@@ -49,10 +49,6 @@ export default function MedicineInfoDialog({ open, onOpenChange, medicineId, bra
       setData(null);
       try {
         let medId = medicineId || null;
-        let branchBatch: string | null = null;
-        let branchExpiry: string | null = null;
-        let branchUnitLabel: string | null = null;
-
         let branchSellingPrice: number | null = null;
         if (branchItemId) {
           // branch_items only stores medicine_id + selling_price; batch_number,
