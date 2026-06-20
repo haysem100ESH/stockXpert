@@ -67,16 +67,25 @@ export default function StaffInventoryWithActions() {
   useEffect(() => {
     if (!branchItems || branchItems.length === 0) { setBatchCounts({}); return; }
     const ids = branchItems.map((i: any) => i.id);
+    let cancelled = false;
     (async () => {
-      const { data } = await supabase
-        .from('inventory_batches')
-        .select('branch_item_id')
-        .in('branch_item_id', ids)
-        .gt('remaining_quantity', 0);
+      // Chunk + retry: previously this sent one massive .in() with hundreds of
+      // branch_item_id UUIDs, which would silently fail on slow connections
+      // and leave batch badges blank.
+      const { chunkedInPartial } = await import('@/lib/supabaseBatch');
+      const { data } = await chunkedInPartial<any>(ids, (chunk) =>
+        supabase
+          .from('inventory_batches')
+          .select('branch_item_id')
+          .in('branch_item_id', chunk)
+          .gt('remaining_quantity', 0)
+      );
+      if (cancelled) return;
       const counts: Record<string, number> = {};
-      (data || []).forEach((r: any) => { counts[r.branch_item_id] = (counts[r.branch_item_id] || 0) + 1; });
+      data.forEach((r: any) => { counts[r.branch_item_id] = (counts[r.branch_item_id] || 0) + 1; });
       setBatchCounts(counts);
     })();
+    return () => { cancelled = true; };
   }, [branchItems]);
 
   useEffect(() => {
