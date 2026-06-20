@@ -61,9 +61,8 @@ export interface SalesCustomer {
 
 import { chunkedInPartial } from '@/lib/supabaseBatch';
 
-// Sentinel used when a name lookup genuinely fails after retries — UI renders
-// "Unavailable" instead of the misleading "Unknown".
-export const SALES_UNAVAILABLE = '__UNAVAILABLE__';
+// Visible string shown when a name lookup genuinely fails after retries.
+export const SALES_UNAVAILABLE = 'Unavailable';
 
 async function fetchSalesInventory(branchIds: string[]): Promise<SalesMedicine[]> {
   if (branchIds.length === 0) return [];
