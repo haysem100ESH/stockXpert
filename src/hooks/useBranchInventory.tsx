@@ -21,6 +21,7 @@ import { useBranchContext } from './useBranchContext';
 import { useOwnerBranchIds } from './useOwnerBranchIds';
 import type { BranchItem } from '@/components/inventory/EditBranchItemDialog';
 import type { Packaging } from '@/lib/packaging';
+import { chunkedIn, chunkedInPartial } from '@/lib/supabaseBatch';
 
 export type EnrichedBranchItem = BranchItem & {
   branch_name?: string;
@@ -36,12 +37,9 @@ export type EnrichedBranchItem = BranchItem & {
   packaging?: Packaging | null;
 };
 
-const CHUNK = 200;
-const chunk = <T,>(arr: T[]): T[][] => {
-  const out: T[][] = [];
-  for (let i = 0; i < arr.length; i += CHUNK) out.push(arr.slice(i, i + CHUNK));
-  return out;
-};
+// Visible string shown when the medicine name fetch genuinely fails after
+// retries — distinguishes a connection issue from valid data.
+export const UNAVAILABLE = 'Unavailable';
 
 // Cache of branch-name lookups, shared across page fetches in one session.
 async function enrichItems(
@@ -51,62 +49,58 @@ async function enrichItems(
   const medicineIds = [...new Set(rawItems.map((i) => i.medicine_id))];
   const allBranchIds = [...new Set(rawItems.map((i) => i.branch_id))];
 
-  const [medArrays, branchArrays, packArrays] = await Promise.all([
-    Promise.all(chunk(medicineIds).map((ids) =>
+  // Chunked + retried fetches (chunks of 50, 3 attempts w/ exponential backoff)
+  // so large id lists don't blow past URL/proxy limits on slow connections.
+  const [medRes, branchRes, packRes] = await Promise.all([
+    chunkedInPartial<any>(medicineIds, (ids) =>
       supabase
         .from('medicines')
         .select('id, name, generic_name, category, manufacturer, batch_number, item_type, unit_label, units_per_pack, strips_per_pack, units_per_strip, medicine_group, strength, packaging_mode, sub_units_per_unit, main_unit_name, sub_unit_name, unit_price, sub_unit_price, minimum_stock_level, medicine_code_id')
         .in('id', ids)
-        .range(0, 9999)
-        .then((r: any) => r.data || [])
-    )),
-    Promise.all(chunk(allBranchIds).map((ids) =>
-      supabase
-        .from('pharmacy_branches')
-        .select('id, name')
-        .in('id', ids)
-        .then((r: any) => r.data || [])
-    )),
-    Promise.all(chunk(medicineIds).map((ids) =>
-      (supabase as any)
-        .from('medicine_packaging')
-        .select('*')
-        .in('medicine_id', ids)
-        .then((r: any) => r.data || [])
-    )),
+    ),
+    chunkedInPartial<any>(allBranchIds, (ids) =>
+      supabase.from('pharmacy_branches').select('id, name').in('id', ids)
+    ),
+    chunkedInPartial<any>(medicineIds, (ids) =>
+      (supabase as any).from('medicine_packaging').select('*').in('medicine_id', ids)
+    ),
   ]);
 
   const medMap: Record<string, any> = {};
-  medArrays.flat().forEach((m: any) => { medMap[m.id] = m; });
+  medRes.data.forEach((m: any) => { medMap[m.id] = m; });
   const branchMap: Record<string, string> = {};
-  branchArrays.flat().forEach((b: any) => { branchMap[b.id] = b.name; });
+  branchRes.data.forEach((b: any) => { branchMap[b.id] = b.name; });
   const packMap: Record<string, Packaging> = {};
-  packArrays.flat().forEach((p: any) => { packMap[p.medicine_id] = p as Packaging; });
+  packRes.data.forEach((p: any) => { packMap[p.medicine_id] = p as Packaging; });
 
   return rawItems.map((item) => {
-    const med = medMap[item.medicine_id] || {};
+    const med = medMap[item.medicine_id];
+    const m = med || {};
+    const nameMissing = !med;
     return {
       ...item,
-      name: med.name || 'Unknown',
-      generic_name: med.generic_name,
-      category: med.category || 'Uncategorized',
-      manufacturer: med.manufacturer,
-      batch_number: med.batch_number,
-      item_type: med.item_type,
-      unit_label: med.unit_label,
-      units_per_pack: med.units_per_pack,
-      strips_per_pack: med.strips_per_pack,
-      units_per_strip: med.units_per_strip,
-      medicine_group: med.medicine_group,
-      strength: med.strength,
-      packaging_mode: med.packaging_mode,
-      sub_units_per_unit: med.sub_units_per_unit,
-      main_unit_name: med.main_unit_name,
-      sub_unit_name: med.sub_unit_name,
-      unit_price: med.unit_price,
-      sub_unit_price: med.sub_unit_price,
-      minimum_stock_level: med.minimum_stock_level,
-      medicine_code_id: med.medicine_code_id ?? null,
+      // If medicines fetch failed OR this specific row didn't come back, mark
+      // as UNAVAILABLE so UI distinguishes loading/missing from valid data.
+      name: nameMissing ? (medRes.failed ? UNAVAILABLE : UNAVAILABLE) : m.name,
+      generic_name: m.generic_name,
+      category: nameMissing ? (medRes.failed ? UNAVAILABLE : 'Uncategorized') : (m.category || 'Uncategorized'),
+      manufacturer: m.manufacturer,
+      batch_number: m.batch_number,
+      item_type: m.item_type,
+      unit_label: m.unit_label,
+      units_per_pack: m.units_per_pack,
+      strips_per_pack: m.strips_per_pack,
+      units_per_strip: m.units_per_strip,
+      medicine_group: m.medicine_group,
+      strength: m.strength,
+      packaging_mode: m.packaging_mode,
+      sub_units_per_unit: m.sub_units_per_unit,
+      main_unit_name: m.main_unit_name,
+      sub_unit_name: m.sub_unit_name,
+      unit_price: m.unit_price,
+      sub_unit_price: m.sub_unit_price,
+      minimum_stock_level: m.minimum_stock_level,
+      medicine_code_id: m.medicine_code_id ?? null,
       packaging: packMap[item.medicine_id] ?? null,
       active_ingredients: [],
       branch_name: branchMap[item.branch_id],
@@ -168,17 +162,15 @@ async function fetchBranchInventoryProgressive(
 
 async function fetchActiveIngredients(medicineIds: string[]) {
   if (medicineIds.length === 0) return {} as Record<string, Array<{ ingredient_name: string; strength: string | null }>>;
-  const arrays = await Promise.all(chunk(medicineIds).map((ids) =>
+  const { data } = await chunkedInPartial<any>(medicineIds, (ids) =>
     (supabase as any)
       .from('medicine_active_ingredients')
       .select('medicine_id, ingredient_name, strength, sort_order')
       .in('medicine_id', ids)
       .order('sort_order')
-      .range(0, 49999)
-      .then((r: any) => r.data || [])
-  ));
+  );
   const ingMap: Record<string, Array<{ ingredient_name: string; strength: string | null }>> = {};
-  arrays.flat().forEach((i: any) => {
+  data.forEach((i: any) => {
     if (!ingMap[i.medicine_id]) ingMap[i.medicine_id] = [];
     ingMap[i.medicine_id].push({ ingredient_name: i.ingredient_name, strength: i.strength });
   });
