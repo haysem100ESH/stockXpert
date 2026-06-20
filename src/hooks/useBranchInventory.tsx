@@ -162,17 +162,15 @@ async function fetchBranchInventoryProgressive(
 
 async function fetchActiveIngredients(medicineIds: string[]) {
   if (medicineIds.length === 0) return {} as Record<string, Array<{ ingredient_name: string; strength: string | null }>>;
-  const arrays = await Promise.all(chunk(medicineIds).map((ids) =>
+  const { data } = await chunkedInPartial<any>(medicineIds, (ids) =>
     (supabase as any)
       .from('medicine_active_ingredients')
       .select('medicine_id, ingredient_name, strength, sort_order')
       .in('medicine_id', ids)
       .order('sort_order')
-      .range(0, 49999)
-      .then((r: any) => r.data || [])
-  ));
+  );
   const ingMap: Record<string, Array<{ ingredient_name: string; strength: string | null }>> = {};
-  arrays.flat().forEach((i: any) => {
+  data.forEach((i: any) => {
     if (!ingMap[i.medicine_id]) ingMap[i.medicine_id] = [];
     ingMap[i.medicine_id].push({ ingredient_name: i.ingredient_name, strength: i.strength });
   });
