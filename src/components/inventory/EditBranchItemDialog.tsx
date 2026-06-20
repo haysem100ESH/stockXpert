@@ -221,6 +221,7 @@ export default function EditBranchItemDialog({ open, onOpenChange, item, onItemU
           resolved = fallback;
         }
         setPackaging(resolved);
+        setOriginalPackaging(JSON.parse(JSON.stringify(resolved)));
       })();
       // Load batches for FIFO/specific selection
       getFIFOBatches(item.id).then(setAvailableBatches).catch(() => setAvailableBatches([]));
