@@ -26,6 +26,7 @@ import {
   formatStock,
   packagingSummary,
 } from '@/lib/packaging';
+import { logFieldChanges } from '@/lib/activityLog';
 
 export interface BranchItem {
   id: string;
@@ -111,6 +112,7 @@ export default function EditBranchItemDialog({ open, onOpenChange, item, onItemU
 
   const [loading, setLoading] = useState(false);
   const [packaging, setPackaging] = useState<Packaging>(defaultPackaging());
+  const [originalPackaging, setOriginalPackaging] = useState<Packaging | null>(null);
   const { toast } = useToast();
   const { profile } = useAuth();
   const { branchType } = useBranchContext();
@@ -219,6 +221,7 @@ export default function EditBranchItemDialog({ open, onOpenChange, item, onItemU
           resolved = fallback;
         }
         setPackaging(resolved);
+        setOriginalPackaging(JSON.parse(JSON.stringify(resolved)));
       })();
       // Load batches for FIFO/specific selection
       getFIFOBatches(item.id).then(setAvailableBatches).catch(() => setAvailableBatches([]));
@@ -662,6 +665,50 @@ export default function EditBranchItemDialog({ open, onOpenChange, item, onItemU
         console.warn('Failed to log edit history:', logErr);
       }
 
+      // Activity Center: log every changed field across Pricing & Stock + Item Info tabs.
+      try {
+        const oldLpiSell = Number(item.selling_price) / originalUpp;
+        const oldLpiBuy = Number(item.purchase_price) / originalUpp;
+        const oldGroup = item.medicine_group || '';
+        const newGroup = medicineGroup === '__custom__' ? customGroup.trim() : (medicineGroup || '');
+        const itemMeta = { item_name: itemName || item.name, entity_name: itemName || item.name };
+        const round4 = (n: number) => Number.isFinite(n) ? Number(n.toFixed(4)) : n;
+
+        await logFieldChanges('edit_item', {
+          // Pricing & Stock tab
+          'LPI Sell Price':         [round4(oldLpiSell), round4(lpiSell)],
+          'LPI Buy Price':          [round4(oldLpiBuy), round4(lpiBuy)],
+          'Minimum Stock Level':    [(item as any).minimum_stock_level ?? null, minStockLevel === '' ? null : parseInt(minStockLevel)],
+          'Lead Time (days)':       [(item as any).lead_time_days ?? null, leadTimeDays === '' ? null : parseInt(leadTimeDays)],
+          'Branch':                 [item.branch_id, branchId || item.branch_id],
+          'Container Type':         [item.packaging_mode || null, containerType || null],
+          // Item Info tab
+          'Item Name':              [item.name, itemName],
+          'Generic Name':           [item.generic_name, genericName],
+          'Strength':               [item.strength, strength],
+          'Medicine Group':         [oldGroup, newGroup],
+          'Category':               [item.category, category],
+          'Manufacturer / Brand':   [item.manufacturer, manufacturer],
+          'Batch Number':           [item.batch_number, batchNumber],
+          'Unit Label':             [item.unit_label, unitLabel],
+        }, { entityType: 'branch_item', entityId: item.id, metadata: itemMeta });
+
+        // Packaging (Pricing & Stock tab — strip / pack settings)
+        if (originalPackaging) {
+          await logFieldChanges('edit_item', {
+            'Unit Name':                    [originalPackaging.unit_name, packaging.unit_name],
+            'Has Strip / Blister':          [originalPackaging.strip_enabled, packaging.strip_enabled],
+            'Strip Name':                   [originalPackaging.strip_name, packaging.strip_name],
+            'Units Per Strip':              [originalPackaging.units_per_strip, packaging.units_per_strip],
+            'Has Pack / Box':               [originalPackaging.pack_enabled, packaging.pack_enabled],
+            'Pack Name':                    [originalPackaging.pack_name, packaging.pack_name],
+            'Strips Per Pack':              [originalPackaging.strips_per_pack, packaging.strips_per_pack],
+          }, { entityType: 'branch_item', entityId: item.id, metadata: itemMeta });
+        }
+      } catch (e) {
+        console.warn('Activity log (edit item) failed', e);
+      }
+
       toast({ title: 'Success', description: 'Item updated successfully' });
       window.dispatchEvent(new Event('app:refresh'));
       onItemUpdated();
@@ -688,7 +735,7 @@ export default function EditBranchItemDialog({ open, onOpenChange, item, onItemU
         <form onSubmit={handleSubmit} className="space-y-4">
           <Tabs defaultValue="branch" className="w-full">
             <TabsList className="grid w-full grid-cols-3">
-              <TabsTrigger value="branch">Pricing & Stock</TabsTrigger>
+              <TabsTrigger value="branch">Packaging & Config</TabsTrigger>
               <TabsTrigger value="batches">Batches</TabsTrigger>
               <TabsTrigger value="catalog">Item Info</TabsTrigger>
             </TabsList>
@@ -727,38 +774,12 @@ export default function EditBranchItemDialog({ open, onOpenChange, item, onItemU
               </div>
 
 
-              {(() => {
-                const unitName = packaging.unit_name || unitLabel || item.unit_label || 'unit';
-                const upp = Math.max(1, Number(computeUnitsPerPack() || item.units_per_pack || 1));
-                const lpiSellNum = parseFloat(sellingPrice);
-                const lpiBuyNum = parseFloat(purchasePrice);
-                return (
-                  <>
-                    <div className="rounded-md border border-primary/30 bg-primary/5 px-3 py-2 text-xs text-muted-foreground">
-                      Prices below are <span className="font-semibold text-foreground">per LPI (1 {unitName})</span> — the smallest sellable unit.
-                      Strip / pack prices on the sales page are computed automatically from this
-                      {upp > 1 ? <> (1 pack = {upp} {unitName}{upp === 1 ? '' : 's'})</> : null}.
-                    </div>
-                    <div className="grid grid-cols-2 gap-4">
-                      <div className="space-y-1">
-                        <Label>LPI Sell Price * <span className="text-muted-foreground font-normal">(per {unitName})</span></Label>
-                        <Input type="number" step="0.0001" min="0" value={sellingPrice} onChange={e => setSellingPrice(e.target.value)} required />
-                        {Number.isFinite(lpiSellNum) && upp > 1 && (
-                          <p className="text-[11px] text-muted-foreground">= ETB {(lpiSellNum * upp).toFixed(2)} per pack</p>
-                        )}
-                      </div>
-                      <div className="space-y-1">
-                        <Label>LPI Buy Price * <span className="text-muted-foreground font-normal">(per {unitName})</span></Label>
-                        <Input type="number" step="0.0001" min="0" value={purchasePrice} onChange={e => setPurchasePrice(e.target.value)} required />
-                        {Number.isFinite(lpiBuyNum) && upp > 1 && (
-                          <p className="text-[11px] text-muted-foreground">= ETB {(lpiBuyNum * upp).toFixed(2)} per pack</p>
-                        )}
-                      </div>
-                    </div>
-                  </>
-                );
-              })()}
-              {/* Expiry date is captured per-batch (Batches view), not at item level */}
+              {/* Prices are managed per-batch in the Batches tab. */}
+              <div className="rounded-md border border-primary/30 bg-primary/5 px-3 py-2 text-xs text-muted-foreground">
+                Prices are now configured <span className="font-semibold text-foreground">per batch</span>. Open the
+                <span className="font-semibold text-foreground"> Batches </span> tab to set buy/sell prices for each batch of this item.
+              </div>
+
 
               <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
                 <div className="space-y-2">

@@ -818,12 +818,18 @@ export default function SalesManagement() {
           payment_method: paymentMethod,
           discount: Number(calculateDiscount().toFixed(2)),
           customer_name: selectedCustomer?.name || null,
-          items: cart.map((it) => ({
-            name: it.name,
-            quantity: it.saleType === 'by_stripe' ? (it.stripesCount ?? 0) : it.quantity,
-            unit_price: (it as any).unit_price ?? (it as any).unitPrice ?? (it as any).price ?? 0,
-            sale_type: it.saleType,
-          })),
+          items: cart.map((it) => {
+            const qty = it.saleType === 'by_stripe' ? (it.stripesCount ?? 0) : it.quantity;
+            const lineTotal = Number((it as any).total ?? 0);
+            const unit = qty > 0 ? lineTotal / qty : Number(it.selling_price ?? 0);
+            return {
+              name: it.name,
+              quantity: qty,
+              unit_price: Number(unit.toFixed(2)),
+              line_total: Number(lineTotal.toFixed(2)),
+              sale_type: it.saleType,
+            };
+          }),
         },
       });
 
