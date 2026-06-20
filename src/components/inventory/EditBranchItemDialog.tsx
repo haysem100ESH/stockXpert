@@ -26,6 +26,7 @@ import {
   formatStock,
   packagingSummary,
 } from '@/lib/packaging';
+import { logFieldChanges } from '@/lib/activityLog';
 
 export interface BranchItem {
   id: string;
