@@ -99,7 +99,7 @@ export function useSeasonalPerformance() {
         .select('medicine_id, branch_id')
         .in('branch_id', branchIds);
 
-      const medIds = [...new Set((branchItems || []).map((bi: any) => bi.medicine_id))];
+      const medIds = [...new Set((branchItems || []).map((bi: any) => bi.medicine_id).filter(Boolean))] as string[];
       if (medIds.length === 0) {
         setItems([]);
         setLoading(false);
