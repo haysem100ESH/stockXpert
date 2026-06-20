@@ -7,7 +7,7 @@ import { Badge } from '@/components/ui/badge';
 import { Button } from '@/components/ui/button';
 import { Popover, PopoverContent, PopoverTrigger } from '@/components/ui/popover';
 import { Calendar } from '@/components/ui/calendar';
-import { Trophy, Calendar as CalendarIcon, Medal } from 'lucide-react';
+import { Trophy, Calendar as CalendarIcon, Medal, RefreshCw } from 'lucide-react';
 import { format } from 'date-fns';
 import { cn } from '@/lib/utils';
 
@@ -29,35 +29,34 @@ export default function Leaderboard({ onSelectStaff }: { onSelectStaff?: (s: Sta
   const [customDate, setCustomDate] = useState<Date | undefined>(new Date());
   const [pickerOpen, setPickerOpen] = useState(false);
 
-  useEffect(() => {
+  const load = async () => {
     if (!profile || profile.role !== 'owner') return;
-    (async () => {
-      setLoading(true);
-      const { data: branches } = await (supabase as any)
-        .from('pharmacy_branches')
-        .select('id')
-        .eq('pharmacy_owner_id', profile.id);
-      const branchIds = (branches || []).map((b: any) => b.id);
-      const branchFilter = selectedBranch ? [selectedBranch] : branchIds;
-      const { data: people } = await (supabase as any)
-        .from('profiles')
-        .select('id, full_name, branch_id')
-        .eq('role', 'staff')
-        .in('branch_id', branchFilter.length ? branchFilter : ['00000000-0000-0000-0000-000000000000']);
-      setStaff((people || []) as StaffRow[]);
+    setLoading(true);
+    const { data: branches } = await (supabase as any)
+      .from('pharmacy_branches')
+      .select('id')
+      .eq('pharmacy_owner_id', profile.id);
+    const branchIds = (branches || []).map((b: any) => b.id);
+    const branchFilter = selectedBranch ? [selectedBranch] : branchIds;
+    const { data: people } = await (supabase as any)
+      .from('profiles')
+      .select('id, full_name, branch_id')
+      .eq('role', 'staff')
+      .in('branch_id', branchFilter.length ? branchFilter : ['00000000-0000-0000-0000-000000000000']);
+    setStaff((people || []) as StaffRow[]);
 
-      // Fetch a wide window once (last 60 days) so client-side filtering is instant.
-      const from = new Date();
-      from.setDate(from.getDate() - 60);
-      const { data: logs } = await (supabase as any)
-        .from('activity_log')
-        .select('user_id, created_at')
-        .eq('owner_id', profile.id)
-        .gte('created_at', from.toISOString());
-      setRows(logs || []);
-      setLoading(false);
-    })();
-  }, [profile, selectedBranch]);
+    const from = new Date();
+    from.setDate(from.getDate() - 60);
+    const { data: logs } = await (supabase as any)
+      .from('activity_log')
+      .select('user_id, created_at')
+      .eq('owner_id', profile.id)
+      .gte('created_at', from.toISOString());
+    setRows(logs || []);
+    setLoading(false);
+  };
+
+  useEffect(() => { load(); }, [profile, selectedBranch]);
 
   const ranked = useMemo(() => {
     let fromTs = 0;
@@ -111,6 +110,17 @@ export default function Leaderboard({ onSelectStaff }: { onSelectStaff?: (s: Sta
               <div className="text-xs text-muted-foreground">Total actions</div>
               <div className="text-lg font-semibold tabular-nums">{total}</div>
             </div>
+            <Button
+              variant="outline"
+              size="icon"
+              className="h-8 w-8"
+              onClick={load}
+              disabled={loading}
+              aria-label="Refresh"
+              title="Refresh"
+            >
+              <RefreshCw className={cn('h-4 w-4', loading && 'animate-spin')} />
+            </Button>
           </div>
         </div>
 
