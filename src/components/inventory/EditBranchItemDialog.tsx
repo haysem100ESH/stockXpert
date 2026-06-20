@@ -735,7 +735,7 @@ export default function EditBranchItemDialog({ open, onOpenChange, item, onItemU
         <form onSubmit={handleSubmit} className="space-y-4">
           <Tabs defaultValue="branch" className="w-full">
             <TabsList className="grid w-full grid-cols-3">
-              <TabsTrigger value="branch">Pricing & Stock</TabsTrigger>
+              <TabsTrigger value="branch">Packaging & Config</TabsTrigger>
               <TabsTrigger value="batches">Batches</TabsTrigger>
               <TabsTrigger value="catalog">Item Info</TabsTrigger>
             </TabsList>
