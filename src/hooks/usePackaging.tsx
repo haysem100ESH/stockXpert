@@ -61,12 +61,17 @@ export function usePackagingMap(medicineIds: string[]) {
     queryKey: ['medicine_packaging_map', key],
     queryFn: async (): Promise<Record<string, Packaging>> => {
       if (ids.length === 0) return {};
-      const { data } = await (supabase as any)
-        .from('medicine_packaging')
-        .select('*')
-        .in('medicine_id', ids);
+      // Chunk + retry: large id lists used to be sent in a single .in() URL
+      // which proxies could truncate, silently dropping packaging data.
+      const { chunkedInPartial } = await import('@/lib/supabaseBatch');
+      const { data } = await chunkedInPartial<any>(ids, (chunk) =>
+        (supabase as any)
+          .from('medicine_packaging')
+          .select('*')
+          .in('medicine_id', chunk)
+      );
       const map: Record<string, Packaging> = {};
-      (data || []).forEach((row: any) => { map[row.medicine_id] = row as Packaging; });
+      data.forEach((row: any) => { map[row.medicine_id] = row as Packaging; });
       return map;
     },
     enabled: ids.length > 0,
