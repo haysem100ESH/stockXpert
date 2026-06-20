@@ -55,16 +55,15 @@ export default function MedicineInfoDialog({ open, onOpenChange, medicineId, bra
 
         let branchSellingPrice: number | null = null;
         if (branchItemId) {
+          // branch_items only stores medicine_id + selling_price; batch_number,
+          // expiry_date and unit_label live on inventory_batches / medicines.
           const { data: bi } = await supabase
             .from('branch_items')
-            .select('medicine_id, batch_number, expiry_date, unit_label, selling_price')
+            .select('medicine_id, selling_price')
             .eq('id', branchItemId)
             .maybeSingle();
           if (bi) {
             medId = medId || bi.medicine_id;
-            branchBatch = bi.batch_number;
-            branchExpiry = bi.expiry_date;
-            branchUnitLabel = bi.unit_label;
             branchSellingPrice = bi.selling_price;
           }
         }
@@ -79,14 +78,15 @@ export default function MedicineInfoDialog({ open, onOpenChange, medicineId, bra
           med = m;
         }
 
-        // Latest active batch (if any) for batch number/expiry
+        // Latest active batch (if any) for batch number/expiry.
+        // inventory_batches uses `remaining_quantity` (not quantity_remaining).
         let latestBatch: any = null;
         if (branchItemId) {
           const { data: b } = await supabase
             .from('inventory_batches')
-            .select('batch_number, expiry_date, quantity_remaining')
+            .select('batch_number, expiry_date, remaining_quantity')
             .eq('branch_item_id', branchItemId)
-            .gt('quantity_remaining', 0)
+            .gt('remaining_quantity', 0)
             .order('expiry_date', { ascending: true })
             .limit(1);
           latestBatch = b?.[0] || null;
