@@ -110,6 +110,17 @@ export default function Leaderboard({ onSelectStaff }: { onSelectStaff?: (s: Sta
               <div className="text-xs text-muted-foreground">Total actions</div>
               <div className="text-lg font-semibold tabular-nums">{total}</div>
             </div>
+            <Button
+              variant="outline"
+              size="icon"
+              className="h-8 w-8"
+              onClick={load}
+              disabled={loading}
+              aria-label="Refresh"
+              title="Refresh"
+            >
+              <RefreshCw className={cn('h-4 w-4', loading && 'animate-spin')} />
+            </Button>
           </div>
         </div>
 
