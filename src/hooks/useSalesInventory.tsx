@@ -59,6 +59,12 @@ export interface SalesCustomer {
   max_credit_limit: number;
 }
 
+import { chunkedInPartial } from '@/lib/supabaseBatch';
+
+// Sentinel used when a name lookup genuinely fails after retries — UI renders
+// "Unavailable" instead of the misleading "Unknown".
+export const SALES_UNAVAILABLE = '__UNAVAILABLE__';
+
 async function fetchSalesInventory(branchIds: string[]): Promise<SalesMedicine[]> {
   if (branchIds.length === 0) return [];
 
@@ -71,50 +77,57 @@ async function fetchSalesInventory(branchIds: string[]): Promise<SalesMedicine[]
   if (error) throw error;
   if (!items || items.length === 0) return [];
 
-  const medicineIds = [...new Set(items.map((i: any) => i.medicine_id))];
-  const allBranchIds = [...new Set(items.map((i: any) => i.branch_id).filter(Boolean))];
+  const medicineIds = [...new Set(items.map((i: any) => i.medicine_id))] as string[];
+  const allBranchIds = [...new Set(items.map((i: any) => i.branch_id).filter(Boolean))] as string[];
 
+  // Chunk to 50 ids + retry. Single-shot .in() with hundreds of UUIDs
+  // could be silently dropped by proxies on slow connections, causing
+  // names to render as "Unknown".
   const [medsRes, branchesRes] = await Promise.all([
-    (supabase as any)
-      .from('medicines')
-      .select('id, name, generic_name, category, item_type, unit_label, units_per_pack, medicine_group, strength, packaging_mode, sub_units_per_unit, main_unit_name, sub_unit_name, unit_price, sub_unit_price')
-      .in('id', medicineIds),
-    allBranchIds.length > 0
-      ? (supabase as any).from('pharmacy_branches').select('id, name').in('id', allBranchIds)
-      : Promise.resolve({ data: [] }),
+    chunkedInPartial<any>(medicineIds, (ids) =>
+      (supabase as any)
+        .from('medicines')
+        .select('id, name, generic_name, category, item_type, unit_label, units_per_pack, medicine_group, strength, packaging_mode, sub_units_per_unit, main_unit_name, sub_unit_name, unit_price, sub_unit_price')
+        .in('id', ids)
+    ),
+    chunkedInPartial<any>(allBranchIds, (ids) =>
+      (supabase as any).from('pharmacy_branches').select('id, name').in('id', ids)
+    ),
   ]);
 
   const medMap: Record<string, any> = {};
-  (medsRes.data || []).forEach((m: any) => { medMap[m.id] = m; });
+  medsRes.data.forEach((m: any) => { medMap[m.id] = m; });
   const branchMap: Record<string, string> = {};
-  (branchesRes.data || []).forEach((b: any) => { branchMap[b.id] = b.name; });
+  branchesRes.data.forEach((b: any) => { branchMap[b.id] = b.name; });
 
   return items.map((item: any) => {
-    const med = medMap[item.medicine_id] || {};
+    const med = medMap[item.medicine_id];
+    const m = med || {};
+    const hasMed = !!med;
     return {
       id: item.id,
       medicine_id: item.medicine_id,
-      name: med.name || 'Unknown',
-      generic_name: med.generic_name,
+      name: hasMed ? m.name : SALES_UNAVAILABLE,
+      generic_name: m.generic_name,
       selling_price: item.selling_price,
       purchase_price: item.purchase_price,
       stock_quantity: item.quantity,
-      category: med.category,
+      category: m.category,
       expiry_date: item.expiry_date,
-      units_per_pack: med.units_per_pack,
+      units_per_pack: m.units_per_pack,
       open_pack_units: 0,
-      unit_label: med.unit_label,
-      item_type: med.item_type,
+      unit_label: m.unit_label,
+      item_type: m.item_type,
       branch_id: item.branch_id,
       branch_name: branchMap[item.branch_id],
-      medicine_group: med.medicine_group,
-      strength: med.strength,
-      packaging_mode: med.packaging_mode,
-      sub_units_per_unit: med.sub_units_per_unit,
-      main_unit_name: med.main_unit_name,
-      sub_unit_name: med.sub_unit_name,
-      unit_price: med.unit_price,
-      sub_unit_price: med.sub_unit_price,
+      medicine_group: m.medicine_group,
+      strength: m.strength,
+      packaging_mode: m.packaging_mode,
+      sub_units_per_unit: m.sub_units_per_unit,
+      main_unit_name: m.main_unit_name,
+      sub_unit_name: m.sub_unit_name,
+      unit_price: m.unit_price,
+      sub_unit_price: m.sub_unit_price,
     } as SalesMedicine;
   });
 }
@@ -129,18 +142,22 @@ async function fetchSalesCustomers(selectedBranch: string | null, ownerBranchIds
   const { data, error } = await query;
   if (error || !data || data.length === 0) return [];
 
-  const customerIds = data.map((c: any) => c.id);
+  const customerIds = data.map((c: any) => c.id) as string[];
   const [creditsRes, logsRes] = await Promise.all([
-    (supabase as any).from('customer_credits').select('customer_id, total_debt').in('customer_id', customerIds),
-    (supabase as any).from('credit_logs').select('customer_id, new_score, created_at').in('customer_id', customerIds).order('created_at', { ascending: false }),
+    chunkedInPartial<any>(customerIds, (ids) =>
+      (supabase as any).from('customer_credits').select('customer_id, total_debt').in('customer_id', ids)
+    ),
+    chunkedInPartial<any>(customerIds, (ids) =>
+      (supabase as any).from('credit_logs').select('customer_id, new_score, created_at').in('customer_id', ids).order('created_at', { ascending: false })
+    ),
   ]);
 
   const debtMap: Record<string, number> = {};
-  for (const credit of creditsRes.data || []) {
+  for (const credit of creditsRes.data) {
     debtMap[credit.customer_id] = Math.max(0, Number(credit.total_debt) || 0);
   }
   const latestScoreMap: Record<string, number> = {};
-  for (const log of logsRes.data || []) {
+  for (const log of logsRes.data) {
     if (!latestScoreMap[log.customer_id]) latestScoreMap[log.customer_id] = log.new_score;
   }
 
