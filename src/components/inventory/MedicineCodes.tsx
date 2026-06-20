@@ -66,16 +66,22 @@ export default function MedicineCodes() {
   const [assignBusy, setAssignBusy] = useState(false);
 
   // Pull packaging rows for all medicines so we can format stock.
+  // Chunked into batches of 20 ids to keep URLs short — large id lists
+  // (1000+) previously hit URL-length limits and triggered 400 / ERR_FAILED.
   useEffect(() => {
-    const ids = [...new Set(items.map((i: any) => i.medicine_id))];
+    const ids = [...new Set(items.map((i: any) => i.medicine_id).filter(Boolean))] as string[];
     if (ids.length === 0) return;
     (async () => {
-      const { data } = await (supabase as any)
-        .from('medicine_packaging')
-        .select('medicine_id, unit_name, strip_enabled, units_per_strip, strip_name, pack_enabled, strips_per_pack, pack_name, unit_selling_price, strip_selling_price, pack_selling_price')
-        .in('medicine_id', ids);
+      const { chunkedInPartial } = await import('@/lib/supabaseBatch');
+      console.log(`[Supabase batching] medicine_packaging by medicine_id (MedicineCodes): ${Math.ceil(ids.length / 20)} batches for ${ids.length} ids`);
+      const { data } = await chunkedInPartial<any>(ids, (chunk) =>
+        (supabase as any)
+          .from('medicine_packaging')
+          .select('medicine_id, unit_name, strip_enabled, units_per_strip, strip_name, pack_enabled, strips_per_pack, pack_name, unit_selling_price, strip_selling_price, pack_selling_price')
+          .in('medicine_id', chunk)
+      , 20);
       const map: Record<string, Packaging> = {};
-      (data || []).forEach((r: any) => { map[r.medicine_id] = r; });
+      data.forEach((r: any) => { map[r.medicine_id] = r; });
       setPackagings(map);
     })();
   }, [items]);
