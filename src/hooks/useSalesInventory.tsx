@@ -88,7 +88,7 @@ async function fetchSalesInventory(branchIds: string[]): Promise<SalesMedicine[]
         .from('medicines')
         .select('id, name, generic_name, category, item_type, unit_label, units_per_pack, medicine_group, strength, packaging_mode, sub_units_per_unit, main_unit_name, sub_unit_name, unit_price, sub_unit_price')
         .in('id', ids)
-    ),
+    , 20),
     chunkedInPartial<any>(allBranchIds, (ids) =>
       (supabase as any).from('pharmacy_branches').select('id, name').in('id', ids)
     ),
