@@ -62,15 +62,19 @@ export default function LowStockItemsTable() {
         (item: any) => item.quantity <= (item.medicines?.minimum_stock_level || 0)
       );
 
-      // Fetch packaging in one batch
-      const medIds = [...new Set(filtered.map((i: any) => i.medicine_id))];
+      // Fetch packaging chunked (max 20 ids/request) to avoid URL-length 400s.
+      const medIds = [...new Set(filtered.map((i: any) => i.medicine_id).filter(Boolean))] as string[];
       const packMap: Record<string, Packaging> = {};
       if (medIds.length > 0) {
-        const { data: packs } = await (supabase as any)
-          .from('medicine_packaging')
-          .select('*')
-          .in('medicine_id', medIds);
-        (packs || []).forEach((p: any) => { packMap[p.medicine_id] = p as Packaging; });
+        const { chunkedInPartial } = await import('@/lib/supabaseBatch');
+        console.log(`[Supabase batching] medicine_packaging by medicine_id (LowStockItemsTable): ${Math.ceil(medIds.length / 20)} batches for ${medIds.length} ids`);
+        const { data: packs } = await chunkedInPartial<any>(medIds, (chunk) =>
+          (supabase as any)
+            .from('medicine_packaging')
+            .select('*')
+            .in('medicine_id', chunk)
+        , 20);
+        packs.forEach((p: any) => { packMap[p.medicine_id] = p as Packaging; });
       }
 
       const lowStock = filtered.map((item: any) => ({

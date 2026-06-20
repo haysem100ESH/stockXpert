@@ -418,12 +418,16 @@ export default function FinanceManagement() {
           .filter(Boolean) as string[]
       ));
       if (medIds.length > 0) {
-        const { data: pkgRows } = await (supabase as any)
-          .from('medicine_packaging')
-          .select('*')
-          .in('medicine_id', medIds);
+        const { chunkedInPartial } = await import('@/lib/supabaseBatch');
+        console.log(`[Supabase batching] medicine_packaging by medicine_id (FinanceManagement): ${Math.ceil(medIds.length / 20)} batches for ${medIds.length} ids`);
+        const { data: pkgRows } = await chunkedInPartial<any>(medIds, (chunk) =>
+          (supabase as any)
+            .from('medicine_packaging')
+            .select('*')
+            .in('medicine_id', chunk)
+        , 20);
         const map: Record<string, Packaging> = {};
-        (pkgRows || []).forEach((p: any) => { map[p.medicine_id] = p as Packaging; });
+        pkgRows.forEach((p: any) => { map[p.medicine_id] = p as Packaging; });
         setPackagingMap(map);
       } else {
         setPackagingMap({});

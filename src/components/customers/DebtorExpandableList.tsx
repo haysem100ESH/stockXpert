@@ -87,15 +87,19 @@ function ExpandedCreditItems({ customerId }: { customerId: string }) {
           return;
         }
 
-        // Fetch medicine details
-        const medicineIds = [...new Set(saleItemsData.map((si: any) => si.medicine_id).filter((id: any) => id !== null && id !== undefined))];
+        // Fetch medicine details (chunked to 20 ids/req for URL safety).
+        const medicineIds = [...new Set(saleItemsData.map((si: any) => si.medicine_id).filter((id: any) => id !== null && id !== undefined))] as string[];
         let medsData: any[] = [];
         if (medicineIds.length > 0) {
-          const { data } = await (supabase as any)
-            .from('medicines')
-            .select('id, name, unit_label, item_type')
-            .in('id', medicineIds);
-          medsData = data || [];
+          const { chunkedInPartial } = await import('@/lib/supabaseBatch');
+          console.log(`[Supabase batching] medicines by id (DebtorExpandableList): ${Math.ceil(medicineIds.length / 20)} batches for ${medicineIds.length} ids`);
+          const { data } = await chunkedInPartial<any>(medicineIds, (chunk) =>
+            (supabase as any)
+              .from('medicines')
+              .select('id, name, unit_label, item_type')
+              .in('id', chunk)
+          , 20);
+          medsData = data;
         }
 
         const medMap = new Map((medsData || []).map((m: any) => [m.id, m]));

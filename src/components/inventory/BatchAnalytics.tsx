@@ -68,15 +68,19 @@ export default function BatchAnalytics() {
         return;
       }
 
-      // Fetch medicine names
-      const medIds = [...new Set(batchData.map((b: any) => b.medicine_id))];
-      const { data: meds } = await supabase
-        .from('medicines')
-        .select('id, name')
-        .in('id', medIds);
+      // Fetch medicine names (chunked to 20 ids/req for URL safety).
+      const medIds = [...new Set(batchData.map((b: any) => b.medicine_id).filter(Boolean))] as string[];
+      const { chunkedInPartial } = await import('@/lib/supabaseBatch');
+      console.log(`[Supabase batching] medicines by id (BatchAnalytics): ${Math.ceil(medIds.length / 20)} batches for ${medIds.length} ids`);
+      const { data: meds } = await chunkedInPartial<any>(medIds, (chunk) =>
+        supabase
+          .from('medicines')
+          .select('id, name')
+          .in('id', chunk)
+      , 20);
 
       const medMap: Record<string, string> = {};
-      (meds || []).forEach((m: any) => { medMap[m.id] = m.name; });
+      meds.forEach((m: any) => { medMap[m.id] = m.name; });
 
       const today = new Date().toISOString().split('T')[0];
 
