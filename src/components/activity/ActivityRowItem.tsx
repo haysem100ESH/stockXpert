@@ -43,7 +43,11 @@ export default function ActivityRowItem({ row }: { row: ActivityRow }) {
   const meta = TYPE_META[row.activity_type] || { label: row.activity_type, icon: Package, color: 'text-muted-foreground' };
   const Icon = meta.icon;
   const m = row.metadata || {};
-  const baseName = m.item_name || m.name || m.code || m.label || row.entity_id || meta.label;
+  const isSale = row.activity_type === 'sell_item';
+  const saleTitle = isSale
+    ? `Sale${m.customer_name ? ` — ${m.customer_name}` : ''}${m.total !== undefined ? ` · ${Number(m.total).toFixed(2)}` : ''}`
+    : null;
+  const baseName = saleTitle || m.item_name || m.name || m.code || m.label || meta.label;
   const batchSuffix = m.batch_number ? ` · Batch #${m.batch_number}` : '';
   const fieldSuffix = m.field ? ` — ${m.field}` : '';
   const title = `${baseName}${batchSuffix}${fieldSuffix}`;
@@ -55,12 +59,18 @@ export default function ActivityRowItem({ row }: { row: ActivityRow }) {
         <div className="space-y-1 text-sm">
           {items && items.length > 0 ? (
             <div className="space-y-1">
-              {items.map((it, i) => (
-                <div key={i} className="flex justify-between gap-2 border-b border-border/40 py-1">
-                  <span>{it.name} × {it.quantity}</span>
-                  <span className="tabular-nums">{Number(it.unit_price || 0).toFixed(2)}</span>
-                </div>
-              ))}
+              {items.map((it, i) => {
+                const qty = Number(it.quantity) || 0;
+                const lineTotal = it.line_total !== undefined
+                  ? Number(it.line_total)
+                  : Number(it.unit_price || 0) * qty;
+                return (
+                  <div key={i} className="flex justify-between gap-2 border-b border-border/40 py-1">
+                    <span>{it.name} × {qty}</span>
+                    <span className="tabular-nums">{lineTotal.toFixed(2)}</span>
+                  </div>
+                );
+              })}
             </div>
           ) : null}
           <div className="grid grid-cols-2 gap-x-4 gap-y-1 pt-1">
