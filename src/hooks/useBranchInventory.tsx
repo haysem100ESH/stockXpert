@@ -37,9 +37,9 @@ export type EnrichedBranchItem = BranchItem & {
   packaging?: Packaging | null;
 };
 
-// Sentinel returned when the medicine name fetch genuinely fails after all
-// retries — UI checks for this and renders "Unavailable" instead of "Unknown".
-export const UNAVAILABLE = '__UNAVAILABLE__';
+// Visible string shown when the medicine name fetch genuinely fails after
+// retries — distinguishes a connection issue from valid data.
+export const UNAVAILABLE = 'Unavailable';
 
 // Cache of branch-name lookups, shared across page fetches in one session.
 async function enrichItems(
