@@ -112,6 +112,7 @@ export default function EditBranchItemDialog({ open, onOpenChange, item, onItemU
 
   const [loading, setLoading] = useState(false);
   const [packaging, setPackaging] = useState<Packaging>(defaultPackaging());
+  const [originalPackaging, setOriginalPackaging] = useState<Packaging | null>(null);
   const { toast } = useToast();
   const { profile } = useAuth();
   const { branchType } = useBranchContext();
