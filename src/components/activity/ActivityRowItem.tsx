@@ -43,7 +43,11 @@ export default function ActivityRowItem({ row }: { row: ActivityRow }) {
   const meta = TYPE_META[row.activity_type] || { label: row.activity_type, icon: Package, color: 'text-muted-foreground' };
   const Icon = meta.icon;
   const m = row.metadata || {};
-  const baseName = m.item_name || m.name || m.code || m.label || row.entity_id || meta.label;
+  const isSale = row.activity_type === 'sell_item';
+  const saleTitle = isSale
+    ? `Sale${m.customer_name ? ` — ${m.customer_name}` : ''}${m.total !== undefined ? ` · ${Number(m.total).toFixed(2)}` : ''}`
+    : null;
+  const baseName = saleTitle || m.item_name || m.name || m.code || m.label || meta.label;
   const batchSuffix = m.batch_number ? ` · Batch #${m.batch_number}` : '';
   const fieldSuffix = m.field ? ` — ${m.field}` : '';
   const title = `${baseName}${batchSuffix}${fieldSuffix}`;
