@@ -59,12 +59,18 @@ export default function ActivityRowItem({ row }: { row: ActivityRow }) {
         <div className="space-y-1 text-sm">
           {items && items.length > 0 ? (
             <div className="space-y-1">
-              {items.map((it, i) => (
-                <div key={i} className="flex justify-between gap-2 border-b border-border/40 py-1">
-                  <span>{it.name} × {it.quantity}</span>
-                  <span className="tabular-nums">{Number(it.unit_price || 0).toFixed(2)}</span>
-                </div>
-              ))}
+              {items.map((it, i) => {
+                const qty = Number(it.quantity) || 0;
+                const lineTotal = it.line_total !== undefined
+                  ? Number(it.line_total)
+                  : Number(it.unit_price || 0) * qty;
+                return (
+                  <div key={i} className="flex justify-between gap-2 border-b border-border/40 py-1">
+                    <span>{it.name} × {qty}</span>
+                    <span className="tabular-nums">{lineTotal.toFixed(2)}</span>
+                  </div>
+                );
+              })}
             </div>
           ) : null}
           <div className="grid grid-cols-2 gap-x-4 gap-y-1 pt-1">
