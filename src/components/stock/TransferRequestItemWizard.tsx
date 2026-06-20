@@ -119,15 +119,23 @@ export default function TransferRequestItemWizard({
 
       if (!items?.length) { setSourceMeds([]); return; }
 
-      const ids = [...new Set(items.map((i: any) => i.medicine_id))];
-      const [{ data: meds }, { data: packs }] = await Promise.all([
-        supabase.from('medicines')
-          .select('id, name, generic_name, medicine_group, medicine_code_id, unit_label')
-          .in('id', ids),
-        (supabase as any).from('medicine_packaging').select('*').in('medicine_id', ids),
+      const ids = [...new Set(items.map((i: any) => i.medicine_id).filter(Boolean))] as string[];
+      const { chunkedInPartial } = await import('@/lib/supabaseBatch');
+      console.log(`[Supabase batching] medicines + medicine_packaging (TransferWizard source): ${Math.ceil(ids.length / 20)} batches for ${ids.length} ids`);
+      const [medsRes, packsRes] = await Promise.all([
+        chunkedInPartial<any>(ids, (chunk) =>
+          supabase.from('medicines')
+            .select('id, name, generic_name, medicine_group, medicine_code_id, unit_label')
+            .in('id', chunk)
+        , 20),
+        chunkedInPartial<any>(ids, (chunk) =>
+          (supabase as any).from('medicine_packaging').select('*').in('medicine_id', chunk)
+        , 20),
       ]);
+      const meds = medsRes.data;
+      const packs = packsRes.data;
       const packMap: Record<string, Packaging> = {};
-      (packs || []).forEach((p: any) => { packMap[p.medicine_id] = p; });
+      packs.forEach((p: any) => { packMap[p.medicine_id] = p; });
 
       const qtyMap = new Map<string, number>();
       items.forEach((i: any) => qtyMap.set(i.medicine_id, (qtyMap.get(i.medicine_id) || 0) + Number(i.quantity || 0)));
@@ -161,17 +169,25 @@ export default function TransferRequestItemWizard({
 
       if (!items?.length) { setTargets([]); return; }
 
-      const ids = [...new Set(items.map((i: any) => i.medicine_id))];
-      const [{ data: meds }, { data: packs }] = await Promise.all([
-        supabase.from('medicines')
-          .select('id, name, generic_name, medicine_group, medicine_code_id, unit_label')
-          .in('id', ids),
-        (supabase as any).from('medicine_packaging').select('*').in('medicine_id', ids),
+      const ids = [...new Set(items.map((i: any) => i.medicine_id).filter(Boolean))] as string[];
+      const { chunkedInPartial } = await import('@/lib/supabaseBatch');
+      console.log(`[Supabase batching] medicines + medicine_packaging (TransferWizard targets): ${Math.ceil(ids.length / 20)} batches for ${ids.length} ids`);
+      const [medsRes, packsRes] = await Promise.all([
+        chunkedInPartial<any>(ids, (chunk) =>
+          supabase.from('medicines')
+            .select('id, name, generic_name, medicine_group, medicine_code_id, unit_label')
+            .in('id', chunk)
+        , 20),
+        chunkedInPartial<any>(ids, (chunk) =>
+          (supabase as any).from('medicine_packaging').select('*').in('medicine_id', chunk)
+        , 20),
       ]);
+      const meds = medsRes.data;
+      const packs = packsRes.data;
       const medMap: Record<string, any> = {};
-      (meds || []).forEach((m: any) => { medMap[m.id] = m; });
+      meds.forEach((m: any) => { medMap[m.id] = m; });
       const packMap: Record<string, Packaging> = {};
-      (packs || []).forEach((p: any) => { packMap[p.medicine_id] = p; });
+      packs.forEach((p: any) => { packMap[p.medicine_id] = p; });
 
       const srcGen = normalize(src.generic_name);
       const srcName = normalize(src.name);

@@ -80,16 +80,24 @@ export default function GlobalInventoryView() {
       const medIds = [...new Set(effective.map((i: any) => i.medicine_id))];
       if (medIds.length === 0) { setItems([]); setLoading(false); return; }
 
-      const [{ data: meds }, { data: packs }] = await Promise.all([
-        supabase
-          .from('medicines')
-          .select('id, name, category, minimum_stock_level, unit_label')
-          .in('id', medIds),
-        (supabase as any)
-          .from('medicine_packaging')
-          .select('*')
-          .in('medicine_id', medIds),
+      const { chunkedInPartial } = await import('@/lib/supabaseBatch');
+      console.log(`[Supabase batching] medicines + medicine_packaging (GlobalInventoryView): ${Math.ceil(medIds.length / 20)} batches for ${medIds.length} ids`);
+      const [medsRes, packsRes] = await Promise.all([
+        chunkedInPartial<any>(medIds as string[], (chunk) =>
+          supabase
+            .from('medicines')
+            .select('id, name, category, minimum_stock_level, unit_label')
+            .in('id', chunk)
+        , 20),
+        chunkedInPartial<any>(medIds as string[], (chunk) =>
+          (supabase as any)
+            .from('medicine_packaging')
+            .select('*')
+            .in('medicine_id', chunk)
+        , 20),
       ]);
+      const meds = medsRes.data;
+      const packs = packsRes.data;
 
       const packMap: Record<string, Packaging> = {};
       (packs || []).forEach((p: any) => { packMap[p.medicine_id] = p; });
