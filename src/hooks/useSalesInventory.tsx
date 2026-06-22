@@ -224,11 +224,13 @@ export function useSalesInventory() {
     placeholderData: (prev) => prev,
   });
 
-  // Pull-to-refresh interop
+  // Pull-to-refresh + post-sale broadcast. Use refetchQueries so the active
+  // list updates immediately rather than waiting for the next focus event.
   useEffect(() => {
     const handler = () => {
-      queryClient.invalidateQueries({ queryKey: ['sales-inventory'] });
-      queryClient.invalidateQueries({ queryKey: ['sales-customers'] });
+      queryClient.refetchQueries({ queryKey: ['sales-inventory'] });
+      queryClient.refetchQueries({ queryKey: ['sales-customers'] });
+      queryClient.refetchQueries({ queryKey: ['branch-inventory'] });
     };
     window.addEventListener('app:refresh', handler);
     return () => window.removeEventListener('app:refresh', handler);
@@ -238,8 +240,8 @@ export function useSalesInventory() {
   useEffect(() => {
     if (!enabled || branchIds.length === 0) return;
     const invalidate = () => {
-      queryClient.invalidateQueries({ queryKey: ['sales-inventory'] });
-      queryClient.invalidateQueries({ queryKey: ['branch-inventory'] });
+      queryClient.refetchQueries({ queryKey: ['sales-inventory'] });
+      queryClient.refetchQueries({ queryKey: ['branch-inventory'] });
     };
     const channel = (supabase as any)
       .channel(`sales-inv-${branchIds.join('-')}`)
@@ -258,8 +260,8 @@ export function useSalesInventory() {
     refetchMedicines: inventoryQuery.refetch,
     refetchCustomers: customersQuery.refetch,
     invalidate: () => {
-      queryClient.invalidateQueries({ queryKey: ['sales-inventory'] });
-      queryClient.invalidateQueries({ queryKey: ['sales-customers'] });
+      queryClient.refetchQueries({ queryKey: ['sales-inventory'] });
+      queryClient.refetchQueries({ queryKey: ['sales-customers'] });
     },
   };
 }

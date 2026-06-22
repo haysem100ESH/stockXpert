@@ -256,7 +256,6 @@ export default function CreateCustomItemDialog({ open, onOpenChange, onItemCreat
                   <Input value={strength} onChange={e => setStrength(e.target.value)} placeholder="e.g. 500mg, 250mg/5ml" />
                 </div>
                 <div className="space-y-2">
-                  <Label>Medicine Code</Label>
                   <MedicineCodeCombobox value={medicineCodeId} onChange={setMedicineCodeId} />
                 </div>
               </div>
