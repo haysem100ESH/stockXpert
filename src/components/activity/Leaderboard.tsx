@@ -47,17 +47,18 @@ export default function Leaderboard({ onSelectStaff }: { onSelectStaff?: (s: Sta
     setStaff((people || []) as StaffRow[]);
 
     const from = new Date();
-    from.setDate(from.getDate() - 60);
-    const { data: logs } = await (supabase as any)
+    from.setDate(from.getDate() - (filter === 'all' || filter === 'month' ? 365 : 60));
+    let q = (supabase as any)
       .from('activity_log')
       .select('user_id, created_at')
-      .eq('owner_id', profile.id)
-      .gte('created_at', from.toISOString());
+      .eq('owner_id', profile.id);
+    if (filter !== 'all') q = q.gte('created_at', from.toISOString());
+    const { data: logs } = await q;
     setRows(logs || []);
     setLoading(false);
   };
 
-  useEffect(() => { load(); }, [profile, selectedBranch]);
+  useEffect(() => { load(); }, [profile, selectedBranch, filter]);
 
   const ranked = useMemo(() => {
     let fromTs = 0;
