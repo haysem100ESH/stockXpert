@@ -342,10 +342,14 @@ export default function CreateCustomItemDialog({ open, onOpenChange, onItemCreat
                   <Input type="number" min="1" value={unitsPerStrip} onChange={e => setUnitsPerStrip(e.target.value)} placeholder="e.g. 10" />
                 </div>
               </div>
+              <div className="space-y-2">
+                <Label>Unit Name</Label>
+                <Input value={unitName} onChange={e => setUnitName(e.target.value)} placeholder="unit (e.g. tablet, capsule)" />
+              </div>
               {stripsPerPack && unitsPerStrip && parseInt(stripsPerPack) > 0 && parseInt(unitsPerStrip) > 0 && (
                 <div className="rounded-md bg-primary/10 border border-primary/20 px-3 py-2 -mt-2">
                   <p className="text-sm font-semibold">
-                    Total stock per item: {parseInt(stripsPerPack) * parseInt(unitsPerStrip)} units
+                    Total stock per item: {parseInt(stripsPerPack) * parseInt(unitsPerStrip)} {unitName.trim() || 'unit'}{parseInt(stripsPerPack) * parseInt(unitsPerStrip) === 1 ? '' : 's'}
                   </p>
                 </div>
               )}
