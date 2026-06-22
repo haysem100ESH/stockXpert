@@ -51,11 +51,8 @@ export interface BranchItem {
   medicine_group?: string | null;
   strength?: string | null;
   packaging_mode?: string | null;
-  sub_units_per_unit?: number | null;
   main_unit_name?: string | null;
-  sub_unit_name?: string | null;
   unit_price?: number | null;
-  sub_unit_price?: number | null;
   minimum_stock_level?: number | null;
 }
 
@@ -89,12 +86,9 @@ export default function EditBranchItemDialog({ open, onOpenChange, item, onItemU
   const [unitsPerStrip, setUnitsPerStrip] = useState('');
   const [unitsPerPack, setUnitsPerPack] = useState('');
 
-  // Multi-level packaging
+  // Multi-level packaging (unit -> strip -> pack only)
   const [containerType, setContainerType] = useState('');
-  const [subUnitsPerUnit, setSubUnitsPerUnit] = useState('');
-  const [subUnitName, setSubUnitName] = useState('');
   const [unitPrice, setUnitPrice] = useState('');
-  const [subUnitPrice, setSubUnitPrice] = useState('');
 
   // New: branch-level controls
   const [minStockLevel, setMinStockLevel] = useState('');
@@ -179,10 +173,7 @@ export default function EditBranchItemDialog({ open, onOpenChange, item, onItemU
       setUnitsPerPack(item.units_per_pack ? String(item.units_per_pack) : '');
 
       setContainerType(item.packaging_mode || '');
-      setSubUnitsPerUnit(item.sub_units_per_unit ? String(item.sub_units_per_unit) : '');
-      setSubUnitName(item.sub_unit_name || '');
       setUnitPrice(item.unit_price != null ? String(item.unit_price) : '');
-      setSubUnitPrice(item.sub_unit_price != null ? String(item.sub_unit_price) : '');
 
       setMinStockLevel((item as any).minimum_stock_level != null ? String((item as any).minimum_stock_level) : '');
       setLeadTimeDays((item as any).lead_time_days != null ? String((item as any).lead_time_days) : '3');
@@ -258,10 +249,7 @@ export default function EditBranchItemDialog({ open, onOpenChange, item, onItemU
       newStripsPerPack !== oldStripsPerPack ||
       newUnitsPerStrip !== oldUnitsPerStrip ||
       containerType !== (item.packaging_mode || '') ||
-      (subUnitsPerUnit ? parseInt(subUnitsPerUnit) : null) !== (item.sub_units_per_unit || null) ||
-      subUnitName !== (item.sub_unit_name || '') ||
       (unitPrice ? parseFloat(unitPrice) : null) !== (item.unit_price ?? null) ||
-      (subUnitPrice ? parseFloat(subUnitPrice) : null) !== (item.sub_unit_price ?? null) ||
       (isPharmacy && (
         strength !== (item.strength || '') ||
         newGroup !== oldGroup
@@ -359,10 +347,7 @@ export default function EditBranchItemDialog({ open, onOpenChange, item, onItemU
           strips_per_pack: packagingMode === 'with_strip' ? parseInt(stripsPerPack) : null,
           units_per_strip: packagingMode === 'with_strip' ? parseInt(unitsPerStrip) : null,
           packaging_mode: containerType.trim() || null,
-          sub_units_per_unit: subUnitsPerUnit && parseInt(subUnitsPerUnit) > 0 ? parseInt(subUnitsPerUnit) : null,
-          sub_unit_name: subUnitName.trim() || null,
           unit_price: unitPrice && !isNaN(parseFloat(unitPrice)) ? parseFloat(unitPrice) : null,
-          sub_unit_price: subUnitPrice && !isNaN(parseFloat(subUnitPrice)) ? parseFloat(subUnitPrice) : null,
         };
         if (isPharmacy) {
           newMedicineData.strength = strength.trim() || null;
