@@ -136,12 +136,12 @@ export default function Leaderboard({ onSelectStaff }: { onSelectStaff?: (s: Sta
 
         {/* Filter tabs */}
         <div className="mt-4 flex flex-wrap items-center gap-1.5 rounded-lg bg-muted/40 p-1">
-          {(['today', 'week', 'month'] as FilterKey[]).map((k) => (
+          {(['today', 'week', 'month', 'all'] as FilterKey[]).map((k) => (
             <button
               key={k}
               onClick={() => setFilter(k)}
               className={cn(
-                'flex-1 min-w-[80px] rounded-md px-3 py-1.5 text-xs font-medium transition-colors',
+                'flex-1 min-w-[70px] rounded-md px-3 py-1.5 text-xs font-medium transition-colors',
                 filter === k ? 'bg-background shadow-sm text-foreground' : 'text-muted-foreground hover:text-foreground'
               )}
             >
