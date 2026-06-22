@@ -111,7 +111,7 @@ export default function SalesManagement() {
     return () => mql.removeEventListener('change', onChange);
   }, []);
 
-  const itemsPerPage = 16;
+  const ITEMS_PER_PAGE = 24;
 
   useEffect(() => {
     const filtered = medicines.filter(medicine => {
@@ -126,8 +126,8 @@ export default function SalesManagement() {
   }, [medicines, searchTerm, categoryFilter]);
 
   useEffect(() => {
-    const startIndex = (currentPage - 1) * itemsPerPage;
-    setPaginatedMedicines(filteredMedicines.slice(startIndex, startIndex + itemsPerPage));
+    const startIndex = (currentPage - 1) * ITEMS_PER_PAGE;
+    setPaginatedMedicines(filteredMedicines.slice(startIndex, startIndex + ITEMS_PER_PAGE));
   }, [filteredMedicines, currentPage]);
 
   // Clear amount received when cart changes so placeholder takes effect
@@ -864,6 +864,7 @@ export default function SalesManagement() {
   const subtotal = calculateSubtotal();
   const discount = calculateDiscount();
   const total = calculateTotal();
+  const totalPages = Math.max(1, Math.ceil(filteredMedicines.length / ITEMS_PER_PAGE));
 
   const renderSaleCard = (medicine: Medicine) => {
     const pkg = packagingMap[medicine.medicine_id];
@@ -1096,39 +1097,29 @@ export default function SalesManagement() {
           </div>
         )}
 
-        {Math.ceil(filteredMedicines.length / itemsPerPage) > 1 && (
-          <div className="flex justify-center">
-            <Pagination>
-              <PaginationContent>
-                <PaginationItem>
-                  <PaginationPrevious
-                    href="#"
-                    onClick={(e) => { e.preventDefault(); if (currentPage > 1) setCurrentPage(p => p - 1); }}
-                    className={currentPage === 1 ? 'pointer-events-none opacity-50' : ''}
-                  />
-                </PaginationItem>
-                {Array.from({ length: Math.ceil(filteredMedicines.length / itemsPerPage) }, (_, i) => i + 1).map((page) => (
-                  <PaginationItem key={page}>
-                    <PaginationLink href="#" onClick={(e) => { e.preventDefault(); setCurrentPage(page); }} isActive={currentPage === page}>
-                      {page}
-                    </PaginationLink>
-                  </PaginationItem>
-                ))}
-                <PaginationItem>
-                  <PaginationNext
-                    href="#"
-                    onClick={(e) => { e.preventDefault(); if (currentPage < Math.ceil(filteredMedicines.length / itemsPerPage)) setCurrentPage(p => p + 1); }}
-                    className={currentPage === Math.ceil(filteredMedicines.length / itemsPerPage) ? 'pointer-events-none opacity-50' : ''}
-                  />
-                </PaginationItem>
-              </PaginationContent>
-            </Pagination>
-          </div>
+        {totalPages > 1 && (
+          <Pagination>
+            <PaginationContent>
+              <PaginationItem>
+                <PaginationPrevious
+                  onClick={() => setCurrentPage(p => Math.max(1, p - 1))}
+                  className={currentPage === 1 ? 'pointer-events-none opacity-50' : 'cursor-pointer'}
+                />
+              </PaginationItem>
+              <PaginationItem>
+                <PaginationLink isActive>
+                  {currentPage} / {totalPages}
+                </PaginationLink>
+              </PaginationItem>
+              <PaginationItem>
+                <PaginationNext
+                  onClick={() => setCurrentPage(p => Math.min(totalPages, p + 1))}
+                  className={currentPage === totalPages ? 'pointer-events-none opacity-50' : 'cursor-pointer'}
+                />
+              </PaginationItem>
+            </PaginationContent>
+          </Pagination>
         )}
-
-        <div className="text-center text-sm text-muted-foreground">
-          Showing {paginatedMedicines.length} of {filteredMedicines.length} {isPharmacy ? 'medicines' : 'items'}
-        </div>
       </div>
 
       {/* Cart — desktop sidebar / mobile slider */}
