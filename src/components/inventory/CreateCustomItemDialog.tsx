@@ -128,7 +128,7 @@ export default function CreateCustomItemDialog({ open, onOpenChange, onItemCreat
         category: finalCategory,
         manufacturer: manufacturer.trim() || null,
         item_type: itemType,
-        unit_label: itemType === 'measurable' ? unitLabel : 'strip',
+        unit_label: itemType === 'measurable' ? unitLabel : (unitName.trim() || 'unit'),
         units_per_pack: computedUnitsPerPack,
         minimum_stock_level: 0,
         purchase_price: 0,
@@ -155,6 +155,32 @@ export default function CreateCustomItemDialog({ open, onOpenChange, onItemCreat
       const { data: newMed, error } = await supabase.from('medicines').insert(insertPayload).select('id, name, generic_name, category, manufacturer, item_type, unit_label, units_per_pack, minimum_stock_level').single();
 
       if (error) throw error;
+
+      // Create medicine_packaging row so sales/inventory can compute strip/pack
+      // prices from the LPI/unit price. Skip for measurable items.
+      if (itemType === 'full_pcs') {
+        const ups = parseInt(unitsPerStrip);
+        const spp = parseInt(stripsPerPack);
+        const hasStrip = packagingMode === 'with_strip' && ups > 0;
+        const hasPack = hasStrip && spp > 0;
+        try {
+          await (supabase as any).from('medicine_packaging').upsert({
+            medicine_id: newMed.id,
+            unit_name: unitName.trim() || 'unit',
+            strip_enabled: hasStrip,
+            units_per_strip: hasStrip ? ups : null,
+            strip_name: hasStrip ? 'strip' : null,
+            pack_enabled: hasPack,
+            strips_per_pack: hasPack ? spp : null,
+            pack_name: hasPack ? (containerType.trim() || 'pack') : null,
+            unit_selling_price: null,
+            strip_selling_price: null,
+            pack_selling_price: null,
+          }, { onConflict: 'medicine_id' });
+        } catch (e) {
+          console.warn('Failed to create medicine_packaging row', e);
+        }
+      }
 
       // Auto-link to owner's first group (or create one)
       if (ownerId) {
@@ -316,10 +342,14 @@ export default function CreateCustomItemDialog({ open, onOpenChange, onItemCreat
                   <Input type="number" min="1" value={unitsPerStrip} onChange={e => setUnitsPerStrip(e.target.value)} placeholder="e.g. 10" />
                 </div>
               </div>
+              <div className="space-y-2">
+                <Label>Unit Name</Label>
+                <Input value={unitName} onChange={e => setUnitName(e.target.value)} placeholder="unit (e.g. tablet, capsule)" />
+              </div>
               {stripsPerPack && unitsPerStrip && parseInt(stripsPerPack) > 0 && parseInt(unitsPerStrip) > 0 && (
                 <div className="rounded-md bg-primary/10 border border-primary/20 px-3 py-2 -mt-2">
                   <p className="text-sm font-semibold">
-                    Total stock per item: {parseInt(stripsPerPack) * parseInt(unitsPerStrip)} units
+                    Total stock per item: {parseInt(stripsPerPack) * parseInt(unitsPerStrip)} {unitName.trim() || 'unit'}{parseInt(stripsPerPack) * parseInt(unitsPerStrip) === 1 ? '' : 's'}
                   </p>
                 </div>
               )}
