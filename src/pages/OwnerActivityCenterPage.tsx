@@ -10,8 +10,32 @@ import { toast } from '@/hooks/use-toast';
 
 interface StaffPick { id: string; full_name: string | null }
 
+const MONTH_NAMES = ['January','February','March','April','May','June','July','August','September','October','November','December'];
+
 function StaffActivityDrawer({ staff, range, onClose }: { staff: StaffPick | null; range: LeaderboardRange | null; onClose: () => void }) {
-  const { rows, loading } = useActivityFeed({ userId: staff?.id, limit: 200, from: range?.from, to: range?.to });
+  const isAllTime = !range?.from && !range?.to;
+  const { rows, loading } = useActivityFeed({ userId: staff?.id, limit: isAllTime ? 1000 : 200, from: range?.from, to: range?.to });
+
+  const grouped = (() => {
+    if (!isAllTime) return null;
+    const byYear = new Map<number, Map<number, typeof rows>>();
+    for (const r of rows) {
+      const d = new Date(r.created_at);
+      const y = d.getFullYear();
+      const m = d.getMonth();
+      if (!byYear.has(y)) byYear.set(y, new Map());
+      const months = byYear.get(y)!;
+      if (!months.has(m)) months.set(m, [] as any);
+      (months.get(m) as any).push(r);
+    }
+    return Array.from(byYear.entries())
+      .sort((a, b) => b[0] - a[0])
+      .map(([year, months]) => ({
+        year,
+        months: Array.from(months.entries()).sort((a, b) => b[0] - a[0]).map(([m, items]) => ({ month: m, items })),
+      }));
+  })();
+
   return (
     <Sheet open={!!staff} onOpenChange={(o) => !o && onClose()}>
       <SheetContent className="w-full sm:max-w-xl overflow-y-auto">
@@ -22,7 +46,28 @@ function StaffActivityDrawer({ staff, range, onClose }: { staff: StaffPick | nul
         <div className="mt-4 space-y-2">
           {loading && <div className="text-sm text-muted-foreground">Loading…</div>}
           {!loading && rows.length === 0 && <div className="text-sm text-muted-foreground">No activity yet.</div>}
-          {rows.map((r) => <ActivityRowItem key={r.id} row={r} />)}
+          {!loading && !isAllTime && rows.map((r) => <ActivityRowItem key={r.id} row={r} />)}
+          {!loading && isAllTime && grouped && grouped.map((y) => (
+            <div key={y.year} className="space-y-3">
+              <div className="sticky top-0 z-10 -mx-1 px-1 py-1.5 bg-background/95 backdrop-blur border-b">
+                <div className="text-base font-bold tracking-tight">{y.year}</div>
+              </div>
+              {y.months.map((mo) => (
+                <div key={mo.month} className="space-y-1.5">
+                  <div className="flex items-center gap-2 pl-1">
+                    <div className="text-xs font-semibold uppercase tracking-wider text-muted-foreground">
+                      {MONTH_NAMES[mo.month]}
+                    </div>
+                    <div className="h-px flex-1 bg-border" />
+                    <div className="text-[10px] tabular-nums text-muted-foreground">{(mo.items as any).length}</div>
+                  </div>
+                  <div className="space-y-2">
+                    {(mo.items as any).map((r: any) => <ActivityRowItem key={r.id} row={r} />)}
+                  </div>
+                </div>
+              ))}
+            </div>
+          ))}
         </div>
       </SheetContent>
     </Sheet>
