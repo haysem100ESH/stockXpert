@@ -230,13 +230,11 @@ export default function SalesManagement() {
       if (pkg) {
         const upStrip = unitsPerStripSafe(pkg);
         const upPack = unitsPerPackSafe(pkg);
-        const uPrice = pkg.unit_selling_price ?? (medicine.selling_price && upPack ? medicine.selling_price / upPack : medicine.selling_price);
-        const sPrice = pkg.unit_selling_price != null
-          ? uPrice * upStrip
-          : (pkg.strip_selling_price ?? (autoStripPrice(pkg) ?? uPrice * upStrip));
-        const pPrice = pkg.unit_selling_price != null
-          ? uPrice * upPack
-          : (pkg.pack_selling_price ?? (autoPackPrice(pkg) ?? uPrice * upPack));
+        // branch_items.selling_price is per-unit (LPI); use it as the unit price
+        // when pkg has no explicit unit_selling_price.
+        const uPrice = pkg.unit_selling_price ?? medicine.selling_price;
+        const sPrice = uPrice * upStrip;
+        const pPrice = uPrice * upPack;
         levelPrices = { unit: uPrice, strip: sPrice, pack: pPrice };
         levelLabels = { unit: pkg.unit_name || 'unit', strip: pkg.strip_name || 'strip', pack: pkg.pack_name || 'pack' };
         levelUnitsPer = { unit: 1, strip: upStrip, pack: upPack };
