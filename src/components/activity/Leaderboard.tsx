@@ -80,7 +80,15 @@ export default function Leaderboard({ onSelectStaff }: { onSelectStaff?: (s: Sta
   }, [staff, rows, filter, customDate]);
 
   const filterLabel = (k: FilterKey) =>
-    k === 'today' ? 'Today' : k === 'week' ? 'This Week' : k === 'month' ? 'This Month' : 'Custom Date';
+    k === 'today' ? 'Today' : k === 'week' ? 'This Week' : k === 'month' ? 'This Month' : k === 'all' ? 'All Time' : 'Custom Date';
+
+  const currentRange = useMemo((): LeaderboardRange => {
+    if (filter === 'today') return { from: startOfDay(), to: endOfDay(), label: 'Today' };
+    if (filter === 'week') return { from: startOfWeek(), to: endOfDay(), label: 'This Week' };
+    if (filter === 'month') return { from: startOfMonth(), to: endOfDay(), label: 'This Month' };
+    if (filter === 'custom' && customDate) return { from: startOfDay(customDate), to: endOfDay(customDate), label: format(customDate, 'PP') };
+    return { label: 'All Time' };
+  }, [filter, customDate]);
 
   const subtitle = filter === 'custom' && customDate
     ? format(customDate, 'EEEE, MMM d, yyyy')
