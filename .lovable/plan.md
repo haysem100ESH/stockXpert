@@ -1,120 +1,79 @@
-## Why it's failing
+## Goal
 
-The Activity Center hits `staff_goals` and `staff_goal_assignments` and gets **HTTP 500**. PostgREST only returns 500 when the RLS policy itself crashes during evaluation (not 401/403 = denial, not 400 = bad column).
+Three focused changes to the inventory "Add Item → Custom Item" and per-branch add/edit price flows so packaging is strictly **unit → strip → pack** (no sub-units) and prices are always entered for the **LPI** (least possible item / single unit / tablet), with strip and pack prices auto-derived and shown read-only.
 
-Two things are broken in your DB:
+---
 
-1. **`activity_log` policies are corrupted.** You shared:
-   ```
-   activity_log_insert_self  → WITH CHECK ( 7 )
-   activity_log_select_own_or_owner → USING ( 7 )
-   ```
-   `( 7 )` is not a valid boolean predicate. Whatever was originally there got replaced with a literal integer. Postgres will throw at evaluation time.
+## 1. Custom Item form: Medicine Group → Medicine Code
 
-2. **`staff_goals` SELECT policy references tables/columns that may not resolve** at runtime:
-   ```sql
-   EXISTS (SELECT 1 FROM public.profiles p
-           JOIN public.pharmacy_branches b ON b.id = p.branch_id
-           WHERE ... AND b.pharmacy_owner_id = staff_goals.owner_id ...)
-   ```
-   If `pharmacy_branches.pharmacy_owner_id` doesn't exist (or `profiles` has no `branch_id`), the whole policy errors → 500 for every user, including owners — even though the simpler `owner_id = auth.uid()` branch would have matched.
+File: `src/components/inventory/CreateCustomItemDialog.tsx`
 
-`staff_goal_assignments` 500s for the same reason: its policies reference `staff_goals`, and the broken state propagates.
+- Remove the `Medicine Group` `Select` (and `medicineGroup` / `customGroup` state + reset + `medicine_group` field in the insert payload + `useMedicineGroups` import).
+- Add a new `Medicine Code` field in the same grid cell, using the existing `MedicineCodeCombobox` component (`src/components/inventory/MedicineCodeCombobox.tsx`).
+  - State: `const [medicineCodeId, setMedicineCodeId] = useState<string | null>(null)` — optional.
+  - Inline-create is already supported by the combobox (popover with "+ Create new code") — works for new codes scoped to the current owner.
+- On insert into `medicines`, include `medicine_code_id: medicineCodeId` (column already used elsewhere — see `useBranchInventory.tsx` select list).
+- Keep the pharmacy-only wrapper around `Strength` (medicine code is pharmacy-only too, to match existing UI grouping).
+- Reset `medicineCodeId` in `resetForm()`.
 
-## The fix (one migration)
+Result: When creating a custom item, the user picks (or inline-creates) a medicine code instead of a medicine group. Codes are owner-scoped and already filter to the current owner's branch context via `useMedicineCodes`.
 
-Drop and recreate the broken policies with safe, valid expressions. Move the owner-vs-staff resolution into a `SECURITY DEFINER` helper so the policies don't have to join tables inline (this is also what the project memory's "user-roles" pattern recommends, and it removes any chance of recursion / undefined-table crashes inside the policy).
+---
 
-### Step 1 — Helper function
+## 2. Remove the "Sub-unit" feature (strip sub-level)
 
-```sql
-CREATE OR REPLACE FUNCTION public.current_owner_id()
-RETURNS uuid
-LANGUAGE sql STABLE SECURITY DEFINER SET search_path = public
-AS $$
-  SELECT public.resolve_owner_id(auth.uid())
-$$;
-GRANT EXECUTE ON FUNCTION public.current_owner_id() TO authenticated;
-```
+The packaging hierarchy is strictly: **Unit → Strip → Pack**. Anywhere a sub-unit-of-strip section exists, remove it.
 
-`resolve_owner_id` already exists in `activity-center-migration.sql` and safely returns the owner id whether the caller is an owner or a staff member. Wrapping it means policies never have to touch `profiles` / `pharmacy_branches` directly.
+### a) `src/components/inventory/CreateCustomItemDialog.tsx`
+- Delete the entire "Sub-unit (optional)" block (the `<div>` rendered when `itemType === 'full_pcs' && packagingMode === 'with_strip'` containing `Sub-units per Unit` and `Sub-unit Name`).
+- Remove related state: `subUnitsPerUnit`, `subUnitName` (and their resets).
+- Remove the `sub_units_per_unit` / `sub_unit_name` assignment from `insertPayload`.
 
-### Step 2 — Fix `activity_log`
+### b) `src/components/inventory/EditBranchItemDialog.tsx`
+- Remove the `subUnitsPerUnit`, `subUnitName`, `subUnitPrice` state, their seeding from `item`, their dirty-check entries, and their inclusion in the update payload (`sub_units_per_unit`, `sub_unit_name`, `sub_unit_price`).
+- Remove the UI section that edits these fields (the sub-unit input block).
 
-```sql
-DROP POLICY IF EXISTS activity_log_select_own_or_owner ON public.activity_log;
-DROP POLICY IF EXISTS activity_log_insert_self        ON public.activity_log;
+### c) Display surfaces (read-only)
+- `src/components/inventory/MedicineInfoDialog.tsx`: drop the `sub_units_per_unit` / `sub_unit_name` / `sub_unit_price` lines from the rendered breakdown and from the `select(...)` column list. Keep `unit_price`.
+- `src/hooks/useBranchInventory.tsx` and `src/hooks/useSalesInventory.tsx`: drop `sub_units_per_unit`, `main_unit_name`, `sub_unit_name`, `sub_unit_price` from the `.select(...)` strings and from the mapped objects + TypeScript interfaces.
+- `src/components/sales/SalesManagement.tsx`: remove the `sub_units_per_unit` / `sub_unit_name` / `sub_unit_price` interface fields and the comment referencing sub-unit sales. Verify no logic actually consumes them (a quick grep shows only field declarations/interfaces, not arithmetic).
 
-CREATE POLICY activity_log_select_own_or_owner ON public.activity_log
-  FOR SELECT TO authenticated
-  USING (user_id = auth.uid() OR owner_id = auth.uid());
+The DB columns themselves are left intact (no migration in this change) — we simply stop reading and writing them so the UI behaves as if they don't exist.
 
-CREATE POLICY activity_log_insert_self ON public.activity_log
-  FOR INSERT TO authenticated
-  WITH CHECK (user_id = auth.uid());
-```
+---
 
-### Step 3 — Fix `staff_goals`
+## 3. Prices = LPI only; strip/pack prices auto-calculated (read-only)
 
-```sql
-DROP POLICY IF EXISTS staff_goals_select_assigned ON public.staff_goals;
-DROP POLICY IF EXISTS staff_goals_owner_all       ON public.staff_goals;
+The user enters **selling price** and **purchase price** for a single unit (LPI / tablet). Strip and pack prices, when applicable, are computed automatically and shown as read-only.
 
--- Owners: full control of their own goals.
-CREATE POLICY staff_goals_owner_all ON public.staff_goals
-  FOR ALL TO authenticated
-  USING (owner_id = auth.uid())
-  WITH CHECK (owner_id = auth.uid());
+### a) `src/components/inventory/AddBranchItemDialog.tsx`
+- Change the two price inputs (`Selling Price *`, `Purchase Price (Cost) *`) to be explicitly labeled `Selling Price per <unit_name>` and `Purchase Price per <unit_name>` (defaulting to "unit" / "tablet" from the item's packaging).
+- Beneath each input, if `units_per_strip` and/or `strips_per_pack` are configured for the selected item, render a small read-only summary:
+  - `Strip price: {unit × units_per_strip}` (auto)
+  - `Pack price: {unit × units_per_strip × strips_per_pack}` (auto)
+- On submit, the stored `selling_price` / `purchase_price` on `branch_items` and on the created batch remain the LPI value (consistent with how `EditBranchItemDialog` already stores `lpiSell` and lets `autoStripPrice` / `autoPackPrice` compute the rest).
 
--- Staff: read goals that belong to their owner, scoped by assignment_scope.
-CREATE POLICY staff_goals_select_assigned ON public.staff_goals
-  FOR SELECT TO authenticated
-  USING (
-    owner_id = public.current_owner_id()
-    AND (
-      assignment_scope = 'all'
-      OR (assignment_scope = 'staff' AND EXISTS (
-        SELECT 1 FROM public.staff_goal_assignments a
-        WHERE a.goal_id = staff_goals.id AND a.staff_id = auth.uid()
-      ))
-      OR (assignment_scope = 'branch')  -- branch scoping resolved client-side; see note below
-    )
-  );
-```
+### b) `src/components/inventory/EditBranchItemDialog.tsx`
+- The form already converts to LPI on load (`Number(item.selling_price) / upp`) and writes via `autoStripPrice` / `autoPackPrice`. Tighten the UI:
+  - Label the price inputs as LPI/unit explicitly (`Selling Price per {unit_name}`).
+  - Render the computed `strip_selling_price` and `pack_selling_price` as **disabled inputs** (or plain read-only text) directly under the LPI inputs so the user can see them.
+  - Remove any existing editable strip-price / pack-price field if present.
+- Ensure `medicine_packaging` upsert continues to send `unit_selling_price = lpiSell`, `strip_selling_price = autoStripPrice(...)`, `pack_selling_price = autoPackPrice(...)`.
 
-Note on `assignment_scope = 'branch'`: if `profiles.branch_id` does exist in this project, swap the last branch line for `(assignment_scope = 'branch' AND branch_id = (SELECT branch_id FROM public.profiles WHERE id = auth.uid()))`. We'll verify with a quick `\d profiles` check before committing the migration.
+### c) Helpers
+- Reuse `autoStripPrice` and `autoPackPrice` from `src/lib/packaging.ts` — no changes needed.
 
-### Step 4 — Fix `staff_goal_assignments`
+---
 
-```sql
-DROP POLICY IF EXISTS sga_owner_manage      ON public.staff_goal_assignments;
-DROP POLICY IF EXISTS sga_staff_select_self ON public.staff_goal_assignments;
+## Out of scope
 
-CREATE POLICY sga_owner_manage ON public.staff_goal_assignments
-  FOR ALL TO authenticated
-  USING (EXISTS (
-    SELECT 1 FROM public.staff_goals g
-    WHERE g.id = staff_goal_assignments.goal_id AND g.owner_id = auth.uid()
-  ))
-  WITH CHECK (EXISTS (
-    SELECT 1 FROM public.staff_goals g
-    WHERE g.id = staff_goal_assignments.goal_id AND g.owner_id = auth.uid()
-  ));
+- No DB migrations (existing `sub_*` columns stay; we just stop reading/writing them).
+- No changes to sales/cart math — strip/pack pricing already derives from packaging via `usePackaging`.
+- No changes to the standalone "Add Medicine" dialog beyond what's listed; if it also exposes sub-unit fields, they will be removed in the same pass as section 2 above.
 
-CREATE POLICY sga_staff_select_self ON public.staff_goal_assignments
-  FOR SELECT TO authenticated
-  USING (staff_id = auth.uid());
-```
+## Verification
 
-### Step 5 — Verify
-
-After running the migration:
-- Reload the Activity Center as an owner → `staff_goals` and `staff_goal_assignments` should return 200.
-- Reload as a staff user → only assigned/scoped goals come back.
-- No 500s in the console.
-
-## What I will NOT change
-
-- No frontend changes — `useStaffGoals`, `Leaderboard`, `OwnerActivityCenterPage` stay as-is.
-- No schema changes to columns or grants — only policy definitions.
-- No edits to the unrelated medicine codes / batching work from earlier turns.
+1. Open Inventory → Add Item → Custom Item: confirm "Medicine Group" is gone, "Medicine Code" combobox is present, inline-create works.
+2. Confirm the "Sub-unit (optional)" panel no longer appears for any strip-mode item, and Edit Branch Item no longer shows sub-unit fields.
+3. Add a new branch item with `units_per_strip = 10`, `strips_per_pack = 10`, selling price 2.00: verify it displays "Strip price: 20.00" and "Pack price: 200.00" read-only, and that `medicine_packaging` row stores `unit_selling_price = 2`, `strip_selling_price = 20`, `pack_selling_price = 200`.
+4. Sales screen still renders unit/strip/pack prices correctly (driven by `medicine_packaging`, unchanged).

@@ -29,11 +29,8 @@ export type EnrichedBranchItem = BranchItem & {
   strength?: string | null;
   active_ingredients?: Array<{ ingredient_name: string; strength: string | null }>;
   packaging_mode?: string | null;
-  sub_units_per_unit?: number | null;
   main_unit_name?: string | null;
-  sub_unit_name?: string | null;
   unit_price?: number | null;
-  sub_unit_price?: number | null;
   packaging?: Packaging | null;
 };
 
@@ -55,7 +52,7 @@ async function enrichItems(
     chunkedInPartial<any>(medicineIds, (ids) =>
       supabase
         .from('medicines')
-        .select('id, name, generic_name, category, manufacturer, batch_number, item_type, unit_label, units_per_pack, strips_per_pack, units_per_strip, medicine_group, strength, packaging_mode, sub_units_per_unit, main_unit_name, sub_unit_name, unit_price, sub_unit_price, minimum_stock_level, medicine_code_id')
+        .select('id, name, generic_name, category, manufacturer, batch_number, item_type, unit_label, units_per_pack, strips_per_pack, units_per_strip, medicine_group, strength, packaging_mode, main_unit_name, unit_price, minimum_stock_level, medicine_code_id')
         .in('id', ids)
     , 20),
     chunkedInPartial<any>(allBranchIds, (ids) =>
@@ -94,11 +91,8 @@ async function enrichItems(
       medicine_group: m.medicine_group,
       strength: m.strength,
       packaging_mode: m.packaging_mode,
-      sub_units_per_unit: m.sub_units_per_unit,
       main_unit_name: m.main_unit_name,
-      sub_unit_name: m.sub_unit_name,
       unit_price: m.unit_price,
-      sub_unit_price: m.sub_unit_price,
       minimum_stock_level: m.minimum_stock_level,
       medicine_code_id: m.medicine_code_id ?? null,
       packaging: packMap[item.medicine_id] ?? null,
