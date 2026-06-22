@@ -15,6 +15,8 @@ import { useAuth } from '@/hooks/useAuth';
 import { useBranchContext } from '@/hooks/useBranchContext';
 import CreateCustomItemDialog from './CreateCustomItemDialog';
 import { logActivity } from '@/lib/activityLog';
+import { usePackaging, effectivePackaging } from '@/hooks/usePackaging';
+import { autoStripPrice, autoPackPrice } from '@/lib/packaging';
 
 interface CatalogItem {
   id: string;
@@ -461,15 +463,21 @@ export default function AddBranchItemDialog({ open, onOpenChange, onItemAdded }:
                   </div>
                 )}
 
-                <div className="space-y-2">
-                  <Label>Selling Price *</Label>
-                  <Input type="number" step="0.01" min="0" value={sellingPrice} onChange={e => setSellingPrice(e.target.value)} placeholder="0.00" />
-                </div>
+                <PriceWithBreakdown
+                  label="Selling Price"
+                  medicineId={selectedItem.id}
+                  value={sellingPrice}
+                  onChange={setSellingPrice}
+                  kind="sell"
+                />
 
-                <div className="space-y-2">
-                  <Label>Purchase Price (Cost) *</Label>
-                  <Input type="number" step="0.01" min="0" value={purchasePrice} onChange={e => setPurchasePrice(e.target.value)} placeholder="0.00" />
-                </div>
+                <PriceWithBreakdown
+                  label="Purchase Price (Cost)"
+                  medicineId={selectedItem.id}
+                  value={purchasePrice}
+                  onChange={setPurchasePrice}
+                  kind="buy"
+                />
 
                 <div className="space-y-2">
                   <Label>Quantity *</Label>
