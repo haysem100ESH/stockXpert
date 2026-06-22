@@ -183,11 +183,9 @@ export default function SalesManagement() {
     // respects medicine packaging config (strip/pack enabled flags). Unit
     // (LPI) is ALWAYS available, even when no packaging row exists.
     const pkg = packagingMap[medicine.medicine_id];
-    const upPack = pkg ? unitsPerPackSafe(pkg) : (medicine.units_per_pack || 1);
-    const unitPrice = pkg?.unit_selling_price
-      ?? (medicine.selling_price && upPack > 1
-        ? medicine.selling_price / upPack
-        : medicine.selling_price);
+    // branch_items.selling_price is now stored as the per-unit (LPI) price,
+    // so use it directly when pkg has no explicit unit_selling_price.
+    const unitPrice = pkg?.unit_selling_price ?? medicine.selling_price;
     addToCart(medicine, 'full_pack', 1, {
       sellLevel: 'unit',
       unitsPerLevel: 1,
