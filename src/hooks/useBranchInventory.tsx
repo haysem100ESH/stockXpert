@@ -240,7 +240,7 @@ export function useBranchInventory() {
   }, [query.data, ingredientsQuery.data]);
 
   useEffect(() => {
-    const handler = () => queryClient.invalidateQueries({ queryKey: ['branch-inventory'] });
+    const handler = () => queryClient.refetchQueries({ queryKey: ['branch-inventory'] });
     window.addEventListener('app:refresh', handler);
     return () => window.removeEventListener('app:refresh', handler);
   }, [queryClient]);
@@ -249,8 +249,8 @@ export function useBranchInventory() {
   useEffect(() => {
     if (!enabled || branchIds.length === 0) return;
     const invalidate = () => {
-      queryClient.invalidateQueries({ queryKey: ['branch-inventory'] });
-      queryClient.invalidateQueries({ queryKey: ['sales-inventory'] });
+      queryClient.refetchQueries({ queryKey: ['branch-inventory'] });
+      queryClient.refetchQueries({ queryKey: ['sales-inventory'] });
     };
     const channel = (supabase as any)
       .channel(`branch-inv-${branchIds.join('-')}`)
