@@ -34,16 +34,27 @@ const approxEq = (a: number, b: number) => Math.abs(a - b) < 0.01;
 function inferSaleLevel(si: any, pkg?: Packaging | null): SaleLevel {
   if (si?.sale_type === 'by_stripe') return 'unit';
   const price = Number(si?.unit_price || 0);
-  if (pkg) {
-    if (pkg.pack_enabled && pkg.pack_selling_price && approxEq(price, Number(pkg.pack_selling_price))) return 'pack';
-    if (pkg.strip_enabled && pkg.strip_selling_price && approxEq(price, Number(pkg.strip_selling_price))) return 'strip';
-    if (pkg.unit_selling_price && approxEq(price, Number(pkg.unit_selling_price))) return 'unit';
-    if (pkg.strip_enabled && pkg.units_per_strip && pkg.unit_selling_price &&
-        approxEq(price, Number(pkg.unit_selling_price) * Number(pkg.units_per_strip))) return 'strip';
-    if (pkg.pack_enabled && pkg.strips_per_pack && pkg.units_per_strip && pkg.unit_selling_price &&
-        approxEq(price, Number(pkg.unit_selling_price) * Number(pkg.units_per_strip) * Number(pkg.strips_per_pack))) return 'pack';
+  if (pkg && price > 0) {
+    const ups = Number(pkg.units_per_strip || 0);
+    const spp = Number(pkg.strips_per_pack || 0);
+    const lpi = Number(pkg.unit_selling_price || 0);
+    // Derive per-level prices: prefer stored values, otherwise compute from LPI.
+    const unitP = lpi;
+    const stripP = Number(pkg.strip_selling_price || 0) || (lpi && ups ? lpi * ups : 0);
+    const packP = Number(pkg.pack_selling_price || 0) || (lpi && ups && spp ? lpi * ups * spp : 0);
+    const candidates: Array<[SaleLevel, number]> = [];
+    if (unitP > 0) candidates.push(['unit', unitP]);
+    if (pkg.strip_enabled && stripP > 0) candidates.push(['strip', stripP]);
+    if (pkg.pack_enabled && pkg.strip_enabled && packP > 0) candidates.push(['pack', packP]);
+    let best: SaleLevel = 'unit';
+    let bestDiff = Infinity;
+    for (const [lv, p] of candidates) {
+      const d = Math.abs(price - p);
+      if (d < bestDiff) { bestDiff = d; best = lv; }
+    }
+    if (bestDiff < 0.01) return best;
   }
-  return 'pack';
+  return 'unit';
 }
 
 interface SaleItemFormatted {
