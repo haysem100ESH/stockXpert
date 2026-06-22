@@ -12,7 +12,8 @@ import { format } from 'date-fns';
 import { cn } from '@/lib/utils';
 
 interface StaffRow { id: string; full_name: string | null; branch_id: string | null }
-type FilterKey = 'today' | 'week' | 'month' | 'custom';
+type FilterKey = 'today' | 'week' | 'month' | 'all' | 'custom';
+export interface LeaderboardRange { from?: Date; to?: Date; label: string }
 
 function startOfDay(d = new Date()) { const x = new Date(d); x.setHours(0,0,0,0); return x; }
 function endOfDay(d = new Date()) { const x = new Date(d); x.setHours(23,59,59,999); return x; }
