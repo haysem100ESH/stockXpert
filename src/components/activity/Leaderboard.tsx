@@ -12,14 +12,15 @@ import { format } from 'date-fns';
 import { cn } from '@/lib/utils';
 
 interface StaffRow { id: string; full_name: string | null; branch_id: string | null }
-type FilterKey = 'today' | 'week' | 'month' | 'custom';
+type FilterKey = 'today' | 'week' | 'month' | 'all' | 'custom';
+export interface LeaderboardRange { from?: Date; to?: Date; label: string }
 
 function startOfDay(d = new Date()) { const x = new Date(d); x.setHours(0,0,0,0); return x; }
 function endOfDay(d = new Date()) { const x = new Date(d); x.setHours(23,59,59,999); return x; }
 function startOfWeek(d = new Date()) { const x = startOfDay(d); const day = x.getDay(); const diff = (day === 0 ? -6 : 1 - day); x.setDate(x.getDate()+diff); return x; }
 function startOfMonth(d = new Date()) { const x = startOfDay(d); x.setDate(1); return x; }
 
-export default function Leaderboard({ onSelectStaff }: { onSelectStaff?: (s: StaffRow) => void }) {
+export default function Leaderboard({ onSelectStaff }: { onSelectStaff?: (s: StaffRow, range: LeaderboardRange) => void }) {
   const { profile } = useAuth();
   const { selectedBranch } = useBranchContext();
   const [staff, setStaff] = useState<StaffRow[]>([]);
@@ -46,17 +47,18 @@ export default function Leaderboard({ onSelectStaff }: { onSelectStaff?: (s: Sta
     setStaff((people || []) as StaffRow[]);
 
     const from = new Date();
-    from.setDate(from.getDate() - 60);
-    const { data: logs } = await (supabase as any)
+    from.setDate(from.getDate() - (filter === 'all' || filter === 'month' ? 365 : 60));
+    let q = (supabase as any)
       .from('activity_log')
       .select('user_id, created_at')
-      .eq('owner_id', profile.id)
-      .gte('created_at', from.toISOString());
+      .eq('owner_id', profile.id);
+    if (filter !== 'all') q = q.gte('created_at', from.toISOString());
+    const { data: logs } = await q;
     setRows(logs || []);
     setLoading(false);
   };
 
-  useEffect(() => { load(); }, [profile, selectedBranch]);
+  useEffect(() => { load(); }, [profile, selectedBranch, filter]);
 
   const ranked = useMemo(() => {
     let fromTs = 0;
@@ -79,7 +81,15 @@ export default function Leaderboard({ onSelectStaff }: { onSelectStaff?: (s: Sta
   }, [staff, rows, filter, customDate]);
 
   const filterLabel = (k: FilterKey) =>
-    k === 'today' ? 'Today' : k === 'week' ? 'This Week' : k === 'month' ? 'This Month' : 'Custom Date';
+    k === 'today' ? 'Today' : k === 'week' ? 'This Week' : k === 'month' ? 'This Month' : k === 'all' ? 'All Time' : 'Custom Date';
+
+  const currentRange = useMemo((): LeaderboardRange => {
+    if (filter === 'today') return { from: startOfDay(), to: endOfDay(), label: 'Today' };
+    if (filter === 'week') return { from: startOfWeek(), to: endOfDay(), label: 'This Week' };
+    if (filter === 'month') return { from: startOfMonth(), to: endOfDay(), label: 'This Month' };
+    if (filter === 'custom' && customDate) return { from: startOfDay(customDate), to: endOfDay(customDate), label: format(customDate, 'PP') };
+    return { label: 'All Time' };
+  }, [filter, customDate]);
 
   const subtitle = filter === 'custom' && customDate
     ? format(customDate, 'EEEE, MMM d, yyyy')
@@ -126,12 +136,12 @@ export default function Leaderboard({ onSelectStaff }: { onSelectStaff?: (s: Sta
 
         {/* Filter tabs */}
         <div className="mt-4 flex flex-wrap items-center gap-1.5 rounded-lg bg-muted/40 p-1">
-          {(['today', 'week', 'month'] as FilterKey[]).map((k) => (
+          {(['today', 'week', 'month', 'all'] as FilterKey[]).map((k) => (
             <button
               key={k}
               onClick={() => setFilter(k)}
               className={cn(
-                'flex-1 min-w-[80px] rounded-md px-3 py-1.5 text-xs font-medium transition-colors',
+                'flex-1 min-w-[70px] rounded-md px-3 py-1.5 text-xs font-medium transition-colors',
                 filter === k ? 'bg-background shadow-sm text-foreground' : 'text-muted-foreground hover:text-foreground'
               )}
             >
@@ -167,7 +177,7 @@ export default function Leaderboard({ onSelectStaff }: { onSelectStaff?: (s: Sta
         {/* Top performer highlight */}
         {!loading && top && top.count > 0 && (
           <button
-            onClick={() => onSelectStaff?.(top.staff)}
+            onClick={() => onSelectStaff?.(top.staff, currentRange)}
             className="mt-4 w-full text-left rounded-lg border border-amber-500/20 bg-gradient-to-r from-amber-500/10 via-amber-500/5 to-transparent p-3 hover:border-amber-500/40 transition-colors"
           >
             <div className="flex items-center gap-3">
@@ -200,7 +210,7 @@ export default function Leaderboard({ onSelectStaff }: { onSelectStaff?: (s: Sta
             return (
               <button
                 key={e.staff.id}
-                onClick={() => onSelectStaff?.(e.staff)}
+                onClick={() => onSelectStaff?.(e.staff, currentRange)}
                 className="group relative flex w-full items-center gap-3 rounded-md px-2.5 py-2 text-left hover:bg-muted/50 transition-colors"
               >
                 <div className="flex h-7 w-7 shrink-0 items-center justify-center">

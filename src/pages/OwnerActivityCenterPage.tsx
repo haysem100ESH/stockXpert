@@ -2,7 +2,7 @@ import { useEffect, useState } from 'react';
 import { supabase } from '@/integrations/supabase/client';
 import { useAuth } from '@/hooks/useAuth';
 import { Sheet, SheetContent, SheetHeader, SheetTitle } from '@/components/ui/sheet';
-import Leaderboard from '@/components/activity/Leaderboard';
+import Leaderboard, { type LeaderboardRange } from '@/components/activity/Leaderboard';
 import GoalManager from '@/components/activity/GoalManager';
 import ActivityRowItem from '@/components/activity/ActivityRowItem';
 import { useActivityFeed } from '@/hooks/useActivityFeed';
@@ -10,13 +10,14 @@ import { toast } from '@/hooks/use-toast';
 
 interface StaffPick { id: string; full_name: string | null }
 
-function StaffActivityDrawer({ staff, onClose }: { staff: StaffPick | null; onClose: () => void }) {
-  const { rows, loading } = useActivityFeed({ userId: staff?.id, limit: 100 });
+function StaffActivityDrawer({ staff, range, onClose }: { staff: StaffPick | null; range: LeaderboardRange | null; onClose: () => void }) {
+  const { rows, loading } = useActivityFeed({ userId: staff?.id, limit: 200, from: range?.from, to: range?.to });
   return (
     <Sheet open={!!staff} onOpenChange={(o) => !o && onClose()}>
       <SheetContent className="w-full sm:max-w-xl overflow-y-auto">
         <SheetHeader>
           <SheetTitle>{staff?.full_name || 'Staff'} — Activity</SheetTitle>
+          <p className="text-xs text-muted-foreground">{range?.label || 'All Time'}</p>
         </SheetHeader>
         <div className="mt-4 space-y-2">
           {loading && <div className="text-sm text-muted-foreground">Loading…</div>}
@@ -31,6 +32,7 @@ function StaffActivityDrawer({ staff, onClose }: { staff: StaffPick | null; onCl
 export default function OwnerActivityCenterPage() {
   const { profile } = useAuth();
   const [selected, setSelected] = useState<StaffPick | null>(null);
+  const [selectedRange, setSelectedRange] = useState<LeaderboardRange | null>(null);
 
   // Goal completion notifications
   useEffect(() => {
@@ -63,11 +65,11 @@ export default function OwnerActivityCenterPage() {
         <p className="text-sm text-muted-foreground">Monitor your team's productivity in real time.</p>
       </div>
 
-      <Leaderboard onSelectStaff={(s) => setSelected({ id: s.id, full_name: s.full_name })} />
+      <Leaderboard onSelectStaff={(s, range) => { setSelected({ id: s.id, full_name: s.full_name }); setSelectedRange(range); }} />
 
       <GoalManager />
 
-      <StaffActivityDrawer staff={selected} onClose={() => setSelected(null)} />
+      <StaffActivityDrawer staff={selected} range={selectedRange} onClose={() => setSelected(null)} />
     </div>
   );
 }
