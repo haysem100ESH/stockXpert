@@ -651,8 +651,8 @@ export default function EditBranchItemDialog({ open, onOpenChange, item, onItemU
 
       // Activity Center: log every changed field across Pricing & Stock + Item Info tabs.
       try {
-        const oldLpiSell = Number(item.selling_price) / originalUpp;
-        const oldLpiBuy = Number(item.purchase_price) / originalUpp;
+        const oldLpiSell = Number(item.selling_price);
+        const oldLpiBuy = Number(item.purchase_price);
         const oldGroup = item.medicine_group || '';
         const newGroup = medicineGroup === '__custom__' ? customGroup.trim() : (medicineGroup || '');
         const itemMeta = { item_name: itemName || item.name, entity_name: itemName || item.name };
