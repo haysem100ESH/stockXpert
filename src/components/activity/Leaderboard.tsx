@@ -177,7 +177,7 @@ export default function Leaderboard({ onSelectStaff }: { onSelectStaff?: (s: Sta
         {/* Top performer highlight */}
         {!loading && top && top.count > 0 && (
           <button
-            onClick={() => onSelectStaff?.(top.staff)}
+            onClick={() => onSelectStaff?.(top.staff, currentRange)}
             className="mt-4 w-full text-left rounded-lg border border-amber-500/20 bg-gradient-to-r from-amber-500/10 via-amber-500/5 to-transparent p-3 hover:border-amber-500/40 transition-colors"
           >
             <div className="flex items-center gap-3">
@@ -210,7 +210,7 @@ export default function Leaderboard({ onSelectStaff }: { onSelectStaff?: (s: Sta
             return (
               <button
                 key={e.staff.id}
-                onClick={() => onSelectStaff?.(e.staff)}
+                onClick={() => onSelectStaff?.(e.staff, currentRange)}
                 className="group relative flex w-full items-center gap-3 rounded-md px-2.5 py-2 text-left hover:bg-muted/50 transition-colors"
               >
                 <div className="flex h-7 w-7 shrink-0 items-center justify-center">
