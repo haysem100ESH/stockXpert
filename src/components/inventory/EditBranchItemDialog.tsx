@@ -152,9 +152,9 @@ export default function EditBranchItemDialog({ open, onOpenChange, item, onItemU
 
   useEffect(() => {
     if (item && open) {
-      const upp = Math.max(1, Number(item.units_per_pack || 1));
-      setSellingPrice((Number(item.selling_price) / upp).toString());
-      setPurchasePrice((Number(item.purchase_price) / upp).toString());
+      // selling_price / purchase_price are stored as LPI (per smallest unit) — show as-is.
+      setSellingPrice(Number(item.selling_price).toString());
+      setPurchasePrice(Number(item.purchase_price).toString());
       setExpiryDate(item.expiry_date || '');
       setItemName(item.name || '');
       setGenericName(item.generic_name || '');
@@ -302,12 +302,11 @@ export default function EditBranchItemDialog({ open, onOpenChange, item, onItemU
     try {
       const { data: { user } } = await supabase.auth.getUser();
 
-      // Convert LPI prices entered by the user back into pack-level for storage.
-      const uppForSave = Math.max(1, Number(computeUnitsPerPack() || item.units_per_pack || 1));
+      // Prices are stored as LPI (per smallest unit) — no pack-level conversion.
       const lpiSell = parseFloat(sellingPrice);
       const lpiBuy = parseFloat(purchasePrice);
-      const storedSell = lpiSell * uppForSave;
-      const storedBuy = lpiBuy * uppForSave;
+      const storedSell = lpiSell;
+      const storedBuy = lpiBuy;
 
       // Always update branch-specific fields
       const branchUpdate: any = {
@@ -652,8 +651,8 @@ export default function EditBranchItemDialog({ open, onOpenChange, item, onItemU
 
       // Activity Center: log every changed field across Pricing & Stock + Item Info tabs.
       try {
-        const oldLpiSell = Number(item.selling_price) / originalUpp;
-        const oldLpiBuy = Number(item.purchase_price) / originalUpp;
+        const oldLpiSell = Number(item.selling_price);
+        const oldLpiBuy = Number(item.purchase_price);
         const oldGroup = item.medicine_group || '';
         const newGroup = medicineGroup === '__custom__' ? customGroup.trim() : (medicineGroup || '');
         const itemMeta = { item_name: itemName || item.name, entity_name: itemName || item.name };
