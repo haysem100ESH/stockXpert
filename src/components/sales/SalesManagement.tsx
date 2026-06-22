@@ -42,11 +42,8 @@ interface Medicine {
   branch_name?: string;
   // Multi-level packaging (v2)
   packaging_mode?: string | null;
-  sub_units_per_unit?: number | null;
   main_unit_name?: string | null;
-  sub_unit_name?: string | null;
   unit_price?: number | null;
-  sub_unit_price?: number | null;
   strength?: string | null;
   medicine_group?: string | null;
 }
@@ -658,8 +655,6 @@ export default function SalesManagement() {
         } else if (item.saleType === 'full_pack') {
           totalQtyToDeduct = item.quantity;
         } else if (item.saleType === 'by_stripe' && item.stripesCount) {
-          // Use the cart item's units_per_pack (which may be the expanded value
-          // for sub-unit sales, not the original medicine's units_per_pack).
           const upp = item.units_per_pack;
           if (!upp) continue;
           totalQtyToDeduct = item.stripesCount / upp;
