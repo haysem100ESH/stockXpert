@@ -1,4 +1,6 @@
 import { useEffect, useState } from 'react';
+import { Collapsible, CollapsibleContent, CollapsibleTrigger } from '@/components/ui/collapsible';
+import { ChevronDown } from 'lucide-react';
 import { supabase } from '@/integrations/supabase/client';
 import { useAuth } from '@/hooks/useAuth';
 import { Sheet, SheetContent, SheetHeader, SheetTitle } from '@/components/ui/sheet';
@@ -47,26 +49,33 @@ function StaffActivityDrawer({ staff, range, onClose }: { staff: StaffPick | nul
           {loading && <div className="text-sm text-muted-foreground">Loading…</div>}
           {!loading && rows.length === 0 && <div className="text-sm text-muted-foreground">No activity yet.</div>}
           {!loading && !isAllTime && rows.map((r) => <ActivityRowItem key={r.id} row={r} />)}
-          {!loading && isAllTime && grouped && grouped.map((y) => (
-            <div key={y.year} className="space-y-3">
-              <div className="sticky top-0 z-10 -mx-1 px-1 py-1.5 bg-background/95 backdrop-blur border-b">
-                <div className="text-base font-bold tracking-tight">{y.year}</div>
-              </div>
-              {y.months.map((mo) => (
-                <div key={mo.month} className="space-y-1.5">
-                  <div className="flex items-center gap-2 pl-1">
-                    <div className="text-xs font-semibold uppercase tracking-wider text-muted-foreground">
-                      {MONTH_NAMES[mo.month]}
-                    </div>
-                    <div className="h-px flex-1 bg-border" />
-                    <div className="text-[10px] tabular-nums text-muted-foreground">{(mo.items as any).length}</div>
-                  </div>
-                  <div className="space-y-2">
-                    {(mo.items as any).map((r: any) => <ActivityRowItem key={r.id} row={r} />)}
-                  </div>
-                </div>
-              ))}
-            </div>
+          {!loading && isAllTime && grouped && grouped.map((y, yi) => (
+            <Collapsible key={y.year} defaultOpen={yi === 0} className="space-y-2">
+              <CollapsibleTrigger className="group sticky top-0 z-10 -mx-1 flex w-[calc(100%+0.5rem)] items-center gap-2 px-1 py-1.5 bg-background/95 backdrop-blur border-b hover:bg-muted/40 transition-colors">
+                <ChevronDown className="h-4 w-4 text-muted-foreground transition-transform group-data-[state=closed]:-rotate-90" />
+                <span className="text-base font-bold tracking-tight">{y.year}</span>
+                <span className="ml-auto text-[10px] tabular-nums text-muted-foreground">
+                  {y.months.reduce((s, m) => s + (m.items as any).length, 0)} actions
+                </span>
+              </CollapsibleTrigger>
+              <CollapsibleContent className="space-y-3 data-[state=open]:animate-accordion-down data-[state=closed]:animate-accordion-up">
+                {y.months.map((mo, mi) => (
+                  <Collapsible key={mo.month} defaultOpen={yi === 0 && mi === 0} className="space-y-1.5">
+                    <CollapsibleTrigger className="group flex w-full items-center gap-2 pl-1 hover:opacity-80 transition-opacity">
+                      <ChevronDown className="h-3 w-3 text-muted-foreground transition-transform group-data-[state=closed]:-rotate-90" />
+                      <span className="text-xs font-semibold uppercase tracking-wider text-muted-foreground">
+                        {MONTH_NAMES[mo.month]}
+                      </span>
+                      <div className="h-px flex-1 bg-border" />
+                      <span className="text-[10px] tabular-nums text-muted-foreground">{(mo.items as any).length}</span>
+                    </CollapsibleTrigger>
+                    <CollapsibleContent className="space-y-2 data-[state=open]:animate-accordion-down data-[state=closed]:animate-accordion-up">
+                      {(mo.items as any).map((r: any) => <ActivityRowItem key={r.id} row={r} />)}
+                    </CollapsibleContent>
+                  </Collapsible>
+                ))}
+              </CollapsibleContent>
+            </Collapsible>
           ))}
         </div>
       </SheetContent>
