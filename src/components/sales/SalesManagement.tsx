@@ -111,7 +111,7 @@ export default function SalesManagement() {
     return () => mql.removeEventListener('change', onChange);
   }, []);
 
-  const itemsPerPage = 16;
+  const ITEMS_PER_PAGE = 24;
 
   useEffect(() => {
     const filtered = medicines.filter(medicine => {
@@ -126,8 +126,8 @@ export default function SalesManagement() {
   }, [medicines, searchTerm, categoryFilter]);
 
   useEffect(() => {
-    const startIndex = (currentPage - 1) * itemsPerPage;
-    setPaginatedMedicines(filteredMedicines.slice(startIndex, startIndex + itemsPerPage));
+    const startIndex = (currentPage - 1) * ITEMS_PER_PAGE;
+    setPaginatedMedicines(filteredMedicines.slice(startIndex, startIndex + ITEMS_PER_PAGE));
   }, [filteredMedicines, currentPage]);
 
   // Clear amount received when cart changes so placeholder takes effect
