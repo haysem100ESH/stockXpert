@@ -152,9 +152,9 @@ export default function EditBranchItemDialog({ open, onOpenChange, item, onItemU
 
   useEffect(() => {
     if (item && open) {
-      const upp = Math.max(1, Number(item.units_per_pack || 1));
-      setSellingPrice((Number(item.selling_price) / upp).toString());
-      setPurchasePrice((Number(item.purchase_price) / upp).toString());
+      // selling_price / purchase_price are stored as LPI (per smallest unit) — show as-is.
+      setSellingPrice(Number(item.selling_price).toString());
+      setPurchasePrice(Number(item.purchase_price).toString());
       setExpiryDate(item.expiry_date || '');
       setItemName(item.name || '');
       setGenericName(item.generic_name || '');
