@@ -865,17 +865,15 @@ export default function SalesManagement() {
     const packName = pkg?.pack_name || 'pack';
 
     // Resolve per-level prices when new packaging exists.
+    // branch_items.selling_price is per-unit (LPI), so strip/pack prices are
+    // simply unit price multiplied by the unit count at each level.
     let unitPrice = 0, stripPrice = 0, packPrice = 0;
     if (hasNewPackaging) {
       const upStrip = unitsPerStripSafe(pkg!);
       const upPack = unitsPerPackSafe(pkg!);
-      unitPrice = pkg!.unit_selling_price ?? (medicine.selling_price && upPack ? medicine.selling_price / upPack : medicine.selling_price);
-      stripPrice = pkg!.unit_selling_price != null
-        ? unitPrice * upStrip
-        : (pkg!.strip_selling_price ?? (autoStripPrice(pkg!) ?? unitPrice * upStrip));
-      packPrice = pkg!.unit_selling_price != null
-        ? unitPrice * upPack
-        : (pkg!.pack_selling_price ?? (autoPackPrice(pkg!) ?? unitPrice * upPack));
+      unitPrice = pkg!.unit_selling_price ?? medicine.selling_price;
+      stripPrice = unitPrice * upStrip;
+      packPrice = unitPrice * upPack;
     }
 
     return (
