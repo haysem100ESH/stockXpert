@@ -619,39 +619,27 @@ export default function SalesManagement() {
         const stripeQty = Number(item.stripesCount || 0);
         const packQty = Number(item.quantity || 0);
 
-        // Encode the chosen sell level into the legacy columns so the DB
-        // CHECK constraint (full_pack | by_stripe) is satisfied while Finance
-        // can still recover the exact level:
-        //   unit  -> sale_type='by_stripe', strip_quantity=0, pack_quantity=0
-        //   strip -> sale_type='by_stripe', strip_quantity=qty
-        //   pack  -> sale_type='full_pack', pack_quantity=qty
-        let saleType: 'full_pack' | 'by_stripe' = item.saleType === 'by_stripe' ? 'by_stripe' : 'full_pack';
-        let qtyForRow = isMeasurableItem || item.saleType === 'by_stripe' ? stripeQty : packQty;
-        let stripQtyCol = item.saleType === 'by_stripe' && !isMeasurableItem ? Math.max(0, Math.round(stripeQty)) : 0;
-        let packQtyCol = item.saleType !== 'by_stripe' && !isMeasurableItem ? Math.max(0, Math.round(packQty)) : 0;
-        let stripesSoldCol: number | null = item.saleType === 'by_stripe' && stripeQty > 0 ? Math.round(stripeQty * 1000) : null;
-
+        // Resolve the level the cashier picked. New flow uses item.sellLevel
+        // ('unit' | 'strip' | 'pack'); legacy flow uses item.saleType
+        // ('by_stripe' | 'full_pack'). Map both to the canonical sale_type now
+        // that the DB CHECK accepts unit/strip/pack directly.
+        let level: 'unit' | 'strip' | 'pack';
+        let qtyForRow: number;
         if (item.sellLevel) {
-          const q = Number(item.quantity || 0);
-          qtyForRow = q;
-          if (item.sellLevel === 'pack') {
-            saleType = 'full_pack';
-            packQtyCol = Math.max(0, Math.round(q));
-            stripQtyCol = 0;
-            stripesSoldCol = null;
-          } else if (item.sellLevel === 'strip') {
-            saleType = 'by_stripe';
-            stripQtyCol = Math.max(0, Math.round(q));
-            packQtyCol = 0;
-            stripesSoldCol = Math.round(q * 1000);
-          } else {
-            // unit
-            saleType = 'by_stripe';
-            stripQtyCol = 0;
-            packQtyCol = 0;
-            stripesSoldCol = null;
-          }
+          level = item.sellLevel;
+          qtyForRow = Number(item.quantity || 0);
+        } else if (isMeasurableItem || item.saleType === 'by_stripe') {
+          level = 'strip';
+          qtyForRow = stripeQty;
+        } else {
+          level = 'pack';
+          qtyForRow = packQty;
         }
+
+        // Companion columns kept in sync for backward-compatible readers.
+        const stripQtyCol = level === 'strip' ? Math.max(0, Math.round(qtyForRow)) : 0;
+        const packQtyCol = level === 'pack' ? Math.max(0, Math.round(qtyForRow)) : 0;
+        const stripesSoldCol: number | null = level === 'strip' ? Math.round(qtyForRow * 1000) : null;
 
         return {
           sale_id: saleData.id,
@@ -660,7 +648,7 @@ export default function SalesManagement() {
           quantity: Number(Number(qtyForRow).toFixed(4)),
           unit_price: Number(item.selling_price),
           total_price: Number(item.total.toFixed(2)),
-          sale_type: saleType,
+          sale_type: level,
           strip_quantity: stripQtyCol,
           pack_quantity: packQtyCol,
           stripes_sold: stripesSoldCol,
