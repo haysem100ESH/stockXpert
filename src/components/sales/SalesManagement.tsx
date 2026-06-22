@@ -42,11 +42,8 @@ interface Medicine {
   branch_name?: string;
   // Multi-level packaging (v2)
   packaging_mode?: string | null;
-  sub_units_per_unit?: number | null;
   main_unit_name?: string | null;
-  sub_unit_name?: string | null;
   unit_price?: number | null;
-  sub_unit_price?: number | null;
   strength?: string | null;
   medicine_group?: string | null;
 }
@@ -186,11 +183,9 @@ export default function SalesManagement() {
     // respects medicine packaging config (strip/pack enabled flags). Unit
     // (LPI) is ALWAYS available, even when no packaging row exists.
     const pkg = packagingMap[medicine.medicine_id];
-    const upPack = pkg ? unitsPerPackSafe(pkg) : (medicine.units_per_pack || 1);
-    const unitPrice = pkg?.unit_selling_price
-      ?? (medicine.selling_price && upPack > 1
-        ? medicine.selling_price / upPack
-        : medicine.selling_price);
+    // branch_items.selling_price is now stored as the per-unit (LPI) price,
+    // so use it directly when pkg has no explicit unit_selling_price.
+    const unitPrice = pkg?.unit_selling_price ?? medicine.selling_price;
     addToCart(medicine, 'full_pack', 1, {
       sellLevel: 'unit',
       unitsPerLevel: 1,
@@ -235,13 +230,11 @@ export default function SalesManagement() {
       if (pkg) {
         const upStrip = unitsPerStripSafe(pkg);
         const upPack = unitsPerPackSafe(pkg);
-        const uPrice = pkg.unit_selling_price ?? (medicine.selling_price && upPack ? medicine.selling_price / upPack : medicine.selling_price);
-        const sPrice = pkg.unit_selling_price != null
-          ? uPrice * upStrip
-          : (pkg.strip_selling_price ?? (autoStripPrice(pkg) ?? uPrice * upStrip));
-        const pPrice = pkg.unit_selling_price != null
-          ? uPrice * upPack
-          : (pkg.pack_selling_price ?? (autoPackPrice(pkg) ?? uPrice * upPack));
+        // branch_items.selling_price is per-unit (LPI); use it as the unit price
+        // when pkg has no explicit unit_selling_price.
+        const uPrice = pkg.unit_selling_price ?? medicine.selling_price;
+        const sPrice = uPrice * upStrip;
+        const pPrice = uPrice * upPack;
         levelPrices = { unit: uPrice, strip: sPrice, pack: pPrice };
         levelLabels = { unit: pkg.unit_name || 'unit', strip: pkg.strip_name || 'strip', pack: pkg.pack_name || 'pack' };
         levelUnitsPer = { unit: 1, strip: upStrip, pack: upPack };
@@ -658,8 +651,6 @@ export default function SalesManagement() {
         } else if (item.saleType === 'full_pack') {
           totalQtyToDeduct = item.quantity;
         } else if (item.saleType === 'by_stripe' && item.stripesCount) {
-          // Use the cart item's units_per_pack (which may be the expanded value
-          // for sub-unit sales, not the original medicine's units_per_pack).
           const upp = item.units_per_pack;
           if (!upp) continue;
           totalQtyToDeduct = item.stripesCount / upp;
@@ -874,17 +865,15 @@ export default function SalesManagement() {
     const packName = pkg?.pack_name || 'pack';
 
     // Resolve per-level prices when new packaging exists.
+    // branch_items.selling_price is per-unit (LPI), so strip/pack prices are
+    // simply unit price multiplied by the unit count at each level.
     let unitPrice = 0, stripPrice = 0, packPrice = 0;
     if (hasNewPackaging) {
       const upStrip = unitsPerStripSafe(pkg!);
       const upPack = unitsPerPackSafe(pkg!);
-      unitPrice = pkg!.unit_selling_price ?? (medicine.selling_price && upPack ? medicine.selling_price / upPack : medicine.selling_price);
-      stripPrice = pkg!.unit_selling_price != null
-        ? unitPrice * upStrip
-        : (pkg!.strip_selling_price ?? (autoStripPrice(pkg!) ?? unitPrice * upStrip));
-      packPrice = pkg!.unit_selling_price != null
-        ? unitPrice * upPack
-        : (pkg!.pack_selling_price ?? (autoPackPrice(pkg!) ?? unitPrice * upPack));
+      unitPrice = pkg!.unit_selling_price ?? medicine.selling_price;
+      stripPrice = unitPrice * upStrip;
+      packPrice = unitPrice * upPack;
     }
 
     return (

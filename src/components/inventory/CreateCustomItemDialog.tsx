@@ -10,8 +10,8 @@ import { useToast } from '@/hooks/use-toast';
 import { useAuth } from '@/hooks/useAuth';
 import { useBranchContext } from '@/hooks/useBranchContext';
 import { useCustomCategories } from '@/hooks/useCustomCategories';
-import { useMedicineGroups } from '@/hooks/useMedicineGroups';
 import { MEASURABLE_UNIT_OPTIONS } from '@/lib/itemTypes';
+import MedicineCodeCombobox from './MedicineCodeCombobox';
 
 interface CreateCustomItemDialogProps {
   open: boolean;
@@ -23,8 +23,7 @@ export default function CreateCustomItemDialog({ open, onOpenChange, onItemCreat
   const [name, setName] = useState('');
   const [genericName, setGenericName] = useState('');
   const [strength, setStrength] = useState('');
-  const [medicineGroup, setMedicineGroup] = useState('');
-  const [customGroup, setCustomGroup] = useState('');
+  const [medicineCodeId, setMedicineCodeId] = useState<string | null>(null);
   const [category, setCategory] = useState('');
   const [customCategory, setCustomCategory] = useState('');
   const [manufacturer, setManufacturer] = useState('');
@@ -34,13 +33,11 @@ export default function CreateCustomItemDialog({ open, onOpenChange, onItemCreat
   const [stripsPerPack, setStripsPerPack] = useState('');
   const [unitsPerStrip, setUnitsPerStrip] = useState('');
   const [unitsPack, setUnitsPack] = useState('');
-  
-  // Multi-level packaging
+
+  // Multi-level packaging (unit -> strip -> pack only; no sub-unit level)
   const [containerType, setContainerType] = useState(''); // packaging_mode column: Pack, Bottle, Box, Carton...
   const [mainUnitName, setMainUnitName] = useState('');
   const [unitName, setUnitName] = useState(''); // strip-level label (informational; persisted via unit_label too)
-  const [subUnitsPerUnit, setSubUnitsPerUnit] = useState('');
-  const [subUnitName, setSubUnitName] = useState('');
   const [submitting, setSubmitting] = useState(false);
 
   const { toast } = useToast();
@@ -48,14 +45,12 @@ export default function CreateCustomItemDialog({ open, onOpenChange, onItemCreat
   const { branchType } = useBranchContext();
   const isPharmacy = branchType === 'pharmacy';
   const { categories } = useCustomCategories(isPharmacy ? 'pharmacy' : 'general');
-  const { groups: medicineGroups, addGroup } = useMedicineGroups();
 
   const resetForm = () => {
     setName('');
     setGenericName('');
     setStrength('');
-    setMedicineGroup('');
-    setCustomGroup('');
+    setMedicineCodeId(null);
     setCategory('');
     setCustomCategory('');
     setManufacturer('');
@@ -65,12 +60,10 @@ export default function CreateCustomItemDialog({ open, onOpenChange, onItemCreat
     setStripsPerPack('');
     setUnitsPerStrip('');
     setUnitsPack('');
-    
+
     setContainerType('');
     setMainUnitName('');
     setUnitName('');
-    setSubUnitsPerUnit('');
-    setSubUnitName('');
   };
 
   const handleCreate = async () => {
@@ -126,20 +119,6 @@ export default function CreateCustomItemDialog({ open, onOpenChange, onItemCreat
         computedUnitsPerPack = parseInt(unitsPack);
       }
 
-      // Resolve final group: pharmacy mode only
-      let finalGroup: string | null = null;
-      if (isPharmacy) {
-        if (medicineGroup === '__custom__') {
-          const custom = customGroup.trim();
-          if (custom) {
-            await addGroup(custom);
-            finalGroup = custom;
-          }
-        } else if (medicineGroup) {
-          finalGroup = medicineGroup;
-        }
-      }
-
       // Insert into medicines table
       // Note: purchase_price / selling_price / stock_quantity are placeholders (0).
       // Real pricing & stock are configured per-branch in Add Medicine → branch_items + inventory_batches.
@@ -149,7 +128,7 @@ export default function CreateCustomItemDialog({ open, onOpenChange, onItemCreat
         category: finalCategory,
         manufacturer: manufacturer.trim() || null,
         item_type: itemType,
-        unit_label: itemType === 'measurable' ? unitLabel : 'strip',
+        unit_label: itemType === 'measurable' ? unitLabel : (unitName.trim() || 'unit'),
         units_per_pack: computedUnitsPerPack,
         minimum_stock_level: 0,
         purchase_price: 0,
@@ -160,7 +139,7 @@ export default function CreateCustomItemDialog({ open, onOpenChange, onItemCreat
       // Pharmacy-only fields
       if (isPharmacy) {
         insertPayload.strength = strength.trim() || null;
-        insertPayload.medicine_group = finalGroup;
+        if (medicineCodeId) insertPayload.medicine_code_id = medicineCodeId;
       }
 
       // Persist strip breakdown when applicable
@@ -169,17 +148,39 @@ export default function CreateCustomItemDialog({ open, onOpenChange, onItemCreat
         insertPayload.units_per_strip = parseInt(unitsPerStrip);
       }
 
-      // Multi-level packaging fields (all optional, nullable)
+      // Container type & main-unit label (optional)
       if (containerType.trim()) insertPayload.packaging_mode = containerType.trim();
       if (mainUnitName.trim()) insertPayload.main_unit_name = mainUnitName.trim();
-      if (subUnitsPerUnit && parseInt(subUnitsPerUnit) > 0) {
-        insertPayload.sub_units_per_unit = parseInt(subUnitsPerUnit);
-        if (subUnitName.trim()) insertPayload.sub_unit_name = subUnitName.trim();
-      }
 
       const { data: newMed, error } = await supabase.from('medicines').insert(insertPayload).select('id, name, generic_name, category, manufacturer, item_type, unit_label, units_per_pack, minimum_stock_level').single();
 
       if (error) throw error;
+
+      // Create medicine_packaging row so sales/inventory can compute strip/pack
+      // prices from the LPI/unit price. Skip for measurable items.
+      if (itemType === 'full_pcs') {
+        const ups = parseInt(unitsPerStrip);
+        const spp = parseInt(stripsPerPack);
+        const hasStrip = packagingMode === 'with_strip' && ups > 0;
+        const hasPack = hasStrip && spp > 0;
+        try {
+          await (supabase as any).from('medicine_packaging').upsert({
+            medicine_id: newMed.id,
+            unit_name: unitName.trim() || 'unit',
+            strip_enabled: hasStrip,
+            units_per_strip: hasStrip ? ups : null,
+            strip_name: hasStrip ? 'strip' : null,
+            pack_enabled: hasPack,
+            strips_per_pack: hasPack ? spp : null,
+            pack_name: hasPack ? (containerType.trim() || 'pack') : null,
+            unit_selling_price: null,
+            strip_selling_price: null,
+            pack_selling_price: null,
+          }, { onConflict: 'medicine_id' });
+        } catch (e) {
+          console.warn('Failed to create medicine_packaging row', e);
+        }
+      }
 
       // Auto-link to owner's first group (or create one)
       if (ownerId) {
@@ -255,21 +256,9 @@ export default function CreateCustomItemDialog({ open, onOpenChange, onItemCreat
                   <Input value={strength} onChange={e => setStrength(e.target.value)} placeholder="e.g. 500mg, 250mg/5ml" />
                 </div>
                 <div className="space-y-2">
-                  <Label>Medicine Group</Label>
-                  <Select value={medicineGroup} onValueChange={setMedicineGroup}>
-                    <SelectTrigger><SelectValue placeholder="Select group" /></SelectTrigger>
-                    <SelectContent>
-                      {medicineGroups.map(g => (
-                        <SelectItem key={g.id} value={g.name}>{g.name}</SelectItem>
-                      ))}
-                      <SelectItem value="__custom__">+ Custom Group</SelectItem>
-                    </SelectContent>
-                  </Select>
+                  <MedicineCodeCombobox value={medicineCodeId} onChange={setMedicineCodeId} />
                 </div>
               </div>
-              {medicineGroup === '__custom__' && (
-                <Input value={customGroup} onChange={e => setCustomGroup(e.target.value)} placeholder="Enter new group name (e.g. NSAIDS and anti-pain)" />
-              )}
             </>
           )}
 
@@ -352,10 +341,14 @@ export default function CreateCustomItemDialog({ open, onOpenChange, onItemCreat
                   <Input type="number" min="1" value={unitsPerStrip} onChange={e => setUnitsPerStrip(e.target.value)} placeholder="e.g. 10" />
                 </div>
               </div>
+              <div className="space-y-2">
+                <Label>Unit Name</Label>
+                <Input value={unitName} onChange={e => setUnitName(e.target.value)} placeholder="unit (e.g. tablet, capsule)" />
+              </div>
               {stripsPerPack && unitsPerStrip && parseInt(stripsPerPack) > 0 && parseInt(unitsPerStrip) > 0 && (
                 <div className="rounded-md bg-primary/10 border border-primary/20 px-3 py-2 -mt-2">
                   <p className="text-sm font-semibold">
-                    Total stock per item: {parseInt(stripsPerPack) * parseInt(unitsPerStrip)} units
+                    Total stock per item: {parseInt(stripsPerPack) * parseInt(unitsPerStrip)} {unitName.trim() || 'unit'}{parseInt(stripsPerPack) * parseInt(unitsPerStrip) === 1 ? '' : 's'}
                   </p>
                 </div>
               )}
@@ -383,29 +376,6 @@ export default function CreateCustomItemDialog({ open, onOpenChange, onItemCreat
               ))}
             </datalist>
           </div>
-
-          {/* Sub-unit (3rd hierarchy level) — only meaningful for countable items */}
-          {itemType === 'full_pcs' && packagingMode === 'with_strip' && (
-            <div className="space-y-3 rounded-lg border p-3 bg-muted/20">
-              <div className="flex items-center justify-between">
-                <Label className="text-sm font-semibold">Sub-unit (optional)</Label>
-                <span className="text-xs text-muted-foreground">e.g. tablets in a strip</span>
-              </div>
-              <div className="grid grid-cols-2 gap-3">
-                <div className="space-y-1">
-                  <Label className="text-xs">Sub-units per Unit</Label>
-                  <Input type="number" min="0" value={subUnitsPerUnit} onChange={e => setSubUnitsPerUnit(e.target.value)} placeholder="e.g. 5" />
-                </div>
-                <div className="space-y-1">
-                  <Label className="text-xs">Sub-unit Name</Label>
-                  <Input value={subUnitName} onChange={e => setSubUnitName(e.target.value)} placeholder="e.g. Tablet, Piece" />
-                </div>
-              </div>
-              <p className="text-xs text-muted-foreground">
-                Pricing will be configured when adding stock to a branch.
-              </p>
-            </div>
-          )}
 
           <Button onClick={handleCreate} disabled={submitting} className="w-full">
             {submitting && <Loader2 className="h-4 w-4 animate-spin mr-2" />}

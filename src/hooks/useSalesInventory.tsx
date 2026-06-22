@@ -43,11 +43,8 @@ export interface SalesMedicine {
   medicine_group?: string | null;
   strength?: string | null;
   packaging_mode?: string | null;
-  sub_units_per_unit?: number | null;
   main_unit_name?: string | null;
-  sub_unit_name?: string | null;
   unit_price?: number | null;
-  sub_unit_price?: number | null;
 }
 
 export interface SalesCustomer {
@@ -86,7 +83,7 @@ async function fetchSalesInventory(branchIds: string[]): Promise<SalesMedicine[]
     chunkedInPartial<any>(medicineIds, (ids) =>
       (supabase as any)
         .from('medicines')
-        .select('id, name, generic_name, category, item_type, unit_label, units_per_pack, medicine_group, strength, packaging_mode, sub_units_per_unit, main_unit_name, sub_unit_name, unit_price, sub_unit_price')
+        .select('id, name, generic_name, category, item_type, unit_label, units_per_pack, medicine_group, strength, packaging_mode, main_unit_name, unit_price')
         .in('id', ids)
     , 20),
     chunkedInPartial<any>(allBranchIds, (ids) =>
@@ -122,11 +119,8 @@ async function fetchSalesInventory(branchIds: string[]): Promise<SalesMedicine[]
       medicine_group: m.medicine_group,
       strength: m.strength,
       packaging_mode: m.packaging_mode,
-      sub_units_per_unit: m.sub_units_per_unit,
       main_unit_name: m.main_unit_name,
-      sub_unit_name: m.sub_unit_name,
       unit_price: m.unit_price,
-      sub_unit_price: m.sub_unit_price,
     } as SalesMedicine;
   });
 }
@@ -230,11 +224,13 @@ export function useSalesInventory() {
     placeholderData: (prev) => prev,
   });
 
-  // Pull-to-refresh interop
+  // Pull-to-refresh + post-sale broadcast. Use refetchQueries so the active
+  // list updates immediately rather than waiting for the next focus event.
   useEffect(() => {
     const handler = () => {
-      queryClient.invalidateQueries({ queryKey: ['sales-inventory'] });
-      queryClient.invalidateQueries({ queryKey: ['sales-customers'] });
+      queryClient.refetchQueries({ queryKey: ['sales-inventory'] });
+      queryClient.refetchQueries({ queryKey: ['sales-customers'] });
+      queryClient.refetchQueries({ queryKey: ['branch-inventory'] });
     };
     window.addEventListener('app:refresh', handler);
     return () => window.removeEventListener('app:refresh', handler);
@@ -244,8 +240,8 @@ export function useSalesInventory() {
   useEffect(() => {
     if (!enabled || branchIds.length === 0) return;
     const invalidate = () => {
-      queryClient.invalidateQueries({ queryKey: ['sales-inventory'] });
-      queryClient.invalidateQueries({ queryKey: ['branch-inventory'] });
+      queryClient.refetchQueries({ queryKey: ['sales-inventory'] });
+      queryClient.refetchQueries({ queryKey: ['branch-inventory'] });
     };
     const channel = (supabase as any)
       .channel(`sales-inv-${branchIds.join('-')}`)
@@ -264,8 +260,8 @@ export function useSalesInventory() {
     refetchMedicines: inventoryQuery.refetch,
     refetchCustomers: customersQuery.refetch,
     invalidate: () => {
-      queryClient.invalidateQueries({ queryKey: ['sales-inventory'] });
-      queryClient.invalidateQueries({ queryKey: ['sales-customers'] });
+      queryClient.refetchQueries({ queryKey: ['sales-inventory'] });
+      queryClient.refetchQueries({ queryKey: ['sales-customers'] });
     },
   };
 }

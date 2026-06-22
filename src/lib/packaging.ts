@@ -86,7 +86,16 @@ export function formatStock(totalUnits: number, p: Packaging): string {
     if (packs) parts.push(`${packs} ${pluralize(pack, packs)}`);
     if (strips) parts.push(`${strips} ${pluralize(strip, strips)}`);
     if (units || parts.length === 0) parts.push(`${units} ${pluralize(unit, units)}`);
-    return parts.join(', ');
+    let result = parts.join(', ');
+    // Always show the total strip equivalence when stock contains whole packs,
+    // so users can see how many strips the packs represent (e.g. "37 packs, 4 strips (300 strips total)").
+    if (packs > 0 && p.strips_per_pack) {
+      const totalStrips = packs * p.strips_per_pack + strips;
+      if (totalStrips !== strips) {
+        result += ` (${totalStrips} ${pluralize(strip, totalStrips)} total)`;
+      }
+    }
+    return result;
   }
   if (p.strip_enabled && p.units_per_strip) {
     const strips = Math.floor(total / p.units_per_strip);
