@@ -65,11 +65,11 @@ export default function OwnerActivityCenterPage() {
         <p className="text-sm text-muted-foreground">Monitor your team's productivity in real time.</p>
       </div>
 
-      <Leaderboard onSelectStaff={(s) => setSelected({ id: s.id, full_name: s.full_name })} />
+      <Leaderboard onSelectStaff={(s, range) => { setSelected({ id: s.id, full_name: s.full_name }); setSelectedRange(range); }} />
 
       <GoalManager />
 
-      <StaffActivityDrawer staff={selected} onClose={() => setSelected(null)} />
+      <StaffActivityDrawer staff={selected} range={selectedRange} onClose={() => setSelected(null)} />
     </div>
   );
 }
