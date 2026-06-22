@@ -32,6 +32,7 @@ function StaffActivityDrawer({ staff, range, onClose }: { staff: StaffPick | nul
 export default function OwnerActivityCenterPage() {
   const { profile } = useAuth();
   const [selected, setSelected] = useState<StaffPick | null>(null);
+  const [selectedRange, setSelectedRange] = useState<LeaderboardRange | null>(null);
 
   // Goal completion notifications
   useEffect(() => {
