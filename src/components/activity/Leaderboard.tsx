@@ -20,7 +20,7 @@ function endOfDay(d = new Date()) { const x = new Date(d); x.setHours(23,59,59,9
 function startOfWeek(d = new Date()) { const x = startOfDay(d); const day = x.getDay(); const diff = (day === 0 ? -6 : 1 - day); x.setDate(x.getDate()+diff); return x; }
 function startOfMonth(d = new Date()) { const x = startOfDay(d); x.setDate(1); return x; }
 
-export default function Leaderboard({ onSelectStaff }: { onSelectStaff?: (s: StaffRow) => void }) {
+export default function Leaderboard({ onSelectStaff }: { onSelectStaff?: (s: StaffRow, range: LeaderboardRange) => void }) {
   const { profile } = useAuth();
   const { selectedBranch } = useBranchContext();
   const [staff, setStaff] = useState<StaffRow[]>([]);
