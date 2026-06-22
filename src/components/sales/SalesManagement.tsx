@@ -864,6 +864,7 @@ export default function SalesManagement() {
   const subtotal = calculateSubtotal();
   const discount = calculateDiscount();
   const total = calculateTotal();
+  const totalPages = Math.max(1, Math.ceil(filteredMedicines.length / ITEMS_PER_PAGE));
 
   const renderSaleCard = (medicine: Medicine) => {
     const pkg = packagingMap[medicine.medicine_id];
