@@ -574,3 +574,83 @@ export default function AddBranchItemDialog({ open, onOpenChange, onItemAdded }:
     </>
   );
 }
+
+/**
+ * Price input for the LPI (smallest sellable unit / tablet) with a read-only
+ * preview of the auto-derived strip and pack prices based on the medicine's
+ * packaging configuration.
+ */
+function PriceWithBreakdown({
+  label,
+  medicineId,
+  value,
+  onChange,
+  kind,
+}: {
+  label: string;
+  medicineId: string;
+  value: string;
+  onChange: (v: string) => void;
+  kind: 'sell' | 'buy';
+}) {
+  const { packaging } = usePackaging(medicineId);
+  const p = effectivePackaging(packaging);
+  const unitName = p.unit_name || 'unit';
+  const stripName = p.strip_name || 'strip';
+  const packName = p.pack_name || 'pack';
+  const lpi = parseFloat(value);
+  const validLpi = Number.isFinite(lpi) && lpi >= 0;
+  const stripPrice = validLpi
+    ? autoStripPrice({ ...p, unit_selling_price: lpi })
+    : null;
+  const packPrice = validLpi
+    ? autoPackPrice({
+        ...p,
+        unit_selling_price: lpi,
+        strip_selling_price: stripPrice ?? null,
+      })
+    : null;
+
+  return (
+    <div className="space-y-2">
+      <Label>
+        {label} per {unitName} *
+      </Label>
+      <Input
+        type="number"
+        step="0.01"
+        min="0"
+        value={value}
+        onChange={(e) => onChange(e.target.value)}
+        placeholder="0.00"
+      />
+      {(p.strip_enabled || p.pack_enabled) && (
+        <div className="rounded-md border bg-muted/30 px-2 py-1.5 text-xs text-muted-foreground space-y-0.5">
+          {p.strip_enabled && p.units_per_strip ? (
+            <div>
+              {kind === 'sell' ? 'Strip price' : 'Strip cost'}:{' '}
+              <span className="font-medium text-foreground">
+                {stripPrice != null ? stripPrice.toFixed(2) : '—'}
+              </span>{' '}
+              <span className="opacity-70">
+                ({p.units_per_strip} {unitName}/{stripName})
+              </span>
+            </div>
+          ) : null}
+          {p.pack_enabled && p.strips_per_pack && p.units_per_strip ? (
+            <div>
+              {kind === 'sell' ? 'Pack price' : 'Pack cost'}:{' '}
+              <span className="font-medium text-foreground">
+                {packPrice != null ? packPrice.toFixed(2) : '—'}
+              </span>{' '}
+              <span className="opacity-70">
+                ({p.strips_per_pack} {stripName}/{packName})
+              </span>
+            </div>
+          ) : null}
+          <div className="opacity-70 italic">Auto-calculated from {unitName} price.</div>
+        </div>
+      )}
+    </div>
+  );
+}
