@@ -619,6 +619,9 @@ export default function SalesManagement() {
         const isMeasurableItem = item.item_type === 'measurable' || isMeasurable(item.unit_label);
         const stripeQty = Number(item.stripesCount || 0);
         const packQty = Number(item.quantity || 0);
+        // Persist the explicit sell level when using the new multi-level flow
+        // so Finance shows the exact unit the cashier picked (unit/strip/pack).
+        const resolvedSaleType = item.sellLevel ? item.sellLevel : item.saleType;
 
         return {
           sale_id: saleData.id,
@@ -627,7 +630,7 @@ export default function SalesManagement() {
           quantity: isByStripe ? Number(stripeQty.toFixed(4)) : Number(packQty),
           unit_price: Number(item.selling_price),
           total_price: Number(item.total.toFixed(2)),
-          sale_type: item.saleType,
+          sale_type: resolvedSaleType,
           strip_quantity: isByStripe && !isMeasurableItem ? Math.max(0, Math.round(stripeQty)) : 0,
           pack_quantity: !isByStripe && !isMeasurableItem ? Math.max(0, Math.round(packQty)) : 0,
           stripes_sold: isByStripe && stripeQty > 0
