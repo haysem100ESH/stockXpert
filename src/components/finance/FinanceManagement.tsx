@@ -32,12 +32,19 @@ type SaleLevel = 'unit' | 'strip' | 'pack';
 const approxEq = (a: number, b: number) => Math.abs(a - b) < 0.01;
 
 function inferSaleLevel(si: any, pkg?: Packaging | null): SaleLevel {
-  // 1) Explicit level recorded by the new multi-level Sales flow.
+  // 1) Explicit level (forward-compat if DB ever stores it).
   const st = si?.sale_type;
   if (st === 'unit' || st === 'strip' || st === 'pack') return st;
-  // 2) Legacy markers.
-  if (st === 'by_stripe') return 'unit';
-  if (st === 'full_pack') return 'pack';
+  // 2) Legacy markers encode the level via strip_quantity / pack_quantity.
+  const stripQty = Number(si?.strip_quantity || 0);
+  const packQty = Number(si?.pack_quantity || 0);
+  if (st === 'by_stripe') {
+    if (stripQty > 0) return 'strip';
+    return 'unit';
+  }
+  if (st === 'full_pack') {
+    if (packQty > 0) return 'pack';
+  }
   // 3) Heuristic fallback: match unit_price against per-level prices.
   const price = Number(si?.unit_price || 0);
   if (pkg && price > 0) {
@@ -59,7 +66,7 @@ function inferSaleLevel(si: any, pkg?: Packaging | null): SaleLevel {
     }
     if (bestDiff < 0.01) return best;
   }
-  return 'unit';
+  return st === 'full_pack' ? 'pack' : 'unit';
 }
 
 interface SaleItemFormatted {

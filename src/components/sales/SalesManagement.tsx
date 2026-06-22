@@ -615,27 +615,55 @@ export default function SalesManagement() {
       // Keep compatibility with both legacy and new branch_items system.
       // Now using branch_item_id (item.id is branch_items.id).
       const saleItems = cart.map(item => {
-        const isByStripe = item.saleType === 'by_stripe';
         const isMeasurableItem = item.item_type === 'measurable' || isMeasurable(item.unit_label);
         const stripeQty = Number(item.stripesCount || 0);
         const packQty = Number(item.quantity || 0);
-        // Persist the explicit sell level when using the new multi-level flow
-        // so Finance shows the exact unit the cashier picked (unit/strip/pack).
-        const resolvedSaleType = item.sellLevel ? item.sellLevel : item.saleType;
+
+        // Encode the chosen sell level into the legacy columns so the DB
+        // CHECK constraint (full_pack | by_stripe) is satisfied while Finance
+        // can still recover the exact level:
+        //   unit  -> sale_type='by_stripe', strip_quantity=0, pack_quantity=0
+        //   strip -> sale_type='by_stripe', strip_quantity=qty
+        //   pack  -> sale_type='full_pack', pack_quantity=qty
+        let saleType: 'full_pack' | 'by_stripe' = item.saleType === 'by_stripe' ? 'by_stripe' : 'full_pack';
+        let qtyForRow = isMeasurableItem || item.saleType === 'by_stripe' ? stripeQty : packQty;
+        let stripQtyCol = item.saleType === 'by_stripe' && !isMeasurableItem ? Math.max(0, Math.round(stripeQty)) : 0;
+        let packQtyCol = item.saleType !== 'by_stripe' && !isMeasurableItem ? Math.max(0, Math.round(packQty)) : 0;
+        let stripesSoldCol: number | null = item.saleType === 'by_stripe' && stripeQty > 0 ? Math.round(stripeQty * 1000) : null;
+
+        if (item.sellLevel) {
+          const q = Number(item.quantity || 0);
+          qtyForRow = q;
+          if (item.sellLevel === 'pack') {
+            saleType = 'full_pack';
+            packQtyCol = Math.max(0, Math.round(q));
+            stripQtyCol = 0;
+            stripesSoldCol = null;
+          } else if (item.sellLevel === 'strip') {
+            saleType = 'by_stripe';
+            stripQtyCol = Math.max(0, Math.round(q));
+            packQtyCol = 0;
+            stripesSoldCol = Math.round(q * 1000);
+          } else {
+            // unit
+            saleType = 'by_stripe';
+            stripQtyCol = 0;
+            packQtyCol = 0;
+            stripesSoldCol = null;
+          }
+        }
 
         return {
           sale_id: saleData.id,
-          medicine_id: (item as any).medicine_id || item.id, // fallback to medicine_id
-          branch_item_id: item.id, // branch_items.id
-          quantity: isByStripe ? Number(stripeQty.toFixed(4)) : Number(packQty),
+          medicine_id: (item as any).medicine_id || item.id,
+          branch_item_id: item.id,
+          quantity: Number(Number(qtyForRow).toFixed(4)),
           unit_price: Number(item.selling_price),
           total_price: Number(item.total.toFixed(2)),
-          sale_type: resolvedSaleType,
-          strip_quantity: isByStripe && !isMeasurableItem ? Math.max(0, Math.round(stripeQty)) : 0,
-          pack_quantity: !isByStripe && !isMeasurableItem ? Math.max(0, Math.round(packQty)) : 0,
-          stripes_sold: isByStripe && stripeQty > 0
-            ? Math.round(stripeQty * 1000)
-            : null,
+          sale_type: saleType,
+          strip_quantity: stripQtyCol,
+          pack_quantity: packQtyCol,
+          stripes_sold: stripesSoldCol,
         };
       });
 
