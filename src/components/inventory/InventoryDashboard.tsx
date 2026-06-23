@@ -209,22 +209,33 @@ export default function InventoryDashboard() {
 
   const confirmRemoveExpiredItem = async () => {
     try {
-      const { error } = await supabase
+      // Try to delete the expired batch entirely so it disappears from
+      // inventory and stops triggering expiry alerts. If a sale_item_batches
+      // FK blocks deletion (historical sale linkage), fall back to setting
+      // remaining_quantity to 0 so audit data is preserved.
+      const { error: delError } = await supabase
         .from('inventory_batches')
-        .update({ remaining_quantity: 0 })
+        .delete()
         .eq('id', deleteConfirm.batchId);
-      if (error) throw error;
+
+      if (delError) {
+        const { error: updError } = await supabase
+          .from('inventory_batches')
+          .update({ remaining_quantity: 0 })
+          .eq('id', deleteConfirm.batchId);
+        if (updError) throw updError;
+      }
 
       if (deleteConfirm.branchItemId) {
         await syncBranchItemQuantity(deleteConfirm.branchItemId);
       }
 
       setExpiredBatches(expiredBatches.filter(b => b.batch_id !== deleteConfirm.batchId));
-      toast({ title: "Success", description: "Expired batch stock set to 0" });
+      toast({ title: "Success", description: "Expired batch removed from inventory" });
       setDeleteConfirm({ open: false, batchId: '', branchItemId: '', itemName: '', batchNumber: null });
     } catch (error) {
-      console.error('Error updating expired batch:', error);
-      toast({ title: "Error", description: "Failed to update expired batch", variant: "destructive" });
+      console.error('Error removing expired batch:', error);
+      toast({ title: "Error", description: "Failed to remove expired batch", variant: "destructive" });
     }
   };
 
