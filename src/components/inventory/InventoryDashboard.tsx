@@ -482,7 +482,7 @@ export default function InventoryDashboard() {
                       onClick={() => handleRemoveExpiredBatch(b)}
                       className="text-destructive hover:text-destructive"
                     >
-                      Set Stock to 0
+                      Remove Batch
                     </Button>
                   </div>
                 </div>
