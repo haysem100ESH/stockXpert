@@ -508,10 +508,10 @@ export default function InventoryDashboard() {
       <ConfirmationDialog
         open={deleteConfirm.open}
         onOpenChange={(open) => setDeleteConfirm(prev => ({ ...prev, open }))}
-        title="Set Stock to Zero"
-        description={`Are you sure you want to set batch "${deleteConfirm.batchNumber || '—'}" of "${deleteConfirm.itemName}" to 0?`}
+        title="Remove Expired Batch"
+        description={`Remove batch "${deleteConfirm.batchNumber || '—'}" of "${deleteConfirm.itemName}" from inventory? This will stop expiry alerts for this batch. Sale history is preserved.`}
         onConfirm={confirmRemoveExpiredItem}
-        confirmText="Set to 0"
+        confirmText="Remove"
         cancelText="Cancel"
       />
     </div>
