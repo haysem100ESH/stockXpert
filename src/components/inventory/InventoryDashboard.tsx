@@ -209,22 +209,33 @@ export default function InventoryDashboard() {
 
   const confirmRemoveExpiredItem = async () => {
     try {
-      const { error } = await supabase
+      // Try to delete the expired batch entirely so it disappears from
+      // inventory and stops triggering expiry alerts. If a sale_item_batches
+      // FK blocks deletion (historical sale linkage), fall back to setting
+      // remaining_quantity to 0 so audit data is preserved.
+      const { error: delError } = await supabase
         .from('inventory_batches')
-        .update({ remaining_quantity: 0 })
+        .delete()
         .eq('id', deleteConfirm.batchId);
-      if (error) throw error;
+
+      if (delError) {
+        const { error: updError } = await supabase
+          .from('inventory_batches')
+          .update({ remaining_quantity: 0 })
+          .eq('id', deleteConfirm.batchId);
+        if (updError) throw updError;
+      }
 
       if (deleteConfirm.branchItemId) {
         await syncBranchItemQuantity(deleteConfirm.branchItemId);
       }
 
       setExpiredBatches(expiredBatches.filter(b => b.batch_id !== deleteConfirm.batchId));
-      toast({ title: "Success", description: "Expired batch stock set to 0" });
+      toast({ title: "Success", description: "Expired batch removed from inventory" });
       setDeleteConfirm({ open: false, batchId: '', branchItemId: '', itemName: '', batchNumber: null });
     } catch (error) {
-      console.error('Error updating expired batch:', error);
-      toast({ title: "Error", description: "Failed to update expired batch", variant: "destructive" });
+      console.error('Error removing expired batch:', error);
+      toast({ title: "Error", description: "Failed to remove expired batch", variant: "destructive" });
     }
   };
 
@@ -471,7 +482,7 @@ export default function InventoryDashboard() {
                       onClick={() => handleRemoveExpiredBatch(b)}
                       className="text-destructive hover:text-destructive"
                     >
-                      Set Stock to 0
+                      Remove Batch
                     </Button>
                   </div>
                 </div>
@@ -497,10 +508,10 @@ export default function InventoryDashboard() {
       <ConfirmationDialog
         open={deleteConfirm.open}
         onOpenChange={(open) => setDeleteConfirm(prev => ({ ...prev, open }))}
-        title="Set Stock to Zero"
-        description={`Are you sure you want to set batch "${deleteConfirm.batchNumber || '—'}" of "${deleteConfirm.itemName}" to 0?`}
+        title="Remove Expired Batch"
+        description={`Remove batch "${deleteConfirm.batchNumber || '—'}" of "${deleteConfirm.itemName}" from inventory? This will stop expiry alerts for this batch. Sale history is preserved.`}
         onConfirm={confirmRemoveExpiredItem}
-        confirmText="Set to 0"
+        confirmText="Remove"
         cancelText="Cancel"
       />
     </div>
