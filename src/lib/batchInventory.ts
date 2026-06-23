@@ -86,14 +86,19 @@ export async function syncBranchItemQuantity(branchItemId: string): Promise<void
 }
 
 /**
- * Get batches for a branch_item ordered by FIFO (expiry first, then created_at)
+ * Get batches for a branch_item ordered by FIFO (earliest non-expired
+ * expiry first, then earliest created_at). Expired batches are EXCLUDED
+ * from sale so the next non-expired batch is automatically brought to the
+ * front. Expired batch rows remain in the database for audit/visibility.
  */
 export async function getFIFOBatches(branchItemId: string): Promise<InventoryBatch[]> {
+  const today = new Date().toISOString().split('T')[0];
   const { data } = await supabase
     .from('inventory_batches')
     .select('*')
     .eq('branch_item_id', branchItemId)
     .gt('remaining_quantity', 0)
+    .or(`expiry_date.is.null,expiry_date.gte.${today}`)
     .order('expiry_date', { ascending: true, nullsFirst: false })
     .order('created_at', { ascending: true });
 

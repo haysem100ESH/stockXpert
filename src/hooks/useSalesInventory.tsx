@@ -75,11 +75,13 @@ async function fetchSalesInventory(branchIds: string[]): Promise<SalesMedicine[]
 
   const medicineIds = [...new Set(items.map((i: any) => i.medicine_id))] as string[];
   const allBranchIds = [...new Set(items.map((i: any) => i.branch_id).filter(Boolean))] as string[];
+  const branchItemIds = items.map((i: any) => i.id) as string[];
+  const today = new Date().toISOString().split('T')[0];
 
   // Chunk to 50 ids + retry. Single-shot .in() with hundreds of UUIDs
   // could be silently dropped by proxies on slow connections, causing
   // names to render as "Unknown".
-  const [medsRes, branchesRes] = await Promise.all([
+  const [medsRes, branchesRes, batchesRes] = await Promise.all([
     chunkedInPartial<any>(medicineIds, (ids) =>
       (supabase as any)
         .from('medicines')
@@ -89,6 +91,13 @@ async function fetchSalesInventory(branchIds: string[]): Promise<SalesMedicine[]
     chunkedInPartial<any>(allBranchIds, (ids) =>
       (supabase as any).from('pharmacy_branches').select('id, name').in('id', ids)
     ),
+    chunkedInPartial<any>(branchItemIds, (ids) =>
+      (supabase as any)
+        .from('inventory_batches')
+        .select('branch_item_id, remaining_quantity, expiry_date')
+        .in('branch_item_id', ids)
+        .gt('remaining_quantity', 0)
+    , 20),
   ]);
 
   const medMap: Record<string, any> = {};
@@ -96,33 +105,62 @@ async function fetchSalesInventory(branchIds: string[]): Promise<SalesMedicine[]
   const branchMap: Record<string, string> = {};
   branchesRes.data.forEach((b: any) => { branchMap[b.id] = b.name; });
 
-  return items.map((item: any) => {
-    const med = medMap[item.medicine_id];
-    const m = med || {};
-    const hasMed = !!med;
-    return {
-      id: item.id,
-      medicine_id: item.medicine_id,
-      name: hasMed ? m.name : SALES_UNAVAILABLE,
-      generic_name: m.generic_name,
-      selling_price: item.selling_price,
-      purchase_price: item.purchase_price,
-      stock_quantity: item.quantity,
-      category: m.category,
-      expiry_date: item.expiry_date,
-      units_per_pack: m.units_per_pack,
-      open_pack_units: 0,
-      unit_label: m.unit_label,
-      item_type: m.item_type,
-      branch_id: item.branch_id,
-      branch_name: branchMap[item.branch_id],
-      medicine_group: m.medicine_group,
-      strength: m.strength,
-      packaging_mode: m.packaging_mode,
-      main_unit_name: m.main_unit_name,
-      unit_price: m.unit_price,
-    } as SalesMedicine;
+  // Track expired-batch quantity per branch_item so we exclude it from the
+  // sellable stock figure. The batches stay in the DB (visible in batch
+  // breakdown / expiry views), but the cashier can never pick from them and
+  // the next non-expired batch is automatically brought to the front.
+  // Also detect items that have batches at all — items without any batch
+  // row fall back to the legacy branch_items.expiry_date check.
+  const expiredQtyByItem: Record<string, number> = {};
+  const hasAnyBatch: Record<string, boolean> = {};
+  const hasFreshBatch: Record<string, boolean> = {};
+  batchesRes.data.forEach((b: any) => {
+    hasAnyBatch[b.branch_item_id] = true;
+    if (b.expiry_date && b.expiry_date < today) {
+      expiredQtyByItem[b.branch_item_id] = (expiredQtyByItem[b.branch_item_id] || 0) + Number(b.remaining_quantity || 0);
+    } else {
+      hasFreshBatch[b.branch_item_id] = true;
+    }
   });
+
+  return items
+    .map((item: any) => {
+      const med = medMap[item.medicine_id];
+      const m = med || {};
+      const hasMed = !!med;
+      const rawQty = Number(item.quantity) || 0;
+      const expiredQty = expiredQtyByItem[item.id] || 0;
+      let sellable = Math.max(0, rawQty - expiredQty);
+
+      // Legacy items without batches: fall back to branch_items.expiry_date.
+      if (!hasAnyBatch[item.id] && item.expiry_date && item.expiry_date < today) {
+        sellable = 0;
+      }
+
+      return {
+        id: item.id,
+        medicine_id: item.medicine_id,
+        name: hasMed ? m.name : SALES_UNAVAILABLE,
+        generic_name: m.generic_name,
+        selling_price: item.selling_price,
+        purchase_price: item.purchase_price,
+        stock_quantity: sellable,
+        category: m.category,
+        expiry_date: item.expiry_date,
+        units_per_pack: m.units_per_pack,
+        open_pack_units: 0,
+        unit_label: m.unit_label,
+        item_type: m.item_type,
+        branch_id: item.branch_id,
+        branch_name: branchMap[item.branch_id],
+        medicine_group: m.medicine_group,
+        strength: m.strength,
+        packaging_mode: m.packaging_mode,
+        main_unit_name: m.main_unit_name,
+        unit_price: m.unit_price,
+      } as SalesMedicine;
+    })
+    .filter((m: SalesMedicine) => m.stock_quantity > 0);
 }
 
 async function fetchSalesCustomers(selectedBranch: string | null, ownerBranchIds: string[], isOwner: boolean): Promise<SalesCustomer[]> {
