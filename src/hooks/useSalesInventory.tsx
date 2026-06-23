@@ -94,7 +94,7 @@ async function fetchSalesInventory(branchIds: string[]): Promise<SalesMedicine[]
     chunkedInPartial<any>(branchItemIds, (ids) =>
       (supabase as any)
         .from('inventory_batches')
-        .select('branch_item_id, remaining_quantity, expiry_date')
+        .select('branch_item_id, remaining_quantity, expiry_date, selling_price, purchase_price, created_at')
         .in('branch_item_id', ids)
         .gt('remaining_quantity', 0)
     , 20),
@@ -106,20 +106,21 @@ async function fetchSalesInventory(branchIds: string[]): Promise<SalesMedicine[]
   branchesRes.data.forEach((b: any) => { branchMap[b.id] = b.name; });
 
   // Track expired-batch quantity per branch_item so we exclude it from the
-  // sellable stock figure. The batches stay in the DB (visible in batch
-  // breakdown / expiry views), but the cashier can never pick from them and
-  // the next non-expired batch is automatically brought to the front.
-  // Also detect items that have batches at all — items without any batch
-  // row fall back to the legacy branch_items.expiry_date check.
+  // sellable stock figure, and identify the FIFO-front fresh batch so the
+  // sales card surfaces its expiry/price instead of the expired one's.
   const expiredQtyByItem: Record<string, number> = {};
   const hasAnyBatch: Record<string, boolean> = {};
-  const hasFreshBatch: Record<string, boolean> = {};
+  const frontBatchByItem: Record<string, any> = {};
   batchesRes.data.forEach((b: any) => {
     hasAnyBatch[b.branch_item_id] = true;
     if (b.expiry_date && b.expiry_date < today) {
       expiredQtyByItem[b.branch_item_id] = (expiredQtyByItem[b.branch_item_id] || 0) + Number(b.remaining_quantity || 0);
     } else {
-      hasFreshBatch[b.branch_item_id] = true;
+      const current = frontBatchByItem[b.branch_item_id];
+      const isEarlier = !current
+        || (b.expiry_date && (!current.expiry_date || b.expiry_date < current.expiry_date))
+        || (b.expiry_date === current.expiry_date && b.created_at < current.created_at);
+      if (isEarlier) frontBatchByItem[b.branch_item_id] = b;
     }
   });
 
@@ -137,16 +138,22 @@ async function fetchSalesInventory(branchIds: string[]): Promise<SalesMedicine[]
         sellable = 0;
       }
 
+      // Surface the FIFO-front fresh batch's expiry & price on the card.
+      const front = frontBatchByItem[item.id];
+      const displayExpiry = front ? front.expiry_date : item.expiry_date;
+      const displaySellingPrice = front && front.selling_price != null ? Number(front.selling_price) : item.selling_price;
+      const displayPurchasePrice = front && front.purchase_price != null ? Number(front.purchase_price) : item.purchase_price;
+
       return {
         id: item.id,
         medicine_id: item.medicine_id,
         name: hasMed ? m.name : SALES_UNAVAILABLE,
         generic_name: m.generic_name,
-        selling_price: item.selling_price,
-        purchase_price: item.purchase_price,
+        selling_price: displaySellingPrice,
+        purchase_price: displayPurchasePrice,
         stock_quantity: sellable,
         category: m.category,
-        expiry_date: item.expiry_date,
+        expiry_date: displayExpiry,
         units_per_pack: m.units_per_pack,
         open_pack_units: 0,
         unit_label: m.unit_label,
