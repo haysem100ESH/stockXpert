@@ -282,6 +282,12 @@ export default function FinanceManagement() {
         return;
       }
 
+      // Use sale_date (business/accounting date) for filtering and ordering so
+      // reports reflect when the sale actually happened, not when the row was
+      // written. created_at remains the system record timestamp.
+      const startDay = queryStartDate.toISOString().slice(0, 10);
+      const endDay = queryEndDate.toISOString().slice(0, 10);
+
       // Fetch sales with medicine details
       let salesQuery = supabase
         .from('sales')
@@ -302,8 +308,9 @@ export default function FinanceManagement() {
             )
           )
         `)
-        .gte('created_at', queryStartDate.toISOString())
-        .lte('created_at', queryEndDate.toISOString())
+        .gte('sale_date', startDay)
+        .lte('sale_date', endDay)
+        .order('sale_date', { ascending: false })
         .order('created_at', { ascending: false });
 
       if (selectedBranch) {
