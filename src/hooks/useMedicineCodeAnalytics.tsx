@@ -87,18 +87,20 @@ export interface SaleItemRow {
 
 async function fetchSaleItems(branchIds: string[], since: Date): Promise<SaleItemRow[]> {
   if (branchIds.length === 0) return [];
+  const sinceDay = since.toISOString().slice(0, 10);
   const { data, error } = await (supabase as any)
     .from('sale_items')
-    .select('medicine_id, quantity, total_price, created_at, sales!inner(branch_id, created_at)')
+    .select('medicine_id, quantity, total_price, created_at, sales!inner(branch_id, sale_date, created_at)')
     .in('sales.branch_id', branchIds)
-    .gte('sales.created_at', since.toISOString())
+    .gte('sales.sale_date', sinceDay)
     .range(0, 49999);
   if (error) throw error;
   return ((data || []) as any[]).map((r) => ({
     medicine_id: r.medicine_id,
     quantity: Number(r.quantity) || 0,
     total_price: Number(r.total_price) || 0,
-    created_at: r.sales?.created_at || r.created_at,
+    // Prefer business sale_date; fall back to sale's created_at then row's.
+    created_at: r.sales?.sale_date || r.sales?.created_at || r.created_at,
   }));
 }
 
