@@ -165,12 +165,14 @@ export default function Dashboard() {
         return;
       }
       
-      // Fetch revenue for the selected period
+      // Fetch revenue for the selected period — filter by business sale_date
+      const startDay = start.toISOString().slice(0, 10);
+      const endDay = end.toISOString().slice(0, 10);
       let salesQuery = supabase
         .from('sales')
-        .select('total_amount, created_at, payment_method, discount_amount')
-        .gte('created_at', start.toISOString())
-        .lte('created_at', end.toISOString());
+        .select('total_amount, created_at, sale_date, payment_method, discount_amount')
+        .gte('sale_date', startDay)
+        .lte('sale_date', endDay);
       
       if (profile?.role === 'staff') {
         salesQuery = salesQuery.eq('branch_id', userBranch || profile?.branch_id);
