@@ -842,6 +842,7 @@ export default function SalesManagement() {
           payment_method: paymentMethod,
           discount: Number(calculateDiscount().toFixed(2)),
           customer_name: selectedCustomer?.name || null,
+          sale_date: saleDate,
           items: cart.map((it) => {
             const qty = it.saleType === 'by_stripe' ? (it.stripesCount ?? 0) : it.quantity;
             const lineTotal = Number((it as any).total ?? 0);
@@ -866,6 +867,8 @@ export default function SalesManagement() {
       setChangeAction(null);
       setKeepChangeOption('profit');
       setCartOpen(false);
+      // Reset sale date back to today for the next transaction.
+      setSaleDate(todayISO());
       // Revalidate cached product list + customers (debt may have changed).
       invalidateSalesCache();
       // Broadcast to all pages (Inventory, Dashboard, etc.) so stock cards refresh live.
