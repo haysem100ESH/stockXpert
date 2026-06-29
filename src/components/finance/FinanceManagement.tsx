@@ -736,7 +736,7 @@ export default function FinanceManagement() {
       const isPaid = Number(sale.total_amount) <= ((sale as any).amount_paid || 0);
       const isPartial = !isPaid && ((sale as any).amount_paid || 0) > 0;
       row.values = [
-        new Date(sale.created_at).toLocaleString(), itemNames,
+        new Date((sale as any).sale_date || sale.created_at).toLocaleString(), itemNames,
         sale.seller ? `${sale.seller.role === 'owner' ? 'Owner' : 'Staff'} (${sale.seller.full_name})` : '—',
         (sale as any).payment_method || '—',
         Number(sale.discount_amount) > 0 ? Number(sale.discount_amount) : '',
@@ -794,7 +794,7 @@ export default function FinanceManagement() {
         const isPaid = Number(sale.total_amount) <= ((sale as any).amount_paid || 0);
         const isPartial = !isPaid && ((sale as any).amount_paid || 0) > 0;
         return [
-          new Date(sale.created_at).toLocaleDateString(), itemNames,
+          new Date((sale as any).sale_date || sale.created_at).toLocaleDateString(), itemNames,
           sale.seller ? `${sale.seller.role === 'owner' ? 'Owner' : 'Staff'} (${sale.seller.full_name})` : '—',
           (sale as any).payment_method || '—',
           Number(sale.discount_amount) > 0 ? `−ETB ${Number(sale.discount_amount).toFixed(2)}` : '',
@@ -1269,7 +1269,7 @@ export default function FinanceManagement() {
                               })}
                             </div>
                             <div className="text-xs text-muted-foreground">
-                              {new Date(sale.created_at).toLocaleDateString()} · {new Date(sale.created_at).toLocaleTimeString()}
+                              {new Date((sale as any).sale_date || sale.created_at).toLocaleDateString()} · {new Date(sale.created_at).toLocaleTimeString()}
                             </div>
                             {Number(sale.discount_amount || 0) > 0 && (
                               <div className="text-xs text-muted-foreground">
@@ -1512,7 +1512,7 @@ export default function FinanceManagement() {
                             return (
                               <TableRow key={sale.id} className={idx % 2 === 0 ? '' : 'bg-muted/20'}>
                                 <TableCell className="text-xs whitespace-nowrap">
-                                  <div>{new Date(sale.created_at).toLocaleDateString()}</div>
+                                  <div>{new Date((sale as any).sale_date || sale.created_at).toLocaleDateString()}</div>
                                   <div className="text-muted-foreground">{new Date(sale.created_at).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })}</div>
                                 </TableCell>
                                 <TableCell className="text-xs max-w-[200px]">
