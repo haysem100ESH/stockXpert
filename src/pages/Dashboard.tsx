@@ -426,7 +426,8 @@ export default function Dashboard() {
       // Process income vs expense data by day
       const dateMap = new Map<string, { income: number; expenses: number }>();
       salesWithItems?.forEach(sale => {
-        const date = format(new Date(sale.created_at), 'yyyy-MM-dd');
+        // Group by business sale_date when present; fall back to created_at.
+        const date = format(new Date((sale as any).sale_date || sale.created_at), 'yyyy-MM-dd');
         const existing = dateMap.get(date) || { income: 0, expenses: 0 };
         dateMap.set(date, {
           ...existing,
