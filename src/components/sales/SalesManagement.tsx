@@ -584,6 +584,9 @@ export default function SalesManagement() {
         branch_id: selectedBranch ?? profile?.branch_id ?? null,
         amount_paid: Number(actualPaid.toFixed(2)),
         payment_status: String(paymentStatus),
+        // Business/accounting date chosen by the cashier. The DB also stores
+        // its own created_at / updated_at timestamps untouched.
+        sale_date: saleDate,
       };
 
       // Only add customer_id if a customer is selected
