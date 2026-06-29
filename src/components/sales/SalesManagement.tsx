@@ -1041,10 +1041,54 @@ export default function SalesManagement() {
     return <div className="p-4 text-muted-foreground">Loading {isPharmacy ? 'medicines' : 'items'}...</div>;
   }
 
+  const isCustomSaleDate = saleDate !== todayISO();
+
   return (
     <div className="flex flex-col lg:grid lg:grid-cols-3 gap-6 relative">
       {/* Medicine/Item list */}
       <div className="lg:col-span-2 space-y-4">
+        {/* Sticky Sale Date bar — applies to every item in this transaction */}
+        <div className="sticky top-0 z-30 -mx-2 px-2 py-2 bg-background/95 backdrop-blur supports-[backdrop-filter]:bg-background/80 border-b border-border/60">
+          <div className={`rounded-lg border ${isCustomSaleDate ? 'border-warning/60 bg-warning/10' : 'border-primary/30 bg-primary/5'} p-3 flex items-center gap-3`}>
+            <CalendarIcon className={`h-5 w-5 shrink-0 ${isCustomSaleDate ? 'text-warning' : 'text-primary'}`} />
+            <div className="flex-1 min-w-0">
+              <Label htmlFor="sale-date-input" className="text-xs font-semibold uppercase tracking-wide text-muted-foreground">
+                Sale Date {isCustomSaleDate && <span className="text-warning normal-case">· Custom date applied to this transaction</span>}
+              </Label>
+              <div className="flex items-center gap-2 mt-1">
+                <Input
+                  id="sale-date-input"
+                  type="date"
+                  value={saleDate}
+                  max={todayISO()}
+                  onChange={(e) => {
+                    const v = e.target.value;
+                    if (!v) return;
+                    // Prevent future dates
+                    if (v > todayISO()) {
+                      toast({ title: 'Invalid date', description: 'Sale date cannot be in the future.', variant: 'destructive' });
+                      return;
+                    }
+                    setSaleDate(v);
+                  }}
+                  className="h-10 text-base font-semibold w-auto min-w-[180px]"
+                />
+                {isCustomSaleDate && (
+                  <Button
+                    type="button"
+                    size="sm"
+                    variant="ghost"
+                    className="h-9 text-xs"
+                    onClick={() => setSaleDate(todayISO())}
+                  >
+                    Reset to today
+                  </Button>
+                )}
+              </div>
+            </div>
+          </div>
+        </div>
+
         {/* Search + Filter row */}
         <div className="flex items-center gap-3">
           <div className="relative flex-1">
