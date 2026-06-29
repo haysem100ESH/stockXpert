@@ -218,8 +218,8 @@ export default function Dashboard() {
         supabase
           .from('sales')
           .select('id')
-          .gte('created_at', start.toISOString())
-          .lte('created_at', end.toISOString())
+          .gte('sale_date', startDay)
+          .lte('sale_date', endDay)
       );
       const { data: periodSalesData } = await periodSalesQuery;
       const todaySales = periodSalesData?.length || 0;
