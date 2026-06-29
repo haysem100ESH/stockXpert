@@ -52,12 +52,16 @@ export function useBranchProfit() {
     }
 
     // Fetch sales
+    // Sales are filtered by business sale_date so monthly profit reflects the
+    // accounting date the cashier picked, not the row's insertion timestamp.
+    const startDay = String(startOfMonth).slice(0, 10);
+    const endDay = String(endOfMonth).slice(0, 10);
     const { data: salesData } = await supabase
       .from('sales')
       .select('total_amount')
       .in('branch_id', branchIds)
-      .gte('created_at', startOfMonth)
-      .lte('created_at', endOfMonth);
+      .gte('sale_date', startDay)
+      .lte('sale_date', endDay);
 
     const totalSales = (salesData || []).reduce((sum, s) => sum + Number(s.total_amount), 0);
 
