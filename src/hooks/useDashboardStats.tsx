@@ -98,10 +98,15 @@ async function fetchDashboardOverview({ selectedBranch, ownerBranchIds, dateFilt
   // which silently truncates results for owners with hundreds of items / sales.
   // We also dropped the redundant `salesQuery` — `salesWithItemsQuery` returns the
   // same rows plus the joined sale_items, so one round-trip is enough.
+  // Filter on `sale_date` (business/accounting date the cashier picked) so
+  // analytics reflect when the sale really happened, not when the row was
+  // inserted. created_at is preserved for audit but not used for filtering.
+  const startDay = startDate.toISOString().slice(0, 10);
+  const endDay = now.toISOString().slice(0, 10);
   let salesWithItemsQuery = supabase.from('sales')
-    .select('id, total_amount, payment_method, discount_amount, branch_id, created_at, sale_items(quantity, medicine_id, medicines(name, category, medicine_code_id))')
-    .gte('created_at', startDate.toISOString())
-    .lte('created_at', now.toISOString())
+    .select('id, total_amount, payment_method, discount_amount, branch_id, created_at, sale_date, sale_items(quantity, medicine_id, medicines(name, category, medicine_code_id))')
+    .gte('sale_date', startDay)
+    .lte('sale_date', endDay)
     .range(0, 49999);
   let branchItemsQuery = supabase.from('branch_items')
     .select('id, quantity, expiry_date, medicines!inner(category, minimum_stock_level, medicine_code_id)')

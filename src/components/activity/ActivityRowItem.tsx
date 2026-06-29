@@ -136,7 +136,25 @@ export default function ActivityRowItem({ row }: { row: ActivityRow }) {
             <span className="font-medium truncate">{title}</span>
             <Badge variant="outline" className="text-[10px] py-0 px-1.5">{meta.label}</Badge>
           </div>
-          <div className="text-xs text-muted-foreground">{format(new Date(row.created_at), 'PP p')}</div>
+          <div className="text-xs text-muted-foreground">
+            {(() => {
+              // For sale rows, prefer the business sale_date stored in metadata
+              // (the date the cashier picked); keep the actual recorded time.
+              const saleDateStr = isSale ? (row.metadata as any)?.sale_date : null;
+              if (saleDateStr) {
+                const businessDay = format(new Date(`${saleDateStr}T00:00:00`), 'PP');
+                const time = format(new Date(row.created_at), 'p');
+                const isBackdated = saleDateStr !== format(new Date(row.created_at), 'yyyy-MM-dd');
+                return (
+                  <span>
+                    {businessDay} · {time}
+                    {isBackdated && <span className="ml-1 text-warning">(backdated)</span>}
+                  </span>
+                );
+              }
+              return format(new Date(row.created_at), 'PP p');
+            })()}
+          </div>
         </div>
         <ChevronDown className={cn('h-4 w-4 text-muted-foreground transition-transform', open && 'rotate-180')} />
       </CollapsibleTrigger>

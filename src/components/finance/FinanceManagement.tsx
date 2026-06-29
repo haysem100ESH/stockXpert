@@ -282,6 +282,12 @@ export default function FinanceManagement() {
         return;
       }
 
+      // Use sale_date (business/accounting date) for filtering and ordering so
+      // reports reflect when the sale actually happened, not when the row was
+      // written. created_at remains the system record timestamp.
+      const startDay = queryStartDate.toISOString().slice(0, 10);
+      const endDay = queryEndDate.toISOString().slice(0, 10);
+
       // Fetch sales with medicine details
       let salesQuery = supabase
         .from('sales')
@@ -302,8 +308,9 @@ export default function FinanceManagement() {
             )
           )
         `)
-        .gte('created_at', queryStartDate.toISOString())
-        .lte('created_at', queryEndDate.toISOString())
+        .gte('sale_date', startDay)
+        .lte('sale_date', endDay)
+        .order('sale_date', { ascending: false })
         .order('created_at', { ascending: false });
 
       if (selectedBranch) {
@@ -584,7 +591,13 @@ export default function FinanceManagement() {
         }
         return { ...sale, perLevel, itemTotal };
       })
-      .sort((a, b) => new Date(b.created_at).getTime() - new Date(a.created_at).getTime());
+      .sort((a, b) => {
+        // Primary: sale_date (business date). Secondary: created_at for ties.
+        const aDate = (a as any).sale_date || a.created_at;
+        const bDate = (b as any).sale_date || b.created_at;
+        const d = new Date(bDate).getTime() - new Date(aDate).getTime();
+        return d !== 0 ? d : new Date(b.created_at).getTime() - new Date(a.created_at).getTime();
+      });
   }, [sales, selectedItem, packagingMap]);
 
   const fetchBranches = async () => {
@@ -723,7 +736,7 @@ export default function FinanceManagement() {
       const isPaid = Number(sale.total_amount) <= ((sale as any).amount_paid || 0);
       const isPartial = !isPaid && ((sale as any).amount_paid || 0) > 0;
       row.values = [
-        new Date(sale.created_at).toLocaleString(), itemNames,
+        new Date((sale as any).sale_date || sale.created_at).toLocaleString(), itemNames,
         sale.seller ? `${sale.seller.role === 'owner' ? 'Owner' : 'Staff'} (${sale.seller.full_name})` : '—',
         (sale as any).payment_method || '—',
         Number(sale.discount_amount) > 0 ? Number(sale.discount_amount) : '',
@@ -781,7 +794,7 @@ export default function FinanceManagement() {
         const isPaid = Number(sale.total_amount) <= ((sale as any).amount_paid || 0);
         const isPartial = !isPaid && ((sale as any).amount_paid || 0) > 0;
         return [
-          new Date(sale.created_at).toLocaleDateString(), itemNames,
+          new Date((sale as any).sale_date || sale.created_at).toLocaleDateString(), itemNames,
           sale.seller ? `${sale.seller.role === 'owner' ? 'Owner' : 'Staff'} (${sale.seller.full_name})` : '—',
           (sale as any).payment_method || '—',
           Number(sale.discount_amount) > 0 ? `−ETB ${Number(sale.discount_amount).toFixed(2)}` : '',
@@ -1256,7 +1269,7 @@ export default function FinanceManagement() {
                               })}
                             </div>
                             <div className="text-xs text-muted-foreground">
-                              {new Date(sale.created_at).toLocaleDateString()} · {new Date(sale.created_at).toLocaleTimeString()}
+                              {new Date((sale as any).sale_date || sale.created_at).toLocaleDateString()} · {new Date(sale.created_at).toLocaleTimeString()}
                             </div>
                             {Number(sale.discount_amount || 0) > 0 && (
                               <div className="text-xs text-muted-foreground">
@@ -1499,7 +1512,7 @@ export default function FinanceManagement() {
                             return (
                               <TableRow key={sale.id} className={idx % 2 === 0 ? '' : 'bg-muted/20'}>
                                 <TableCell className="text-xs whitespace-nowrap">
-                                  <div>{new Date(sale.created_at).toLocaleDateString()}</div>
+                                  <div>{new Date((sale as any).sale_date || sale.created_at).toLocaleDateString()}</div>
                                   <div className="text-muted-foreground">{new Date(sale.created_at).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })}</div>
                                 </TableCell>
                                 <TableCell className="text-xs max-w-[200px]">
