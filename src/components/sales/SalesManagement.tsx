@@ -91,6 +91,14 @@ export default function SalesManagement() {
   const [keepChangeOption, setKeepChangeOption] = useState<'profit' | 'deduct_debt'>('profit');
   const [cartOpen, setCartOpen] = useState(false);
   const [selectedMedicineForDialog, setSelectedMedicineForDialog] = useState<Medicine | null>(null);
+  // Sale Date — the business/accounting date for this transaction. Defaults
+  // to today. All finance/analytics persistence uses this value.
+  const todayISO = () => {
+    const d = new Date();
+    const off = d.getTimezoneOffset();
+    return new Date(d.getTime() - off * 60_000).toISOString().slice(0, 10);
+  };
+  const [saleDate, setSaleDate] = useState<string>(todayISO());
 
   const { profile } = useAuth();
   const { toast } = useToast();
