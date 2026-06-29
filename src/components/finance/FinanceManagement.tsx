@@ -591,7 +591,13 @@ export default function FinanceManagement() {
         }
         return { ...sale, perLevel, itemTotal };
       })
-      .sort((a, b) => new Date(b.created_at).getTime() - new Date(a.created_at).getTime());
+      .sort((a, b) => {
+        // Primary: sale_date (business date). Secondary: created_at for ties.
+        const aDate = (a as any).sale_date || a.created_at;
+        const bDate = (b as any).sale_date || b.created_at;
+        const d = new Date(bDate).getTime() - new Date(aDate).getTime();
+        return d !== 0 ? d : new Date(b.created_at).getTime() - new Date(a.created_at).getTime();
+      });
   }, [sales, selectedItem, packagingMap]);
 
   const fetchBranches = async () => {
