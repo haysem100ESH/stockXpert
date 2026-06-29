@@ -313,8 +313,8 @@ export default function Dashboard() {
               medicines (name, category, medicine_code_id)
             )
           `)
-          .gte('created_at', start.toISOString())
-          .lte('created_at', end.toISOString());
+          .gte('sale_date', startDay)
+          .lte('sale_date', endDay);
         
         if (profile?.role === 'staff') {
           salesWithItemsQuery = salesWithItemsQuery.eq('branch_id', userBranch || profile?.branch_id);
