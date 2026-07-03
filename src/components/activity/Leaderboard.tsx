@@ -1,5 +1,5 @@
-import { useEffect, useMemo, useState } from 'react';
-import { supabase } from '@/integrations/supabase/client';
+import { useCallback, useEffect, useMemo, useState } from 'react';
+import { db } from '@/lib/db';
 import { useAuth } from '@/hooks/useAuth';
 import { useBranchContext } from '@/hooks/useBranchContext';
 import { Card, CardContent } from '@/components/ui/card';
@@ -12,6 +12,8 @@ import { format } from 'date-fns';
 import { cn } from '@/lib/utils';
 
 interface StaffRow { id: string; full_name: string | null; branch_id: string | null }
+interface BranchRow { id: string }
+interface ActivityInsertRow { user_id?: string; created_at?: string }
 type FilterKey = 'today' | 'week' | 'month' | 'all' | 'custom';
 export interface LeaderboardRange { from?: Date; to?: Date; label: string }
 
@@ -35,7 +37,7 @@ async function countActivitiesByStaff(staffIds: string[], range: { from?: Date; 
   for (let i = 0; i < staffIds.length; i += chunkSize) {
     const chunk = staffIds.slice(i, i + chunkSize);
     const entries = await Promise.all(chunk.map(async (staffId) => {
-      let q = (supabase as any)
+      let q = db
         .from('activity_log')
         .select('id', { count: 'exact', head: true })
         .eq('user_id', staffId);
@@ -67,16 +69,16 @@ export default function Leaderboard({ onSelectStaff }: { onSelectStaff?: (s: Sta
   const [customDate, setCustomDate] = useState<Date | undefined>(new Date());
   const [pickerOpen, setPickerOpen] = useState(false);
 
-  const load = async () => {
+  const load = useCallback(async () => {
     if (!profile || profile.role !== 'owner') return;
     setLoading(true);
-    const { data: branches } = await (supabase as any)
+    const { data: branches } = await db
       .from('pharmacy_branches')
       .select('id')
       .eq('pharmacy_owner_id', profile.id);
-    const branchIds = (branches || []).map((b: any) => b.id);
+    const branchIds = ((branches || []) as BranchRow[]).map((b) => b.id);
     const branchFilter = selectedBranch ? [selectedBranch] : branchIds;
-    const { data: people } = await (supabase as any)
+    const { data: people } = await db
       .from('profiles')
       .select('id, full_name, branch_id')
       .eq('role', 'staff')
@@ -97,20 +99,20 @@ export default function Leaderboard({ onSelectStaff }: { onSelectStaff?: (s: Sta
     const counts = await countActivitiesByStaff(staffIds, rangeForFilter(filter, customDate));
     setActivityCounts(counts);
     setLoading(false);
-  };
+  }, [profile, selectedBranch, filter, customDate]);
 
 
-  useEffect(() => { load(); }, [profile, selectedBranch, filter, customDate]);
+  useEffect(() => { load(); }, [load]);
 
   useEffect(() => {
     if (!profile || profile.role !== 'owner' || staff.length === 0) return;
 
     const staffIds = new Set(staff.map((s) => s.id));
     const range = rangeForFilter(filter, customDate);
-    const ch = (supabase as any)
+    const ch = db
       .channel(`leaderboard-activity-${profile.id}-${filter}-${customDate?.toISOString() ?? 'none'}`)
-      .on('postgres_changes', { event: 'INSERT', schema: 'public', table: 'activity_log' }, (payload: any) => {
-        const row = payload.new as { user_id?: string; created_at?: string };
+      .on('postgres_changes', { event: 'INSERT', schema: 'public', table: 'activity_log' }, (payload: { new: ActivityInsertRow }) => {
+        const row = payload.new;
         if (!row.user_id || !staffIds.has(row.user_id) || !row.created_at) return;
 
         const ts = new Date(row.created_at);
@@ -124,7 +126,7 @@ export default function Leaderboard({ onSelectStaff }: { onSelectStaff?: (s: Sta
       })
       .subscribe();
 
-    return () => { (supabase as any).removeChannel(ch); };
+    return () => { db.removeChannel(ch); };
   }, [profile, staff, filter, customDate]);
 
   const ranked = useMemo(() => {
