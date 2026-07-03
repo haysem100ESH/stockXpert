@@ -610,7 +610,12 @@ export default function SalesManagement() {
 
       // If extended columns don't exist in schema, retry without them (and
       // without sale_date so installs that haven't run the migration still work).
-      if (saleResult.error?.code === '42703' || saleResult.error?.message?.includes('does not exist')) {
+      if (
+        saleResult.error?.code === '42703' ||
+        saleResult.error?.code === 'PGRST204' ||
+        saleResult.error?.message?.includes('does not exist') ||
+        saleResult.error?.message?.toLowerCase?.().includes("could not find") 
+      ) {
         console.warn('[Sale Insert] Falling back to base payload (extended columns not in schema)');
         const { sale_date: _omitDate, ...legacyInsert } = baseSaleInsert as any;
         saleResult = await (supabase as any)
