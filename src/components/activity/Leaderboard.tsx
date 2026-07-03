@@ -44,19 +44,31 @@ export default function Leaderboard({ onSelectStaff }: { onSelectStaff?: (s: Sta
       .select('id, full_name, branch_id')
       .eq('role', 'staff')
       .in('branch_id', branchFilter.length ? branchFilter : ['00000000-0000-0000-0000-000000000000']);
-    setStaff((people || []) as StaffRow[]);
+    const staffList = (people || []) as StaffRow[];
+    setStaff(staffList);
+
+    const staffIds = staffList.map((s) => s.id);
+    if (staffIds.length === 0) {
+      setRows([]);
+      setLoading(false);
+      return;
+    }
 
     const from = new Date();
     from.setDate(from.getDate() - (filter === 'all' || filter === 'month' ? 365 : 60));
+    // Filter by user_id IN staffIds — more reliable than owner_id, which may be
+    // NULL on some legacy activity_log rows and would silently exclude them.
     let q = (supabase as any)
       .from('activity_log')
       .select('user_id, created_at')
-      .eq('owner_id', profile.id);
+      .in('user_id', staffIds);
     if (filter !== 'all') q = q.gte('created_at', from.toISOString());
-    const { data: logs } = await q;
+    const { data: logs, error: logsErr } = await q;
+    if (logsErr) console.warn('[Leaderboard] activity_log query error', logsErr);
     setRows(logs || []);
     setLoading(false);
   };
+
 
   useEffect(() => { load(); }, [profile, selectedBranch, filter]);
 
