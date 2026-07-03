@@ -165,12 +165,14 @@ export default function Dashboard() {
         return;
       }
       
-      // Fetch revenue for the selected period
+      // Fetch revenue for the selected period — filter by business sale_date
+      const startDay = start.toISOString().slice(0, 10);
+      const endDay = end.toISOString().slice(0, 10);
       let salesQuery = supabase
         .from('sales')
-        .select('total_amount, created_at, payment_method, discount_amount')
-        .gte('created_at', start.toISOString())
-        .lte('created_at', end.toISOString());
+        .select('total_amount, created_at, sale_date, payment_method, discount_amount')
+        .gte('sale_date', startDay)
+        .lte('sale_date', endDay);
       
       if (profile?.role === 'staff') {
         salesQuery = salesQuery.eq('branch_id', userBranch || profile?.branch_id);
@@ -216,8 +218,8 @@ export default function Dashboard() {
         supabase
           .from('sales')
           .select('id')
-          .gte('created_at', start.toISOString())
-          .lte('created_at', end.toISOString())
+          .gte('sale_date', startDay)
+          .lte('sale_date', endDay)
       );
       const { data: periodSalesData } = await periodSalesQuery;
       const todaySales = periodSalesData?.length || 0;
@@ -311,8 +313,8 @@ export default function Dashboard() {
               medicines (name, category, medicine_code_id)
             )
           `)
-          .gte('created_at', start.toISOString())
-          .lte('created_at', end.toISOString());
+          .gte('sale_date', startDay)
+          .lte('sale_date', endDay);
         
         if (profile?.role === 'staff') {
           salesWithItemsQuery = salesWithItemsQuery.eq('branch_id', userBranch || profile?.branch_id);
@@ -424,7 +426,8 @@ export default function Dashboard() {
       // Process income vs expense data by day
       const dateMap = new Map<string, { income: number; expenses: number }>();
       salesWithItems?.forEach(sale => {
-        const date = format(new Date(sale.created_at), 'yyyy-MM-dd');
+        // Group by business sale_date when present; fall back to created_at.
+        const date = format(new Date((sale as any).sale_date || sale.created_at), 'yyyy-MM-dd');
         const existing = dateMap.get(date) || { income: 0, expenses: 0 };
         dateMap.set(date, {
           ...existing,

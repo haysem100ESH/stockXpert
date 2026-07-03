@@ -112,11 +112,14 @@ export default function StaffDashboard() {
       const branchItemsResult = await branchItemsQuery;
       const branchItemsData = branchItemsResult.data as any[] || [];
 
+      const startDay = start.toISOString().slice(0, 10);
+      const endDay = end.toISOString().slice(0, 10);
+
       let salesQuery = supabase
         .from('sales')
         .select('id, total_amount, payment_method, discount_amount')
-        .gte('created_at', start.toISOString())
-        .lte('created_at', end.toISOString());
+        .gte('sale_date', startDay)
+        .lte('sale_date', endDay);
       
       if (userBranch) {
         salesQuery = salesQuery.eq('branch_id', userBranch);
@@ -136,8 +139,8 @@ export default function StaffDashboard() {
             medicines (name, category)
           )
         `)
-        .gte('created_at', start.toISOString())
-        .lte('created_at', end.toISOString());
+        .gte('sale_date', startDay)
+        .lte('sale_date', endDay);
       
       if (userBranch) {
         salesWithItemsQuery = salesWithItemsQuery.eq('branch_id', userBranch);

@@ -5,7 +5,8 @@ import { Input } from '@/components/ui/input';
 import { Badge } from '@/components/ui/badge';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
 import { Pagination, PaginationContent, PaginationItem, PaginationLink, PaginationNext, PaginationPrevious } from '@/components/ui/pagination';
-import { Search, Plus, ShoppingCart, Filter, Info } from 'lucide-react';
+import { Search, Plus, ShoppingCart, Filter, Info, CalendarIcon } from 'lucide-react';
+import { Label } from '@/components/ui/label';
 import MedicineInfoDialog from '@/components/inventory/MedicineInfoDialog';
 import { supabase } from '@/lib/db';
 import { useToast } from '@/hooks/use-toast';
@@ -90,6 +91,14 @@ export default function SalesManagement() {
   const [keepChangeOption, setKeepChangeOption] = useState<'profit' | 'deduct_debt'>('profit');
   const [cartOpen, setCartOpen] = useState(false);
   const [selectedMedicineForDialog, setSelectedMedicineForDialog] = useState<Medicine | null>(null);
+  // Sale Date — the business/accounting date for this transaction. Defaults
+  // to today. All finance/analytics persistence uses this value.
+  const todayISO = () => {
+    const d = new Date();
+    const off = d.getTimezoneOffset();
+    return new Date(d.getTime() - off * 60_000).toISOString().slice(0, 10);
+  };
+  const [saleDate, setSaleDate] = useState<string>(todayISO());
 
   const { profile } = useAuth();
   const { toast } = useToast();
@@ -575,6 +584,9 @@ export default function SalesManagement() {
         branch_id: selectedBranch ?? profile?.branch_id ?? null,
         amount_paid: Number(actualPaid.toFixed(2)),
         payment_status: String(paymentStatus),
+        // Business/accounting date chosen by the cashier. The DB also stores
+        // its own created_at / updated_at timestamps untouched.
+        sale_date: saleDate,
       };
 
       // Only add customer_id if a customer is selected
@@ -596,12 +608,14 @@ export default function SalesManagement() {
         .select()
         .single();
 
-      // If extended columns don't exist in schema, retry with base payload
+      // If extended columns don't exist in schema, retry without them (and
+      // without sale_date so installs that haven't run the migration still work).
       if (saleResult.error?.code === '42703' || saleResult.error?.message?.includes('does not exist')) {
         console.warn('[Sale Insert] Falling back to base payload (extended columns not in schema)');
+        const { sale_date: _omitDate, ...legacyInsert } = baseSaleInsert as any;
         saleResult = await (supabase as any)
           .from('sales')
-          .insert([baseSaleInsert])
+          .insert([legacyInsert])
           .select()
           .single();
       }
@@ -615,24 +629,43 @@ export default function SalesManagement() {
       // Keep compatibility with both legacy and new branch_items system.
       // Now using branch_item_id (item.id is branch_items.id).
       const saleItems = cart.map(item => {
-        const isByStripe = item.saleType === 'by_stripe';
         const isMeasurableItem = item.item_type === 'measurable' || isMeasurable(item.unit_label);
         const stripeQty = Number(item.stripesCount || 0);
         const packQty = Number(item.quantity || 0);
 
+        // Resolve the level the cashier picked. New flow uses item.sellLevel
+        // ('unit' | 'strip' | 'pack'); legacy flow uses item.saleType
+        // ('by_stripe' | 'full_pack'). Map both to the canonical sale_type now
+        // that the DB CHECK accepts unit/strip/pack directly.
+        let level: 'unit' | 'strip' | 'pack';
+        let qtyForRow: number;
+        if (item.sellLevel) {
+          level = item.sellLevel;
+          qtyForRow = Number(item.quantity || 0);
+        } else if (isMeasurableItem || item.saleType === 'by_stripe') {
+          level = 'strip';
+          qtyForRow = stripeQty;
+        } else {
+          level = 'pack';
+          qtyForRow = packQty;
+        }
+
+        // Companion columns kept in sync for backward-compatible readers.
+        const stripQtyCol = level === 'strip' ? Math.max(0, Math.round(qtyForRow)) : 0;
+        const packQtyCol = level === 'pack' ? Math.max(0, Math.round(qtyForRow)) : 0;
+        const stripesSoldCol: number | null = level === 'strip' ? Math.round(qtyForRow * 1000) : null;
+
         return {
           sale_id: saleData.id,
-          medicine_id: (item as any).medicine_id || item.id, // fallback to medicine_id
-          branch_item_id: item.id, // branch_items.id
-          quantity: isByStripe ? Number(stripeQty.toFixed(4)) : Number(packQty),
+          medicine_id: (item as any).medicine_id || item.id,
+          branch_item_id: item.id,
+          quantity: Number(Number(qtyForRow).toFixed(4)),
           unit_price: Number(item.selling_price),
           total_price: Number(item.total.toFixed(2)),
-          sale_type: item.saleType,
-          strip_quantity: isByStripe && !isMeasurableItem ? Math.max(0, Math.round(stripeQty)) : 0,
-          pack_quantity: !isByStripe && !isMeasurableItem ? Math.max(0, Math.round(packQty)) : 0,
-          stripes_sold: isByStripe && stripeQty > 0
-            ? Math.round(stripeQty * 1000)
-            : null,
+          sale_type: level,
+          strip_quantity: stripQtyCol,
+          pack_quantity: packQtyCol,
+          stripes_sold: stripesSoldCol,
         };
       });
 
@@ -809,6 +842,7 @@ export default function SalesManagement() {
           payment_method: paymentMethod,
           discount: Number(calculateDiscount().toFixed(2)),
           customer_name: selectedCustomer?.name || null,
+          sale_date: saleDate,
           items: cart.map((it) => {
             const qty = it.saleType === 'by_stripe' ? (it.stripesCount ?? 0) : it.quantity;
             const lineTotal = Number((it as any).total ?? 0);
@@ -833,6 +867,8 @@ export default function SalesManagement() {
       setChangeAction(null);
       setKeepChangeOption('profit');
       setCartOpen(false);
+      // Reset sale date back to today for the next transaction.
+      setSaleDate(todayISO());
       // Revalidate cached product list + customers (debt may have changed).
       invalidateSalesCache();
       // Broadcast to all pages (Inventory, Dashboard, etc.) so stock cards refresh live.
@@ -1005,10 +1041,54 @@ export default function SalesManagement() {
     return <div className="p-4 text-muted-foreground">Loading {isPharmacy ? 'medicines' : 'items'}...</div>;
   }
 
+  const isCustomSaleDate = saleDate !== todayISO();
+
   return (
     <div className="flex flex-col lg:grid lg:grid-cols-3 gap-6 relative">
       {/* Medicine/Item list */}
       <div className="lg:col-span-2 space-y-4">
+        {/* Sticky Sale Date bar — applies to every item in this transaction */}
+        <div className="sticky top-0 z-30 -mx-2 px-2 py-2 bg-background/95 backdrop-blur supports-[backdrop-filter]:bg-background/80 border-b border-border/60">
+          <div className={`rounded-lg border ${isCustomSaleDate ? 'border-warning/60 bg-warning/10' : 'border-primary/30 bg-primary/5'} p-3 flex items-center gap-3`}>
+            <CalendarIcon className={`h-5 w-5 shrink-0 ${isCustomSaleDate ? 'text-warning' : 'text-primary'}`} />
+            <div className="flex-1 min-w-0">
+              <Label htmlFor="sale-date-input" className="text-xs font-semibold uppercase tracking-wide text-muted-foreground">
+                Sale Date {isCustomSaleDate && <span className="text-warning normal-case">· Custom date applied to this transaction</span>}
+              </Label>
+              <div className="flex items-center gap-2 mt-1">
+                <Input
+                  id="sale-date-input"
+                  type="date"
+                  value={saleDate}
+                  max={todayISO()}
+                  onChange={(e) => {
+                    const v = e.target.value;
+                    if (!v) return;
+                    // Prevent future dates
+                    if (v > todayISO()) {
+                      toast({ title: 'Invalid date', description: 'Sale date cannot be in the future.', variant: 'destructive' });
+                      return;
+                    }
+                    setSaleDate(v);
+                  }}
+                  className="h-10 text-base font-semibold w-auto min-w-[180px]"
+                />
+                {isCustomSaleDate && (
+                  <Button
+                    type="button"
+                    size="sm"
+                    variant="ghost"
+                    className="h-9 text-xs"
+                    onClick={() => setSaleDate(todayISO())}
+                  >
+                    Reset to today
+                  </Button>
+                )}
+              </div>
+            </div>
+          </div>
+        </div>
+
         {/* Search + Filter row */}
         <div className="flex items-center gap-3">
           <div className="relative flex-1">
