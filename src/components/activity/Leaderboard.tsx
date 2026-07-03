@@ -16,15 +16,52 @@ type FilterKey = 'today' | 'week' | 'month' | 'all' | 'custom';
 export interface LeaderboardRange { from?: Date; to?: Date; label: string }
 
 function startOfDay(d = new Date()) { const x = new Date(d); x.setHours(0,0,0,0); return x; }
-function endOfDay(d = new Date()) { const x = new Date(d); x.setHours(23,59,59,999); return x; }
+function nextDayStart(d = new Date()) { const x = startOfDay(d); x.setDate(x.getDate()+1); return x; }
 function startOfWeek(d = new Date()) { const x = startOfDay(d); const day = x.getDay(); const diff = (day === 0 ? -6 : 1 - day); x.setDate(x.getDate()+diff); return x; }
 function startOfMonth(d = new Date()) { const x = startOfDay(d); x.setDate(1); return x; }
+
+function rangeForFilter(filter: FilterKey, customDate?: Date): { from?: Date; to?: Date } {
+  if (filter === 'today') return { from: startOfDay(), to: nextDayStart() };
+  if (filter === 'week') return { from: startOfWeek(), to: nextDayStart() };
+  if (filter === 'month') return { from: startOfMonth(), to: nextDayStart() };
+  if (filter === 'custom' && customDate) return { from: startOfDay(customDate), to: nextDayStart(customDate) };
+  return {};
+}
+
+async function countActivitiesByStaff(staffIds: string[], range: { from?: Date; to?: Date }) {
+  const counts: Record<string, number> = {};
+  const chunkSize = 8;
+
+  for (let i = 0; i < staffIds.length; i += chunkSize) {
+    const chunk = staffIds.slice(i, i + chunkSize);
+    const entries = await Promise.all(chunk.map(async (staffId) => {
+      let q = (supabase as any)
+        .from('activity_log')
+        .select('id', { count: 'exact', head: true })
+        .eq('user_id', staffId);
+
+      if (range.from) q = q.gte('created_at', range.from.toISOString());
+      if (range.to) q = q.lt('created_at', range.to.toISOString());
+
+      const { count, error } = await q;
+      if (error) {
+        console.warn('[Leaderboard] activity count query error', error);
+        return [staffId, 0] as const;
+      }
+      return [staffId, count ?? 0] as const;
+    }));
+
+    for (const [staffId, count] of entries) counts[staffId] = count;
+  }
+
+  return counts;
+}
 
 export default function Leaderboard({ onSelectStaff }: { onSelectStaff?: (s: StaffRow, range: LeaderboardRange) => void }) {
   const { profile } = useAuth();
   const { selectedBranch } = useBranchContext();
   const [staff, setStaff] = useState<StaffRow[]>([]);
-  const [rows, setRows] = useState<Array<{ user_id: string; created_at: string }>>([]);
+  const [activityCounts, setActivityCounts] = useState<Record<string, number>>({});
   const [loading, setLoading] = useState(false);
   const [filter, setFilter] = useState<FilterKey>('today');
   const [customDate, setCustomDate] = useState<Date | undefined>(new Date());
@@ -49,57 +86,62 @@ export default function Leaderboard({ onSelectStaff }: { onSelectStaff?: (s: Sta
 
     const staffIds = staffList.map((s) => s.id);
     if (staffIds.length === 0) {
-      setRows([]);
+      setActivityCounts({});
       setLoading(false);
       return;
     }
 
-    const from = new Date();
-    from.setDate(from.getDate() - (filter === 'all' || filter === 'month' ? 365 : 60));
-    // Filter by user_id IN staffIds — more reliable than owner_id, which may be
-    // NULL on some legacy activity_log rows and would silently exclude them.
-    let q = (supabase as any)
-      .from('activity_log')
-      .select('user_id, created_at')
-      .in('user_id', staffIds);
-    if (filter !== 'all') q = q.gte('created_at', from.toISOString());
-    const { data: logs, error: logsErr } = await q;
-    if (logsErr) console.warn('[Leaderboard] activity_log query error', logsErr);
-    setRows(logs || []);
+    // Use exact server-side counts for the same date range used by the drawer.
+    // Fetching raw rows can silently stop at PostgREST's row limit, which made
+    // recent activity appear as 0 while the staff detail drawer still had rows.
+    const counts = await countActivitiesByStaff(staffIds, rangeForFilter(filter, customDate));
+    setActivityCounts(counts);
     setLoading(false);
   };
 
 
-  useEffect(() => { load(); }, [profile, selectedBranch, filter]);
+  useEffect(() => { load(); }, [profile, selectedBranch, filter, customDate]);
+
+  useEffect(() => {
+    if (!profile || profile.role !== 'owner' || staff.length === 0) return;
+
+    const staffIds = new Set(staff.map((s) => s.id));
+    const range = rangeForFilter(filter, customDate);
+    const ch = (supabase as any)
+      .channel(`leaderboard-activity-${profile.id}-${filter}-${customDate?.toISOString() ?? 'none'}`)
+      .on('postgres_changes', { event: 'INSERT', schema: 'public', table: 'activity_log' }, (payload: any) => {
+        const row = payload.new as { user_id?: string; created_at?: string };
+        if (!row.user_id || !staffIds.has(row.user_id) || !row.created_at) return;
+
+        const ts = new Date(row.created_at);
+        if (range.from && ts < range.from) return;
+        if (range.to && ts >= range.to) return;
+
+        setActivityCounts((current) => ({
+          ...current,
+          [row.user_id!]: (current[row.user_id!] ?? 0) + 1,
+        }));
+      })
+      .subscribe();
+
+    return () => { (supabase as any).removeChannel(ch); };
+  }, [profile, staff, filter, customDate]);
 
   const ranked = useMemo(() => {
-    let fromTs = 0;
-    let toTs = Date.now();
-    if (filter === 'today') fromTs = startOfDay().getTime();
-    else if (filter === 'week') fromTs = startOfWeek().getTime();
-    else if (filter === 'month') fromTs = startOfMonth().getTime();
-    else if (filter === 'custom' && customDate) {
-      fromTs = startOfDay(customDate).getTime();
-      toTs = endOfDay(customDate).getTime();
-    }
-    const counts = new Map<string, number>();
-    for (const r of rows) {
-      const ts = new Date(r.created_at).getTime();
-      if (ts >= fromTs && ts <= toTs) counts.set(r.user_id, (counts.get(r.user_id) || 0) + 1);
-    }
     return staff
-      .map((s) => ({ staff: s, name: s.full_name || 'Unnamed', count: counts.get(s.id) ?? 0 }))
+      .map((s) => ({ staff: s, name: s.full_name || 'Unnamed', count: activityCounts[s.id] ?? 0 }))
       .sort((a, b) => b.count - a.count);
-  }, [staff, rows, filter, customDate]);
+  }, [staff, activityCounts]);
 
   const filterLabel = (k: FilterKey) =>
     k === 'today' ? 'Today' : k === 'week' ? 'This Week' : k === 'month' ? 'This Month' : k === 'all' ? 'All Time' : 'Custom Date';
 
   const currentRange = useMemo((): LeaderboardRange => {
-    if (filter === 'today') return { from: startOfDay(), to: endOfDay(), label: 'Today' };
-    if (filter === 'week') return { from: startOfWeek(), to: endOfDay(), label: 'This Week' };
-    if (filter === 'month') return { from: startOfMonth(), to: endOfDay(), label: 'This Month' };
-    if (filter === 'custom' && customDate) return { from: startOfDay(customDate), to: endOfDay(customDate), label: format(customDate, 'PP') };
+    const range = rangeForFilter(filter, customDate);
+    if (filter === 'today') return { ...range, label: 'Today' };
+    if (filter === 'week') return { ...range, label: 'This Week' };
+    if (filter === 'month') return { ...range, label: 'This Month' };
+    if (filter === 'custom' && customDate) return { ...range, label: format(customDate, 'PP') };
     return { label: 'All Time' };
   }, [filter, customDate]);
 
