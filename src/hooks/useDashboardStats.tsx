@@ -14,14 +14,14 @@
  * Cache key: ['dashboard-stats', { ownerId, selectedBranch, dateFilter }]
  * Stale time: 60s. Pull-to-refresh and explicit invalidations bust it.
  */
-import { useEffect, useMemo } from 'react';
-import { useQuery, useQueryClient } from '@tanstack/react-query';
-import { supabase } from '@/lib/db';
-import { useAuth } from './useAuth';
-import { useBranchContext } from './useBranchContext';
-import { useOwnerBranchIds } from './useOwnerBranchIds';
+import { useEffect, useMemo } from "react";
+import { useQuery, useQueryClient } from "@tanstack/react-query";
+import { supabase } from "@/lib/db";
+import { useAuth } from "./useAuth";
+import { useBranchContext } from "./useBranchContext";
+import { useOwnerBranchIds } from "./useOwnerBranchIds";
 
-export type DateFilter = 'daily' | 'weekly' | 'monthly' | 'yearly';
+export type DateFilter = "daily" | "weekly" | "monthly" | "yearly";
 
 export interface DashboardStats {
   totalRevenue: number;
@@ -34,10 +34,25 @@ export interface DashboardStats {
   expiredItems: number;
 }
 
-export interface CategorySalesData { category: string; sales: number; revenue: number; }
-export interface ProductPerformanceData { name: string; sales: number; revenue: number; }
-export interface PaymentMethodData { method: string; amount: number; }
-export interface GroupSalesData { name: string; code: string; sales: number; }
+export interface CategorySalesData {
+  category: string;
+  sales: number;
+  revenue: number;
+}
+export interface ProductPerformanceData {
+  name: string;
+  sales: number;
+  revenue: number;
+}
+export interface PaymentMethodData {
+  method: string;
+  amount: number;
+}
+export interface GroupSalesData {
+  name: string;
+  code: string;
+  sales: number;
+}
 
 export interface DashboardOverview {
   stats: DashboardStats;
@@ -53,23 +68,56 @@ export interface DashboardOverview {
   topGroupSales: GroupSalesData[];
 }
 
-const MEDICINE_CATEGORIES = ['tablet', 'capsule', 'syrup', 'injection', 'cream', 'ointment', 'drops', 'inhaler'];
+const MEDICINE_CATEGORIES = ["tablet", "capsule", "syrup", "injection", "cream", "ointment", "drops", "inhaler"];
 
 const EMPTY_OVERVIEW: DashboardOverview = {
-  stats: { totalRevenue: 0, totalProducts: 0, totalMedicines: 0, totalItems: 0, totalSoldItems: 0, lowStockItems: 0, outOfStockItems: 0, expiredItems: 0 },
-  categorySales: [], medicinesCategorySales: [], itemsCategorySales: [],
-  productPerformance: [], topMedicines: [], topItems: [], paymentMethodData: [],
+  stats: {
+    totalRevenue: 0,
+    totalProducts: 0,
+    totalMedicines: 0,
+    totalItems: 0,
+    totalSoldItems: 0,
+    lowStockItems: 0,
+    outOfStockItems: 0,
+    expiredItems: 0,
+  },
+  categorySales: [],
+  medicinesCategorySales: [],
+  itemsCategorySales: [],
+  productPerformance: [],
+  topMedicines: [],
+  topItems: [],
+  paymentMethodData: [],
   creditOverview: { avgScore: 0, atRisk: 0, totalExposure: 0, totalCustomers: 0 },
-  totalGroups: 0, topGroupSales: [],
+  totalGroups: 0,
+  topGroupSales: [],
 };
 
 function getStartDate(dateFilter: DateFilter): Date {
-  const now = new Date();
   const d = new Date();
-  if (dateFilter === 'daily') d.setHours(0, 0, 0, 0);
-  else if (dateFilter === 'weekly') d.setDate(now.getDate() - 7);
-  else if (dateFilter === 'monthly') d.setMonth(now.getMonth() - 1);
-  else if (dateFilter === 'yearly') d.setFullYear(now.getFullYear() - 1);
+
+  switch (dateFilter) {
+    case "daily":
+      d.setHours(0, 0, 0, 0);
+      break;
+
+    case "weekly":
+      d.setDate(d.getDate() - 6);
+      d.setHours(0, 0, 0, 0);
+      break;
+
+    case "monthly":
+      d.setDate(1);
+      d.setHours(0, 0, 0, 0);
+      break;
+
+    case "yearly":
+      d.setMonth(0);
+      d.setDate(1);
+      d.setHours(0, 0, 0, 0);
+      break;
+  }
+
   return d;
 }
 
@@ -80,7 +128,12 @@ interface FetchArgs {
   isOwner: boolean;
 }
 
-async function fetchDashboardOverview({ selectedBranch, ownerBranchIds, dateFilter, isOwner }: FetchArgs): Promise<DashboardOverview> {
+async function fetchDashboardOverview({
+  selectedBranch,
+  ownerBranchIds,
+  dateFilter,
+  isOwner,
+}: FetchArgs): Promise<DashboardOverview> {
   if (!selectedBranch && isOwner && ownerBranchIds.length === 0) {
     return EMPTY_OVERVIEW;
   }
@@ -101,50 +154,65 @@ async function fetchDashboardOverview({ selectedBranch, ownerBranchIds, dateFilt
   // Filter on `sale_date` (business/accounting date the cashier picked) so
   // analytics reflect when the sale really happened, not when the row was
   // inserted. created_at is preserved for audit but not used for filtering.
-  const startDay = startDate.toISOString().slice(0, 10);
-  const endDay = now.toISOString().slice(0, 10);
-  let salesWithItemsQuery = supabase.from('sales')
-    .select('id, total_amount, payment_method, discount_amount, branch_id, created_at, sale_date, sale_items(quantity, medicine_id, medicines(name, category, medicine_code_id))')
-    .gte('sale_date', startDay)
-    .lte('sale_date', endDay)
+  function formatLocalDate(date: Date) {
+    const y = date.getFullYear();
+    const m = String(date.getMonth() + 1).padStart(2, "0");
+    const d = String(date.getDate()).padStart(2, "0");
+
+    return `${y}-${m}-${d}`;
+  }
+
+  const startDay = formatLocalDate(startDate);
+  const endDay = formatLocalDate(now);
+  let salesWithItemsQuery = supabase
+    .from("sales")
+    .select(
+      "id, total_amount, payment_method, discount_amount, branch_id, created_at, sale_date, sale_items(quantity, medicine_id, medicines(name, category, medicine_code_id))",
+    )
+    .gte("sale_date", startDay)
+    .lte("sale_date", endDay)
     .range(0, 49999);
-  let branchItemsQuery = supabase.from('branch_items')
-    .select('id, quantity, expiry_date, medicines!inner(category, minimum_stock_level, medicine_code_id)')
+  let branchItemsQuery = supabase
+    .from("branch_items")
+    .select("id, quantity, expiry_date, medicines!inner(category, minimum_stock_level, medicine_code_id)")
     .range(0, 49999);
-  let custQuery = supabase.from('customers')
-    .select('id, credit_score, max_credit_limit, branch_id')
-    .range(0, 9999);
-  let salesDebtQuery = supabase.from('sales')
-    .select('total_amount, amount_paid, customer_id, branch_id')
-    .not('customer_id', 'is', null)
+  let custQuery = supabase.from("customers").select("id, credit_score, max_credit_limit, branch_id").range(0, 9999);
+  let salesDebtQuery = supabase
+    .from("sales")
+    .select("total_amount, amount_paid, customer_id, branch_id")
+    .not("customer_id", "is", null)
     .range(0, 49999);
   // Batch-level expiry data — items have multiple batches with different expiries.
-  let batchesQuery: any = supabase.from('inventory_batches')
-    .select('branch_item_id, expiry_date, remaining_quantity, branch_id')
-    .gt('remaining_quantity', 0)
-    .not('expiry_date', 'is', null)
+  let batchesQuery: any = supabase
+    .from("inventory_batches")
+    .select("branch_item_id, expiry_date, remaining_quantity, branch_id")
+    .gt("remaining_quantity", 0)
+    .not("expiry_date", "is", null)
     .range(0, 49999);
 
   if (selectedBranch) {
-    branchItemsQuery = branchItemsQuery.eq('branch_id', selectedBranch);
-    salesWithItemsQuery = salesWithItemsQuery.eq('branch_id', selectedBranch);
-    custQuery = custQuery.eq('branch_id', selectedBranch);
-    salesDebtQuery = salesDebtQuery.eq('branch_id', selectedBranch);
-    batchesQuery = batchesQuery.eq('branch_id', selectedBranch);
+    branchItemsQuery = branchItemsQuery.eq("branch_id", selectedBranch);
+    salesWithItemsQuery = salesWithItemsQuery.eq("branch_id", selectedBranch);
+    custQuery = custQuery.eq("branch_id", selectedBranch);
+    salesDebtQuery = salesDebtQuery.eq("branch_id", selectedBranch);
+    batchesQuery = batchesQuery.eq("branch_id", selectedBranch);
   } else if (ownerBranchIds.length > 0) {
-    branchItemsQuery = branchItemsQuery.in('branch_id', ownerBranchIds);
-    salesWithItemsQuery = salesWithItemsQuery.in('branch_id', ownerBranchIds);
-    custQuery = custQuery.in('branch_id', ownerBranchIds);
-    salesDebtQuery = salesDebtQuery.in('branch_id', ownerBranchIds);
-    batchesQuery = batchesQuery.in('branch_id', ownerBranchIds);
+    branchItemsQuery = branchItemsQuery.in("branch_id", ownerBranchIds);
+    salesWithItemsQuery = salesWithItemsQuery.in("branch_id", ownerBranchIds);
+    custQuery = custQuery.in("branch_id", ownerBranchIds);
+    salesDebtQuery = salesDebtQuery.in("branch_id", ownerBranchIds);
+    batchesQuery = batchesQuery.in("branch_id", ownerBranchIds);
   }
 
   // Fire all queries in parallel.
-  const codesQuery = (supabase as any).from('medicine_codes')
-    .select('id, code, label')
-    .range(0, 9999);
+  const codesQuery = (supabase as any).from("medicine_codes").select("id, code, label").range(0, 9999);
   const [branchItemsRes, salesWithItemsRes, custRes, salesDebtRes, codesRes, batchesRes] = await Promise.all([
-    branchItemsQuery, salesWithItemsQuery, custQuery, salesDebtQuery, codesQuery, batchesQuery,
+    branchItemsQuery,
+    salesWithItemsQuery,
+    custQuery,
+    salesDebtQuery,
+    codesQuery,
+    batchesQuery,
   ]);
 
   const branchItemsData = branchItemsRes.data || [];
@@ -158,16 +226,19 @@ async function fetchDashboardOverview({ selectedBranch, ownerBranchIds, dateFilt
   const saleItemsData: any[] = [];
   salesWithItems.forEach((s: any) => (s.sale_items || []).forEach((si: any) => saleItemsData.push(si)));
 
-
   // Stats
   const totalRevenue = salesData.reduce((sum, s: any) => sum + Number(s.total_amount), 0);
   const totalProducts = branchItemsData.length;
-  const totalMedicines = branchItemsData.filter((bi: any) => MEDICINE_CATEGORIES.includes(bi.medicines?.category)).length;
+  const totalMedicines = branchItemsData.filter((bi: any) =>
+    MEDICINE_CATEGORIES.includes(bi.medicines?.category),
+  ).length;
   const totalItems = branchItemsData.filter((bi: any) => !MEDICINE_CATEGORIES.includes(bi.medicines?.category)).length;
-  const lowStockItems = branchItemsData.filter((bi: any) => bi.quantity <= (bi.medicines?.minimum_stock_level || 0) && bi.quantity > 0).length;
+  const lowStockItems = branchItemsData.filter(
+    (bi: any) => bi.quantity <= (bi.medicines?.minimum_stock_level || 0) && bi.quantity > 0,
+  ).length;
   const outOfStockItems = branchItemsData.filter((bi: any) => bi.quantity === 0).length;
   const totalSoldItems = saleItemsData.reduce((sum, item: any) => sum + item.quantity, 0);
-  const today = new Date().toISOString().split('T')[0];
+  const today = formatLocalDate(new Date());
   // Expired items: distinct branch_items that have at least one batch with an
   // expired date (batches are the source of truth). Fall back to branch_items
   // legacy expiry for items without batches.
@@ -221,17 +292,19 @@ async function fetchDashboardOverview({ selectedBranch, ownerBranchIds, dateFilt
   const topMedicines = Array.from(productMap.entries())
     .filter(([, d]) => MEDICINE_CATEGORIES.includes(d.category))
     .map(([name, d]) => ({ name, sales: d.sales, revenue: d.revenue }))
-    .sort((a, b) => b.sales - a.sales).slice(0, 10);
+    .sort((a, b) => b.sales - a.sales)
+    .slice(0, 10);
 
   const topItems = Array.from(productMap.entries())
     .filter(([, d]) => !MEDICINE_CATEGORIES.includes(d.category))
     .map(([name, d]) => ({ name, sales: d.sales, revenue: d.revenue }))
-    .sort((a, b) => b.sales - a.sales).slice(0, 10);
+    .sort((a, b) => b.sales - a.sales)
+    .slice(0, 10);
 
   // Payment methods
   const paymentMap = new Map<string, number>();
   salesData.forEach((sale: any) => {
-    const method = sale.payment_method || 'Cash';
+    const method = sale.payment_method || "Cash";
     const amount = Number(sale.total_amount) - (Number(sale.discount_amount) || 0);
     paymentMap.set(method, (paymentMap.get(method) || 0) + amount);
   });
@@ -267,8 +340,8 @@ async function fetchDashboardOverview({ selectedBranch, ownerBranchIds, dateFilt
   });
   const topGroupSales: GroupSalesData[] = Array.from(groupSalesIds.entries())
     .map(([cid, ids]) => ({
-      name: codeMap.get(cid)?.label || codeMap.get(cid)?.code || 'Unknown',
-      code: codeMap.get(cid)?.code || '',
+      name: codeMap.get(cid)?.label || codeMap.get(cid)?.code || "Unknown",
+      code: codeMap.get(cid)?.code || "",
       sales: ids.size,
     }))
     .sort((a, b) => b.sales - a.sales)
@@ -284,18 +357,34 @@ async function fetchDashboardOverview({ selectedBranch, ownerBranchIds, dateFilt
   const totalGroups = branchCodeIds.size;
 
   return {
-    stats: { totalRevenue, totalProducts, totalMedicines, totalItems, totalSoldItems, lowStockItems, outOfStockItems, expiredItems },
+    stats: {
+      totalRevenue,
+      totalProducts,
+      totalMedicines,
+      totalItems,
+      totalSoldItems,
+      lowStockItems,
+      outOfStockItems,
+      expiredItems,
+    },
     categorySales: toArr(categoryMap),
     medicinesCategorySales: toArr(medicineCategoryMap),
     itemsCategorySales: toArr(itemCategoryMap),
-    productPerformance, topMedicines, topItems, paymentMethodData, creditOverview,
+    productPerformance,
+    topMedicines,
+    topItems,
+    paymentMethodData,
+    creditOverview,
     totalGroups,
     topGroupSales,
   };
 }
 
-export const DASHBOARD_STATS_KEY = (scope: { ownerId?: string; selectedBranch: string | null; dateFilter: DateFilter }) =>
-  ['dashboard-stats', scope] as const;
+export const DASHBOARD_STATS_KEY = (scope: {
+  ownerId?: string;
+  selectedBranch: string | null;
+  dateFilter: DateFilter;
+}) => ["dashboard-stats", scope] as const;
 
 export function useDashboardStats(dateFilter: DateFilter) {
   const { profile } = useAuth();
@@ -303,30 +392,32 @@ export function useDashboardStats(dateFilter: DateFilter) {
   const { branchIds: cachedOwnerBranchIds, isLoading: ownerBranchesLoading } = useOwnerBranchIds();
   const queryClient = useQueryClient();
 
-  const isOwner = profile?.role === 'owner';
+  const isOwner = profile?.role === "owner";
   // For staff, the branch context's selectedBranch hydrates asynchronously;
   // fall back to profile.branch_id immediately so the dashboard never queries
   // without a branch filter (which would expose cross-branch totals via RLS).
-  const effectiveBranch = isOwner ? selectedBranch : (selectedBranch || profile?.branch_id || null);
+  const effectiveBranch = isOwner ? selectedBranch : selectedBranch || profile?.branch_id || null;
   const enabled = !!profile && (isOwner ? !ownerBranchesLoading : !!effectiveBranch);
 
   const queryKey = useMemo(
-    () => DASHBOARD_STATS_KEY({
-      ownerId: isOwner ? profile?.id : undefined,
-      selectedBranch: effectiveBranch,
-      dateFilter,
-    }),
-    [isOwner, profile?.id, effectiveBranch, dateFilter]
+    () =>
+      DASHBOARD_STATS_KEY({
+        ownerId: isOwner ? profile?.id : undefined,
+        selectedBranch: effectiveBranch,
+        dateFilter,
+      }),
+    [isOwner, profile?.id, effectiveBranch, dateFilter],
   );
 
   const query = useQuery({
     queryKey,
-    queryFn: () => fetchDashboardOverview({
-      selectedBranch: effectiveBranch,
-      ownerBranchIds: cachedOwnerBranchIds,
-      dateFilter,
-      isOwner,
-    }),
+    queryFn: () =>
+      fetchDashboardOverview({
+        selectedBranch: effectiveBranch,
+        ownerBranchIds: cachedOwnerBranchIds,
+        dateFilter,
+        isOwner,
+      }),
     enabled,
     staleTime: 60 * 1000,
     gcTime: 5 * 60 * 1000,
@@ -335,9 +426,9 @@ export function useDashboardStats(dateFilter: DateFilter) {
 
   // Pull-to-refresh interop
   useEffect(() => {
-    const handler = () => queryClient.invalidateQueries({ queryKey: ['dashboard-stats'] });
-    window.addEventListener('app:refresh', handler);
-    return () => window.removeEventListener('app:refresh', handler);
+    const handler = () => queryClient.invalidateQueries({ queryKey: ["dashboard-stats"] });
+    window.addEventListener("app:refresh", handler);
+    return () => window.removeEventListener("app:refresh", handler);
   }, [queryClient]);
 
   return {
@@ -345,6 +436,6 @@ export function useDashboardStats(dateFilter: DateFilter) {
     loading: query.isLoading,
     isFetching: query.isFetching,
     refetch: query.refetch,
-    invalidate: () => queryClient.invalidateQueries({ queryKey: ['dashboard-stats'] }),
+    invalidate: () => queryClient.invalidateQueries({ queryKey: ["dashboard-stats"] }),
   };
 }
