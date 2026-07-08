@@ -478,6 +478,46 @@ export default function FinanceManagement() {
       const netProfit = totalIncome - totalExpenses;
       const profitMargin = totalIncome > 0 ? (netProfit / totalIncome) * 100 : 0;
 
+      // COGS: sum(baseUnits sold × avg purchase cost per base unit) using
+      // branch_items purchase_price as the cost basis for each medicine.
+      let cogs = 0;
+      if (medIds.length > 0) {
+        let costQuery = supabase
+          .from('branch_items')
+          .select('medicine_id, purchase_price, quantity, branch_id')
+          .in('medicine_id', medIds);
+        if (selectedBranch) costQuery = costQuery.eq('branch_id', selectedBranch);
+        else if (ownerBranchIds.length > 0) costQuery = costQuery.in('branch_id', ownerBranchIds);
+        const { data: costRows } = await costQuery;
+        const costAgg = new Map<string, { total: number; qty: number }>();
+        (costRows || []).forEach((r: any) => {
+          const prev = costAgg.get(r.medicine_id) || { total: 0, qty: 0 };
+          const q = Math.max(0, Number(r.quantity) || 0);
+          prev.total += Number(r.purchase_price || 0) * q;
+          prev.qty += q;
+          costAgg.set(r.medicine_id, prev);
+        });
+        const costPerUnit = (medId: string) => {
+          const a = costAgg.get(medId);
+          if (!a || a.qty <= 0) {
+            // Fallback: any purchase_price for this med
+            const any = (costRows || []).find((r: any) => r.medicine_id === medId);
+            return any ? Number(any.purchase_price || 0) : 0;
+          }
+          return a.total / a.qty;
+        };
+        (salesWithSeller || []).forEach((sale: any) => {
+          (sale.sale_items || []).forEach((si: any) => {
+            const medId = si.medicine_id || si.medicines?.id;
+            if (!medId) return;
+            const pkg = packagingMap[medId] || (undefined as any);
+            const f = formatSaleItem(si, pkg);
+            cogs += f.baseUnits * costPerUnit(medId);
+          });
+        });
+      }
+      const grossProfit = salesRevenue - cogs;
+
       setStats({
         totalIncome,
         totalExpenses,
@@ -485,6 +525,8 @@ export default function FinanceManagement() {
         profitMargin,
         salesRevenue,
         extraProfit,
+        cogs,
+        grossProfit,
       });
 
       // Branch-wise data for chart
