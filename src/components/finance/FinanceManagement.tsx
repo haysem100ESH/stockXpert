@@ -193,6 +193,8 @@ export default function FinanceManagement() {
     profitMargin: 0,
     salesRevenue: 0,
     extraProfit: 0,
+    cogs: 0,
+    grossProfit: 0,
   });
   const [expenses, setExpenses] = useState<Expense[]>([]);
   const [sales, setSales] = useState<Sale[]>([]);
