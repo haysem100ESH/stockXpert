@@ -200,7 +200,7 @@ export default function FinanceManagement() {
   const [expensesPage, setExpensesPage] = useState(1);
   const [loading, setLoading] = useState(true);
   const [showAddExpense, setShowAddExpense] = useState(false);
-  const [period, setPeriod] = useState('monthly');
+  const [period, setPeriod] = useState('daily');
   const [startDate, setStartDate] = useState<Date>();
   const [endDate, setEndDate] = useState<Date>();
   const [branchData, setBranchData] = useState<BranchData[]>([]);
