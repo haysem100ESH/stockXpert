@@ -70,7 +70,7 @@ export default function StaffDashboard() {
   const [topMedicines, setTopMedicines] = useState<ProductData[]>([]);
   const [topItems, setTopItems] = useState<ProductData[]>([]);
   const [loading, setLoading] = useState(true);
-  const [reportPeriod, setReportPeriod] = useState('monthly');
+  const [reportPeriod, setReportPeriod] = useState('daily');
   const [customDate, setCustomDate] = useState<Date>();
 
   useEffect(() => {
