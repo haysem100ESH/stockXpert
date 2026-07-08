@@ -114,6 +114,8 @@ interface FinanceStats {
   profitMargin: number;
   salesRevenue: number;
   extraProfit: number;
+  cogs: number;
+  grossProfit: number;
 }
 
 
