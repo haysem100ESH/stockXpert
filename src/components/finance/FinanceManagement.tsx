@@ -114,6 +114,8 @@ interface FinanceStats {
   profitMargin: number;
   salesRevenue: number;
   extraProfit: number;
+  cogs: number;
+  grossProfit: number;
 }
 
 
@@ -191,6 +193,8 @@ export default function FinanceManagement() {
     profitMargin: 0,
     salesRevenue: 0,
     extraProfit: 0,
+    cogs: 0,
+    grossProfit: 0,
   });
   const [expenses, setExpenses] = useState<Expense[]>([]);
   const [sales, setSales] = useState<Sale[]>([]);
@@ -200,7 +204,7 @@ export default function FinanceManagement() {
   const [expensesPage, setExpensesPage] = useState(1);
   const [loading, setLoading] = useState(true);
   const [showAddExpense, setShowAddExpense] = useState(false);
-  const [period, setPeriod] = useState('monthly');
+  const [period, setPeriod] = useState('daily');
   const [startDate, setStartDate] = useState<Date>();
   const [endDate, setEndDate] = useState<Date>();
   const [branchData, setBranchData] = useState<BranchData[]>([]);
@@ -277,7 +281,7 @@ export default function FinanceManagement() {
       // If owner has no branches yet, show empty data
       if (!selectedBranch && ownerBranchIds.length === 0 && profile?.role === 'owner') {
         setSales([]); setExpenses([]); setInventoryExpenses([]); setBranchData([]);
-        setStats({ totalIncome: 0, totalExpenses: 0, netProfit: 0, profitMargin: 0, salesRevenue: 0, extraProfit: 0 });
+        setStats({ totalIncome: 0, totalExpenses: 0, netProfit: 0, profitMargin: 0, salesRevenue: 0, extraProfit: 0, cogs: 0, grossProfit: 0 });
         setLoading(false);
         return;
       }
@@ -474,6 +478,46 @@ export default function FinanceManagement() {
       const netProfit = totalIncome - totalExpenses;
       const profitMargin = totalIncome > 0 ? (netProfit / totalIncome) * 100 : 0;
 
+      // COGS: sum(baseUnits sold × avg purchase cost per base unit) using
+      // branch_items purchase_price as the cost basis for each medicine.
+      let cogs = 0;
+      if (medIds.length > 0) {
+        let costQuery = supabase
+          .from('branch_items')
+          .select('medicine_id, purchase_price, quantity, branch_id')
+          .in('medicine_id', medIds);
+        if (selectedBranch) costQuery = costQuery.eq('branch_id', selectedBranch);
+        else if (ownerBranchIds.length > 0) costQuery = costQuery.in('branch_id', ownerBranchIds);
+        const { data: costRows } = await costQuery;
+        const costAgg = new Map<string, { total: number; qty: number }>();
+        (costRows || []).forEach((r: any) => {
+          const prev = costAgg.get(r.medicine_id) || { total: 0, qty: 0 };
+          const q = Math.max(0, Number(r.quantity) || 0);
+          prev.total += Number(r.purchase_price || 0) * q;
+          prev.qty += q;
+          costAgg.set(r.medicine_id, prev);
+        });
+        const costPerUnit = (medId: string) => {
+          const a = costAgg.get(medId);
+          if (!a || a.qty <= 0) {
+            // Fallback: any purchase_price for this med
+            const any = (costRows || []).find((r: any) => r.medicine_id === medId);
+            return any ? Number(any.purchase_price || 0) : 0;
+          }
+          return a.total / a.qty;
+        };
+        (salesWithSeller || []).forEach((sale: any) => {
+          (sale.sale_items || []).forEach((si: any) => {
+            const medId = si.medicine_id || si.medicines?.id;
+            if (!medId) return;
+            const pkg = packagingMap[medId] || (undefined as any);
+            const f = formatSaleItem(si, pkg);
+            cogs += f.baseUnits * costPerUnit(medId);
+          });
+        });
+      }
+      const grossProfit = salesRevenue - cogs;
+
       setStats({
         totalIncome,
         totalExpenses,
@@ -481,6 +525,8 @@ export default function FinanceManagement() {
         profitMargin,
         salesRevenue,
         extraProfit,
+        cogs,
+        grossProfit,
       });
 
       // Branch-wise data for chart
@@ -975,52 +1021,81 @@ export default function FinanceManagement() {
 
       {/* Stats Cards */}
       <div className="grid grid-cols-2 md:grid-cols-2 lg:grid-cols-4 gap-3 sm:gap-6">
-        <Card>
-          <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
-            <CardTitle className="text-sm font-medium">Total Income</CardTitle>
-            <DollarSign className="h-4 w-4 text-success" />
-          </CardHeader>
-          <CardContent>
-            <div className="text-2xl font-bold text-success">ETB {stats.totalIncome.toFixed(2)}</div>
-          </CardContent>
-        </Card>
+        {isAdvancedMode ? (
+          <>
+            <Card>
+              <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
+                <CardTitle className="text-sm font-medium">Total Income</CardTitle>
+                <DollarSign className="h-4 w-4 text-success" />
+              </CardHeader>
+              <CardContent>
+                <div className="text-2xl font-bold text-success">ETB {stats.totalIncome.toFixed(2)}</div>
+              </CardContent>
+            </Card>
 
-        <Card>
-          <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
-            <CardTitle className="text-sm font-medium">Total Expenses</CardTitle>
-            <TrendingDown className="h-4 w-4 text-destructive" />
-          </CardHeader>
-          <CardContent>
-            <div className="text-2xl font-bold text-destructive">ETB {stats.totalExpenses.toFixed(2)}</div>
-          </CardContent>
-        </Card>
+            <Card>
+              <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
+                <CardTitle className="text-sm font-medium">Total Expenses</CardTitle>
+                <TrendingDown className="h-4 w-4 text-destructive" />
+              </CardHeader>
+              <CardContent>
+                <div className="text-2xl font-bold text-destructive">ETB {stats.totalExpenses.toFixed(2)}</div>
+              </CardContent>
+            </Card>
 
-        <Card>
-          <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
-            <CardTitle className="text-sm font-medium">Net Profit</CardTitle>
-            <TrendingUp className="h-4 w-4 text-primary" />
-          </CardHeader>
-          <CardContent>
-            <div className={`text-2xl font-bold ${stats.netProfit >= 0 ? 'text-success' : 'text-destructive'}`}>
-              ETB {stats.netProfit.toFixed(2)}
-            </div>
-          </CardContent>
-        </Card>
+            <Card>
+              <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
+                <CardTitle className="text-sm font-medium">Net Profit</CardTitle>
+                <TrendingUp className="h-4 w-4 text-primary" />
+              </CardHeader>
+              <CardContent>
+                <div className={`text-2xl font-bold ${stats.netProfit >= 0 ? 'text-success' : 'text-destructive'}`}>
+                  ETB {stats.netProfit.toFixed(2)}
+                </div>
+              </CardContent>
+            </Card>
 
-        {(isAdvancedMode || showFinanceDetails) && (
-          <Card>
-            <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
-              <CardTitle className="text-sm font-medium">Profit Margin</CardTitle>
-              <BarChart3 className="h-4 w-4 text-info" />
-            </CardHeader>
-            <CardContent>
-              <div className={`text-2xl font-bold ${stats.profitMargin >= 0 ? 'text-success' : 'text-destructive'}`}>
-                {stats.profitMargin.toFixed(1)}%
-              </div>
-            </CardContent>
-          </Card>
+            <Card>
+              <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
+                <CardTitle className="text-sm font-medium">Profit Margin</CardTitle>
+                <BarChart3 className="h-4 w-4 text-info" />
+              </CardHeader>
+              <CardContent>
+                <div className={`text-2xl font-bold ${stats.profitMargin >= 0 ? 'text-success' : 'text-destructive'}`}>
+                  {stats.profitMargin.toFixed(1)}%
+                </div>
+              </CardContent>
+            </Card>
+          </>
+        ) : (
+          <>
+            <Card>
+              <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
+                <CardTitle className="text-sm font-medium">Period Sales</CardTitle>
+                <DollarSign className="h-4 w-4 text-success" />
+              </CardHeader>
+              <CardContent>
+                <div className="text-2xl font-bold text-success">ETB {stats.salesRevenue.toFixed(2)}</div>
+                <p className="text-xs text-muted-foreground mt-1">Total sales for the selected period</p>
+              </CardContent>
+            </Card>
+
+            <Card>
+              <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
+                <CardTitle className="text-sm font-medium">Gross Profit</CardTitle>
+                <TrendingUp className="h-4 w-4 text-primary" />
+              </CardHeader>
+              <CardContent>
+                <div className={`text-2xl font-bold ${stats.grossProfit >= 0 ? 'text-success' : 'text-destructive'}`}>
+                  ETB {stats.grossProfit.toFixed(2)}
+                </div>
+                <p className="text-xs text-muted-foreground mt-1">Sales Revenue − COGS</p>
+              </CardContent>
+            </Card>
+          </>
         )}
       </div>
+
 
       {/* See Details button in Simple Mode */}
       {!isAdvancedMode && !showFinanceDetails && (

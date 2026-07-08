@@ -112,7 +112,7 @@ export default function Dashboard() {
   const [totalGroups, setTotalGroups] = useState(0);
   const [topGroupSales, setTopGroupSales] = useState<GroupSalesData[]>([]);
   const [loading, setLoading] = useState(true);
-  const [reportPeriod, setReportPeriod] = useState('monthly');
+  const [reportPeriod, setReportPeriod] = useState('daily');
   const [customDate, setCustomDate] = useState<Date>();
   const [sendingTestMessage, setSendingTestMessage] = useState(false);
 

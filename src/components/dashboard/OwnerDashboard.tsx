@@ -73,7 +73,7 @@ interface PaymentMethodData {
 
 export default function OwnerDashboard() {
   const [sendingTestMessage, setSendingTestMessage] = useState(false);
-  const [dateFilter, setDateFilter] = useState<DateFilter>('monthly');
+  const [dateFilter, setDateFilter] = useState<DateFilter>('daily');
   const { toast } = useToast();
   const { selectedBranch, branchType } = useBranchContext();
   const { profile } = useAuth();
