@@ -248,25 +248,37 @@ export default function FinanceManagement() {
   const fetchFinanceData = async () => {
     try {
       const now = new Date();
-      let queryStartDate = startDate || new Date();
-      let queryEndDate = endDate || now;
+      // Centralized date window logic — MUST match the Dashboard's useDashboardStats
+      // so every summary card, chart, table and report reflects the same period.
+      let queryStartDate: Date;
+      let queryEndDate: Date;
 
-      if (!startDate && !endDate) {
+      if (startDate || endDate) {
+        // Custom range — inclusive on both ends. Missing bound falls back to today.
+        queryStartDate = startDate ? new Date(startDate) : new Date();
+        queryEndDate = endDate ? new Date(endDate) : new Date();
+      } else {
+        queryEndDate = new Date();
+        queryStartDate = new Date();
         switch (period) {
           case 'daily':
-            queryStartDate.setDate(now.getDate() - 1);
+            queryStartDate.setHours(0, 0, 0, 0); // today only
             break;
           case 'weekly':
-            queryStartDate.setDate(now.getDate() - 7);
+            queryStartDate.setDate(now.getDate() - 6);
+            queryStartDate.setHours(0, 0, 0, 0);
             break;
           case 'monthly':
-            queryStartDate.setMonth(now.getMonth() - 1);
+            queryStartDate.setDate(now.getDate() - 29);
+            queryStartDate.setHours(0, 0, 0, 0);
             break;
           case 'yearly':
             queryStartDate.setFullYear(now.getFullYear() - 1);
+            queryStartDate.setHours(0, 0, 0, 0);
             break;
         }
       }
+      queryEndDate.setHours(23, 59, 59, 999);
 
       // Owner isolation: fetch owner's branch IDs when "All Branches"
       let ownerBranchIds: string[] = [];
