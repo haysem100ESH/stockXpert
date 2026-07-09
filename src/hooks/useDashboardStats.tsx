@@ -201,7 +201,7 @@ async function fetchDashboardOverview({
   ).length;
   const outOfStockItems = branchItemsData.filter((bi: any) => bi.quantity === 0).length;
   const totalSoldItems = saleItemsData.reduce((sum, item: any) => sum + item.quantity, 0);
-  const today = formatLocalDate(new Date());
+  const today = addisDayString();
   // Expired items: distinct branch_items that have at least one batch with an
   // expired date (batches are the source of truth). Fall back to branch_items
   // legacy expiry for items without batches.
