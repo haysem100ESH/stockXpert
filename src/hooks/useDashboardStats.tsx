@@ -94,34 +94,6 @@ const EMPTY_OVERVIEW: DashboardOverview = {
   topGroupSales: [],
 };
 
-function getStartDate(dateFilter: DateFilter): Date {
-  const d = new Date();
-
-  switch (dateFilter) {
-    case "daily":
-      d.setHours(0, 0, 0, 0);
-      break;
-
-    case "weekly":
-      d.setDate(d.getDate() - 6);
-      d.setHours(0, 0, 0, 0);
-      break;
-
-    case "monthly":
-      d.setDate(1);
-      d.setHours(0, 0, 0, 0);
-      break;
-
-    case "yearly":
-      d.setMonth(0);
-      d.setDate(1);
-      d.setHours(0, 0, 0, 0);
-      break;
-  }
-
-  return d;
-}
-
 interface FetchArgs {
   selectedBranch: string | null;
   ownerBranchIds: string[];
@@ -144,27 +116,17 @@ async function fetchDashboardOverview({
     return EMPTY_OVERVIEW;
   }
 
-  const now = new Date();
-  const startDate = getStartDate(dateFilter);
-
   // Build all primary queries.
   // NOTE: explicit .range() is required to bypass Supabase's default 1000-row cap,
   // which silently truncates results for owners with hundreds of items / sales.
   // We also dropped the redundant `salesQuery` — `salesWithItemsQuery` returns the
   // same rows plus the joined sale_items, so one round-trip is enough.
-  // Filter on `sale_date` (business/accounting date the cashier picked) so
-  // analytics reflect when the sale really happened, not when the row was
-  // inserted. created_at is preserved for audit but not used for filtering.
-  function formatLocalDate(date: Date) {
-    const y = date.getFullYear();
-    const m = String(date.getMonth() + 1).padStart(2, "0");
-    const d = String(date.getDate()).padStart(2, "0");
+  // Filter on `sale_date` using Ethiopia (Africa/Addis_Ababa) local dates so
+  // analytics reflect the current calendar day in Addis regardless of the
+  // browser's or server's timezone.
+  const startDay = addisPeriodStartDay(dateFilter);
+  const endDay = addisDayString();
 
-    return `${y}-${m}-${d}`;
-  }
-
-  const startDay = formatLocalDate(startDate);
-  const endDay = formatLocalDate(now);
   let salesWithItemsQuery = supabase
     .from("sales")
     .select(
