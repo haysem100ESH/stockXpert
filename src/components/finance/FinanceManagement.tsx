@@ -248,38 +248,25 @@ export default function FinanceManagement() {
 
   const fetchFinanceData = async () => {
     try {
-      const now = new Date();
-      // Centralized date window logic — MUST match the Dashboard's useDashboardStats
-      // so every summary card, chart, table and report reflects the same period.
-      let queryStartDate: Date;
-      let queryEndDate: Date;
+      // Anchor all period math to Africa/Addis_Ababa (UTC+3, no DST). Without
+      // this the "today" filter uses browser/UTC and Ethiopian sales made
+      // early in the local morning would show under "yesterday".
+      let startDay: string;
+      let endDay: string;
 
       if (startDate || endDate) {
         // Custom range — inclusive on both ends. Missing bound falls back to today.
-        queryStartDate = startDate ? new Date(startDate) : new Date();
-        queryEndDate = endDate ? new Date(endDate) : new Date();
+        startDay = startDate ? addisDayString(new Date(startDate)) : addisDayString();
+        endDay = endDate ? addisDayString(new Date(endDate)) : addisDayString();
       } else {
-        queryEndDate = new Date();
-        queryStartDate = new Date();
-        switch (period) {
-          case 'daily':
-            queryStartDate.setHours(0, 0, 0, 0); // today only
-            break;
-          case 'weekly':
-            queryStartDate.setDate(now.getDate() - 6);
-            queryStartDate.setHours(0, 0, 0, 0);
-            break;
-          case 'monthly':
-            queryStartDate.setDate(now.getDate() - 29);
-            queryStartDate.setHours(0, 0, 0, 0);
-            break;
-          case 'yearly':
-            queryStartDate.setFullYear(now.getFullYear() - 1);
-            queryStartDate.setHours(0, 0, 0, 0);
-            break;
-        }
+        startDay = addisPeriodStartDay(period as any);
+        endDay = addisDayString();
       }
-      queryEndDate.setHours(23, 59, 59, 999);
+
+      // Build the actual instants that bracket the Addis day range so custom-
+      // expense/inventory `created_at` filters use the same window.
+      const queryStartDate = new Date(`${startDay}T00:00:00+03:00`);
+      const queryEndDate = new Date(`${endDay}T23:59:59.999+03:00`);
 
       // Owner isolation: fetch owner's branch IDs when "All Branches"
       let ownerBranchIds: string[] = [];
@@ -302,8 +289,7 @@ export default function FinanceManagement() {
       // Use sale_date (business/accounting date) for filtering and ordering so
       // reports reflect when the sale actually happened, not when the row was
       // written. created_at remains the system record timestamp.
-      const startDay = queryStartDate.toISOString().slice(0, 10);
-      const endDay = queryEndDate.toISOString().slice(0, 10);
+
 
       // Fetch sales with medicine details
       let salesQuery = supabase
