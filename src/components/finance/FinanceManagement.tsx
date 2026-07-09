@@ -515,7 +515,7 @@ export default function FinanceManagement() {
           });
         });
       }
-      const grossProfit = salesRevenue - cogs;
+      const grossProfit = totalIncome - cogs;
 
       setStats({
         totalIncome,
