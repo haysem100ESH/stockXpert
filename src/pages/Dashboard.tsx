@@ -253,10 +253,8 @@ export default function Dashboard() {
           minimum_stock_level: bi.medicines?.minimum_stock_level ?? 0,
         }));
 
-      const todayStr = new Date().toISOString().split('T')[0];
-      const thirtyDaysFromNow = new Date();
-      thirtyDaysFromNow.setDate(thirtyDaysFromNow.getDate() + 30);
-      const thirtyStr = thirtyDaysFromNow.toISOString().split('T')[0];
+      const todayStr = addisDayString();
+      const thirtyStr = addisDayOffset(30);
 
       // Pull batch-level expiry data (the real source of truth — items can have
       // multiple batches with different expiry dates).
