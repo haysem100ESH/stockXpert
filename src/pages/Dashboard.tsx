@@ -19,6 +19,7 @@ import { useSeasonalPerformance } from '@/hooks/useSeasonalPerformance';
 import SeasonalTrendsWidget from '@/components/smart-inventory/SeasonalTrendsWidget';
 import ScoreOverview from '@/components/smart-inventory/ScoreOverview';
 import { useSmartInventory } from '@/hooks/useSmartInventory';
+import { addisDayString, addisDayOffset, addisPeriodStartDay } from '@/lib/timezone';
 interface DashboardStats {
   totalRevenue: number;
   totalProducts: number;
