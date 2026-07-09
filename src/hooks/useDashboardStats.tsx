@@ -190,7 +190,12 @@ async function fetchDashboardOverview({
   salesWithItems.forEach((s: any) => (s.sale_items || []).forEach((si: any) => saleItemsData.push(si)));
 
   // Stats
-  const totalRevenue = salesData.reduce((sum, s: any) => sum + Number(s.total_amount), 0);
+  // Include extra_profit (tips / "keep the change" overpayments) — it's real
+  // income received from the customer but not part of total_amount.
+  const totalRevenue = salesData.reduce(
+    (sum, s: any) => sum + Number(s.total_amount) + Number(s.extra_profit || 0),
+    0,
+  );
   const totalProducts = branchItemsData.length;
   const totalMedicines = branchItemsData.filter((bi: any) =>
     MEDICINE_CATEGORIES.includes(bi.medicines?.category),
