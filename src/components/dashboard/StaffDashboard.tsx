@@ -9,6 +9,7 @@ import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@
 import { Package, ShoppingCart, AlertTriangle, Download, Calendar as CalendarDaysIcon } from 'lucide-react';
 import { format, startOfDay, endOfDay, subWeeks, subMonths, subYears } from 'date-fns';
 import { supabase } from '@/lib/db';
+import { addisDayString, addisPeriodStartDay } from '@/lib/timezone';
 import { BarChart, Bar, XAxis, YAxis, CartesianGrid, ResponsiveContainer, PieChart, Pie, Cell } from 'recharts';
 
 // Use explicit types with type assertions to avoid complex inference
