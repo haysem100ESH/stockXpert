@@ -273,7 +273,8 @@ async function fetchDashboardOverview({
   const paymentMap = new Map<string, number>();
   salesData.forEach((sale: any) => {
     const method = sale.payment_method || "Cash";
-    const amount = Number(sale.total_amount) - (Number(sale.discount_amount) || 0);
+    const amount =
+      Number(sale.total_amount) - (Number(sale.discount_amount) || 0) + Number(sale.extra_profit || 0);
     paymentMap.set(method, (paymentMap.get(method) || 0) + amount);
   });
   const paymentMethodData = Array.from(paymentMap.entries()).map(([method, amount]) => ({ method, amount }));
