@@ -470,7 +470,8 @@ export default function Dashboard() {
       const paymentMap = new Map<string, number>();
       salesData?.forEach(sale => {
         const method = sale.payment_method || 'Cash';
-        const amount = Number(sale.total_amount) - (Number(sale.discount_amount) || 0);
+        const amount =
+          Number(sale.total_amount) - (Number(sale.discount_amount) || 0) + Number((sale as any).extra_profit || 0);
         paymentMap.set(method, (paymentMap.get(method) || 0) + amount);
       });
 
