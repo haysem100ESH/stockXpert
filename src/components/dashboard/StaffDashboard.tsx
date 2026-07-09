@@ -269,7 +269,12 @@ export default function StaffDashboard() {
       const totalItems = branchItemsData.filter((bi: any) => !medicineCategories.includes(bi.medicines?.category)).length;
       const lowStockItemsCount = lowStockData.length;
       const outOfStockItemsCount = outOfStockData.length;
-      const periodSalesRevenue = salesData.reduce((sum: number, sale: any) => sum + Number(sale.total_amount), 0);
+      // Period sales revenue includes extra_profit (tips / kept change) so it
+      // matches the total cash actually received from customers.
+      const periodSalesRevenue = salesData.reduce(
+        (sum: number, sale: any) => sum + Number(sale.total_amount) + Number(sale.extra_profit || 0),
+        0,
+      );
 
       setStats({
         totalProducts,
