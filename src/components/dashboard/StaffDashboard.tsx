@@ -113,12 +113,16 @@ export default function StaffDashboard() {
       const branchItemsResult = await branchItemsQuery;
       const branchItemsData = branchItemsResult.data as any[] || [];
 
-      const startDay = start.toISOString().slice(0, 10);
-      const endDay = end.toISOString().slice(0, 10);
+      // Date range in Africa/Addis_Ababa timezone so "today" matches the
+      // current Ethiopian calendar day for staff regardless of browser TZ.
+      const startDay = customDate
+        ? addisDayString(customDate)
+        : addisPeriodStartDay(reportPeriod as any);
+      const endDay = customDate ? addisDayString(customDate) : addisDayString();
 
       let salesQuery = supabase
         .from('sales')
-        .select('id, total_amount, payment_method, discount_amount')
+        .select('id, total_amount, extra_profit, payment_method, discount_amount')
         .gte('sale_date', startDay)
         .lte('sale_date', endDay);
       
