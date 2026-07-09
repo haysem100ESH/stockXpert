@@ -188,7 +188,11 @@ export default function Dashboard() {
       }
       const { data: salesData } = await salesQuery;
       
-      const totalRevenue = salesData?.reduce((sum, sale) => sum + Number(sale.total_amount), 0) || 0;
+      const totalRevenue =
+        salesData?.reduce(
+          (sum, sale: any) => sum + Number(sale.total_amount) + Number(sale.extra_profit || 0),
+          0,
+        ) || 0;
 
       // CRITICAL: Inventory metrics MUST come from `branch_items` (per-branch stock),
       // never from `medicines` (the global master catalog). `medicines` rows can
