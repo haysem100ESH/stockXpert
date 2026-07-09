@@ -438,7 +438,7 @@ export default function Dashboard() {
         const existing = dateMap.get(date) || { income: 0, expenses: 0 };
         dateMap.set(date, {
           ...existing,
-          income: existing.income + Number(sale.total_amount)
+          income: existing.income + Number(sale.total_amount) + Number((sale as any).extra_profit || 0)
         });
       });
 
