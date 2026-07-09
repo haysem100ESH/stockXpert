@@ -167,11 +167,15 @@ export default function Dashboard() {
       }
       
       // Fetch revenue for the selected period — filter by business sale_date
-      const startDay = start.toISOString().slice(0, 10);
-      const endDay = end.toISOString().slice(0, 10);
+      // in Africa/Addis_Ababa time so "today"/"this week" match the Ethiopian
+      // calendar day regardless of the browser's timezone.
+      const startDay = customDate
+        ? addisDayString(customDate)
+        : addisPeriodStartDay(reportPeriod as any);
+      const endDay = customDate ? addisDayString(customDate) : addisDayString();
       let salesQuery = supabase
         .from('sales')
-        .select('total_amount, created_at, sale_date, payment_method, discount_amount')
+        .select('total_amount, extra_profit, created_at, sale_date, payment_method, discount_amount')
         .gte('sale_date', startDay)
         .lte('sale_date', endDay);
       
