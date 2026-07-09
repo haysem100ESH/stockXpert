@@ -130,7 +130,7 @@ async function fetchDashboardOverview({
   let salesWithItemsQuery = supabase
     .from("sales")
     .select(
-      "id, total_amount, payment_method, discount_amount, branch_id, created_at, sale_date, sale_items(quantity, medicine_id, medicines(name, category, medicine_code_id))",
+      "id, total_amount, extra_profit, payment_method, discount_amount, branch_id, created_at, sale_date, sale_items(quantity, medicine_id, medicines(name, category, medicine_code_id))",
     )
     .gte("sale_date", startDay)
     .lte("sale_date", endDay)
