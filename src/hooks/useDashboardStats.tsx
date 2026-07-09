@@ -20,6 +20,7 @@ import { supabase } from "@/lib/db";
 import { useAuth } from "./useAuth";
 import { useBranchContext } from "./useBranchContext";
 import { useOwnerBranchIds } from "./useOwnerBranchIds";
+import { addisDayString, addisPeriodStartDay } from "@/lib/timezone";
 
 export type DateFilter = "daily" | "weekly" | "monthly" | "yearly";
 
@@ -93,34 +94,6 @@ const EMPTY_OVERVIEW: DashboardOverview = {
   topGroupSales: [],
 };
 
-function getStartDate(dateFilter: DateFilter): Date {
-  const d = new Date();
-
-  switch (dateFilter) {
-    case "daily":
-      d.setHours(0, 0, 0, 0);
-      break;
-
-    case "weekly":
-      d.setDate(d.getDate() - 6);
-      d.setHours(0, 0, 0, 0);
-      break;
-
-    case "monthly":
-      d.setDate(1);
-      d.setHours(0, 0, 0, 0);
-      break;
-
-    case "yearly":
-      d.setMonth(0);
-      d.setDate(1);
-      d.setHours(0, 0, 0, 0);
-      break;
-  }
-
-  return d;
-}
-
 interface FetchArgs {
   selectedBranch: string | null;
   ownerBranchIds: string[];
@@ -143,31 +116,21 @@ async function fetchDashboardOverview({
     return EMPTY_OVERVIEW;
   }
 
-  const now = new Date();
-  const startDate = getStartDate(dateFilter);
-
   // Build all primary queries.
   // NOTE: explicit .range() is required to bypass Supabase's default 1000-row cap,
   // which silently truncates results for owners with hundreds of items / sales.
   // We also dropped the redundant `salesQuery` — `salesWithItemsQuery` returns the
   // same rows plus the joined sale_items, so one round-trip is enough.
-  // Filter on `sale_date` (business/accounting date the cashier picked) so
-  // analytics reflect when the sale really happened, not when the row was
-  // inserted. created_at is preserved for audit but not used for filtering.
-  function formatLocalDate(date: Date) {
-    const y = date.getFullYear();
-    const m = String(date.getMonth() + 1).padStart(2, "0");
-    const d = String(date.getDate()).padStart(2, "0");
+  // Filter on `sale_date` using Ethiopia (Africa/Addis_Ababa) local dates so
+  // analytics reflect the current calendar day in Addis regardless of the
+  // browser's or server's timezone.
+  const startDay = addisPeriodStartDay(dateFilter);
+  const endDay = addisDayString();
 
-    return `${y}-${m}-${d}`;
-  }
-
-  const startDay = formatLocalDate(startDate);
-  const endDay = formatLocalDate(now);
   let salesWithItemsQuery = supabase
     .from("sales")
     .select(
-      "id, total_amount, payment_method, discount_amount, branch_id, created_at, sale_date, sale_items(quantity, medicine_id, medicines(name, category, medicine_code_id))",
+      "id, total_amount, extra_profit, payment_method, discount_amount, branch_id, created_at, sale_date, sale_items(quantity, medicine_id, medicines(name, category, medicine_code_id))",
     )
     .gte("sale_date", startDay)
     .lte("sale_date", endDay)
@@ -227,7 +190,12 @@ async function fetchDashboardOverview({
   salesWithItems.forEach((s: any) => (s.sale_items || []).forEach((si: any) => saleItemsData.push(si)));
 
   // Stats
-  const totalRevenue = salesData.reduce((sum, s: any) => sum + Number(s.total_amount), 0);
+  // Include extra_profit (tips / "keep the change" overpayments) — it's real
+  // income received from the customer but not part of total_amount.
+  const totalRevenue = salesData.reduce(
+    (sum, s: any) => sum + Number(s.total_amount) + Number(s.extra_profit || 0),
+    0,
+  );
   const totalProducts = branchItemsData.length;
   const totalMedicines = branchItemsData.filter((bi: any) =>
     MEDICINE_CATEGORIES.includes(bi.medicines?.category),
@@ -238,7 +206,7 @@ async function fetchDashboardOverview({
   ).length;
   const outOfStockItems = branchItemsData.filter((bi: any) => bi.quantity === 0).length;
   const totalSoldItems = saleItemsData.reduce((sum, item: any) => sum + item.quantity, 0);
-  const today = formatLocalDate(new Date());
+  const today = addisDayString();
   // Expired items: distinct branch_items that have at least one batch with an
   // expired date (batches are the source of truth). Fall back to branch_items
   // legacy expiry for items without batches.
@@ -305,7 +273,8 @@ async function fetchDashboardOverview({
   const paymentMap = new Map<string, number>();
   salesData.forEach((sale: any) => {
     const method = sale.payment_method || "Cash";
-    const amount = Number(sale.total_amount) - (Number(sale.discount_amount) || 0);
+    const amount =
+      Number(sale.total_amount) - (Number(sale.discount_amount) || 0) + Number(sale.extra_profit || 0);
     paymentMap.set(method, (paymentMap.get(method) || 0) + amount);
   });
   const paymentMethodData = Array.from(paymentMap.entries()).map(([method, amount]) => ({ method, amount }));
