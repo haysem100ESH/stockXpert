@@ -242,13 +242,9 @@ export default function StaffDashboard() {
           minimum_stock_level: bi.medicines?.minimum_stock_level,
         }));
 
-      const today = new Date().toISOString().split('T')[0];
-      const thirtyDaysFromNow = new Date();
-      thirtyDaysFromNow.setDate(thirtyDaysFromNow.getDate() + 30);
-      const tomorrow = new Date();
-      tomorrow.setDate(tomorrow.getDate() + 1);
-      const tomorrowStr = tomorrow.toISOString().split('T')[0];
-      const thirtyStr = thirtyDaysFromNow.toISOString().split('T')[0];
+      const today = addisDayString();
+      const tomorrowStr = addisDayString(new Date(Date.now() + 86_400_000));
+      const thirtyStr = addisDayString(new Date(Date.now() + 30 * 86_400_000));
 
       const expiringData: SimpleItem[] = branchItemsData
         .filter((bi: any) => bi.expiry_date && bi.quantity > 0 && bi.expiry_date >= tomorrowStr && bi.expiry_date <= thirtyStr)
