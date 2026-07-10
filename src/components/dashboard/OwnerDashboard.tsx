@@ -73,7 +73,7 @@ interface PaymentMethodData {
 
 export default function OwnerDashboard() {
   const [sendingTestMessage, setSendingTestMessage] = useState(false);
-  const [dateFilter, setDateFilter] = useState<DateFilter>('monthly');
+  const [dateFilter, setDateFilter] = useState<DateFilter>('daily');
   const { toast } = useToast();
   const { selectedBranch, branchType } = useBranchContext();
   const { profile } = useAuth();
@@ -300,18 +300,24 @@ export default function OwnerDashboard() {
                   <CardDescription>Medicine sales performance</CardDescription>
                 </CardHeader>
                 <CardContent className="p-3 sm:p-6 pt-0 sm:pt-0">
-                  <div className="w-full overflow-x-auto">
-                    <div style={{ minWidth: 280 }}>
-                      <ResponsiveContainer width="100%" height={260}>
-                        <BarChart data={medicinesCategorySales} margin={{ left: -20, right: 8, top: 5, bottom: 40 }}>
-                          <CartesianGrid strokeDasharray="3 3" />
-                          <XAxis dataKey="category" tick={{ fontSize: 10 }} interval={0} angle={-30} textAnchor="end" height={60} />
-                          <YAxis tick={{ fontSize: 11 }} width={40} />
-                          <Bar dataKey="sales" fill="hsl(var(--primary))" radius={[3,3,0,0]} />
-                        </BarChart>
-                      </ResponsiveContainer>
+                  {medicinesCategorySales.length === 0 ? (
+                    <div className="h-[220px] flex items-center justify-center text-sm text-muted-foreground">
+                      No data available for the selected period
                     </div>
-                  </div>
+                  ) : (
+                    <div className="w-full overflow-x-auto">
+                      <div style={{ minWidth: 280 }}>
+                        <ResponsiveContainer width="100%" height={260}>
+                          <BarChart data={medicinesCategorySales} margin={{ left: -20, right: 8, top: 5, bottom: 40 }}>
+                            <CartesianGrid strokeDasharray="3 3" />
+                            <XAxis dataKey="category" tick={{ fontSize: 10 }} interval={0} angle={-30} textAnchor="end" height={60} />
+                            <YAxis tick={{ fontSize: 11 }} width={40} />
+                            <Bar dataKey="sales" fill="hsl(var(--primary))" radius={[3,3,0,0]} />
+                          </BarChart>
+                        </ResponsiveContainer>
+                      </div>
+                    </div>
+                  )}
                 </CardContent>
               </Card>
             )}
@@ -323,18 +329,24 @@ export default function OwnerDashboard() {
                 <CardDescription>{isPharmacy ? 'Non-medicine items sales' : 'Sales breakdown by category'}</CardDescription>
               </CardHeader>
               <CardContent className="p-3 sm:p-6 pt-0 sm:pt-0">
-                <div className="w-full overflow-x-auto">
-                  <div style={{ minWidth: 280 }}>
-                    <ResponsiveContainer width="100%" height={260}>
-                      <BarChart data={isPharmacy ? itemsCategorySales : categorySales} margin={{ left: -20, right: 8, top: 5, bottom: 40 }}>
-                        <CartesianGrid strokeDasharray="3 3" />
-                        <XAxis dataKey="category" tick={{ fontSize: 10 }} interval={0} angle={-30} textAnchor="end" height={60} />
-                        <YAxis tick={{ fontSize: 11 }} width={40} />
-                        <Bar dataKey="sales" fill="hsl(var(--secondary))" radius={[3,3,0,0]} />
-                      </BarChart>
-                    </ResponsiveContainer>
+                {((isPharmacy ? itemsCategorySales : categorySales).length === 0) ? (
+                  <div className="h-[220px] flex items-center justify-center text-sm text-muted-foreground">
+                    No data available for the selected period
                   </div>
-                </div>
+                ) : (
+                  <div className="w-full overflow-x-auto">
+                    <div style={{ minWidth: 280 }}>
+                      <ResponsiveContainer width="100%" height={260}>
+                        <BarChart data={isPharmacy ? itemsCategorySales : categorySales} margin={{ left: -20, right: 8, top: 5, bottom: 40 }}>
+                          <CartesianGrid strokeDasharray="3 3" />
+                          <XAxis dataKey="category" tick={{ fontSize: 10 }} interval={0} angle={-30} textAnchor="end" height={60} />
+                          <YAxis tick={{ fontSize: 11 }} width={40} />
+                          <Bar dataKey="sales" fill="hsl(var(--secondary))" radius={[3,3,0,0]} />
+                        </BarChart>
+                      </ResponsiveContainer>
+                    </div>
+                  </div>
+                )}
               </CardContent>
             </Card>
 
@@ -346,23 +358,31 @@ export default function OwnerDashboard() {
                   <CardDescription>Best performing medicines</CardDescription>
                 </CardHeader>
                 <CardContent className="p-3 sm:p-6 pt-0 sm:pt-0">
-                  <ResponsiveContainer width="100%" height={220}>
-                    <PieChart>
-                      <Pie data={topMedicines.slice(0, 5)} cx="50%" cy="50%" outerRadius="55%" fill="hsl(var(--primary))" dataKey="sales" label={false} nameKey="name">
-                        {topMedicines.slice(0, 5).map((_, index) => (
-                          <Cell key={`cell-${index}`} fill={`hsl(${(index * 72) % 360}, 70%, 50%)`} />
+                  {topMedicines.length === 0 ? (
+                    <div className="h-[220px] flex items-center justify-center text-sm text-muted-foreground">
+                      No data available for the selected period
+                    </div>
+                  ) : (
+                    <>
+                      <ResponsiveContainer width="100%" height={220}>
+                        <PieChart>
+                          <Pie data={topMedicines.slice(0, 5)} cx="50%" cy="50%" outerRadius="55%" fill="hsl(var(--primary))" dataKey="sales" label={false} nameKey="name">
+                            {topMedicines.slice(0, 5).map((_, index) => (
+                              <Cell key={`cell-${index}`} fill={`hsl(${(index * 72) % 360}, 70%, 50%)`} />
+                            ))}
+                          </Pie>
+                        </PieChart>
+                      </ResponsiveContainer>
+                      <div className="mt-2 flex flex-wrap gap-2 justify-center">
+                        {topMedicines.slice(0, 5).map((entry, index) => (
+                          <div key={entry.name} className="flex items-center gap-1 text-xs">
+                            <div className="w-3 h-3 rounded-full shrink-0" style={{ backgroundColor: `hsl(${(index * 72) % 360}, 70%, 50%)` }} />
+                            <span className="truncate max-w-[120px]">{entry.name} ({entry.sales})</span>
+                          </div>
                         ))}
-                      </Pie>
-                    </PieChart>
-                  </ResponsiveContainer>
-                  <div className="mt-2 flex flex-wrap gap-2 justify-center">
-                    {topMedicines.slice(0, 5).map((entry, index) => (
-                      <div key={entry.name} className="flex items-center gap-1 text-xs">
-                        <div className="w-3 h-3 rounded-full shrink-0" style={{ backgroundColor: `hsl(${(index * 72) % 360}, 70%, 50%)` }} />
-                        <span className="truncate max-w-[120px]">{entry.name} ({entry.sales})</span>
                       </div>
-                    ))}
-                  </div>
+                    </>
+                  )}
                 </CardContent>
               </Card>
             )}
@@ -374,23 +394,31 @@ export default function OwnerDashboard() {
                 <CardDescription>{isPharmacy ? 'Best performing items' : 'Best performing products'}</CardDescription>
               </CardHeader>
               <CardContent className="p-3 sm:p-6 pt-0 sm:pt-0">
-                <ResponsiveContainer width="100%" height={220}>
-                  <PieChart>
-                    <Pie data={(isPharmacy ? topItems : productPerformance).slice(0, 5)} cx="50%" cy="50%" outerRadius="55%" fill="hsl(var(--accent))" dataKey="sales" label={false} nameKey="name">
-                      {(isPharmacy ? topItems : productPerformance).slice(0, 5).map((_, index) => (
-                        <Cell key={`cell-${index}`} fill={`hsl(${(index * 90) % 360}, 65%, 55%)`} />
+                {((isPharmacy ? topItems : productPerformance).length === 0) ? (
+                  <div className="h-[220px] flex items-center justify-center text-sm text-muted-foreground">
+                    No data available for the selected period
+                  </div>
+                ) : (
+                  <>
+                    <ResponsiveContainer width="100%" height={220}>
+                      <PieChart>
+                        <Pie data={(isPharmacy ? topItems : productPerformance).slice(0, 5)} cx="50%" cy="50%" outerRadius="55%" fill="hsl(var(--accent))" dataKey="sales" label={false} nameKey="name">
+                          {(isPharmacy ? topItems : productPerformance).slice(0, 5).map((_, index) => (
+                            <Cell key={`cell-${index}`} fill={`hsl(${(index * 90) % 360}, 65%, 55%)`} />
+                          ))}
+                        </Pie>
+                      </PieChart>
+                    </ResponsiveContainer>
+                    <div className="mt-2 flex flex-wrap gap-2 justify-center">
+                      {(isPharmacy ? topItems : productPerformance).slice(0, 5).map((entry, index) => (
+                        <div key={entry.name} className="flex items-center gap-1 text-xs">
+                          <div className="w-3 h-3 rounded-full shrink-0" style={{ backgroundColor: `hsl(${(index * 90) % 360}, 65%, 55%)` }} />
+                          <span className="truncate max-w-[120px]">{entry.name} ({entry.sales})</span>
+                        </div>
                       ))}
-                    </Pie>
-                  </PieChart>
-                </ResponsiveContainer>
-                <div className="mt-2 flex flex-wrap gap-2 justify-center">
-                  {(isPharmacy ? topItems : productPerformance).slice(0, 5).map((entry, index) => (
-                    <div key={entry.name} className="flex items-center gap-1 text-xs">
-                      <div className="w-3 h-3 rounded-full shrink-0" style={{ backgroundColor: `hsl(${(index * 90) % 360}, 65%, 55%)` }} />
-                      <span className="truncate max-w-[120px]">{entry.name} ({entry.sales})</span>
                     </div>
-                  ))}
-                </div>
+                  </>
+                )}
               </CardContent>
             </Card>
 
@@ -423,11 +451,11 @@ export default function OwnerDashboard() {
                     </>
                   ) : (
                     <div className="h-[220px] flex flex-col items-center justify-center text-center text-sm text-muted-foreground gap-1 px-4">
-                      <p className="font-medium text-foreground">No grouped sales yet</p>
+                      <p className="font-medium text-foreground">No data available for the selected period</p>
                       <p className="text-xs">
                         {totalGroups === 0
                           ? 'Create medicine codes and assign items to start tracking group sales here.'
-                          : 'Assign items to your medicine codes, then sell them — group sales appear once linked items are sold in this date range.'}
+                          : 'No grouped sales fall inside this date range.'}
                       </p>
                     </div>
                   )}
@@ -441,25 +469,34 @@ export default function OwnerDashboard() {
                 <CardDescription>Revenue by payment method</CardDescription>
               </CardHeader>
               <CardContent className="p-3 sm:p-6 pt-0 sm:pt-0">
-                <ResponsiveContainer width="100%" height={220}>
-                  <PieChart>
-                    <Pie data={paymentMethodData} cx="50%" cy="50%" outerRadius="55%" fill="hsl(var(--accent))" dataKey="amount" label={false} nameKey="method">
-                      {paymentMethodData.map((_, index) => (
-                        <Cell key={`cell-${index}`} fill={`hsl(${(index * 90) % 360}, 65%, 55%)`} />
+                {paymentMethodData.length === 0 ? (
+                  <div className="h-[220px] flex items-center justify-center text-sm text-muted-foreground">
+                    No data available for the selected period
+                  </div>
+                ) : (
+                  <>
+                    <ResponsiveContainer width="100%" height={220}>
+                      <PieChart>
+                        <Pie data={paymentMethodData} cx="50%" cy="50%" outerRadius="55%" fill="hsl(var(--accent))" dataKey="amount" label={false} nameKey="method">
+                          {paymentMethodData.map((_, index) => (
+                            <Cell key={`cell-${index}`} fill={`hsl(${(index * 90) % 360}, 65%, 55%)`} />
+                          ))}
+                        </Pie>
+                      </PieChart>
+                    </ResponsiveContainer>
+                    <div className="mt-2 flex flex-wrap gap-2 justify-center">
+                      {paymentMethodData.map((entry, index) => (
+                        <div key={entry.method} className="flex items-center gap-1 text-xs">
+                          <div className="w-3 h-3 rounded-full shrink-0" style={{ backgroundColor: `hsl(${(index * 90) % 360}, 65%, 55%)` }} />
+                          <span>{entry.method}: ETB {Number(entry.amount).toFixed(2)}</span>
+                        </div>
                       ))}
-                    </Pie>
-                  </PieChart>
-                </ResponsiveContainer>
-                <div className="mt-2 flex flex-wrap gap-2 justify-center">
-                  {paymentMethodData.map((entry, index) => (
-                    <div key={entry.method} className="flex items-center gap-1 text-xs">
-                      <div className="w-3 h-3 rounded-full shrink-0" style={{ backgroundColor: `hsl(${(index * 90) % 360}, 65%, 55%)` }} />
-                      <span>{entry.method}: ETB {Number(entry.amount).toFixed(2)}</span>
                     </div>
-                  ))}
-                </div>
+                  </>
+                )}
               </CardContent>
             </Card>
+
 
             {/* Seasonal Trends */}
             <SeasonalTrendsWidget

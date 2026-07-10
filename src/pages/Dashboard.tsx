@@ -19,6 +19,7 @@ import { useSeasonalPerformance } from '@/hooks/useSeasonalPerformance';
 import SeasonalTrendsWidget from '@/components/smart-inventory/SeasonalTrendsWidget';
 import ScoreOverview from '@/components/smart-inventory/ScoreOverview';
 import { useSmartInventory } from '@/hooks/useSmartInventory';
+import { addisDayString, addisDayOffset, addisPeriodStartDay } from '@/lib/timezone';
 interface DashboardStats {
   totalRevenue: number;
   totalProducts: number;
@@ -112,7 +113,7 @@ export default function Dashboard() {
   const [totalGroups, setTotalGroups] = useState(0);
   const [topGroupSales, setTopGroupSales] = useState<GroupSalesData[]>([]);
   const [loading, setLoading] = useState(true);
-  const [reportPeriod, setReportPeriod] = useState('monthly');
+  const [reportPeriod, setReportPeriod] = useState('daily');
   const [customDate, setCustomDate] = useState<Date>();
   const [sendingTestMessage, setSendingTestMessage] = useState(false);
 
@@ -166,11 +167,15 @@ export default function Dashboard() {
       }
       
       // Fetch revenue for the selected period — filter by business sale_date
-      const startDay = start.toISOString().slice(0, 10);
-      const endDay = end.toISOString().slice(0, 10);
+      // in Africa/Addis_Ababa time so "today"/"this week" match the Ethiopian
+      // calendar day regardless of the browser's timezone.
+      const startDay = customDate
+        ? addisDayString(customDate)
+        : addisPeriodStartDay(reportPeriod as any);
+      const endDay = customDate ? addisDayString(customDate) : addisDayString();
       let salesQuery = supabase
         .from('sales')
-        .select('total_amount, created_at, sale_date, payment_method, discount_amount')
+        .select('total_amount, extra_profit, created_at, sale_date, payment_method, discount_amount')
         .gte('sale_date', startDay)
         .lte('sale_date', endDay);
       
@@ -183,7 +188,11 @@ export default function Dashboard() {
       }
       const { data: salesData } = await salesQuery;
       
-      const totalRevenue = salesData?.reduce((sum, sale) => sum + Number(sale.total_amount), 0) || 0;
+      const totalRevenue =
+        salesData?.reduce(
+          (sum, sale: any) => sum + Number(sale.total_amount) + Number(sale.extra_profit || 0),
+          0,
+        ) || 0;
 
       // CRITICAL: Inventory metrics MUST come from `branch_items` (per-branch stock),
       // never from `medicines` (the global master catalog). `medicines` rows can
@@ -244,10 +253,8 @@ export default function Dashboard() {
           minimum_stock_level: bi.medicines?.minimum_stock_level ?? 0,
         }));
 
-      const todayStr = new Date().toISOString().split('T')[0];
-      const thirtyDaysFromNow = new Date();
-      thirtyDaysFromNow.setDate(thirtyDaysFromNow.getDate() + 30);
-      const thirtyStr = thirtyDaysFromNow.toISOString().split('T')[0];
+      const todayStr = addisDayString();
+      const thirtyStr = addisDayOffset(30);
 
       // Pull batch-level expiry data (the real source of truth — items can have
       // multiple batches with different expiry dates).
@@ -431,7 +438,7 @@ export default function Dashboard() {
         const existing = dateMap.get(date) || { income: 0, expenses: 0 };
         dateMap.set(date, {
           ...existing,
-          income: existing.income + Number(sale.total_amount)
+          income: existing.income + Number(sale.total_amount) + Number((sale as any).extra_profit || 0)
         });
       });
 
@@ -463,7 +470,8 @@ export default function Dashboard() {
       const paymentMap = new Map<string, number>();
       salesData?.forEach(sale => {
         const method = sale.payment_method || 'Cash';
-        const amount = Number(sale.total_amount) - (Number(sale.discount_amount) || 0);
+        const amount =
+          Number(sale.total_amount) - (Number(sale.discount_amount) || 0) + Number((sale as any).extra_profit || 0);
         paymentMap.set(method, (paymentMap.get(method) || 0) + amount);
       });
 

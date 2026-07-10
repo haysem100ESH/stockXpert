@@ -9,6 +9,7 @@ import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@
 import { Package, ShoppingCart, AlertTriangle, Download, Calendar as CalendarDaysIcon } from 'lucide-react';
 import { format, startOfDay, endOfDay, subWeeks, subMonths, subYears } from 'date-fns';
 import { supabase } from '@/lib/db';
+import { addisDayString, addisPeriodStartDay } from '@/lib/timezone';
 import { BarChart, Bar, XAxis, YAxis, CartesianGrid, ResponsiveContainer, PieChart, Pie, Cell } from 'recharts';
 
 // Use explicit types with type assertions to avoid complex inference
@@ -70,7 +71,7 @@ export default function StaffDashboard() {
   const [topMedicines, setTopMedicines] = useState<ProductData[]>([]);
   const [topItems, setTopItems] = useState<ProductData[]>([]);
   const [loading, setLoading] = useState(true);
-  const [reportPeriod, setReportPeriod] = useState('monthly');
+  const [reportPeriod, setReportPeriod] = useState('daily');
   const [customDate, setCustomDate] = useState<Date>();
 
   useEffect(() => {
@@ -112,12 +113,16 @@ export default function StaffDashboard() {
       const branchItemsResult = await branchItemsQuery;
       const branchItemsData = branchItemsResult.data as any[] || [];
 
-      const startDay = start.toISOString().slice(0, 10);
-      const endDay = end.toISOString().slice(0, 10);
+      // Date range in Africa/Addis_Ababa timezone so "today" matches the
+      // current Ethiopian calendar day for staff regardless of browser TZ.
+      const startDay = customDate
+        ? addisDayString(customDate)
+        : addisPeriodStartDay(reportPeriod as any);
+      const endDay = customDate ? addisDayString(customDate) : addisDayString();
 
       let salesQuery = supabase
         .from('sales')
-        .select('id, total_amount, payment_method, discount_amount')
+        .select('id, total_amount, extra_profit, payment_method, discount_amount')
         .gte('sale_date', startDay)
         .lte('sale_date', endDay);
       
@@ -237,13 +242,9 @@ export default function StaffDashboard() {
           minimum_stock_level: bi.medicines?.minimum_stock_level,
         }));
 
-      const today = new Date().toISOString().split('T')[0];
-      const thirtyDaysFromNow = new Date();
-      thirtyDaysFromNow.setDate(thirtyDaysFromNow.getDate() + 30);
-      const tomorrow = new Date();
-      tomorrow.setDate(tomorrow.getDate() + 1);
-      const tomorrowStr = tomorrow.toISOString().split('T')[0];
-      const thirtyStr = thirtyDaysFromNow.toISOString().split('T')[0];
+      const today = addisDayString();
+      const tomorrowStr = addisDayString(new Date(Date.now() + 86_400_000));
+      const thirtyStr = addisDayString(new Date(Date.now() + 30 * 86_400_000));
 
       const expiringData: SimpleItem[] = branchItemsData
         .filter((bi: any) => bi.expiry_date && bi.quantity > 0 && bi.expiry_date >= tomorrowStr && bi.expiry_date <= thirtyStr)
@@ -268,7 +269,12 @@ export default function StaffDashboard() {
       const totalItems = branchItemsData.filter((bi: any) => !medicineCategories.includes(bi.medicines?.category)).length;
       const lowStockItemsCount = lowStockData.length;
       const outOfStockItemsCount = outOfStockData.length;
-      const periodSalesRevenue = salesData.reduce((sum: number, sale: any) => sum + Number(sale.total_amount), 0);
+      // Period sales revenue includes extra_profit (tips / kept change) so it
+      // matches the total cash actually received from customers.
+      const periodSalesRevenue = salesData.reduce(
+        (sum: number, sale: any) => sum + Number(sale.total_amount) + Number(sale.extra_profit || 0),
+        0,
+      );
 
       setStats({
         totalProducts,
