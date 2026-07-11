@@ -109,14 +109,15 @@ const pluralLabel = (label: string, n: number) => {
 };
 
 interface FinanceStats {
-  totalIncome: number;
-  totalExpenses: number;
-  netProfit: number;
+  totalIncome: number;         // salesRevenue + extraProfit (net-of-discount revenue actually received)
+  totalExpenses: number;       // operating expenses ONLY (excludes COGS / inventory purchases)
+  netProfit: number;           // totalIncome - totalExpenses (does NOT subtract COGS)
   profitMargin: number;
-  salesRevenue: number;
-  extraProfit: number;
-  cogs: number;
-  grossProfit: number;
+  salesRevenue: number;        // sum(total_amount) — already net of discount
+  extraProfit: number;         // tips / kept-change overpayments
+  discounts: number;           // sum(discount_amount) — informational
+  cogs: number;                // cost of goods sold
+  grossProfit: number;         // totalIncome - cogs
 }
 
 
@@ -194,6 +195,7 @@ export default function FinanceManagement() {
     profitMargin: 0,
     salesRevenue: 0,
     extraProfit: 0,
+    discounts: 0,
     cogs: 0,
     grossProfit: 0,
   });
@@ -281,7 +283,7 @@ export default function FinanceManagement() {
       // If owner has no branches yet, show empty data
       if (!selectedBranch && ownerBranchIds.length === 0 && profile?.role === 'owner') {
         setSales([]); setExpenses([]); setInventoryExpenses([]); setBranchData([]);
-        setStats({ totalIncome: 0, totalExpenses: 0, netProfit: 0, profitMargin: 0, salesRevenue: 0, extraProfit: 0, cogs: 0, grossProfit: 0 });
+        setStats({ totalIncome: 0, totalExpenses: 0, netProfit: 0, profitMargin: 0, salesRevenue: 0, extraProfit: 0, discounts: 0, cogs: 0, grossProfit: 0 });
         setLoading(false);
         return;
       }
@@ -466,14 +468,19 @@ export default function FinanceManagement() {
         setPackagingMap({});
       }
 
-      // Calculate stats - include inventory expenses in total
-      // Include extra_profit (tips/kept change) — it's real income but not part of total_amount
+      // Revenue calculation:
+      //  - total_amount is stored NET of discount at sale time.
+      //  - extra_profit is tips / kept-change overpayments (real cash received).
+      //  - discounts are tracked separately for reporting only; they do NOT
+      //    reduce income again (they were already subtracted before storage).
       const salesRevenue = salesData?.reduce((sum, sale: any) => sum + Number(sale.total_amount), 0) || 0;
       const extraProfit = salesData?.reduce((sum, sale: any) => sum + Number(sale.extra_profit || 0), 0) || 0;
+      const discounts = salesData?.reduce((sum, sale: any) => sum + Number(sale.discount_amount || 0), 0) || 0;
       const totalIncome = salesRevenue + extraProfit;
-      const totalCustomExpenses = expensesData?.reduce((sum, expense) => sum + Number(expense.amount), 0) || 0;
-      const totalInventoryExpenses = invExpenses.reduce((sum, inv) => sum + inv.total_cost, 0);
-      const totalExpenses = totalCustomExpenses + totalInventoryExpenses;
+
+      // Operating expenses = custom expenses only. Inventory batch purchases
+      // are Cost of Goods (COGS), not operating expenses (accounting standard).
+      const totalExpenses = expensesData?.reduce((sum, expense) => sum + Number(expense.amount), 0) || 0;
       const netProfit = totalIncome - totalExpenses;
       const profitMargin = totalIncome > 0 ? (netProfit / totalIncome) * 100 : 0;
 
@@ -499,7 +506,6 @@ export default function FinanceManagement() {
         const costPerUnit = (medId: string) => {
           const a = costAgg.get(medId);
           if (!a || a.qty <= 0) {
-            // Fallback: any purchase_price for this med
             const any = (costRows || []).find((r: any) => r.medicine_id === medId);
             return any ? Number(any.purchase_price || 0) : 0;
           }
@@ -524,6 +530,7 @@ export default function FinanceManagement() {
         profitMargin,
         salesRevenue,
         extraProfit,
+        discounts,
         cogs,
         grossProfit,
       });
@@ -538,17 +545,12 @@ export default function FinanceManagement() {
         const branchStats: BranchData[] = (branchesData || []).map(branch => {
           const branchSales = salesData?.filter((s: any) => s.branch_id === branch.id) || [];
           const branchCustomExpenses = expensesData?.filter((e: any) => e.branch_id === branch.id) || [];
-          const branchInvExpenses = invExpenses.filter((e: any) => {
-            const bi = (inventoryData || []).find((m: any) => m.id === e.id);
-            return bi?.branch_id === branch.id;
-          });
-          
+          // Branch chart shows Income vs Operating Expenses (COGS excluded).
           return {
             branchId: branch.id,
             branchName: branch.name,
             income: branchSales.reduce((sum, sale: any) => sum + Number(sale.total_amount) + Number(sale.extra_profit || 0), 0),
-            expenses: branchCustomExpenses.reduce((sum, expense) => sum + Number(expense.amount), 0)
-              + branchInvExpenses.reduce((sum, inv) => sum + inv.total_cost, 0)
+            expenses: branchCustomExpenses.reduce((sum, expense) => sum + Number(expense.amount), 0),
           };
         });
 
@@ -1074,8 +1076,11 @@ export default function FinanceManagement() {
                 <DollarSign className="h-4 w-4 text-success" />
               </CardHeader>
               <CardContent>
-                <div className="text-2xl font-bold text-success">ETB {stats.salesRevenue.toFixed(2)}</div>
-                <p className="text-xs text-muted-foreground mt-1">Total sales for the selected period</p>
+                <div className="text-2xl font-bold text-success">ETB {stats.totalIncome.toFixed(2)}</div>
+                <p className="text-xs text-muted-foreground mt-1">
+                  Sales Revenue{stats.extraProfit > 0 ? ` + Extra ETB ${stats.extraProfit.toFixed(2)}` : ''}
+                  {stats.discounts > 0 ? ` − Discounts ETB ${stats.discounts.toFixed(2)}` : ''}
+                </p>
               </CardContent>
             </Card>
 
@@ -1088,7 +1093,7 @@ export default function FinanceManagement() {
                 <div className={`text-2xl font-bold ${stats.grossProfit >= 0 ? 'text-success' : 'text-destructive'}`}>
                   ETB {stats.grossProfit.toFixed(2)}
                 </div>
-                <p className="text-xs text-muted-foreground mt-1">Sales Revenue − COGS</p>
+                <p className="text-xs text-muted-foreground mt-1">Total Income − Cost of Goods (COGS)</p>
               </CardContent>
             </Card>
           </>
@@ -1169,10 +1174,16 @@ export default function FinanceManagement() {
                       <span className="text-muted-foreground">Sales Revenue</span>
                       <span className="font-medium">ETB {stats.salesRevenue.toFixed(2)}</span>
                     </div>
+                    {stats.discounts > 0 && (
+                      <div className="flex justify-between items-center text-sm">
+                        <span className="text-muted-foreground">− Discounts Given</span>
+                        <span className="font-medium text-muted-foreground">− ETB {stats.discounts.toFixed(2)}</span>
+                      </div>
+                    )}
                     {stats.extraProfit > 0 && (
                       <div className="flex justify-between items-center text-sm">
                         <span className="text-success inline-flex items-center gap-1">
-                          + Extra Profit (Keep Change)
+                          + Extra Payments (Tips / Keep Change)
                         </span>
                         <span className="font-medium text-success">+ ETB {stats.extraProfit.toFixed(2)}</span>
                       </div>
@@ -1182,16 +1193,34 @@ export default function FinanceManagement() {
                       <span className="text-success font-medium">ETB {stats.totalIncome.toFixed(2)}</span>
                     </div>
                     <div className="flex justify-between items-center">
-                      <span>Expenses</span>
-                      <span className="text-destructive font-medium">ETB {stats.totalExpenses.toFixed(2)}</span>
+                      <span>Operating Expenses</span>
+                      <span className="text-destructive font-medium">− ETB {stats.totalExpenses.toFixed(2)}</span>
                     </div>
                     <div className="border-t pt-2">
                       <div className="flex justify-between items-center font-bold">
-                        <span>Net Result</span>
+                        <span>Net Income</span>
                         <span className={stats.netProfit >= 0 ? 'text-success' : 'text-destructive'}>
                           ETB {stats.netProfit.toFixed(2)}
                         </span>
                       </div>
+                      <p className="text-[10px] text-muted-foreground mt-1">
+                        Net Income = Total Income − Operating Expenses (COGS reported separately)
+                      </p>
+                    </div>
+                    <div className="mt-3 pt-3 border-t space-y-2">
+                      <div className="flex justify-between items-center text-sm">
+                        <span className="text-muted-foreground">Cost of Goods (COGS)</span>
+                        <span className="font-medium">ETB {stats.cogs.toFixed(2)}</span>
+                      </div>
+                      <div className="flex justify-between items-center text-sm">
+                        <span>Gross Profit</span>
+                        <span className={`font-semibold ${stats.grossProfit >= 0 ? 'text-success' : 'text-destructive'}`}>
+                          ETB {stats.grossProfit.toFixed(2)}
+                        </span>
+                      </div>
+                      <p className="text-[10px] text-muted-foreground">
+                        Gross Profit = Total Income − Cost of Goods (before operating expenses)
+                      </p>
                     </div>
                   </div>
                 </CardContent>
@@ -1406,8 +1435,8 @@ export default function FinanceManagement() {
             <CardHeader>
               <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3">
                 <div>
-                  <CardTitle>Expense Details</CardTitle>
-                  <CardDescription>Inventory purchases & custom expenses</CardDescription>
+                  <CardTitle>Expenses & Cost of Goods</CardTitle>
+                  <CardDescription>Cost of Goods (inventory purchases) and operating expenses are tracked separately</CardDescription>
                 </div>
                 <div className="flex gap-2">
                   <Button
@@ -1416,7 +1445,7 @@ export default function FinanceManagement() {
                     onClick={() => setExpenseSubTab('inventory')}
                   >
                     <Package className="h-4 w-4 mr-1" />
-                    Inventory ({inventoryExpenses.length})
+                    Cost of Goods (COGS) ({inventoryExpenses.length})
                   </Button>
                   <Button
                     variant={expenseSubTab === 'custom' ? 'default' : 'outline'}
@@ -1424,7 +1453,7 @@ export default function FinanceManagement() {
                     onClick={() => setExpenseSubTab('custom')}
                   >
                     <Receipt className="h-4 w-4 mr-1" />
-                    Custom ({expenses.length})
+                    Operating Expenses ({expenses.length})
                   </Button>
                 </div>
               </div>
@@ -1434,7 +1463,7 @@ export default function FinanceManagement() {
                 /* === Inventory Expenses === */
                 <div className="space-y-4">
                   {inventoryExpenses.length === 0 ? (
-                    <p className="text-muted-foreground text-center py-4">No inventory purchases in selected period</p>
+                    <p className="text-muted-foreground text-center py-4">No inventory purchases (COGS) in selected period</p>
                   ) : (
                     <div className="overflow-x-auto">
                     <Table className="min-w-[600px]">
@@ -1468,7 +1497,7 @@ export default function FinanceManagement() {
                     </div>
                   )}
                   <div className="text-center text-sm text-muted-foreground">
-                    Total Inventory Cost: ETB {inventoryExpenses.reduce((s, i) => s + i.total_cost, 0).toFixed(2)}
+                    Total Cost of Goods (COGS): ETB {inventoryExpenses.reduce((s, i) => s + i.total_cost, 0).toFixed(2)}
                   </div>
                 </div>
               ) : (
