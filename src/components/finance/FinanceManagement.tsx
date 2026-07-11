@@ -545,17 +545,12 @@ export default function FinanceManagement() {
         const branchStats: BranchData[] = (branchesData || []).map(branch => {
           const branchSales = salesData?.filter((s: any) => s.branch_id === branch.id) || [];
           const branchCustomExpenses = expensesData?.filter((e: any) => e.branch_id === branch.id) || [];
-          const branchInvExpenses = invExpenses.filter((e: any) => {
-            const bi = (inventoryData || []).find((m: any) => m.id === e.id);
-            return bi?.branch_id === branch.id;
-          });
-          
+          // Branch chart shows Income vs Operating Expenses (COGS excluded).
           return {
             branchId: branch.id,
             branchName: branch.name,
             income: branchSales.reduce((sum, sale: any) => sum + Number(sale.total_amount) + Number(sale.extra_profit || 0), 0),
-            expenses: branchCustomExpenses.reduce((sum, expense) => sum + Number(expense.amount), 0)
-              + branchInvExpenses.reduce((sum, inv) => sum + inv.total_cost, 0)
+            expenses: branchCustomExpenses.reduce((sum, expense) => sum + Number(expense.amount), 0),
           };
         });
 
