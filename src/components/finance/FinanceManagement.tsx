@@ -109,14 +109,15 @@ const pluralLabel = (label: string, n: number) => {
 };
 
 interface FinanceStats {
-  totalIncome: number;
-  totalExpenses: number;
-  netProfit: number;
+  totalIncome: number;         // salesRevenue + extraProfit (net-of-discount revenue actually received)
+  totalExpenses: number;       // operating expenses ONLY (excludes COGS / inventory purchases)
+  netProfit: number;           // totalIncome - totalExpenses (does NOT subtract COGS)
   profitMargin: number;
-  salesRevenue: number;
-  extraProfit: number;
-  cogs: number;
-  grossProfit: number;
+  salesRevenue: number;        // sum(total_amount) — already net of discount
+  extraProfit: number;         // tips / kept-change overpayments
+  discounts: number;           // sum(discount_amount) — informational
+  cogs: number;                // cost of goods sold
+  grossProfit: number;         // totalIncome - cogs
 }
 
 
