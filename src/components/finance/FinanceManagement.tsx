@@ -1076,8 +1076,11 @@ export default function FinanceManagement() {
                 <DollarSign className="h-4 w-4 text-success" />
               </CardHeader>
               <CardContent>
-                <div className="text-2xl font-bold text-success">ETB {stats.salesRevenue.toFixed(2)}</div>
-                <p className="text-xs text-muted-foreground mt-1">Total sales for the selected period</p>
+                <div className="text-2xl font-bold text-success">ETB {stats.totalIncome.toFixed(2)}</div>
+                <p className="text-xs text-muted-foreground mt-1">
+                  Sales Revenue{stats.extraProfit > 0 ? ` + Extra ETB ${stats.extraProfit.toFixed(2)}` : ''}
+                  {stats.discounts > 0 ? ` − Discounts ETB ${stats.discounts.toFixed(2)}` : ''}
+                </p>
               </CardContent>
             </Card>
 
@@ -1090,7 +1093,7 @@ export default function FinanceManagement() {
                 <div className={`text-2xl font-bold ${stats.grossProfit >= 0 ? 'text-success' : 'text-destructive'}`}>
                   ETB {stats.grossProfit.toFixed(2)}
                 </div>
-                <p className="text-xs text-muted-foreground mt-1">Sales Revenue − COGS</p>
+                <p className="text-xs text-muted-foreground mt-1">Total Income − Cost of Goods (COGS)</p>
               </CardContent>
             </Card>
           </>
