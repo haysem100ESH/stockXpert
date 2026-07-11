@@ -466,12 +466,12 @@ export default function Dashboard() {
         .map(([date, data]) => ({ date, ...data }))
         .sort((a, b) => a.date.localeCompare(b.date));
 
-      // Process payment method data
+      // Process payment method data — total_amount is stored net of discount,
+      // so don't subtract discount again. Include extra_profit (tips).
       const paymentMap = new Map<string, number>();
       salesData?.forEach(sale => {
         const method = sale.payment_method || 'Cash';
-        const amount =
-          Number(sale.total_amount) - (Number(sale.discount_amount) || 0) + Number((sale as any).extra_profit || 0);
+        const amount = Number(sale.total_amount) + Number((sale as any).extra_profit || 0);
         paymentMap.set(method, (paymentMap.get(method) || 0) + amount);
       });
 
