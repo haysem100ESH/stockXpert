@@ -400,35 +400,9 @@ export default function Dashboard() {
         return expensesQuery;
       })();
 
-      // Inventory expenses come from `inventory_batches` (per-branch source of
-      // truth for purchases), NOT from the global `medicines` table.
-      // inventory_batches has no `branch_id` column — filter via branch_items.
-      const { data: branchItemIdRows } = await applyBranchFilter(
-        supabase.from('branch_items').select('id').range(0, 49999)
-      );
-      const branchItemIdList = (branchItemIdRows || []).map((r: any) => r.id);
-
-      let inventoryExpData: any[] = [];
-      if (branchItemIdList.length > 0) {
-        // Chunk IDs to avoid URL length limits when filtering by branch_item_id.
-        const CHUNK = 100;
-        const chunks: string[][] = [];
-        for (let i = 0; i < branchItemIdList.length; i += CHUNK) {
-          chunks.push(branchItemIdList.slice(i, i + CHUNK));
-        }
-        const results = await Promise.all(
-          chunks.map((ids) =>
-            supabase
-              .from('inventory_batches')
-              .select('purchase_price, quantity, created_at')
-              .in('branch_item_id', ids)
-              .gte('created_at', start.toISOString())
-              .lte('created_at', end.toISOString())
-              .range(0, 49999)
-          )
-        );
-        inventoryExpData = results.flatMap((r) => r.data || []);
-      }
+      // Income vs Expenses chart uses ONLY operating expenses. Inventory
+      // batch purchases are Cost of Goods (COGS), not operating expenses, and
+      // are reported separately on the Finance page.
 
       // Process income vs expense data by day
       const dateMap = new Map<string, { income: number; expenses: number }>();
@@ -442,7 +416,7 @@ export default function Dashboard() {
         });
       });
 
-      // Add custom expenses
+      // Add custom (operating) expenses only
       expensesData?.forEach(expense => {
         const date = format(new Date(expense.created_at), 'yyyy-MM-dd');
         const existing = dateMap.get(date) || { income: 0, expenses: 0 };
@@ -452,15 +426,7 @@ export default function Dashboard() {
         });
       });
 
-      // Add inventory purchase costs as expenses (column is `quantity`).
-      inventoryExpData.forEach((b: any) => {
-        const date = format(new Date(b.created_at), 'yyyy-MM-dd');
-        const existing = dateMap.get(date) || { income: 0, expenses: 0 };
-        dateMap.set(date, {
-          ...existing,
-          expenses: existing.expenses + (Number(b.purchase_price) * Number(b.quantity || 0))
-        });
-      });
+
 
       const incomeExpenseArray = Array.from(dateMap.entries())
         .map(([date, data]) => ({ date, ...data }))
