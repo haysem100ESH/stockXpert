@@ -1497,7 +1497,7 @@ export default function FinanceManagement() {
                     </div>
                   )}
                   <div className="text-center text-sm text-muted-foreground">
-                    Total Inventory Cost: ETB {inventoryExpenses.reduce((s, i) => s + i.total_cost, 0).toFixed(2)}
+                    Total Cost of Goods (COGS): ETB {inventoryExpenses.reduce((s, i) => s + i.total_cost, 0).toFixed(2)}
                   </div>
                 </div>
               ) : (
