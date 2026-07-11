@@ -1435,8 +1435,8 @@ export default function FinanceManagement() {
             <CardHeader>
               <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3">
                 <div>
-                  <CardTitle>Expense Details</CardTitle>
-                  <CardDescription>Inventory purchases & custom expenses</CardDescription>
+                  <CardTitle>Expenses & Cost of Goods</CardTitle>
+                  <CardDescription>Cost of Goods (inventory purchases) and operating expenses are tracked separately</CardDescription>
                 </div>
                 <div className="flex gap-2">
                   <Button
@@ -1445,7 +1445,7 @@ export default function FinanceManagement() {
                     onClick={() => setExpenseSubTab('inventory')}
                   >
                     <Package className="h-4 w-4 mr-1" />
-                    Inventory ({inventoryExpenses.length})
+                    Cost of Goods (COGS) ({inventoryExpenses.length})
                   </Button>
                   <Button
                     variant={expenseSubTab === 'custom' ? 'default' : 'outline'}
@@ -1453,7 +1453,7 @@ export default function FinanceManagement() {
                     onClick={() => setExpenseSubTab('custom')}
                   >
                     <Receipt className="h-4 w-4 mr-1" />
-                    Custom ({expenses.length})
+                    Operating Expenses ({expenses.length})
                   </Button>
                 </div>
               </div>
