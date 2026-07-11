@@ -195,6 +195,7 @@ export default function FinanceManagement() {
     profitMargin: 0,
     salesRevenue: 0,
     extraProfit: 0,
+    discounts: 0,
     cogs: 0,
     grossProfit: 0,
   });
