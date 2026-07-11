@@ -1174,10 +1174,16 @@ export default function FinanceManagement() {
                       <span className="text-muted-foreground">Sales Revenue</span>
                       <span className="font-medium">ETB {stats.salesRevenue.toFixed(2)}</span>
                     </div>
+                    {stats.discounts > 0 && (
+                      <div className="flex justify-between items-center text-sm">
+                        <span className="text-muted-foreground">− Discounts Given</span>
+                        <span className="font-medium text-muted-foreground">− ETB {stats.discounts.toFixed(2)}</span>
+                      </div>
+                    )}
                     {stats.extraProfit > 0 && (
                       <div className="flex justify-between items-center text-sm">
                         <span className="text-success inline-flex items-center gap-1">
-                          + Extra Profit (Keep Change)
+                          + Extra Payments (Tips / Keep Change)
                         </span>
                         <span className="font-medium text-success">+ ETB {stats.extraProfit.toFixed(2)}</span>
                       </div>
@@ -1187,16 +1193,34 @@ export default function FinanceManagement() {
                       <span className="text-success font-medium">ETB {stats.totalIncome.toFixed(2)}</span>
                     </div>
                     <div className="flex justify-between items-center">
-                      <span>Expenses</span>
-                      <span className="text-destructive font-medium">ETB {stats.totalExpenses.toFixed(2)}</span>
+                      <span>Operating Expenses</span>
+                      <span className="text-destructive font-medium">− ETB {stats.totalExpenses.toFixed(2)}</span>
                     </div>
                     <div className="border-t pt-2">
                       <div className="flex justify-between items-center font-bold">
-                        <span>Net Result</span>
+                        <span>Net Income</span>
                         <span className={stats.netProfit >= 0 ? 'text-success' : 'text-destructive'}>
                           ETB {stats.netProfit.toFixed(2)}
                         </span>
                       </div>
+                      <p className="text-[10px] text-muted-foreground mt-1">
+                        Net Income = Total Income − Operating Expenses (COGS reported separately)
+                      </p>
+                    </div>
+                    <div className="mt-3 pt-3 border-t space-y-2">
+                      <div className="flex justify-between items-center text-sm">
+                        <span className="text-muted-foreground">Cost of Goods (COGS)</span>
+                        <span className="font-medium">ETB {stats.cogs.toFixed(2)}</span>
+                      </div>
+                      <div className="flex justify-between items-center text-sm">
+                        <span>Gross Profit</span>
+                        <span className={`font-semibold ${stats.grossProfit >= 0 ? 'text-success' : 'text-destructive'}`}>
+                          ETB {stats.grossProfit.toFixed(2)}
+                        </span>
+                      </div>
+                      <p className="text-[10px] text-muted-foreground">
+                        Gross Profit = Total Income − Cost of Goods (before operating expenses)
+                      </p>
                     </div>
                   </div>
                 </CardContent>
