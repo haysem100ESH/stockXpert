@@ -1463,7 +1463,7 @@ export default function FinanceManagement() {
                 /* === Inventory Expenses === */
                 <div className="space-y-4">
                   {inventoryExpenses.length === 0 ? (
-                    <p className="text-muted-foreground text-center py-4">No inventory purchases in selected period</p>
+                    <p className="text-muted-foreground text-center py-4">No inventory purchases (COGS) in selected period</p>
                   ) : (
                     <div className="overflow-x-auto">
                     <Table className="min-w-[600px]">
