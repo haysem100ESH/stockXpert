@@ -468,14 +468,19 @@ export default function FinanceManagement() {
         setPackagingMap({});
       }
 
-      // Calculate stats - include inventory expenses in total
-      // Include extra_profit (tips/kept change) — it's real income but not part of total_amount
+      // Revenue calculation:
+      //  - total_amount is stored NET of discount at sale time.
+      //  - extra_profit is tips / kept-change overpayments (real cash received).
+      //  - discounts are tracked separately for reporting only; they do NOT
+      //    reduce income again (they were already subtracted before storage).
       const salesRevenue = salesData?.reduce((sum, sale: any) => sum + Number(sale.total_amount), 0) || 0;
       const extraProfit = salesData?.reduce((sum, sale: any) => sum + Number(sale.extra_profit || 0), 0) || 0;
+      const discounts = salesData?.reduce((sum, sale: any) => sum + Number(sale.discount_amount || 0), 0) || 0;
       const totalIncome = salesRevenue + extraProfit;
-      const totalCustomExpenses = expensesData?.reduce((sum, expense) => sum + Number(expense.amount), 0) || 0;
-      const totalInventoryExpenses = invExpenses.reduce((sum, inv) => sum + inv.total_cost, 0);
-      const totalExpenses = totalCustomExpenses + totalInventoryExpenses;
+
+      // Operating expenses = custom expenses only. Inventory batch purchases
+      // are Cost of Goods (COGS), not operating expenses (accounting standard).
+      const totalExpenses = expensesData?.reduce((sum, expense) => sum + Number(expense.amount), 0) || 0;
       const netProfit = totalIncome - totalExpenses;
       const profitMargin = totalIncome > 0 ? (netProfit / totalIncome) * 100 : 0;
 
@@ -501,7 +506,6 @@ export default function FinanceManagement() {
         const costPerUnit = (medId: string) => {
           const a = costAgg.get(medId);
           if (!a || a.qty <= 0) {
-            // Fallback: any purchase_price for this med
             const any = (costRows || []).find((r: any) => r.medicine_id === medId);
             return any ? Number(any.purchase_price || 0) : 0;
           }
@@ -526,6 +530,7 @@ export default function FinanceManagement() {
         profitMargin,
         salesRevenue,
         extraProfit,
+        discounts,
         cogs,
         grossProfit,
       });
