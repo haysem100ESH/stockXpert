@@ -100,7 +100,7 @@ export default function TransferRequestItemWizard({
   useEffect(() => {
     if (open) {
       setStep('source');
-      setSourceId(''); setQty(1); setQtyLevel('unit');
+      setSourceId(''); setSourceSearch(''); setQty(1); setQtyLevel('unit');
       setTargets([]); setTargetId(''); setCreateNewItem(false);
       setBatches([]); setBatchChoice('');
       setNewBatchNumber(''); setNewBatchExpiry(''); setNewBatchPrice('');
