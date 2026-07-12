@@ -18,6 +18,7 @@ import CartSlider from './CartSlider';
 import AddToCartDialog from './AddToCartDialog';
 import { useIsMobile } from '@/hooks/use-mobile';
 import { updateCreditScore } from '@/hooks/useCreditScore';
+import { addisDayString } from '@/lib/timezone';
 import { isMeasurable } from '@/lib/itemTypes';
 import { logActivity } from '@/lib/activityLog';
 import { deductFIFO, recordSaleItemBatches } from '@/lib/batchInventory';
@@ -92,12 +93,9 @@ export default function SalesManagement() {
   const [cartOpen, setCartOpen] = useState(false);
   const [selectedMedicineForDialog, setSelectedMedicineForDialog] = useState<Medicine | null>(null);
   // Sale Date — the business/accounting date for this transaction. Defaults
-  // to today. All finance/analytics persistence uses this value.
-  const todayISO = () => {
-    const d = new Date();
-    const off = d.getTimezoneOffset();
-    return new Date(d.getTime() - off * 60_000).toISOString().slice(0, 10);
-  };
+  // to today in Africa/Addis_Ababa (Ethiopia) so it stays consistent with the
+  // Dashboard and Finance pages regardless of the browser's timezone.
+  const todayISO = () => addisDayString();
   const [saleDate, setSaleDate] = useState<string>(todayISO());
 
   const { profile } = useAuth();
