@@ -79,6 +79,7 @@ export default function TransferRequestItemWizard({
 
   // Source
   const [sourceMeds, setSourceMeds] = useState<SourceMed[]>([]);
+  const [sourceSearch, setSourceSearch] = useState('');
   const [sourceId, setSourceId] = useState('');
   const [qty, setQty] = useState<number>(1);
   const [qtyLevel, setQtyLevel] = useState<PackagingLevel>('unit');
@@ -99,7 +100,7 @@ export default function TransferRequestItemWizard({
   useEffect(() => {
     if (open) {
       setStep('source');
-      setSourceId(''); setQty(1); setQtyLevel('unit');
+      setSourceId(''); setSourceSearch(''); setQty(1); setQtyLevel('unit');
       setTargets([]); setTargetId(''); setCreateNewItem(false);
       setBatches([]); setBatchChoice('');
       setNewBatchNumber(''); setNewBatchExpiry(''); setNewBatchPrice('');
@@ -341,16 +342,34 @@ export default function TransferRequestItemWizard({
           <div className="space-y-4">
             <div>
               <Label>Item from source branch *</Label>
-              <Select value={sourceId || undefined} onValueChange={setSourceId}>
-                <SelectTrigger><SelectValue placeholder={loading ? 'Loading…' : 'Select item'} /></SelectTrigger>
-                <SelectContent>
-                  {sourceMeds.map(m => (
-                    <SelectItem key={m.id} value={m.id}>
-                      {m.name} (Stock: {m.stock_display})
-                    </SelectItem>
-                  ))}
-                </SelectContent>
-              </Select>
+              <Input
+                placeholder="Search by item name or generic name…"
+                value={sourceSearch}
+                onChange={(e) => setSourceSearch(e.target.value)}
+                className="mb-2"
+              />
+              {(() => {
+                const q = sourceSearch.trim().toLowerCase();
+                const filtered = q
+                  ? sourceMeds.filter(m =>
+                      m.name.toLowerCase().includes(q) ||
+                      (m.generic_name || '').toLowerCase().includes(q))
+                  : sourceMeds;
+                return (
+                  <Select value={sourceId || undefined} onValueChange={setSourceId}>
+                    <SelectTrigger><SelectValue placeholder={loading ? 'Loading…' : 'Select item'} /></SelectTrigger>
+                    <SelectContent>
+                      {filtered.length === 0 ? (
+                        <div className="p-2 text-sm text-muted-foreground text-center">No matches</div>
+                      ) : filtered.map(m => (
+                        <SelectItem key={m.id} value={m.id}>
+                          {m.name}{m.generic_name ? ` · ${m.generic_name}` : ''} (Stock: {m.stock_display})
+                        </SelectItem>
+                      ))}
+                    </SelectContent>
+                  </Select>
+                );
+              })()}
             </div>
             {sourceMed && (() => {
               const levels = availableLevels(sourceMed.packaging);
