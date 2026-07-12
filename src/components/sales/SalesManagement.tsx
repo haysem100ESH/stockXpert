@@ -18,6 +18,7 @@ import CartSlider from './CartSlider';
 import AddToCartDialog from './AddToCartDialog';
 import { useIsMobile } from '@/hooks/use-mobile';
 import { updateCreditScore } from '@/hooks/useCreditScore';
+import { addisDayString } from '@/lib/timezone';
 import { isMeasurable } from '@/lib/itemTypes';
 import { logActivity } from '@/lib/activityLog';
 import { deductFIFO, recordSaleItemBatches } from '@/lib/batchInventory';
